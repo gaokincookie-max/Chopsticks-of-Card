@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>割り箸カード</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="overlay" id="overlay">
+    <div class="popup-card" id="popupCard">
+      <div class="popup-user" id="popupUser"></div>
+      <div class="popup-name" id="popupName"></div>
+      <div class="popup-text" id="popupText"></div>
+    </div>
+  </div>
+
+  <div class="trap-choice" id="trapChoice">
+    <div class="trap-choice-panel">
+      <h2>罠を発動しますか？</h2>
+      <p class="small" id="trapChoiceText">発動できる罠があります。</p>
+      <div class="trap-choice-list" id="trapChoiceList"></div>
+      <button class="secondary" id="trapSkipBtn">発動しない</button>
+    </div>
+  </div>
+
+
+  <div class="help-modal" id="helpModal">
+    <div class="help-panel">
+      <div class="help-head">
+        <h2>ヘルプ</h2>
+        <button id="helpCloseBtn" class="secondary">閉じる</button>
+      </div>
+      <div class="help-tabs" id="helpTabs">
+        <button data-help-tab="basic" class="active">基本</button>
+        <button data-help-tab="turn">ターン</button>
+        <button data-help-tab="attack">攻撃・罠</button>
+        <button data-help-tab="cards">カード一覧</button>
+        <button data-help-tab="deck">デッキ</button>
+      </div>
+      <div class="help-body" id="helpBody"></div>
+    </div>
+  </div>
+
+  <main class="app">
+    <header>
+      <h1>割り箸カード</h1>
+      <p class="subtitle">
+        罠の発動タイミングを「攻撃判定前」「攻撃判定後」に分けました。デッキ保存とCPU別デッキにも対応しています。
+      </p>
+    </header>
+
+
+    <section class="help-strip">
+      <div class="help-shortcuts">
+        <button id="openHelpBtn" class="blue">ヘルプ</button>
+        <button id="openCardsHelpBtn" class="secondary">カード一覧</button>
+      </div>
+      <p class="small">ルール・罠タイミング・カード効果を確認できます。</p>
+    </section>
+
+    <section class="status-strip">
+      <div class="status-card">
+        <span>あなたの山札</span>
+        <strong id="humanDeckCount">0</strong>
+      </div>
+      <div class="status-card">
+        <span>CPUの山札</span>
+        <strong id="cpuDeckCount">0</strong>
+      </div>
+    </section>
+
+    <section class="deck-builder">
+      <div class="deck-head">
+        <div>
+          <h2>デッキ編集</h2>
+          <p class="small">コスト上限以内なら反映できます。</p>
+        </div>
+        <button id="toggleDeckBtn" class="secondary">編集を開く</button>
+      </div>
+      <div class="deck-panel" id="deckPanel">
+        <div class="deck-limit-row">
+          <label>
+            編集するデッキ
+            <select id="deckOwnerSelect">
+              <option value="human">あなた用</option>
+              <option value="cpu">CPU用</option>
+            </select>
+          </label>
+          <label>
+            コスト上限
+            <input id="costLimitInput" type="number" min="1" max="99" value="115" />
+          </label>
+          <span class="small">自分用とCPU用を別々に編集できます。合計コストが上限以下のときだけ反映できます。</span>
+        </div>
+        <div class="deck-summary">
+          <span id="deckCountText">デッキ枚数：0枚</span>
+          <span id="deckCostText">合計コスト：0 / 115</span>
+          <span id="deckValidityText" class="valid">使用可能</span>
+          <span class="small">推奨：12〜20枚程度。同名は最大3枚まで。</span>
+        </div>
+        <div id="deckBottomBar" class="deck-bottom-bar hidden">
+          <span id="deckBottomCount">0枚</span>
+          <span id="deckBottomCost">コスト 0 / 115</span>
+          <span id="deckBottomValid">使用可能</span>
+        </div>
+        <div class="mode-row">
+          <button id="applyDeckBtn">このデッキでリスタート</button>
+          <button id="saveDeckBtn" class="blue">デッキ保存</button>
+          <button id="loadDeckBtn" class="secondary">保存デッキ読込</button>
+          <button id="copyDeckBtn" class="secondary">もう片方へコピー</button>
+          <button id="defaultDeckBtn" class="secondary">表示中を初期に戻す</button>
+        </div>
+        <div class="deck-code-tools">
+          <div class="deck-code-title">デッキコード共有</div>
+          <div class="deck-code-actions">
+            <button id="exportCurrentDeckBtn" class="blue">表示中デッキのコード発行</button>
+            <button id="exportBothDecksBtn" class="blue">両方のコード発行</button>
+            <button id="copyDeckCodeBtn" class="secondary">コードをコピー</button>
+            <button id="importDeckCodeBtn" class="trap">コードを読み込む</button>
+          </div>
+          <div class="deck-code-row">
+            <label>
+              読み込み先
+              <select id="deckCodeTargetSelect">
+                <option value="editing">表示中のデッキ</option>
+                <option value="human">あなた用</option>
+                <option value="cpu">CPU用</option>
+                <option value="both">両方</option>
+                <option value="auto">コードに従う</option>
+              </select>
+            </label>
+          </div>
+          <textarea id="deckCodeBox" class="deck-code-box" placeholder="ここにデッキコードが表示されます。別端末では、ここにコードを貼り付けて読み込んでください。"></textarea>
+          <p class="small">サーバー不要の共有機能です。コードをLINEやメモに貼れば、別端末でも同じデッキを復元できます。</p>
+        </div>
+        <div class="deck-grid" id="deckGrid"></div>
+      </div>
+    </section>
+
+    <section class="event-area">
+      <div class="event-title">直近の行動</div>
+      <div class="last-card empty" id="lastCardDisplay">まだ行動はありません。</div>
+    </section>
+
+    <section class="board">
+      <div class="player-panel cpu">
+        <div class="panel-head">
+          <div>
+            <div class="name">CPU</div>
+            <div class="state-label" id="cpuState">待機中</div>
+          </div>
+        </div>
+        <div class="hands">
+          <div class="hand" id="cpuL" data-owner="cpu" data-hand="L">
+            <div class="calc-badge" id="cpuLCalc"></div>
+            <div class="hand-name">左手</div>
+            <div class="fingers" id="cpuLNum">1</div>
+            <div class="finger-icons" id="cpuLIcons"></div>
+            <div class="trap-slots" id="cpuLTraps"></div>
+          </div>
+          <div class="hand" id="cpuR" data-owner="cpu" data-hand="R">
+            <div class="calc-badge" id="cpuRCalc"></div>
+            <div class="hand-name">右手</div>
+            <div class="fingers" id="cpuRNum">1</div>
+            <div class="finger-icons" id="cpuRIcons"></div>
+            <div class="trap-slots" id="cpuRTraps"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="player-panel human">
+        <div class="panel-head">
+          <div>
+            <div class="name">あなた</div>
+            <div class="state-label" id="humanState">あなたの番です</div>
+          </div>
+        </div>
+        <div class="hands">
+          <div class="hand" id="humanL" data-owner="human" data-hand="L">
+            <div class="calc-badge" id="humanLCalc"></div>
+            <div class="hand-name">左手</div>
+            <div class="fingers" id="humanLNum">1</div>
+            <div class="finger-icons" id="humanLIcons"></div>
+            <div class="trap-slots" id="humanLTraps"></div>
+          </div>
+          <div class="hand" id="humanR" data-owner="human" data-hand="R">
+            <div class="calc-badge" id="humanRCalc"></div>
+            <div class="hand-name">右手</div>
+            <div class="fingers" id="humanRNum">1</div>
+            <div class="finger-icons" id="humanRIcons"></div>
+            <div class="trap-slots" id="humanRTraps"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="actions">
+      <div class="mode-row">
+        <button id="attackBtn">攻撃</button>
+        <button id="splitBtn" class="secondary">分ける</button>
+        <button id="drawBtn" class="blue">テストドロー</button>
+        <button id="cancelBtn" class="secondary">解除</button>
+        <button id="resetBtn" class="danger">リセット</button>
+      </div>
+
+      <div class="message" id="message">
+        攻撃する場合は、自分の生きている手を選んでから、相手の手を選んでください。
+      </div>
+
+      <div class="split-box" id="splitBox">
+        <span>分け直し：</span>
+        <label>左
+          <select id="splitLeft"></select>
+        </label>
+        <label>右
+          <select id="splitRight"></select>
+        </label>
+        <button id="confirmSplitBtn">決定</button>
+        <span class="small" id="splitHint"></span>
+      </div>
+    </section>
+
+    <section class="card-area">
+      <h2>手札 <span class="small" id="handInfo"></span></h2>
+      <div class="hand-cards" id="humanCards"></div>
+      <p class="small">
+        横にスクロールできます。カード関連行動は1ターン1回までです。
+      </p>
+    </section>
+
+    <section class="actions">
+      <h3>ログ</h3>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
