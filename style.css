@@ -430,6 +430,18 @@
       color: var(--trap);
     }
 
+    .trap-slot.blessing-slot {
+      border-color: #2b7a78;
+      background: #e7fbf7;
+      color: #216a66;
+    }
+
+    .trap-slot.curse-slot {
+      border-color: #9b3d3d;
+      background: #fff0ee;
+      color: #8b2f2f;
+    }
+
     .card-area {
       padding: 12px;
       position: sticky;
@@ -499,6 +511,8 @@
     }
 
     .card-type.trap { background: var(--trap); }
+    .card-type.blessing { background: #2b7a78; }
+    .card-type.curse { background: #9b3d3d; }
 
     .card-cost {
       color: var(--accent);

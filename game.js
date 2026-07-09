@@ -709,6 +709,38 @@ const CARD_LIBRARY = {
           addLog(`${handNames[defender]}の罠「囮」発動。1枚引いた。`);
           return {};
         }
+      },
+      powerBlessing: {
+        name: "力の加護",
+        cost: 2,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手で攻撃するとき、攻撃力+1。手が0になったら捨て札に置く。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      guardBlessing: {
+        name: "守護",
+        cost: 2,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手が攻撃されるとき、受ける本数-1。ただし最低1。手が0になったら捨て札に置く。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      slowCurse: {
+        name: "鈍重の呪縛",
+        cost: 2,
+        type: "呪縛",
+        text: "相手の手に表向きで置く。この手で攻撃するとき、攻撃力-1。ただし最低1。手が0になったら捨て札に置く。",
+        curse: true,
+        canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
+      },
+      exposeCurse: {
+        name: "露呈の呪縛",
+        cost: 2,
+        type: "呪縛",
+        text: "相手の手に表向きで置く。この手に置かれる罠は表向きになる。手が0になったら捨て札に置く。",
+        curse: true,
+        canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       }
     };
 
@@ -717,7 +749,7 @@ const CARD_LIBRARY = {
 
     const DEFAULT_DECK_COUNTS = {
       insight: 1,
-      strongHit: 2,
+      strongHit: 1,
       lightHit: 1,
       lockSplit: 1,
       repair: 1,
@@ -726,15 +758,16 @@ const CARD_LIBRARY = {
       snipe: 1,
       rapidFire: 1,
       accelBullet: 1,
-      specialBullet: 1,
       bulletSupply: 1,
       reload: 1,
       calm: 1,
       guard: 1,
       deflect: 1,
       braceTrap: 1,
-      dodgeTrap: 1,
-      baitTrap: 1
+      powerBlessing: 1,
+      guardBlessing: 1,
+      slowCurse: 1,
+      exposeCurse: 1
     };
 
     const state = {
@@ -1300,7 +1333,7 @@ const CARD_LIBRARY = {
           <div>
             <div class="card-title">
               <span class="deck-card-name">${escapeHtml(card.name)}</span>
-              <span class="card-type${card.trap ? " trap" : ""}">${escapeHtml(card.type)}</span>
+              <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
             </div>
             <div class="card-cost">コスト ${card.cost}</div>
             <div class="deck-card-desc">${escapeHtml(card.text)}</div>
@@ -1486,7 +1519,10 @@ const CARD_LIBRARY = {
               if (player === "human" && value > 0) card.classList.add("selectable");
               if (player === "cpu" && state.selectedAttackHand && value > 0) card.classList.add("selectable");
             }
-            if ((state.mode === "setTrap" || state.mode === "setupTrap") && player === "human" && value > 0 && state.traps.human[hand].length < 2) {
+            if ((state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing") && player === "human" && value > 0 && state.traps.human[hand].length < 2) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "setCurse" && player === "cpu" && value > 0 && state.traps.cpu[hand].length < 2) {
               card.classList.add("trap-target");
             }
             if (state.mode === "moveOne" && player === "human" && getMoveOneOptionFrom("human", hand)) {
@@ -1566,16 +1602,61 @@ const CARD_LIBRARY = {
       return typeof slot === "string" ? null : slot?.id;
     }
 
+    function isTrapCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.trap;
+    }
+
+    function isBlessingCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.blessing;
+    }
+
+    function isCurseCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.curse;
+    }
+
+    function isAttachmentCard(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      return !!(card?.trap || card?.blessing || card?.curse);
+    }
+
+    function attachmentKind(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      if (card?.trap) return "trap";
+      if (card?.blessing) return "blessing";
+      if (card?.curse) return "curse";
+      return "card";
+    }
+
+    function attachmentLabel(cardId) {
+      const kind = attachmentKind(cardId);
+      if (kind === "trap") return "罠";
+      if (kind === "blessing") return "加護";
+      if (kind === "curse") return "呪縛";
+      return "カード";
+    }
+
+    function canPlaceAttachment(user, owner) {
+      return ["L", "R"].some(h => state[owner][h] > 0 && state.traps[owner][h].length < 2);
+    }
+
+    function hasAttachment(owner, hand, cardId) {
+      return state.traps[owner][hand].some(slot => trapCardId(slot) === cardId);
+    }
+
+    function hasExposedCurse(owner, hand) {
+      return hasAttachment(owner, hand, "exposeCurse");
+    }
+
     function hasOpponentTrap(player) {
       const opponent = player === "human" ? "cpu" : "human";
-      return ["L", "R"].some(hand => state.traps[opponent][hand].length > 0);
+      return ["L", "R"].some(hand => state.traps[opponent][hand].some(slot => isTrapCard(trapCardId(slot))));
     }
 
     function hasMovableOpponentTrap(player) {
       const opponent = player === "human" ? "cpu" : "human";
       return ["L", "R"].some(hand => {
         const other = otherHand(hand);
-        return state.traps[opponent][hand].length > 0 &&
+        return state.traps[opponent][hand].some(slot => isTrapCard(trapCardId(slot))) &&
           state[opponent][other] > 0 &&
           state.traps[opponent][other].length < 2;
       });
@@ -1588,6 +1669,7 @@ const CARD_LIBRARY = {
         if (state[owner][other] <= 0 || state.traps[owner][other].length >= 2) continue;
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
+          if (!isTrapCard(cardId)) return;
           options.push({ owner, hand, index, cardId });
         });
       }
@@ -1629,7 +1711,9 @@ const CARD_LIBRARY = {
       const options = [];
       for (const hand of ["L", "R"]) {
         state.traps[player][hand].forEach((slot, index) => {
-          options.push({ hand, index, cardId: trapCardId(slot), instanceId: trapInstanceId(slot) });
+          const cardId = trapCardId(slot);
+          if (!isTrapCard(cardId)) return;
+          options.push({ hand, index, cardId, instanceId: trapInstanceId(slot) });
         });
       }
       if (options.length === 0) return null;
@@ -1707,6 +1791,7 @@ const CARD_LIBRARY = {
       for (const hand of ["L", "R"]) {
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
+          if (!isTrapCard(cardId)) return;
           options.push({ owner, hand, index, cardId });
         });
       }
@@ -1718,7 +1803,7 @@ const CARD_LIBRARY = {
     function removeOpponentTrap(user, owner, hand, index) {
       const slot = state.traps[owner][hand][index];
       const cardId = trapCardId(slot);
-      if (!cardId) return false;
+      if (!cardId || !isTrapCard(cardId)) return false;
       const instanceId = trapInstanceId(slot);
       state.traps[owner][hand].splice(index, 1);
       if (instanceId) state.revealedTrapIds.delete(instanceId);
@@ -1735,7 +1820,7 @@ const CARD_LIBRARY = {
     function revealOpponentTrap(user, owner, hand, index) {
       const slot = state.traps[owner][hand][index];
       const cardId = trapCardId(slot);
-      if (!cardId) return false;
+      if (!cardId || !isTrapCard(cardId)) return false;
       const instanceId = trapInstanceId(slot);
       if (instanceId) state.revealedTrapIds.add(instanceId);
       const card = CARD_LIBRARY[cardId];
@@ -1754,8 +1839,10 @@ const CARD_LIBRARY = {
         setMessage("その伏せカードは移動先がないため選べません。");
         return false;
       }
-      const [slot] = state.traps[owner][hand].splice(index, 1);
+      const slot = state.traps[owner][hand][index];
       const cardId = trapCardId(slot);
+      if (!isTrapCard(cardId)) return false;
+      state.traps[owner][hand].splice(index, 1);
       state.traps[owner][other].push(slot);
       setLastAction(user, "手繰り寄せ", `${handNames[owner]}の伏せカードを${handNames[hand]}から${handNames[other]}へ移動しました。`, "card");
       addLog(`${handNames[user]}は「手繰り寄せ」で、${handNames[owner]}の伏せカード「${CARD_LIBRARY[cardId].name}」を${handNames[hand]}から${handNames[other]}へ移動した。`);
@@ -1768,6 +1855,10 @@ const CARD_LIBRARY = {
 
     function chooseOpponentTrapSlot(owner, hand, index) {
       if (state.mode !== "chooseOpponentTrap" || owner !== "cpu") return;
+      if (!isTrapCard(trapCardId(state.traps[owner][hand][index]))) {
+        setMessage("加護・呪縛は罠対象カードでは選べません。");
+        return;
+      }
       if (state.pendingTrapTargetEffect === "remove") {
         removeOpponentTrap("human", owner, hand, index);
       } else if (state.pendingTrapTargetEffect === "reveal") {
@@ -1785,19 +1876,26 @@ const CARD_LIBRARY = {
         const div = document.createElement("div");
         const slot = traps[i];
         const cardId = trapCardId(slot);
+        const card = CARD_LIBRARY[cardId];
         const instanceId = trapInstanceId(slot);
         const revealed = instanceId && state.revealedTrapIds.has(instanceId);
+        const faceUpAttachment = cardId && !card?.trap;
+        const exposedByCurse = card?.trap && hasExposedCurse(player, hand);
         if (cardId) {
-          const selectable = state.turn === "human" && !state.animating && state.mode === "chooseOpponentTrap" && player === "cpu" &&
+          const isTrap = isTrapCard(cardId);
+          const selectable = isTrap && state.turn === "human" && !state.animating && state.mode === "chooseOpponentTrap" && player === "cpu" &&
             (state.pendingTrapTargetEffect !== "move" || (state[player][otherHand(hand)] > 0 && state.traps[player][otherHand(hand)].length < 2));
+          const hidden = isTrap && player === "cpu" && !revealed && !exposedByCurse;
           div.className =
             "trap-slot filled" +
-            (player === "cpu" && !revealed ? " cpu-hidden" : "") +
-            (revealed ? " revealed-info" : "") +
+            (hidden ? " cpu-hidden" : "") +
+            (revealed || exposedByCurse || faceUpAttachment ? " revealed-info" : "") +
+            (card?.blessing ? " blessing-slot" : "") +
+            (card?.curse ? " curse-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
-          div.textContent = player === "cpu" && !revealed ? `伏せ${i + 1}` : CARD_LIBRARY[cardId].name;
+          div.textContent = hidden ? `伏せ${i + 1}` : card.name;
           if (selectable) {
-            div.title = "この伏せカードを選ぶ";
+            div.title = "この伏せ罠を選ぶ";
             div.addEventListener("click", (event) => {
               event.stopPropagation();
               chooseOpponentTrapSlot(player, hand, i);
@@ -1840,6 +1938,7 @@ function renderLastAction() {
       state.hands.human.forEach((cardId, index) => {
         const card = CARD_LIBRARY[cardId];
         const isTrap = !!card.trap;
+        const isZoneCard = !!(card.trap || card.blessing || card.curse);
         const setupActive = state.turn === "human" && !state.gameOver && !state.animating && state.temp.human.setupMode;
         const repairDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "repairDiscard";
         const calmDownDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "calmDownDiscard";
@@ -1847,8 +1946,8 @@ function renderLastAction() {
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
         const berserkLocked = state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed;
         const canUseCardAction = state.turn === "human" && !state.gameOver && !state.animating && !state.temp.human.cardActionUsed && !berserkLocked;
-        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !restrictedByCost && canUseCardAction && !isTrap && card.canPlay("human");
-        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isTrap) || (setupActive && isTrap)) && canSetAnyTrap("human");
+        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !restrictedByCost && canUseCardAction && !isZoneCard && card.canPlay("human");
+        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isZoneCard && !setupActive) || (setupActive && isTrap)) && canSetAttachmentTarget("human", cardId);
         const discardPlayable = repairDiscardMode && cardId !== "repair";
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown";
         const rapidDiscardPlayable = rapidFireDiscardMode && cardId !== "rapidFire";
@@ -1863,7 +1962,7 @@ function renderLastAction() {
         div.innerHTML = `
           <div class="card-title">
             <span>${escapeHtml(card.name)}</span>
-            <span class="card-type${isTrap ? " trap" : ""}">${escapeHtml(card.type)}</span>
+            <span class="card-type${isTrap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
           <div class="card-text">${escapeHtml(card.text)}</div>
@@ -1896,6 +1995,8 @@ function renderLastAction() {
     }
 
     function timingLabel(card) {
+      if (card.blessing) return "加護・表向き";
+      if (card.curse) return "呪縛・表向き";
       if (!card.trap) return "通常";
       const timing = card.triggerTiming === "after" ? "攻撃判定後" : "攻撃判定前";
       const manual = card.manual ? "手動" : "自動";
@@ -1992,7 +2093,7 @@ function renderLastAction() {
 
       if (tab === "cards") {
         const cards = Object.entries(CARD_LIBRARY).map(([id, card]) => {
-          const typeClass = card.trap ? " trap" : "";
+          const typeClass = card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : "";
           const timing = timingLabel(card);
           return `
             <div class="help-card">
@@ -2145,43 +2246,61 @@ function renderLastAction() {
       return ["L", "R"].some(h => state[player][h] > 0 && state.traps[player][h].length < 2);
     }
 
+    function canSetAttachmentTarget(player, cardId) {
+      const card = CARD_LIBRARY[cardId];
+      if (!card) return false;
+      if (card.curse) {
+        const opponent = player === "human" ? "cpu" : "human";
+        return canPlaceAttachment(player, opponent);
+      }
+      return canPlaceAttachment(player, player);
+    }
+
     function selectTrapCard(index) {
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
-      if (!card || !card.trap || (state.temp.human.cardActionUsed && !state.temp.human.setupMode)) return;
+      if (!card || !isAttachmentCard(cardId) || (state.temp.human.cardActionUsed && !state.temp.human.setupMode)) return;
+      if (state.temp.human.setupMode && !card.trap) {
+        setMessage("仕込み中に置けるのは罠カードだけです。");
+        return;
+      }
       if (state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed) {
-        setMessage("バーサーカー中は罠を伏せられません。");
+        setMessage("バーサーカー中はカードを設置できません。");
         return;
       }
       if (state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human) {
         setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
         return;
       }
-      state.mode = state.temp.human.setupMode ? "setupTrap" : "setTrap";
+      state.mode = state.temp.human.setupMode ? "setupTrap" : card.curse ? "setCurse" : card.blessing ? "setBlessing" : "setTrap";
       state.selectedAttackHand = null;
       state.selectedTrapCardIndex = index;
       elements.splitBox.classList.remove("active");
-      setMessage(`「${card.name}」を設置する手を選んでください。`);
+      const target = card.curse ? "相手の手" : "自分の手";
+      setMessage(`「${card.name}」を設置する${target}を選んでください。`);
       render();
     }
 
-    function setTrap(player, hand, handIndex) {
+    function setTrap(player, hand, handIndex, owner = player) {
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
-      if (!card || !card.trap) return false;
+      if (!card || !isAttachmentCard(cardId)) return false;
       const setupActive = !!state.temp[player].setupMode;
+      if (setupActive && !card.trap) return false;
+      if (card.blessing && owner !== player) return false;
+      if (card.curse && owner === player) return false;
       if (state.berserkerTurns[player] > 0 && !state.temp[player].berserkerJustUsed) {
-        if (player === "human") setMessage("バーサーカー中は罠を伏せられません。");
+        if (player === "human") setMessage("バーサーカー中はカードを設置できません。");
         return false;
       }
       if (state.activeCostLimit[player] !== null && card.cost > state.activeCostLimit[player]) {
         if (player === "human") setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
         return false;
       }
-      if (state[player][hand] <= 0 || state.traps[player][hand].length >= 2 || (state.temp[player].cardActionUsed && !setupActive)) return false;
+      if (state[owner][hand] <= 0 || state.traps[owner][hand].length >= 2 || (state.temp[player].cardActionUsed && !setupActive)) return false;
 
       state.hands[player].splice(handIndex, 1);
-      state.traps[player][hand].push(makeTrapInstance(cardId));
+      state.traps[owner][hand].push(makeTrapInstance(cardId));
       if (!setupActive) {
         state.temp[player].cardActionUsed = true;
         state.mode = "attack";
@@ -2190,13 +2309,15 @@ function renderLastAction() {
       }
       state.selectedTrapCardIndex = null;
 
-      addLog(`${handNames[player]}は${handNames[hand]}の下に罠を1枚伏せた。`);
-      setLastAction(player, "罠を伏せた", `${handNames[hand]}の下に1枚伏せました。`, "trap");
+      const label = attachmentLabel(cardId);
+      const faceText = card.trap ? "伏せた" : "表向きで置いた";
+      addLog(`${handNames[player]}は${handNames[owner]}の${handNames[hand]}の下に${label}「${card.name}」を${faceText}。`);
+      setLastAction(player, `${label}を設置`, `${handNames[owner]}の${handNames[hand]}の下に「${card.name}」を${faceText}。`, card.trap ? "trap" : "card");
       if (player === "human") {
         if (setupActive) {
           setMessage(`「${card.name}」を${handNames[hand]}の下に伏せました。続けて罠を伏せるか、「仕込み終了」を押してください。`);
         } else {
-          setMessage(`「${card.name}」を${handNames[hand]}の下に伏せました。`);
+          setMessage(`「${card.name}」を${handNames[owner]}の${handNames[hand]}の下に${faceText}。`);
         }
       }
       render();
@@ -2208,7 +2329,7 @@ function renderLastAction() {
 
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
-      if (!card || card.trap || !card.canPlay(player)) return false;
+      if (!card || isAttachmentCard(cardId) || !card.canPlay(player)) return false;
       if (state.activeCostLimit[player] !== null && card.cost > state.activeCostLimit[player]) {
         if (player === "human") setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
         return false;
@@ -2350,8 +2471,14 @@ function renderLastAction() {
       const basePower = state[attacker][attackHand];
       const bonus = state.temp[attacker].attackBonus || 0;
       const berserkerBonus = state.berserkerTurns[attacker] > 0 ? 2 : 0;
-      let power = Math.max(1, basePower + bonus + berserkerBonus);
+      const blessingBonus = hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0;
+      const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
+      const guardBlessingPenalty = hasAttachment(defender, targetHand, "guardBlessing") ? -1 : 0;
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + cursePenalty + guardBlessingPenalty);
       state.temp[attacker].attackBonus = 0;
+      if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
+      if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
+      if (guardBlessingPenalty) addLog(`${handNames[defender]}の「守護」により、受ける本数-1。`);
 
       let context = { defender, targetHand, attacker, attackHand, incomingPower: power };
       let trapUsed = false;
@@ -2443,7 +2570,7 @@ function renderLastAction() {
 
       addLog(
         `${handNames[attacker]}の${handNames[attackHand]}${basePower}本` +
-        `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${power !== basePower + bonus + berserkerBonus ? `→${power}` : ""}で、` +
+        `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${blessingBonus ? `+${blessingBonus}` : ""}${cursePenalty ? `${cursePenalty}` : ""}${guardBlessingPenalty ? `${guardBlessingPenalty}` : ""}${power !== basePower + bonus + berserkerBonus + blessingBonus + cursePenalty + guardBlessingPenalty ? `→${power}` : ""}で、` +
         `${handNames[defender]}の${handNames[targetHand]}を攻撃。` +
         `${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`
       );
@@ -2467,7 +2594,7 @@ function renderLastAction() {
             if (cardId) state.discard[player].push(cardId);
           });
           state.traps[player][hand] = [];
-          addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下の罠${count}枚が捨て札になった。`);
+          addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下のカード${count}枚が捨て札になった。`);
         }
       }
     }
@@ -2552,6 +2679,7 @@ function renderLastAction() {
         if (!card || qty <= 0) continue;
         total += qty;
         if (card.trap) traps += qty;
+        if (card.blessing || card.curse) defense += Math.ceil(qty / 2);
         if (card.bullet || ["rapidFire", "bulletSupply", "reload", "focusedShot", "snipe"].includes(cardId)) bullets += qty;
         if (["rapidFire", "snipe", "bulletSupply", "reload", "focusedShot", "accelBullet", "specialBullet", "pierceBullet"].includes(cardId)) shooting += qty;
         if (card.trap || ["repair", "guard", "calm", "lockSplit"].includes(cardId)) defense += qty;
@@ -2588,7 +2716,7 @@ function renderLastAction() {
       const index = state.hands.cpu.findIndex(cardId => cardId === id);
       if (index < 0) return -1;
       const card = CARD_LIBRARY[id];
-      if (!card || card.trap || !card.canPlay("cpu")) return -1;
+      if (!card || isAttachmentCard(id) || !card.canPlay("cpu")) return -1;
       if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return -1;
       return index;
     }
@@ -2601,7 +2729,7 @@ function renderLastAction() {
       let best = null;
       for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
-          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + extraBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0));
+          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + extraBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0) + (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
           const result = wrapFinger(state.human[t] + power);
           let score = 20 + state.human[t] * 8 + state.cpu[a] * 2;
           if (result === 0) score += wouldCpuWinByZeroing(t) ? 10000 : 520;
@@ -2658,18 +2786,26 @@ function renderLastAction() {
       let best = null;
       state.hands.cpu.forEach((cardId, index) => {
         const card = CARD_LIBRARY[cardId];
-        if (!card?.trap) return;
+        if (!isAttachmentCard(cardId)) return;
+        if (state.temp.cpu.setupMode && !card.trap) return;
         if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return;
+        const owner = card.curse ? "human" : "cpu";
         for (const hand of ["L", "R"]) {
-          if (state.cpu[hand] <= 0 || state.traps.cpu[hand].length >= 2) continue;
-          let score = 30 + profile.trapBias * 220 - state.traps.cpu[hand].length * 40;
-          if (state.cpu[hand] === 4) score += 210;
-          if (state.cpu[hand] === 3) score += 65;
-          if (["dodgeTrap", "braceTrap", "puddleTrap"].includes(cardId)) score += state.cpu[hand] >= 3 ? 120 : 40;
-          if (["deflect", "attention"].includes(cardId)) score += state.cpu[otherHand(hand)] > 0 ? 70 : -40;
-          if (["thornTrap", "counterTrap", "swampMan"].includes(cardId)) score += state.cpu[hand] >= 2 ? 70 : 15;
-          if (cardId === "baitTrap") score += 35;
-          if (!best || score > best.score) best = { index, hand, score, cardId };
+          if (state[owner][hand] <= 0 || state.traps[owner][hand].length >= 2) continue;
+          let score = 30 + profile.trapBias * 160 - state.traps[owner][hand].length * 40;
+          if (card.trap) {
+            if (state.cpu[hand] === 4) score += 210;
+            if (state.cpu[hand] === 3) score += 65;
+            if (["dodgeTrap", "braceTrap", "puddleTrap"].includes(cardId)) score += state.cpu[hand] >= 3 ? 120 : 40;
+            if (["deflect", "attention"].includes(cardId)) score += state.cpu[otherHand(hand)] > 0 ? 70 : -40;
+            if (["thornTrap", "counterTrap", "swampMan"].includes(cardId)) score += state.cpu[hand] >= 2 ? 70 : 15;
+            if (cardId === "baitTrap") score += 35;
+          }
+          if (cardId === "powerBlessing") score += state.cpu[hand] >= 2 ? 170 : 80;
+          if (cardId === "guardBlessing") score += state.cpu[hand] >= 3 ? 190 : 100;
+          if (cardId === "slowCurse") score += state.human[hand] >= 2 ? 180 : 80;
+          if (cardId === "exposeCurse") score += state.traps.human[hand].some(slot => isTrapCard(trapCardId(slot))) ? 210 : 70;
+          if (!best || score > best.score) best = { index, hand, owner, score, cardId };
         }
       });
       return best;
@@ -2742,7 +2878,7 @@ function renderLastAction() {
           index: trap.index,
           score: trap.score,
           note: "罠設置",
-          action: async () => setTrap("cpu", trap.hand, trap.index)
+          action: async () => setTrap("cpu", trap.hand, trap.index, trap.owner || "cpu")
         });
       }
 
@@ -2756,7 +2892,7 @@ function renderLastAction() {
     function chooseCpuTrapSet() {
       const trap = cpuBestTrapPlacementScore();
       if (!trap) return false;
-      setTrap("cpu", trap.hand, trap.index);
+      setTrap("cpu", trap.hand, trap.index, trap.owner || "cpu");
       return true;
     }
 
@@ -2765,7 +2901,7 @@ function renderLastAction() {
       const attacks = [];
       for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
-          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0));
+          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0) + (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
           const result = wrapFinger(state.human[t] + power);
           let score = 25 + state.human[t] * 8 + state.cpu[a] * 3;
 
@@ -3292,21 +3428,23 @@ function renderLastAction() {
         return;
       }
 
-      if (state.mode === "setTrap" || state.mode === "setupTrap") {
-        if (owner !== "human") {
-          setMessage("罠は自分の手の下にだけ設置できます。設置する手を選んでください。");
+      if (state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing" || state.mode === "setCurse") {
+        const targetOwner = state.mode === "setCurse" ? "cpu" : "human";
+        const label = state.mode === "setCurse" ? "呪縛" : state.mode === "setBlessing" ? "加護" : "罠";
+        if (owner !== targetOwner) {
+          setMessage(`${label}は${targetOwner === "human" ? "自分" : "相手"}の手の下に設置します。設置する手を選んでください。`);
           return;
         }
         if (state.selectedTrapCardIndex === null) return;
-        if (state.human[hand] <= 0) {
-          setMessage("0の手には罠を設置できません。");
+        if (state[targetOwner][hand] <= 0) {
+          setMessage(`0の手には${label}を設置できません。`);
           return;
         }
-        if (state.traps.human[hand].length >= 2) {
-          setMessage("その手にはすでに2枚伏せてあります。");
+        if (state.traps[targetOwner][hand].length >= 2) {
+          setMessage("その手にはすでに2枚置かれています。");
           return;
         }
-        setTrap("human", hand, state.selectedTrapCardIndex);
+        setTrap("human", hand, state.selectedTrapCardIndex, targetOwner);
         return;
       }
 
