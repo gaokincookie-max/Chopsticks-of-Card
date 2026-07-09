@@ -74,7 +74,7 @@
       <div class="deck-head">
         <div>
           <h2>デッキ編集</h2>
-          <p class="small">コスト上限以内なら反映できます。</p>
+          <p class="small">20枚以内・コスト40以内なら反映できます。</p>
         </div>
         <button id="toggleDeckBtn" class="secondary">編集を開く</button>
       </div>
@@ -97,19 +97,19 @@
           </label>
           <label>
             コスト上限
-            <input id="costLimitInput" type="number" min="1" max="99" value="115" />
+            <input id="costLimitInput" type="number" min="1" max="40" value="40" />
           </label>
-          <span class="small">自分用とCPU用を別々に編集できます。合計コストが上限以下のときだけ反映できます。</span>
+          <span class="small">自分用とCPU用を別々に編集できます。20枚以内・コスト40以内のときだけ反映できます。</span>
         </div>
         <div class="deck-summary">
           <span id="deckCountText">デッキ枚数：0枚</span>
-          <span id="deckCostText">合計コスト：0 / 115</span>
+          <span id="deckCostText">合計コスト：0 / 40</span>
           <span id="deckValidityText" class="valid">使用可能</span>
-          <span class="small">推奨：12〜20枚程度。同名は最大3枚まで。</span>
+          <span class="small">ルール：6〜20枚、コスト40以内。同名は最大3枚まで。</span>
         </div>
         <div id="deckBottomBar" class="deck-bottom-bar hidden">
           <span id="deckBottomCount">0枚</span>
-          <span id="deckBottomCost">コスト 0 / 115</span>
+          <span id="deckBottomCost">コスト 0 / 40</span>
           <span id="deckBottomValid">使用可能</span>
         </div>
         <div class="mode-row">

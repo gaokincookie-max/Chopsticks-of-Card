@@ -464,7 +464,7 @@ const CARD_LIBRARY = {
         name: "凶弾",
         cost: 3,
         type: "終端",
-        text: "自分の両手が1以上のときに使える。選んだ自分の手で、選ばなかった自分の手を攻撃する。この攻撃で攻撃された手がちょうど5になった場合、相手の両手に3本ずつ加える。この攻撃では対象変更できない。",
+        text: "自分の両手が1以上のときに使える。選んだ自分の手で、選ばなかった自分の手を攻撃する。この攻撃で攻撃された手がちょうど5になった場合、相手の1以上の手に3本ずつ加える。この攻撃では対象変更できない。",
         canPlay: (player) => state[player].L > 0 && state[player].R > 0,
         terminal: true,
         effect: async (player) => {
@@ -712,48 +712,29 @@ const CARD_LIBRARY = {
       }
     };
 
+        const DECK_MIN_COUNT = 6;
+    const DECK_MAX_COUNT = 20;
+
     const DEFAULT_DECK_COUNTS = {
-      insight: 2,
+      insight: 1,
       strongHit: 2,
       lightHit: 1,
       lockSplit: 1,
       repair: 1,
-      doubleDouble: 1,
       acceleration: 1,
-      randomDice: 1,
-      equalTrade: 1,
       battlePrep: 1,
       snipe: 1,
       rapidFire: 1,
       accelBullet: 1,
       specialBullet: 1,
-      pierceBullet: 1,
       bulletSupply: 1,
       reload: 1,
-      focusedShot: 1,
-      calm: 2,
-      scout: 1,
+      calm: 1,
       guard: 1,
-      removeTrap: 1,
-      revealTrap: 1,
-      pullTrap: 1,
-      breakthrough: 1,
-      setupTrap: 1,
-      passCard: 1,
-      cursedBullet: 1,
-      thriftLaw: 1,
-      berserker: 1,
-      calmDown: 1,
-      deflect: 2,
-      attention: 2,
+      deflect: 1,
       braceTrap: 1,
       dodgeTrap: 1,
-      puddleTrap: 1,
-      partingGift: 1,
-      thornTrap: 2,
-      counterTrap: 1,
-      swampMan: 1,
-      baitTrap: 2
+      baitTrap: 1
     };
 
     const state = {
@@ -773,7 +754,7 @@ const CARD_LIBRARY = {
       deckCounts: { human: { ...DEFAULT_DECK_COUNTS }, cpu: { ...DEFAULT_DECK_COUNTS } },
       editingDeckOwner: "human",
       cpuDifficulty: "standard",
-      costLimit: 115,
+      costLimit: 40,
       selectedTrapCardIndex: null,
       pendingTrapTargetEffect: null,
       pendingRepairDiscard: null,
@@ -1081,7 +1062,7 @@ const CARD_LIBRARY = {
 
     function isDeckValid(owner = state.editingDeckOwner) {
       const stats = getDeckStats(owner);
-      return stats.count >= 6 && stats.cost <= state.costLimit;
+      return stats.count >= DECK_MIN_COUNT && stats.count <= DECK_MAX_COUNT && stats.cost <= state.costLimit;
     }
 
     function areBothDecksValid() {
@@ -1113,7 +1094,7 @@ const CARD_LIBRARY = {
             cpu: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.cpu }
           };
         }
-        if (Number.isFinite(Number(data.costLimit))) state.costLimit = Number(data.costLimit);
+        if (Number.isFinite(Number(data.costLimit))) state.costLimit = Math.min(40, Number(data.costLimit));
         if (["easy", "standard", "hard"].includes(data.cpuDifficulty)) state.cpuDifficulty = data.cpuDifficulty;
         renderDeckBuilder();
         setMessage("保存済みデッキを読み込みました。反映するにはリスタートしてください。");
@@ -1148,8 +1129,11 @@ const CARD_LIBRARY = {
     function validateCountsForImport(counts) {
       const fixed = cloneValidDeckCounts(counts);
       const stats = statsForCounts(fixed);
-      if (stats.count < 6) {
-        return { ok: false, reason: "デッキは最低6枚必要です。", counts: fixed, stats };
+      if (stats.count < DECK_MIN_COUNT) {
+        return { ok: false, reason: `デッキは最低${DECK_MIN_COUNT}枚必要です。`, counts: fixed, stats };
+      }
+      if (stats.count > DECK_MAX_COUNT) {
+        return { ok: false, reason: `デッキは${DECK_MAX_COUNT}枚以内にしてください。`, counts: fixed, stats };
       }
       if (stats.cost > state.costLimit) {
         return { ok: false, reason: `合計コストが上限を超えています。${stats.cost} / ${state.costLimit}`, counts: fixed, stats };
@@ -1252,7 +1236,7 @@ const CARD_LIBRARY = {
       try {
         const payload = decodeDeckPayload(elements.deckCodeBox.value);
         if (Number.isFinite(Number(payload.costLimit))) {
-          state.costLimit = Math.max(1, Math.floor(Number(payload.costLimit)));
+          state.costLimit = Math.min(40, Math.max(1, Math.floor(Number(payload.costLimit))));
         }
 
         const target = elements.deckCodeTargetSelect.value;
@@ -1336,6 +1320,15 @@ const CARD_LIBRARY = {
           const action = btn.dataset.action;
           const current = counts[cardId] || 0;
           if (action === "plus") {
+            const currentStats = getDeckStats(owner);
+            if (currentStats.count >= DECK_MAX_COUNT && current <= 0) {
+              setMessage(`デッキは${DECK_MAX_COUNT}枚以内です。`);
+              return;
+            }
+            if (currentStats.count >= DECK_MAX_COUNT && current < 3) {
+              setMessage(`デッキは${DECK_MAX_COUNT}枚以内です。`);
+              return;
+            }
             counts[cardId] = Math.min(3, current + 1);
           } else {
             counts[cardId] = Math.max(0, current - 1);
@@ -1350,7 +1343,7 @@ const CARD_LIBRARY = {
       const otherStats = getDeckStats(other);
       elements.deckOwnerSelect.value = owner;
       elements.cpuDifficultySelect.value = state.cpuDifficulty;
-      const validText = valid ? "使用可能" : stats.count < 6 ? "最低6枚必要" : "コスト超過";
+      const validText = valid ? "使用可能" : stats.count < DECK_MIN_COUNT ? `最低${DECK_MIN_COUNT}枚必要` : stats.count > DECK_MAX_COUNT ? `${DECK_MAX_COUNT}枚以内` : "コスト超過";
       elements.deckCountText.textContent = `${owner === "human" ? "あなた用" : "CPU用"}：${stats.count}枚 / もう片方：${otherStats.count}枚`;
       elements.deckCostText.textContent = `合計コスト：${stats.cost} / ${state.costLimit}`;
       elements.deckValidityText.textContent = validText;
@@ -2884,8 +2877,9 @@ function renderLastAction() {
       addLog(`${handNames[player]}は「凶弾」で、自分の${handNames[attackHand]}${power}本で${handNames[targetHand]}を攻撃。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
 
       if (total === 5) {
-        addLog(`「凶弾」の追加効果。${handNames[opponent]}の両手に3本ずつ加える。`);
-        for (const h of ["L", "R"]) {
+        const targets = ["L", "R"].filter(h => state[opponent][h] > 0);
+        addLog(`「凶弾」の追加効果。${handNames[opponent]}の1以上の手に3本ずつ加える。`);
+        for (const h of targets) {
           const ob = state[opponent][h];
           const ot = ob + 3;
           const of = normalize(ot, opponent);
@@ -2893,6 +2887,7 @@ function renderLastAction() {
           state[opponent][h] = of;
           addLog(`${handNames[opponent]}の${handNames[h]}：${ob}→${ot}${ot >= 5 ? `→${of}` : ""}`);
         }
+        if (targets.length === 0) addLog("対象になる1以上の手がなかったため、凶弾の追加効果は不発。");
       }
 
       clearBrokenTraps(player);
@@ -3493,7 +3488,8 @@ function renderLastAction() {
 
     elements.costLimitInput.addEventListener("input", () => {
       const value = Number(elements.costLimitInput.value);
-      state.costLimit = Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+      state.costLimit = Math.min(40, Number.isFinite(value) && value > 0 ? Math.floor(value) : 1);
+      elements.costLimitInput.value = state.costLimit;
       renderDeckBuilder();
     });
 
@@ -3501,7 +3497,8 @@ function renderLastAction() {
       if (!areBothDecksValid()) {
         const h = getDeckStats("human");
         const c = getDeckStats("cpu");
-        if (h.count < 6 || c.count < 6) setMessage("あなた用・CPU用の両方を最低6枚以上にしてください。");
+        if (h.count < DECK_MIN_COUNT || c.count < DECK_MIN_COUNT) setMessage(`あなた用・CPU用の両方を最低${DECK_MIN_COUNT}枚以上にしてください。`);
+        else if (h.count > DECK_MAX_COUNT || c.count > DECK_MAX_COUNT) setMessage(`あなた用・CPU用の両方を${DECK_MAX_COUNT}枚以内にしてください。`);
         else setMessage("あなた用・CPU用のどちらかがコスト上限を超えています。");
         return;
       }
