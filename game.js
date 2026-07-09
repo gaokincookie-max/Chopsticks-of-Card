@@ -772,6 +772,7 @@ const CARD_LIBRARY = {
       },
       deckCounts: { human: { ...DEFAULT_DECK_COUNTS }, cpu: { ...DEFAULT_DECK_COUNTS } },
       editingDeckOwner: "human",
+      cpuDifficulty: "standard",
       costLimit: 115,
       selectedTrapCardIndex: null,
       pendingTrapTargetEffect: null,
@@ -847,6 +848,7 @@ const CARD_LIBRARY = {
       defaultDeckBtn: document.getElementById("defaultDeckBtn"),
       costLimitInput: document.getElementById("costLimitInput"),
       deckOwnerSelect: document.getElementById("deckOwnerSelect"),
+      cpuDifficultySelect: document.getElementById("cpuDifficultySelect"),
       saveDeckBtn: document.getElementById("saveDeckBtn"),
       loadDeckBtn: document.getElementById("loadDeckBtn"),
       copyDeckBtn: document.getElementById("copyDeckBtn"),
@@ -1088,8 +1090,9 @@ const CARD_LIBRARY = {
 
     function saveDecks() {
       const data = {
-        version: 11,
+        version: 12,
         costLimit: state.costLimit,
+        cpuDifficulty: state.cpuDifficulty,
         deckCounts: state.deckCounts
       };
       localStorage.setItem("waribashiDecksV11", JSON.stringify(data));
@@ -1111,6 +1114,7 @@ const CARD_LIBRARY = {
           };
         }
         if (Number.isFinite(Number(data.costLimit))) state.costLimit = Number(data.costLimit);
+        if (["easy", "standard", "hard"].includes(data.cpuDifficulty)) state.cpuDifficulty = data.cpuDifficulty;
         renderDeckBuilder();
         setMessage("保存済みデッキを読み込みました。反映するにはリスタートしてください。");
       } catch (error) {
@@ -1345,6 +1349,7 @@ const CARD_LIBRARY = {
       const other = owner === "human" ? "cpu" : "human";
       const otherStats = getDeckStats(other);
       elements.deckOwnerSelect.value = owner;
+      elements.cpuDifficultySelect.value = state.cpuDifficulty;
       const validText = valid ? "使用可能" : stats.count < 6 ? "最低6枚必要" : "コスト超過";
       elements.deckCountText.textContent = `${owner === "human" ? "あなた用" : "CPU用"}：${stats.count}枚 / もう片方：${otherStats.count}枚`;
       elements.deckCostText.textContent = `合計コスト：${stats.cost} / ${state.costLimit}`;
@@ -2535,269 +2540,271 @@ function renderLastAction() {
       return false;
     }
 
+    const CPU_DIFFICULTY_CONFIG = {
+      easy: { label: "やさしめ", topN: 6, noise: 90, skipCardChance: 0.35, mistakeChance: 0.18, trapCaution: 0.75 },
+      standard: { label: "標準", topN: 3, noise: 35, skipCardChance: 0.12, mistakeChance: 0.06, trapCaution: 1.0 },
+      hard: { label: "強め", topN: 2, noise: 12, skipCardChance: 0.03, mistakeChance: 0.01, trapCaution: 1.25 }
+    };
+
+    function cpuConfig() {
+      return CPU_DIFFICULTY_CONFIG[state.cpuDifficulty] || CPU_DIFFICULTY_CONFIG.standard;
+    }
+
+    function cpuDeckProfile() {
+      const counts = currentDeckCounts("cpu");
+      let total = 0, traps = 0, bullets = 0, shooting = 0, defense = 0;
+      for (const [cardId, qtyRaw] of Object.entries(counts)) {
+        const qty = Number(qtyRaw) || 0;
+        const card = CARD_LIBRARY[cardId];
+        if (!card || qty <= 0) continue;
+        total += qty;
+        if (card.trap) traps += qty;
+        if (card.bullet || ["rapidFire", "bulletSupply", "reload", "focusedShot", "snipe"].includes(cardId)) bullets += qty;
+        if (["rapidFire", "snipe", "bulletSupply", "reload", "focusedShot", "accelBullet", "specialBullet", "pierceBullet"].includes(cardId)) shooting += qty;
+        if (card.trap || ["repair", "guard", "calm", "lockSplit"].includes(cardId)) defense += qty;
+      }
+      return {
+        total: Math.max(1, total),
+        trapBias: traps / Math.max(1, total),
+        bulletBias: bullets / Math.max(1, total),
+        shootingBias: shooting / Math.max(1, total),
+        defenseBias: defense / Math.max(1, total)
+      };
+    }
+
+    function chooseScoredCpuOption(options, purpose = "move") {
+      if (!options.length) return null;
+      const cfg = cpuConfig();
+      const prepared = options
+        .filter(opt => Number.isFinite(opt.score))
+        .map(opt => ({ ...opt, rollScore: opt.score + (Math.random() * cfg.noise) - cfg.noise / 2 }))
+        .sort((a, b) => b.rollScore - a.rollScore);
+
+      if (!prepared.length) return null;
+
+      if (Math.random() < cfg.mistakeChance && prepared.length > 1) {
+        const pool = prepared.slice(Math.min(1, prepared.length - 1), Math.min(prepared.length, cfg.topN + 2));
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      const top = prepared.slice(0, Math.min(cfg.topN, prepared.length));
+      return top[Math.floor(Math.random() * top.length)];
+    }
+
+    function cpuCanUseCardIndex(id) {
+      const index = state.hands.cpu.findIndex(cardId => cardId === id);
+      if (index < 0) return -1;
+      const card = CARD_LIBRARY[id];
+      if (!card || card.trap || !card.canPlay("cpu")) return -1;
+      if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return -1;
+      return index;
+    }
+
+    function wouldCpuWinByZeroing(hand) {
+      return state.human[otherHand(hand)] === 0;
+    }
+
+    function cpuBestAttackScoreAfterBonus(extraBonus = 0) {
+      let best = null;
+      for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
+        for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
+          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + extraBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0));
+          const result = wrapFinger(state.human[t] + power);
+          let score = 20 + state.human[t] * 8 + state.cpu[a] * 2;
+          if (result === 0) score += wouldCpuWinByZeroing(t) ? 10000 : 520;
+          if (state.human[t] === 4) score += 120;
+          score -= state.traps.human[t].length * 35 * cpuConfig().trapCaution;
+          if (!best || score > best.score) best = { a, t, result, score };
+        }
+      }
+      return best;
+    }
+
+    function cpuThreatScoreForHands(L = state.cpu.L, R = state.cpu.R) {
+      let score = 0;
+      const values = { L, R };
+      for (const h of ["L", "R"]) {
+        if (values[h] <= 0) {
+          score += 70;
+          continue;
+        }
+        for (const enemy of ["L", "R"]) {
+          if (state.human[enemy] <= 0) continue;
+          if (wrapFinger(values[h] + state.human[enemy]) === 0) score += 120;
+        }
+        if (values[h] === 4) score += 45;
+      }
+      return score;
+    }
+
+    function cpuBestRapidFireAmmo() {
+      let best = null;
+      state.hands.cpu.forEach((cardId, index) => {
+        if (cardId === "rapidFire") return;
+        const card = CARD_LIBRARY[cardId];
+        if (!card) return;
+        let damage = (card.cost || 0) + (card.bullet ? 1 : 0);
+        let score = damage * 90;
+        if (cardId === "logicCrusherBullet") score = 9500;
+        if (card.bullet) score += 85;
+        if (cardId === "specialBullet") score += 120;
+        if (cardId === "pierceBullet") score += (state.traps.human.L.length + state.traps.human.R.length) > 0 ? 180 : 40;
+        if (cardId === "accelBullet") score += 60;
+        for (const t of ["L", "R"].filter(h => state.human[h] > 0)) {
+          const result = cardId === "logicCrusherBullet" ? 0 : wrapFinger(state.human[t] + damage);
+          let targetScore = score + state.human[t] * 10 - state.traps.human[t].length * 20;
+          if (result === 0) targetScore += wouldCpuWinByZeroing(t) ? 10000 : 500;
+          if (!best || targetScore > best.score) best = { index, cardId, target: t, damage, score: targetScore };
+        }
+      });
+      return best;
+    }
+
+    function cpuBestTrapPlacementScore() {
+      const profile = cpuDeckProfile();
+      let best = null;
+      state.hands.cpu.forEach((cardId, index) => {
+        const card = CARD_LIBRARY[cardId];
+        if (!card?.trap) return;
+        if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return;
+        for (const hand of ["L", "R"]) {
+          if (state.cpu[hand] <= 0 || state.traps.cpu[hand].length >= 2) continue;
+          let score = 30 + profile.trapBias * 220 - state.traps.cpu[hand].length * 40;
+          if (state.cpu[hand] === 4) score += 210;
+          if (state.cpu[hand] === 3) score += 65;
+          if (["dodgeTrap", "braceTrap", "puddleTrap"].includes(cardId)) score += state.cpu[hand] >= 3 ? 120 : 40;
+          if (["deflect", "attention"].includes(cardId)) score += state.cpu[otherHand(hand)] > 0 ? 70 : -40;
+          if (["thornTrap", "counterTrap", "swampMan"].includes(cardId)) score += state.cpu[hand] >= 2 ? 70 : 15;
+          if (cardId === "baitTrap") score += 35;
+          if (!best || score > best.score) best = { index, hand, score, cardId };
+        }
+      });
+      return best;
+    }
+
     async function chooseCpuCardAction() {
       if (state.temp.cpu.cardActionUsed) return false;
       if (state.berserkerTurns.cpu > 0 && !state.temp.cpu.berserkerJustUsed) return false;
 
-      const cpuCanUseIndex = (id) => {
-        const index = state.hands.cpu.findIndex(cardId => cardId === id);
-        if (index < 0) return -1;
-        const card = CARD_LIBRARY[id];
-        if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return -1;
-        return index;
+      const cfg = cpuConfig();
+      const profile = cpuDeckProfile();
+      const candidates = [];
+
+      const addCard = (id, score, note = "") => {
+        const index = cpuCanUseCardIndex(id);
+        if (index >= 0) candidates.push({ id, index, score, note, action: async () => playCard("cpu", index, true) });
       };
 
-      const berserkerIndex = cpuCanUseIndex("berserker");
-      if (berserkerIndex >= 0 && Math.random() < 0.35) {
-        await playCard("cpu", berserkerIndex, true);
-        return true;
-      }
+      const bestNormal = cpuBestAttackScoreAfterBonus(0);
+      const bestStrong = cpuBestAttackScoreAfterBonus(1);
 
-      const thriftIndex = cpuCanUseIndex("thriftLaw");
-      if (thriftIndex >= 0 && Math.random() < 0.30) {
-        await playCard("cpu", thriftIndex, true);
-        return true;
-      }
-
-      const passIndex = cpuCanUseIndex("passCard");
-      if (passIndex >= 0 && !chooseCpuMove() && Math.random() < 0.60) {
-        await playCard("cpu", passIndex, true);
-        return true;
-      }
-
-      const bulletIndex = cpuCanUseIndex("cursedBullet");
-      if (bulletIndex >= 0 && (state.cpu.L + state.cpu.R === 5) && Math.random() < 0.45) {
-        await playCard("cpu", bulletIndex, true);
-        return true;
-      }
-
-      const calmDownIndex = cpuCanUseIndex("calmDown");
-      if (calmDownIndex >= 0 && state.hands.cpu.length >= 5 && Math.random() < 0.35) {
-        await playCard("cpu", calmDownIndex, true);
-        return true;
-      }
-
-      const supplyIndex = cpuCanUseIndex("bulletSupply");
-      if (supplyIndex >= 0 && state.hands.cpu.filter(id => CARD_LIBRARY[id]?.bullet).length <= 1 && Math.random() < 0.60) {
-        await playCard("cpu", supplyIndex, true);
-        return true;
-      }
-
-      const reloadIndex = cpuCanUseIndex("reload");
-      if (reloadIndex >= 0 && state.discard.cpu.includes("rapidFire") && Math.random() < 0.55) {
-        await playCard("cpu", reloadIndex, true);
-        return true;
-      }
-
-      const focusIndex = cpuCanUseIndex("focusedShot");
-      if (focusIndex >= 0 && state.hands.cpu.includes("rapidFire") && Math.random() < 0.40) {
-        await playCard("cpu", focusIndex, true);
-        return true;
-      }
-
-      const snipeIndex = cpuCanUseIndex("snipe");
-      if (snipeIndex >= 0 && ["L", "R"].some(h => state.human[h] === 4) && Math.random() < 0.65) {
-        await playCard("cpu", snipeIndex, true);
-        return true;
-      }
-
-      const rapidIndex = cpuCanUseIndex("rapidFire");
-      if (rapidIndex >= 0 && state.hands.cpu.length > 1 && Math.random() < 0.35) {
-        await playCard("cpu", rapidIndex, true);
-        return true;
-      }
-
-      const strongIndex = cpuCanUseIndex("strongHit");
-      if (strongIndex >= 0) {
-        for (const a of ["L", "R"]) {
-          if (!isAlive("cpu", a)) continue;
-          for (const t of ["L", "R"]) {
-            if (!isAlive("human", t)) continue;
-            const without = wrapFinger(state.human[t] + state.cpu[a]);
-            const withBonus = wrapFinger(state.human[t] + state.cpu[a] + 1);
-            if (withBonus === 0 && without !== 0) {
-              await playCard("cpu", strongIndex, true);
-              return true;
-            }
-          }
-        }
-      }
-
-      const lightIndex = cpuCanUseIndex("lightHit");
-      if (lightIndex >= 0) {
-        for (const a of ["L", "R"]) {
-          if (!isAlive("cpu", a)) continue;
-          for (const t of ["L", "R"]) {
-            if (!isAlive("human", t)) continue;
+      if (bestStrong && bestStrong.score > (bestNormal?.score || 0) + 120) addCard("strongHit", bestStrong.score + 60, "攻撃強化");
+      if (state.hands.cpu.includes("lightHit")) {
+        let lightScore = 80;
+        for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
+          for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
             const normal = wrapFinger(state.human[t] + state.cpu[a]);
             const lighter = wrapFinger(state.human[t] + Math.max(1, state.cpu[a] - 1));
-            if (normal === 0 && lighter !== 0 && Math.random() < 0.55) {
-              await playCard("cpu", lightIndex, true);
-              return true;
-            }
+            if (normal !== 0 && lighter === 0) lightScore += wouldCpuWinByZeroing(t) ? 9000 : 430;
+            if (normal === 0 && lighter !== 0) lightScore -= 220;
           }
         }
+        addCard("lightHit", lightScore, "軽打調整");
       }
 
-      const repairIndex = cpuCanUseIndex("repair");
-      if (repairIndex >= 0 && CARD_LIBRARY.repair.canPlay("cpu") && Math.random() < 0.75) {
-        await playCard("cpu", repairIndex, true);
-        return true;
+      if (state.cpu.L === 0 || state.cpu.R === 0) addCard("repair", 780 + (state.cpu.L === 0 && state.cpu.R === 0 ? 300 : 0), "復帰");
+      if (cpuThreatScoreForHands() >= 120) addCard("guard", 300 + cpuThreatScoreForHands(), "防御");
+      if (state.hands.cpu.length >= 5) addCard("calmDown", 180 + state.hands.cpu.length * 25, "手札整理");
+      if (state.turnNumber <= 8 && state.activeAcceleration.cpu === 0 && state.pendingAcceleration.cpu === 0 && state.activeNoDraw.cpu === 0) addCard("acceleration", 260 + Math.max(0, 8 - state.turnNumber) * 15, "過加速");
+      if (getSplitOptions("human").length > 0) addCard("lockSplit", 180 + (state.human.L === 4 || state.human.R === 4 ? 90 : 0), "固定");
+
+      if (state.hands.cpu.includes("rapidFire")) {
+        const ammo = cpuBestRapidFireAmmo();
+        if (ammo) addCard("rapidFire", ammo.score + profile.shootingBias * 260, "乱射");
+      }
+      if (state.hands.cpu.filter(id => CARD_LIBRARY[id]?.bullet).length <= 1) addCard("bulletSupply", 210 + profile.bulletBias * 340, "弾補給");
+      if (state.discard.cpu.includes("rapidFire")) addCard("reload", 260 + profile.bulletBias * 310, "乱射回収");
+      if (state.hands.cpu.includes("rapidFire") && !state.hands.cpu.includes("logicCrusherBullet")) addCard("focusedShot", 420 + profile.bulletBias * 360, "必殺弾");
+      if (["L", "R"].some(h => state.human[h] === 4)) addCard("snipe", wouldCpuWinByZeroing(["L", "R"].find(h => state.human[h] === 4)) ? 10000 : 560, "狙撃");
+      if (CARD_LIBRARY.equalTrade.canPlay("cpu")) addCard("equalTrade", 160 + (state.human.L >= 3 || state.human.R >= 3 ? 120 : 0), "等価交換");
+      if (CARD_LIBRARY.doubleDouble.canPlay("cpu")) addCard("doubleDouble", 320 + (bestNormal?.score || 0) / 4, "追加行動");
+      if (state.cpu.L === 4 || state.cpu.R === 4) addCard("randomDice", state.cpuDifficulty === "easy" ? 170 : 80, "賭け");
+      if (state.hands.cpu.filter(id => CARD_LIBRARY[id]?.trap).length <= 1) addCard("battlePrep", 160 + profile.trapBias * 280, "罠補充");
+      if ((state.traps.human.L.length + state.traps.human.R.length) >= 1) {
+        addCard("revealTrap", 130 + profile.defenseBias * 70, "看破");
+        addCard("removeTrap", 220 + (state.traps.human.L.length + state.traps.human.R.length) * 80, "解除");
+        addCard("pullTrap", 150 + profile.defenseBias * 90, "手繰り寄せ");
+      }
+      if ((state.traps.human.L.length + state.traps.human.R.length) >= 1 && bestNormal && bestNormal.score > 260) addCard("breakthrough", 260 + bestNormal.score / 3, "罠突破");
+      if (state.hands.cpu.filter(id => CARD_LIBRARY[id]?.trap).length >= 2 && canSetAnyTrap("cpu")) addCard("setupTrap", 250 + profile.trapBias * 450, "仕込み");
+      if (state.cpu.L > 0 && state.cpu.R > 0 && state.cpu.L + state.cpu.R === 5) addCard("cursedBullet", 250, "凶弾");
+      if (bestNormal && bestNormal.score < 30) addCard("passCard", 10, "パス");
+      if (state.human.L + state.human.R >= 6) addCard("thriftLaw", 150, "倹約令");
+      if (state.cpu.L >= 2 && state.cpu.R >= 2 && state.human.L + state.human.R >= 5) addCard("berserker", 180, "バーサーカー");
+
+      const trap = cpuBestTrapPlacementScore();
+      if (trap) {
+        candidates.push({
+          id: "setTrap",
+          index: trap.index,
+          score: trap.score,
+          note: "罠設置",
+          action: async () => setTrap("cpu", trap.hand, trap.index)
+        });
       }
 
-      const lockIndex = cpuCanUseIndex("lockSplit");
-      if (lockIndex >= 0 && getSplitOptions("human").length > 0 && Math.random() < 0.35) {
-        await playCard("cpu", lockIndex, true);
-        return true;
-      }
+      if (!candidates.length || Math.random() < cfg.skipCardChance) return false;
 
-      const doubleIndex = cpuCanUseIndex("doubleDouble");
-      if (doubleIndex >= 0 && CARD_LIBRARY.doubleDouble.canPlay("cpu") && Math.random() < 0.85) {
-        await playCard("cpu", doubleIndex, true);
-        return true;
-      }
-
-      const accelIndex = cpuCanUseIndex("acceleration");
-      if (accelIndex >= 0 && state.turnNumber <= 8 && Math.random() < 0.55) {
-        await playCard("cpu", accelIndex, true);
-        return true;
-      }
-
-      const prepIndex = cpuCanUseIndex("battlePrep");
-      if (prepIndex >= 0 && state.hands.cpu.filter(id => CARD_LIBRARY[id]?.trap).length <= 1 && Math.random() < 0.55) {
-        await playCard("cpu", prepIndex, true);
-        return true;
-      }
-
-      const diceIndex = cpuCanUseIndex("randomDice");
-      if (diceIndex >= 0 && (state.cpu.L === 4 || state.cpu.R === 4) && Math.random() < 0.25) {
-        await playCard("cpu", diceIndex, true);
-        return true;
-      }
-
-      const tradeIndex = cpuCanUseIndex("equalTrade");
-      if (tradeIndex >= 0 && CARD_LIBRARY.equalTrade.canPlay("cpu") && Math.random() < 0.35) {
-        await playCard("cpu", tradeIndex, true);
-        return true;
-      }
-
-      const calmIndex = cpuCanUseIndex("calm");
-      if (calmIndex >= 0 && CARD_LIBRARY.calm.canPlay("cpu") && (state.cpu.L === 4 || state.cpu.R === 4)) {
-        await playCard("cpu", calmIndex, true);
-        return true;
-      }
-
-      const insightIndex = cpuCanUseIndex("insight");
-      if (insightIndex >= 0 && state.hands.cpu.length <= 3) {
-        await playCard("cpu", insightIndex, true);
-        return true;
-      }
-
-      const breakthroughIndex = cpuCanUseIndex("breakthrough");
-      const humanBeforeTrapCount = ["L", "R"].reduce((sum, h) => {
-        return sum + state.traps.human[h].filter(slot => (CARD_LIBRARY[trapCardId(slot)]?.triggerTiming || "before") === "before").length;
-      }, 0);
-      if (breakthroughIndex >= 0 && humanBeforeTrapCount >= 1 && Math.random() < 0.55) {
-        await playCard("cpu", breakthroughIndex, true);
-        return true;
-      }
-
-      const setupIndex = cpuCanUseIndex("setupTrap");
-      const cpuTrapCards = state.hands.cpu.filter(id => CARD_LIBRARY[id]?.trap).length;
-      const cpuTrapSpace = ["L", "R"].reduce((sum, h) => sum + (state.cpu[h] > 0 ? 2 - state.traps.cpu[h].length : 0), 0);
-      if (setupIndex >= 0 && cpuTrapCards >= 2 && cpuTrapSpace >= 2 && Math.random() < 0.45) {
-        await playCard("cpu", setupIndex, true);
-        while (state.temp.cpu.setupMode && chooseCpuTrapSet()) {
-          await delay(260);
-        }
-        return "setup";
-      }
-
-      const pullIndex = cpuCanUseIndex("pullTrap");
-      if (pullIndex >= 0 && hasMovableOpponentTrap("cpu") && Math.random() < 0.35) {
-        await playCard("cpu", pullIndex, true);
-        return true;
-      }
-
-      const removeIndex = cpuCanUseIndex("removeTrap");
-      const humanTrapCount = state.traps.human.L.length + state.traps.human.R.length;
-      if (removeIndex >= 0 && humanTrapCount >= 2 && Math.random() < 0.55) {
-        await playCard("cpu", removeIndex, true);
-        return true;
-      }
-
-      const revealIndex = cpuCanUseIndex("revealTrap");
-      if (revealIndex >= 0 && humanTrapCount >= 1 && Math.random() < 0.25) {
-        await playCard("cpu", revealIndex, true);
-        return true;
-      }
-
-      const scoutIndex = cpuCanUseIndex("scout");
-      if (scoutIndex >= 0 && Math.random() < 0.18) {
-        await playCard("cpu", scoutIndex, true);
-        return true;
-      }
-
-      if (chooseCpuTrapSet()) return true;
-
-      return false;
+      const chosen = chooseScoredCpuOption(candidates, "card");
+      if (!chosen || chosen.score < (state.cpuDifficulty === "hard" ? 80 : state.cpuDifficulty === "standard" ? 45 : -50)) return false;
+      return await chosen.action();
     }
 
     function chooseCpuTrapSet() {
-      if (state.temp.cpu.cardActionUsed && !state.temp.cpu.setupMode) return false;
-      if (state.berserkerTurns.cpu > 0 && !state.temp.cpu.berserkerJustUsed) return false;
-      const trapIndex = state.hands.cpu.findIndex(id => CARD_LIBRARY[id]?.trap && (state.activeCostLimit.cpu === null || CARD_LIBRARY[id].cost <= state.activeCostLimit.cpu));
-      if (trapIndex < 0) return false;
-
-      const possibleHands = ["L", "R"].filter(h => state.cpu[h] > 0 && state.traps.cpu[h].length < 2);
-      if (possibleHands.length === 0) return false;
-
-      possibleHands.sort((a, b) => {
-        const scoreA = (state.cpu[a] === 4 ? 10 : 0) - state.traps.cpu[a].length;
-        const scoreB = (state.cpu[b] === 4 ? 10 : 0) - state.traps.cpu[b].length;
-        return scoreB - scoreA;
-      });
-
-      const hand = possibleHands[0];
-      setTrap("cpu", hand, trapIndex);
+      const trap = cpuBestTrapPlacementScore();
+      if (!trap) return false;
+      setTrap("cpu", trap.hand, trap.index);
       return true;
     }
 
     function chooseCpuMove() {
+      const cfg = cpuConfig();
       const attacks = [];
       for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
           const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0));
           const result = wrapFinger(state.human[t] + power);
-          let score = 0;
+          let score = 25 + state.human[t] * 8 + state.cpu[a] * 3;
 
-          if (result === 0) score += 120;
-          score += state.human[t] * 5;
-          score += state.cpu[a] * 2;
-          if (state.human[t] === 4) score += 10;
-          score -= state.traps.human[t].length * 10;
+          if (result === 0) score += wouldCpuWinByZeroing(t) ? 10000 : 620;
+          if (state.human[t] === 4) score += 160;
+          if (state.human[t] === 1 && result !== 0) score -= 40;
+          score -= state.traps.human[t].length * 42 * cfg.trapCaution;
+          if (state.temp.cpu.attackBonus > 0 && result === 0) score += 140;
           attacks.push({ type: "attack", a, t, score });
         }
       }
 
+      const currentThreat = cpuThreatScoreForHands();
       const splits = (state.noSplit.cpu || state.berserkerTurns.cpu > 0) ? [] : getSplitOptions("cpu").map(opt => {
-        let score = 0;
+        let score = 35;
         const values = [opt.L, opt.R];
-        if (!values.includes(0)) score += 4;
-        if (values.includes(4)) score -= 8;
-        if (opt.L === opt.R) score += 4;
-        if (Math.max(opt.L, opt.R) >= 3) score += 3;
-        if (state.temp.cpu.attackBonus > 0) score -= 80;
+        const newThreat = cpuThreatScoreForHands(opt.L, opt.R);
+        score += (currentThreat - newThreat) * 1.8;
+        if (!values.includes(0)) score += 25;
+        if (values.includes(4)) score -= 35;
+        if (opt.L === opt.R) score += 28;
+        if (Math.max(opt.L, opt.R) >= 3) score += 12;
+        if (state.temp.cpu.attackBonus > 0) score -= 220;
+        if (currentThreat < 80) score -= 40;
         return { type: "split", L: opt.L, R: opt.R, score };
       });
 
       const allMoves = attacks.concat(splits);
-
       if (allMoves.length === 0) return null;
 
-      allMoves.sort((x, y) => y.score - x.score);
-      const top = allMoves.slice(0, Math.min(3, allMoves.length));
-      return top[Math.floor(Math.random() * top.length)];
+      const chosen = chooseScoredCpuOption(allMoves, "move");
+      return chosen;
     }
 
     async function cpuExtraAction() {
@@ -3513,6 +3520,13 @@ function renderLastAction() {
       state.editingDeckOwner = elements.deckOwnerSelect.value;
       renderDeckBuilder();
       setMessage(`${state.editingDeckOwner === "human" ? "あなた用" : "CPU用"}デッキを編集中です。`);
+    });
+
+    elements.cpuDifficultySelect.addEventListener("change", () => {
+      state.cpuDifficulty = elements.cpuDifficultySelect.value;
+      renderDeckBuilder();
+      const labels = { easy: "やさしめ", standard: "標準", hard: "強め" };
+      setMessage(`CPU難易度を「${labels[state.cpuDifficulty]}」にしました。`);
     });
 
     elements.saveDeckBtn.addEventListener("click", saveDecks);
