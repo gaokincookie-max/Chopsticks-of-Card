@@ -46,12 +46,58 @@
     <header>
       <h1>割り箸カード</h1>
       <p class="subtitle">
-        罠の発動タイミングを「攻撃判定前」「攻撃判定後」に分けました。デッキ保存とCPU別デッキにも対応しています。
+        メニューから対戦開始・デッキ編集・設定を選べます。デッキ編集と対戦画面を分離しました。
       </p>
     </header>
 
+    <section class="screen menu-screen" id="menuScreen">
+      <div class="menu-card">
+        <div class="menu-kicker">WARIBASHI CARD</div>
+        <h2>割り箸カード</h2>
+        <p class="small">デッキを整えて、CPUと対戦します。加護・呪縛・罠・弾を使って相手の両手を0にしましょう。</p>
+        <div class="menu-actions">
+          <button id="menuStartBtn">スタート</button>
+          <button id="menuDeckBtn" class="blue">デッキ編集</button>
+          <button id="menuSettingsBtn" class="secondary">設定</button>
+        </div>
+      </div>
+    </section>
 
-    <section class="help-strip">
+    <section class="screen difficulty-screen screen-hidden" id="difficultyScreen">
+      <div class="menu-card">
+        <div class="menu-kicker">CPU DIFFICULTY</div>
+        <h2>難易度を選択</h2>
+        <p class="small">難易度を選ぶと、その設定で試合を開始します。</p>
+        <div class="difficulty-grid">
+          <button class="difficulty-btn" data-difficulty-start="easy">
+            <strong>やさしめ</strong>
+            <span>ランダム性が高く、ミスも多め。</span>
+          </button>
+          <button class="difficulty-btn" data-difficulty-start="standard">
+            <strong>標準</strong>
+            <span>候補を点数化してほどよく選択。</span>
+          </button>
+          <button class="difficulty-btn" data-difficulty-start="hard">
+            <strong>強め</strong>
+            <span>勝ち筋と危険回避をかなり優先。</span>
+          </button>
+        </div>
+        <button id="difficultyBackBtn" class="secondary wide-btn">メニューに戻る</button>
+      </div>
+    </section>
+
+    <section class="screen settings-screen screen-hidden" id="settingsScreen">
+      <div class="menu-card">
+        <div class="menu-kicker">SETTINGS</div>
+        <h2>設定</h2>
+        <p class="small">設定項目はまだありません。今後、演出速度や表示設定などを追加できます。</p>
+        <button id="settingsBackBtn" class="secondary wide-btn">メニューに戻る</button>
+      </div>
+    </section>
+
+
+
+    <section class="help-strip app-nav screen-shared">
       <div class="help-shortcuts">
         <button id="openHelpBtn" class="blue">ヘルプ</button>
         <button id="openCardsHelpBtn" class="secondary">カード一覧</button>
@@ -59,7 +105,12 @@
       <p class="small">ルール・罠タイミング・カード効果を確認できます。</p>
     </section>
 
-    <section class="status-strip">
+    <section class="battle-top battle-screen screen-hidden">
+      <button id="battleBackMenuBtn" class="secondary">メニューへ</button>
+      <button id="battleRestartBtn" class="danger">同じ難易度で再戦</button>
+    </section>
+
+    <section class="status-strip battle-screen screen-hidden">
       <div class="status-card">
         <span>あなたの山札</span>
         <strong id="humanDeckCount">0</strong>
@@ -70,13 +121,16 @@
       </div>
     </section>
 
-    <section class="deck-builder">
+    <section class="deck-builder deck-screen screen-hidden" id="deckEditorScreen">
       <div class="deck-head">
         <div>
           <h2>デッキ編集</h2>
           <p class="small">20枚以内・コスト40以内なら反映できます。</p>
         </div>
-        <button id="toggleDeckBtn" class="secondary">編集を開く</button>
+        <div class="deck-head-actions">
+          <button id="deckBackMenuBtn" class="secondary">メニューへ</button>
+          <button id="toggleDeckBtn" class="secondary">編集を開く</button>
+        </div>
       </div>
       <div class="deck-panel" id="deckPanel">
         <div class="deck-limit-row">
@@ -101,6 +155,7 @@
           </label>
           <span class="small">自分用とCPU用を別々に編集できます。20枚以内・コスト40以内のときだけ反映できます。</span>
         </div>
+        <div class="deck-editor-message" id="deckEditorMessage">デッキを編集できます。</div>
         <div class="deck-summary">
           <span id="deckCountText">デッキ枚数：0枚</span>
           <span id="deckCostText">合計コスト：0 / 40</span>
@@ -113,7 +168,7 @@
           <span id="deckBottomValid">使用可能</span>
         </div>
         <div class="mode-row">
-          <button id="applyDeckBtn">このデッキでリスタート</button>
+          <button id="applyDeckBtn">編集内容を確認</button>
           <button id="saveDeckBtn" class="blue">デッキ保存</button>
           <button id="loadDeckBtn" class="secondary">保存デッキ読込</button>
           <button id="copyDeckBtn" class="secondary">もう片方へコピー</button>
@@ -146,12 +201,12 @@
       </div>
     </section>
 
-    <section class="event-area">
+    <section class="event-area battle-screen screen-hidden">
       <div class="event-title">直近の行動</div>
       <div class="last-card empty" id="lastCardDisplay">まだ行動はありません。</div>
     </section>
 
-    <section class="board">
+    <section class="board battle-screen screen-hidden">
       <div class="player-panel cpu">
         <div class="panel-head">
           <div>
@@ -203,7 +258,7 @@
       </div>
     </section>
 
-    <section class="actions">
+    <section class="actions battle-screen screen-hidden">
       <div class="mode-row">
         <button id="attackBtn">攻撃</button>
         <button id="splitBtn" class="secondary">分ける</button>
@@ -229,7 +284,7 @@
       </div>
     </section>
 
-    <section class="card-area">
+    <section class="card-area battle-screen screen-hidden">
       <h2>手札 <span class="small" id="handInfo"></span></h2>
       <div class="hand-cards" id="humanCards"></div>
       <p class="small">
@@ -237,7 +292,7 @@
       </p>
     </section>
 
-    <section class="actions">
+    <section class="actions battle-screen screen-hidden">
       <h3>ログ</h3>
       <div class="log" id="log"></div>
     </section>

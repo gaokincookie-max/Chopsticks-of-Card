@@ -191,7 +191,7 @@ const CARD_LIBRARY = {
         text: "手札を1枚捨て、捨てた手札のコスト分のダメージを相手の手に与える。捨てたカードが「弾」ならダメージ+1。この攻撃には一部の罠を発動できる。使用後、ターン終了。",
         canPlay: (player) => state.hands[player].length > 1 && ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] > 0),
         terminal: true,
-        effect: (player) => {
+        effect: async (player) => {
           if (player === "human") {
             state.mode = "rapidFireDiscard";
             state.selectedAttackHand = null;
@@ -202,10 +202,17 @@ const CARD_LIBRARY = {
             return;
           }
           const discardIndex = chooseCpuRapidFireDiscardIndex();
-          if (discardIndex < 0) return;
+          if (discardIndex < 0) {
+            state.pendingTerminalEnd[player] = true;
+            return;
+          }
           const opponent = "human";
           const target = chooseCpuSnipeTarget();
-          if (target) applyRapidFire(player, opponent, discardIndex, target);
+          if (target) {
+            await applyRapidFire(player, opponent, discardIndex, target);
+          } else {
+            state.pendingTerminalEnd[player] = true;
+          }
         }
       },
       accelBullet: {
@@ -809,7 +816,8 @@ const CARD_LIBRARY = {
       animating: false,
       gameOver: false,
       log: [],
-      turnNumber: 0
+      turnNumber: 0,
+      currentScreen: "menu"
     };
 
     const handNames = {
@@ -821,7 +829,20 @@ const CARD_LIBRARY = {
 
     const elements = {
       message: document.getElementById("message"),
+      deckEditorMessage: document.getElementById("deckEditorMessage"),
       log: document.getElementById("log"),
+      menuScreen: document.getElementById("menuScreen"),
+      difficultyScreen: document.getElementById("difficultyScreen"),
+      settingsScreen: document.getElementById("settingsScreen"),
+      deckEditorScreen: document.getElementById("deckEditorScreen"),
+      menuStartBtn: document.getElementById("menuStartBtn"),
+      menuDeckBtn: document.getElementById("menuDeckBtn"),
+      menuSettingsBtn: document.getElementById("menuSettingsBtn"),
+      difficultyBackBtn: document.getElementById("difficultyBackBtn"),
+      settingsBackBtn: document.getElementById("settingsBackBtn"),
+      deckBackMenuBtn: document.getElementById("deckBackMenuBtn"),
+      battleBackMenuBtn: document.getElementById("battleBackMenuBtn"),
+      battleRestartBtn: document.getElementById("battleRestartBtn"),
       humanState: document.getElementById("humanState"),
       cpuState: document.getElementById("cpuState"),
       splitBox: document.getElementById("splitBox"),
@@ -996,7 +1017,57 @@ const CARD_LIBRARY = {
       return arr;
     }
 
-    function wrapFinger(value) {
+    
+    function showScreen(screen) {
+      state.currentScreen = screen;
+      const showMenu = screen === "menu";
+      const showDifficulty = screen === "difficulty";
+      const showSettings = screen === "settings";
+      const showDeck = screen === "deck";
+      const showBattle = screen === "battle";
+
+      elements.menuScreen.classList.toggle("screen-hidden", !showMenu);
+      elements.difficultyScreen.classList.toggle("screen-hidden", !showDifficulty);
+      elements.settingsScreen.classList.toggle("screen-hidden", !showSettings);
+      elements.deckEditorScreen.classList.toggle("screen-hidden", !showDeck);
+      document.querySelectorAll(".battle-screen").forEach(el => {
+        el.classList.toggle("screen-hidden", !showBattle);
+      });
+
+      document.body.classList.toggle("deck-mode", showDeck);
+      document.body.classList.toggle("battle-mode", showBattle);
+
+      if (showDeck) {
+        elements.deckPanel.classList.add("show");
+        elements.deckBottomBar.classList.remove("hidden");
+        renderDeckBuilder();
+        setMessage("デッキ編集画面です。対戦を始める場合はメニューからスタートを選んでください。");
+      } else {
+        elements.deckBottomBar.classList.add("hidden");
+      }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function startBattleWithDifficulty(difficulty) {
+      if (!areBothDecksValid()) {
+        const h = getDeckStats("human");
+        const c = getDeckStats("cpu");
+        showScreen("deck");
+        if (h.count < DECK_MIN_COUNT || c.count < DECK_MIN_COUNT) setMessage(`対戦前に、あなた用・CPU用の両方を最低${DECK_MIN_COUNT}枚以上にしてください。`);
+        else if (h.count > DECK_MAX_COUNT || c.count > DECK_MAX_COUNT) setMessage(`対戦前に、あなた用・CPU用の両方を${DECK_MAX_COUNT}枚以内にしてください。`);
+        else setMessage("対戦前に、あなた用・CPU用のどちらかのコストを40以内にしてください。");
+        return;
+      }
+      state.cpuDifficulty = difficulty;
+      elements.cpuDifficultySelect.value = difficulty;
+      showScreen("battle");
+      resetGame();
+      const labels = { easy: "やさしめ", standard: "標準", hard: "強め" };
+      setMessage(`CPU難易度「${labels[difficulty]}」で試合開始です。攻撃する手を選んでください。`);
+    }
+
+function wrapFinger(value) {
       return value % 5;
     }
 
@@ -1029,7 +1100,8 @@ const CARD_LIBRARY = {
     }
 
     function setMessage(text) {
-      elements.message.textContent = text;
+      if (elements.message) elements.message.textContent = text;
+      if (elements.deckEditorMessage) elements.deckEditorMessage.textContent = text;
     }
 
     function handEl(player, hand) {
@@ -3535,6 +3607,19 @@ function renderLastAction() {
       card.addEventListener("click", onHandClick);
     });
 
+    elements.menuStartBtn.addEventListener("click", () => showScreen("difficulty"));
+    elements.menuDeckBtn.addEventListener("click", () => showScreen("deck"));
+    elements.menuSettingsBtn.addEventListener("click", () => showScreen("settings"));
+    elements.difficultyBackBtn.addEventListener("click", () => showScreen("menu"));
+    elements.settingsBackBtn.addEventListener("click", () => showScreen("menu"));
+    elements.deckBackMenuBtn.addEventListener("click", () => showScreen("menu"));
+    elements.battleBackMenuBtn.addEventListener("click", () => showScreen("menu"));
+    elements.battleRestartBtn.addEventListener("click", () => startBattleWithDifficulty(state.cpuDifficulty));
+
+    document.querySelectorAll("[data-difficulty-start]").forEach(btn => {
+      btn.addEventListener("click", () => startBattleWithDifficulty(btn.dataset.difficultyStart));
+    });
+
     elements.attackBtn.addEventListener("click", () => {
       if (state.temp.human.setupMode) return;
       state.mode = "attack";
@@ -3600,7 +3685,10 @@ function renderLastAction() {
       render();
     });
 
-    elements.resetBtn.addEventListener("click", resetGame);
+    elements.resetBtn.addEventListener("click", () => {
+      resetGame();
+      setMessage("試合をリセットしました。");
+    });
 
     elements.splitLeft.addEventListener("change", () => syncSplitSelects("left"));
     elements.splitRight.addEventListener("change", () => syncSplitSelects("right"));
@@ -3640,8 +3728,8 @@ function renderLastAction() {
         else setMessage("あなた用・CPU用のどちらかがコスト上限を超えています。");
         return;
       }
-      resetGame();
-      setMessage("あなた用・CPU用の編集デッキでリスタートしました。");
+      setMessage("デッキは使用可能です。対戦を始める場合は、メニューに戻ってスタートを選んでください。");
+      renderDeckBuilder();
     });
 
     elements.defaultDeckBtn.addEventListener("click", () => {
@@ -3690,4 +3778,4 @@ function renderLastAction() {
     });
 
     renderDeckBuilder();
-    resetGame();
+    showScreen("menu");

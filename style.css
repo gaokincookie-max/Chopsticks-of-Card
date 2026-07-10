@@ -41,6 +41,113 @@
       box-shadow: 0 6px 18px var(--shadow);
     }
 
+
+    .screen-hidden {
+      display: none !important;
+    }
+
+    .menu-screen,
+    .difficulty-screen,
+    .settings-screen {
+      padding: 18px 12px;
+    }
+
+    .menu-card {
+      background: var(--panel);
+      border: 2px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 12px 30px var(--shadow);
+      padding: 22px;
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .menu-kicker {
+      color: var(--blue);
+      font-weight: 1000;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+    }
+
+    .menu-card h2 {
+      font-size: clamp(30px, 8vw, 52px);
+      margin: 0 0 8px;
+      color: var(--accent);
+    }
+
+    .menu-actions {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .menu-actions button {
+      min-height: 54px;
+      font-size: 17px;
+    }
+
+    .difficulty-grid {
+      display: grid;
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .difficulty-btn {
+      background: white;
+      color: var(--ink);
+      border: 2px solid var(--line);
+      text-align: left;
+      display: grid;
+      gap: 4px;
+      border-radius: 18px;
+      box-shadow: 0 6px 16px var(--shadow);
+    }
+
+    .difficulty-btn strong {
+      font-size: 18px;
+      color: var(--accent);
+    }
+
+    .difficulty-btn span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .wide-btn {
+      width: 100%;
+    }
+
+    .battle-top {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px 0;
+    }
+
+    .battle-top button {
+      flex: 1;
+    }
+
+    .deck-head-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    body.deck-mode .deck-panel {
+      display: block;
+    }
+
+    body.deck-mode #toggleDeckBtn {
+      display: none;
+    }
+
+    body.deck-mode .deck-builder {
+      margin-top: 12px;
+    }
+
     header { padding: 14px; }
 
     h1 {
@@ -202,6 +309,16 @@
       text-align: center;
       font-weight: 900;
       font-size: 18px;
+    }
+
+    .deck-editor-message {
+      background: #fff7ee;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      color: var(--accent);
+      font-weight: 900;
+      margin-bottom: 10px;
     }
 
     .deck-summary {
