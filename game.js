@@ -10,6 +10,17 @@ const CARD_LIBRARY = {
           addLog(`${handNames[player]}は「ひらめき」で1枚引いた。`);
         }
       },
+      nekodamashi: {
+        name: "ねこだまし",
+        cost: 2,
+        type: "補助",
+        text: "カードを1枚引く。自分の初ターンが来る前に相手から攻撃を受けるとき、手札から捨ててその攻撃を無効化できる。乱射も無効化できる。",
+        canPlay: () => true,
+        effect: (player) => {
+          drawCard(player);
+          addLog(`${handNames[player]}は「ねこだまし」を使い、1枚引いた。`);
+        }
+      },
       strongHit: {
         name: "強打",
         cost: 2,
@@ -675,7 +686,7 @@ const CARD_LIBRARY = {
           const before = state[attacker][attackHand];
           const amount = applyGuardBlessingReduction(attacker, attackHand, 1, "茨");
           const total = before + amount;
-          const finalValue = normalize(total, attacker);
+          const finalValue = normalize(total, attacker, attackHand);
           await animateCalculation(attacker, attackHand, total, finalValue);
           state[attacker][attackHand] = finalValue;
           addLog(`罠「茨」により、${handNames[attacker]}の${handNames[attackHand]}が${before}→${total}${total >= 5 ? `→${finalValue}` : ""}。`);
@@ -698,7 +709,7 @@ const CARD_LIBRARY = {
           const before = state[attacker][attackHand];
           const power = applyGuardBlessingReduction(attacker, attackHand, rawPower, "反撃");
           const total = before + power;
-          const finalValue = normalize(total, attacker);
+          const finalValue = normalize(total, attacker, attackHand);
           await animateCalculation(attacker, attackHand, total, finalValue);
           state[attacker][attackHand] = finalValue;
           addLog(`罠「反撃」により、${handNames[attacker]}の${handNames[attackHand]}が${before}→${total}${total >= 5 ? `→${finalValue}` : ""}。`);
@@ -874,7 +885,15 @@ const CARD_LIBRARY = {
         name: "衰弱の呪縛",
         cost: 3,
         type: "呪縛",
-        text: "相手の手に表向きで置く。その手の持ち主のターン終了時、その手の本数を-1する。0になったら捨て札に置く。",
+        text: "相手の手に表向きで置く。置かれた後、持ち主のターン終了を1回待機する。その次からターン終了時にその手の本数を-1する。",
+        curse: true,
+        canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
+      },
+      overflowCurse: {
+        name: "超過の呪縛",
+        cost: 3,
+        type: "呪縛",
+        text: "相手の手に表向きで置く。この手は5以上になったら、余り計算をせず0になる。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -901,10 +920,8 @@ const CARD_LIBRARY = {
 
     const DEFAULT_DECK_COUNTS = {
       insight: 1,
-      strongHit: 1,
-      lightHit: 1,
+      nekodamashi: 1,
       swapAttachment: 1,
-      guard: 1,
       snipe: 1,
       rapidFire: 1,
       prayer: 1,
@@ -918,8 +935,10 @@ const CARD_LIBRARY = {
       ricochetBlessing: 1,
       slowCurse: 1,
       weaknessCurse: 1,
+      overflowCurse: 1,
       immutableCurse: 1,
-      sealCurse: 1
+      sealCurse: 1,
+      passCard: 1,
     };
 
     const state = {
@@ -955,6 +974,8 @@ const CARD_LIBRARY = {
       pendingEqualTradeSelf: null,
       pendingRapidFireDiscard: null,
       pendingSwapFirst: null,
+      firstTurnStarted: { human: false, cpu: false },
+      weaknessWait: {},
       lastAction: null,
       turn: "human",
       mode: "attack",
@@ -1217,8 +1238,11 @@ function wrapFinger(value) {
       return value % 5;
     }
 
-    function normalize(value, player = null) {
+    function normalize(value, player = null, hand = null) {
       if (value >= 5) {
+        if (player && hand && hasAttachment(player, hand, "overflowCurse")) {
+          return 0;
+        }
         if (player && state.temp[player].guard) {
           state.temp[player].guard = false;
           return 4;
@@ -1628,13 +1652,14 @@ function wrapFinger(value) {
         const candidates = ["L", "R"].filter(h => isAlive(player, h));
         const target = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : "L";
         const before = state[player][target];
-        state[player][target] = normalize(before + 1, player);
+        state[player][target] = normalize(before + 1, player, target);
         addLog(`${handNames[player]}は山札切れで手札もない。${handNames[target]}が${before}→${state[player][target]}。`);
         clearBrokenTraps(player);
       }
     }
 
     async function startTurn(player) {
+      state.firstTurnStarted[player] = true;
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
       state.turn = player;
       state.mode = "attack";
@@ -1806,10 +1831,12 @@ function wrapFinger(value) {
     }
 
     function makeTrapInstance(cardId) {
-      return {
+      const instance = {
         id: `trap_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         cardId
       };
+      if (cardId === "weaknessCurse") instance.waitTurns = 1;
+      return instance;
     }
 
     function trapCardId(slot) {
@@ -2192,7 +2219,7 @@ function wrapFinger(value) {
       const before = state[defender][targetHand];
       const amount = applyGuardBlessingReduction(defender, targetHand, 1, "狙撃");
       const total = before + amount;
-      const finalValue = normalize(total, defender);
+      const finalValue = normalize(total, defender, targetHand);
       await animateCalculation(defender, targetHand, total, finalValue);
       state[defender][targetHand] = finalValue;
       addLog(`${handNames[player]}は「狙撃」で${handNames[defender]}の${handNames[targetHand]}に${amount}本加えた。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
@@ -2939,7 +2966,63 @@ function renderLastAction() {
       return Math.random() < 0.25 ? candidates[0] : null;
     }
 
-    async function maybeChooseManualTrap(defender, candidates, context) {
+    
+    function canUseNekodamashi(defender) {
+      return !state.firstTurnStarted[defender] && state.hands[defender].includes("nekodamashi");
+    }
+
+    async function askHumanNekodamashi(context) {
+      return new Promise(resolve => {
+        elements.trapChoiceList.innerHTML = "";
+        elements.trapChoiceText.textContent = `${handNames[context.attacker]}の攻撃を「ねこだまし」で無効化しますか？`;
+        const div = document.createElement("div");
+        div.className = "trap-choice-card";
+        div.innerHTML = `
+          <div class="card-title">
+            <span>「ねこだまし」</span>
+            <span class="card-type">補助</span>
+          </div>
+          <div class="card-cost">手札から捨てて、この攻撃を無効化します。</div>
+          <div class="card-text">自分の初ターンが来る前だけ使用できます。乱射も無効化できます。</div>
+        `;
+        const cleanup = () => {
+          elements.trapChoice.classList.remove("show");
+          elements.trapSkipBtn.onclick = null;
+        };
+        div.addEventListener("click", () => {
+          cleanup();
+          resolve(true);
+        });
+        elements.trapChoiceList.appendChild(div);
+        elements.trapSkipBtn.onclick = () => {
+          cleanup();
+          resolve(false);
+        };
+        elements.trapChoice.classList.add("show");
+      });
+    }
+
+    async function maybeUseNekodamashi(defender, context) {
+      if (!canUseNekodamashi(defender)) return false;
+      let use = false;
+      if (defender === "human") {
+        use = await askHumanNekodamashi(context);
+      } else {
+        use = true;
+      }
+      if (!use) return false;
+      const index = state.hands[defender].indexOf("nekodamashi");
+      if (index < 0) return false;
+      const [cardId] = state.hands[defender].splice(index, 1);
+      state.discard[defender].push(cardId);
+      addLog(`${handNames[defender]}は手札から「ねこだまし」を使い、${handNames[context.attacker]}の攻撃を無効化した。`);
+      setLastAction(defender, "ねこだまし", "初ターン前の攻撃を無効化しました。", "card");
+      await showCardPopup(defender, CARD_LIBRARY.nekodamashi, false, defender === "cpu" ? 700 : 620);
+      render();
+      return true;
+    }
+
+async function maybeChooseManualTrap(defender, candidates, context) {
       if (candidates.length === 0) return null;
       if (defender === "human") {
         return await askHumanTrapChoice(candidates, context);
@@ -2967,7 +3050,7 @@ function renderLastAction() {
       const actual = ignoreGuard ? Math.max(1, amount) : applyGuardBlessingReduction(player, hand, amount, sourceLabel);
       const before = state[player][hand];
       const total = before + actual;
-      const finalValue = normalize(total, player);
+      const finalValue = normalize(total, player, hand);
       await animateCalculation(player, hand, total, finalValue);
       state[player][hand] = finalValue;
       addLog(`${sourceLabel}により、${handNames[player]}の${handNames[hand]}：${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
@@ -3037,6 +3120,14 @@ async function attack(attacker, attackHand, defender, targetHand) {
       let trapUsed = false;
       let trapResult = {};
 
+      if (await maybeUseNekodamashi(defender, context)) {
+        addLog(`${handNames[attacker]}の攻撃は「ねこだまし」で無効になった。`);
+        state.animating = false;
+        clearHighlights();
+        render();
+        return true;
+      }
+
       await animateAttackIntent(attacker, attackHand, defender, targetHand);
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
@@ -3089,8 +3180,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       const before = state[defender][targetHand];
       const total = before + power;
-      const guardWouldApply = total >= 5 && state.temp[defender].guard;
-      let resolvedFinal = guardWouldApply ? 4 : wrapFinger(total);
+      const overflowWouldApply = total >= 5 && hasAttachment(defender, targetHand, "overflowCurse");
+      const guardWouldApply = total >= 5 && !overflowWouldApply && state.temp[defender].guard;
+      let resolvedFinal = overflowWouldApply ? 0 : (guardWouldApply ? 4 : wrapFinger(total));
+      if (overflowWouldApply) addLog(`${handNames[defender]}の${handNames[targetHand]}の「超過の呪縛」により、5以上は0になる。`);
       await animateCalculation(defender, targetHand, total, resolvedFinal);
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
@@ -3170,13 +3263,29 @@ async function attack(attacker, attackHand, defender, targetHand) {
         async function resolveEndTurnCurses(player) {
       for (const hand of ["L", "R"]) {
         if (state[player][hand] <= 0) continue;
-        if (!hasAttachment(player, hand, "weaknessCurse")) continue;
-        const before = state[player][hand];
-        state[player][hand] = Math.max(0, before - 1);
-        addLog(`${handNames[player]}の${handNames[hand]}の「衰弱の呪縛」により、ターン終了時に${before}→${state[player][hand]}。`);
-        if (state[player][hand] === 0) {
-          await animateCalculation(player, hand, before - 1, 0);
-          clearBrokenTraps(player);
+        const weaknessSlots = state.traps[player][hand].filter(slot => trapCardId(slot) === "weaknessCurse");
+        if (weaknessSlots.length === 0) continue;
+
+        let activeCount = 0;
+        for (const slot of weaknessSlots) {
+          if (typeof slot.waitTurns === "number" && slot.waitTurns > 0) {
+            slot.waitTurns -= 1;
+            addLog(`${handNames[player]}の${handNames[hand]}の「衰弱の呪縛」は待機中。次から発動する。`);
+          } else {
+            activeCount += 1;
+          }
+        }
+
+        for (let i = 0; i < activeCount; i++) {
+          if (state[player][hand] <= 0) break;
+          const before = state[player][hand];
+          state[player][hand] = Math.max(0, before - 1);
+          addLog(`${handNames[player]}の${handNames[hand]}の「衰弱の呪縛」により、ターン終了時に${before}→${state[player][hand]}。`);
+          await animateCalculation(player, hand, state[player][hand], state[player][hand]);
+          if (state[player][hand] === 0) {
+            clearBrokenTraps(player);
+            break;
+          }
         }
       }
       render();
@@ -3592,7 +3701,7 @@ async function endTurn() {
       const rawPower = state[player][attackHand];
       const power = applyGuardBlessingReduction(player, targetHand, rawPower, "凶弾");
       const total = before + power;
-      const finalValue = wrapFinger(total);
+      const finalValue = normalize(total, player, targetHand);
 
       state.animating = true;
       render();
@@ -3609,7 +3718,7 @@ async function endTurn() {
           const ob = state[opponent][h];
           const amount = applyGuardBlessingReduction(opponent, h, 3, "凶弾の追加効果");
           const ot = ob + amount;
-          const of = normalize(ot, opponent);
+          const of = normalize(ot, opponent, h);
           await animateCalculation(opponent, h, ot, of);
           state[opponent][h] = of;
           addLog(`${handNames[opponent]}の${handNames[h]}：${ob}→${ot}${ot >= 5 ? `→${of}` : ""}`);
@@ -3636,6 +3745,14 @@ async function endTurn() {
       const cardId = state.hands[player][discardIndex];
       const ammo = CARD_LIBRARY[cardId];
       if (!ammo || cardId === "rapidFire") return false;
+
+      if (await maybeUseNekodamashi(defender, { defender, targetHand, attacker: player, attackHand: null, incomingPower: 0, isRapidFire: true })) {
+        addLog(`${handNames[player]}の乱射は「ねこだまし」で無効になった。`);
+        state.pendingTerminalEnd[player] = true;
+        state.mode = "attack";
+        render();
+        return true;
+      }
 
       const [discarded] = state.hands[player].splice(discardIndex, 1);
       state.discard[player].push(discarded);
@@ -3715,7 +3832,7 @@ async function endTurn() {
 
       const before = state[defender][targetHand];
       const total = before + damage;
-      const resolvedFinal = normalize(total, defender);
+      const resolvedFinal = normalize(total, defender, targetHand);
       await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
       render();
@@ -4108,6 +4225,8 @@ async function endTurn() {
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
       state.pendingSwapFirst = null;
+      state.firstTurnStarted = { human: false, cpu: false };
+      state.weaknessWait = {};
       state.highlight = null;
       state.lastAction = null;
       state.turn = "human";
