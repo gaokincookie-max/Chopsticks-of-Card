@@ -407,7 +407,7 @@ const CARD_LIBRARY = {
         name: "手繰り寄せ",
         cost: 2,
         type: "補助",
-        text: "相手の伏せカードを1枚選び、相手のもう片方の手の空き枠へ移動する。移動先の手が0、または空き枠がない場合は選べない。",
+        text: "相手の罠ゾーンにあるカード1枚を選び、相手のもう片方の手の空き枠へ移動する。罠・加護・呪縛を移動できる。",
         canPlay: (player) => hasMovableOpponentTrap(player),
         effect: (player) => {
           if (player === "human") {
@@ -416,22 +416,43 @@ const CARD_LIBRARY = {
             state.selectedAttackHand = null;
             state.selectedTrapCardIndex = null;
             elements.splitBox.classList.remove("active");
-            setMessage("「手繰り寄せ」：移動させる相手の伏せカードをタップしてください。");
+            setMessage("「手繰り寄せ」：移動させる相手のカードをタップしてください。");
             return;
           }
           const target = chooseCpuMovableOpponentTrap("human");
           if (target) moveOpponentTrap(player, target.owner, target.hand, target.index);
         }
       },
+      swapAttachment: {
+        name: "すりかえ",
+        cost: 2,
+        type: "補助",
+        text: "相手の罠ゾーンにある加護・呪縛を1枚選び、自分の罠ゾーンにある加護・呪縛を1枚選ぶ。その2枚を交換する。",
+        canPlay: (player) => hasSwapTargets(player),
+        effect: (player) => {
+          if (player === "human") {
+            state.mode = "swapOpponentAttachment";
+            state.pendingSwapFirst = null;
+            state.selectedAttackHand = null;
+            state.selectedTrapCardIndex = null;
+            elements.splitBox.classList.remove("active");
+            setMessage("「すりかえ」：まず相手の加護・呪縛をタップしてください。");
+            render();
+            return;
+          }
+          const pair = chooseCpuSwapPair(player);
+          if (pair) swapAttachments(player, pair.opponent, pair.own);
+        }
+      },
       breakthrough: {
         name: "強行突破",
         cost: 3,
         type: "補助",
-        text: "このターン、自分の攻撃に対して、相手は攻撃判定前の罠を発動できない。",
+        text: "このターン、自分の攻撃は相手側の罠・加護・呪縛の効果を受けない。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].breakthrough = true;
-          addLog(`${handNames[player]}は「強行突破」を使った。このターン、攻撃判定前の罠を封じる。`);
+          addLog(`${handNames[player]}は「強行突破」を使った。このターン、自分の攻撃は相手側の罠・加護・呪縛を無視する。`);
         }
       },
 
@@ -543,7 +564,7 @@ const CARD_LIBRARY = {
 
       deflect: {
         name: "受け流し",
-        cost: 3,
+        cost: 2,
         type: "罠",
         text: "【攻撃判定前・手動】この手が攻撃対象になったとき、攻撃対象をもう片方の手に変更する。",
         trap: true,
@@ -561,7 +582,7 @@ const CARD_LIBRARY = {
       },
       attention: {
         name: "注目",
-        cost: 3,
+        cost: 2,
         type: "罠",
         text: "【攻撃判定前・手動】相手が攻撃するとき、攻撃対象をこの手に変更する。",
         trap: true,
@@ -652,7 +673,8 @@ const CARD_LIBRARY = {
         },
         trigger: async ({ attacker, attackHand }) => {
           const before = state[attacker][attackHand];
-          const total = before + 1;
+          const amount = applyGuardBlessingReduction(attacker, attackHand, 1, "茨");
+          const total = before + amount;
           const finalValue = normalize(total, attacker);
           await animateCalculation(attacker, attackHand, total, finalValue);
           state[attacker][attackHand] = finalValue;
@@ -672,8 +694,9 @@ const CARD_LIBRARY = {
           return placedHand === targetHand && state[defender][placedHand] > 0 && state[attacker][attackHand] > 0;
         },
         trigger: async ({ defender, placedHand, attacker, attackHand }) => {
-          const power = state[defender][placedHand];
+          const rawPower = state[defender][placedHand];
           const before = state[attacker][attackHand];
+          const power = applyGuardBlessingReduction(attacker, attackHand, rawPower, "反撃");
           const total = before + power;
           const finalValue = normalize(total, attacker);
           await animateCalculation(attacker, attackHand, total, finalValue);
@@ -717,6 +740,80 @@ const CARD_LIBRARY = {
           return {};
         }
       },
+      escapeDevice: {
+        name: "逃走装置",
+        cost: 2,
+        type: "罠",
+        text: "【攻撃判定前・手動】自分が片手だけの状態で、この手が攻撃対象になったとき発動できる。この手の本数を反対側の0の手へ移し、この攻撃を無効化する。",
+        trap: true,
+        manual: true,
+        triggerTiming: "before",
+        canTrigger: ({ defender, placedHand, targetHand }) => {
+          const other = otherHand(placedHand);
+          return placedHand === targetHand && state[defender][placedHand] > 0 && state[defender][other] === 0;
+        },
+        trigger: ({ defender, placedHand }) => {
+          const other = otherHand(placedHand);
+          const value = state[defender][placedHand];
+          state[defender][placedHand] = 0;
+          state[defender][other] = value;
+          addLog(`${handNames[defender]}の罠「逃走装置」発動。${handNames[placedHand]}の${value}本を${handNames[other]}へ移し、攻撃を無効化。`);
+          clearBrokenTraps(defender);
+          return { cancelAttack: true };
+        }
+      },
+      magicMirror: {
+        name: "マジックミラー",
+        cost: 2,
+        type: "罠",
+        text: "【呪縛設置時・手動】相手がこの手に呪縛を設置しようとしたとき発動できる。その呪縛を相手の1以上で空き枠のある手に表向きで設置する。設置先がなければ呪縛は捨て札になる。",
+        trap: true,
+        manual: true,
+        triggerTiming: "curse"
+      },
+      prayer: {
+        name: "祈祷",
+        cost: 1,
+        type: "補助",
+        text: "山札から「加護」または「呪縛」をランダムに1枚手札に加える。山札に加護も呪縛もない場合、何も起きない。",
+        canPlay: () => true,
+        effect: (player) => {
+          const options = [];
+          state.decks[player].forEach((cardId, index) => {
+            const card = CARD_LIBRARY[cardId];
+            if (card?.blessing || card?.curse) options.push({ cardId, index });
+          });
+          if (options.length === 0) {
+            addLog(`${handNames[player]}は「祈祷」を使ったが、山札に加護・呪縛はなかった。`);
+            return;
+          }
+          const picked = options[Math.floor(Math.random() * options.length)];
+          const [cardId] = state.decks[player].splice(picked.index, 1);
+          state.hands[player].push(cardId);
+          addLog(`${handNames[player]}は「祈祷」で山札から「${CARD_LIBRARY[cardId].name}」を手札に加えた。`);
+        }
+      },
+      dispelCurse: {
+        name: "解呪",
+        cost: 2,
+        type: "補助",
+        text: "自分の手に置かれている呪縛を1枚選び、捨て札に置く。",
+        canPlay: (player) => hasOwnCurse(player),
+        effect: (player) => {
+          if (player === "human") {
+            state.mode = "chooseOwnCurse";
+            state.selectedAttackHand = null;
+            state.selectedTrapCardIndex = null;
+            state.pendingTrapTargetEffect = "dispel";
+            elements.splitBox.classList.remove("active");
+            setMessage("「解呪」：捨て札にする自分の呪縛をタップしてください。");
+            render();
+            return;
+          }
+          const target = chooseCpuOwnCurse(player);
+          if (target) removeOwnCurse(player, target.hand, target.index);
+        }
+      },
       powerBlessing: {
         name: "力の加護",
         cost: 2,
@@ -729,7 +826,31 @@ const CARD_LIBRARY = {
         name: "守護",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手が攻撃されるとき、受ける本数-1。ただし最低1。手が0になったら捨て札に置く。",
+        text: "自分の手に表向きで置く。この手が攻撃・狙撃・反撃などで本数を加えられるとき、その本数-1。ただし最低1。手が0になったら捨て札に置く。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      growthBlessing: {
+        name: "成長",
+        cost: 2,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手で攻撃し、相手の手の合計がちょうど5になったとき、カードを1枚引く。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      recklessBlessing: {
+        name: "捨て身",
+        cost: 3,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手で攻撃するとき攻撃力+2。相手を攻撃した後、この手に1本加える。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      ricochetBlessing: {
+        name: "跳弾",
+        cost: 3,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手で攻撃した後、相手のもう片方の手にこの手の本数の半分、切り捨ての本数を加える。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -748,6 +869,30 @@ const CARD_LIBRARY = {
         text: "相手の手に表向きで置く。この手に置かれる罠は表向きになる。手が0になったら捨て札に置く。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
+      },
+      weaknessCurse: {
+        name: "衰弱の呪縛",
+        cost: 3,
+        type: "呪縛",
+        text: "相手の手に表向きで置く。その手の持ち主のターン終了時、その手の本数を-1する。0になったら捨て札に置く。",
+        curse: true,
+        canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
+      },
+      immutableCurse: {
+        name: "不変の呪縛",
+        cost: 2,
+        type: "呪縛",
+        text: "相手の手に表向きで置く。この手は攻撃力を増やす効果を受けない。",
+        curse: true,
+        canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
+      },
+      sealCurse: {
+        name: "封印の呪縛",
+        cost: 2,
+        type: "呪縛",
+        text: "相手の手に表向きで置く。この手には新たに加護を置けない。すでに置かれている加護は残る。",
+        curse: true,
+        canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       }
     };
 
@@ -758,23 +903,23 @@ const CARD_LIBRARY = {
       insight: 1,
       strongHit: 1,
       lightHit: 1,
-      lockSplit: 1,
-      repair: 1,
-      acceleration: 1,
-      battlePrep: 1,
+      swapAttachment: 1,
+      guard: 1,
       snipe: 1,
       rapidFire: 1,
-      accelBullet: 1,
-      bulletSupply: 1,
-      reload: 1,
-      calm: 1,
-      guard: 1,
-      deflect: 1,
-      braceTrap: 1,
+      prayer: 1,
+      dispelCurse: 1,
+      escapeDevice: 1,
+      magicMirror: 1,
       powerBlessing: 1,
       guardBlessing: 1,
+      growthBlessing: 1,
+      recklessBlessing: 1,
+      ricochetBlessing: 1,
       slowCurse: 1,
-      exposeCurse: 1
+      weaknessCurse: 1,
+      immutableCurse: 1,
+      sealCurse: 1
     };
 
     const state = {
@@ -809,6 +954,7 @@ const CARD_LIBRARY = {
       berserkerTurns: { human: 0, cpu: 0 },
       pendingEqualTradeSelf: null,
       pendingRapidFireDiscard: null,
+      pendingSwapFirst: null,
       lastAction: null,
       turn: "human",
       mode: "attack",
@@ -906,8 +1052,8 @@ const CARD_LIBRARY = {
     }
 
     async function showPopup(player, title, text, kind = "card", ms = 760, html = false) {
-      elements.popupCard.className = "popup-card" + (kind === "trap" ? " trap" : "") + (kind === "accel" ? " accel-flash" : "");
-      elements.popupUser.className = "popup-user" + (kind === "trap" ? " trap" : kind === "action" || kind === "accel" ? " action" : "");
+      elements.popupCard.className = "popup-card" + (kind === "trap" ? " trap" : "") + (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
+      elements.popupUser.className = "popup-user" + (kind === "trap" ? " trap" : kind === "accel" ? ` action ${player === "cpu" ? "cpu-accel-user" : "human-accel-user"}` : kind === "action" ? " action" : "");
       elements.popupUser.textContent = kind === "trap" ? `${handNames[player]}の罠発動` : kind === "accel" ? `${handNames[player]}の加速` : kind === "action" ? `${handNames[player]}の行動` : `${handNames[player]}が使用`;
       elements.popupName.textContent = title;
       if (html) elements.popupText.innerHTML = text;
@@ -927,7 +1073,7 @@ const CARD_LIBRARY = {
       await showPopup(
         player,
         "過加速",
-        `<div class="roulette-pop">+1 DRAW</div><div>このターンは${draws}枚ドローします。<br>追加ドロー残り：${remaining}ターン</div>`,
+        `<div class="roulette-pop">${player === "cpu" ? "CPU +1 DRAW" : "+1 DRAW"}</div><div>${handNames[player]}はこのターン${draws}枚ドローします。<br>追加ドロー残り：${remaining}ターン</div>`,
         "accel",
         900,
         true
@@ -938,7 +1084,7 @@ const CARD_LIBRARY = {
       await showPopup(
         player,
         "過加速の反動",
-        `<div class="roulette-pop">NO DRAW</div><div>このターン開始時はカードを引けません。<br>反動残り：${remaining}ターン</div>`,
+        `<div class="roulette-pop">${player === "cpu" ? "CPU NO DRAW" : "NO DRAW"}</div><div>${handNames[player]}はこのターン開始時にカードを引けません。<br>反動残り：${remaining}ターン</div>`,
         "accel",
         900,
         true
@@ -1400,7 +1546,7 @@ function wrapFinger(value) {
         if (card.token) return;
         const count = counts[cardId] || 0;
         const row = document.createElement("div");
-        row.className = "deck-row";
+        row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "");
         row.innerHTML = `
           <div>
             <div class="card-title">
@@ -1708,7 +1854,7 @@ function wrapFinger(value) {
     }
 
     function canPlaceAttachment(user, owner) {
-      return ["L", "R"].some(h => state[owner][h] > 0 && state.traps[owner][h].length < 2);
+      return ["L", "R"].some(h => state[owner][h] > 0 && state.traps[owner][h].length < 2 && !(user === owner && hasSealCurse(owner, h)));
     }
 
     function hasAttachment(owner, hand, cardId) {
@@ -1717,6 +1863,222 @@ function wrapFinger(value) {
 
     function hasExposedCurse(owner, hand) {
       return hasAttachment(owner, hand, "exposeCurse");
+    }
+
+    function hasSealCurse(owner, hand) {
+      return hasAttachment(owner, hand, "sealCurse");
+    }
+
+    function hasImmutableCurse(owner, hand) {
+      return hasAttachment(owner, hand, "immutableCurse");
+    }
+
+    function canReceiveBlessing(owner, hand) {
+      return state[owner][hand] > 0 && state.traps[owner][hand].length < 2 && !hasSealCurse(owner, hand);
+    }
+
+    function ignoresOpponentBoardEffects(attacker) {
+      return !!state.temp[attacker]?.breakthrough;
+    }
+
+    function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
+      let finalAmount = Math.max(1, amount);
+      if (hasAttachment(defender, targetHand, "guardBlessing")) {
+        const reduced = Math.max(1, finalAmount - 1);
+        if (reduced !== finalAmount) {
+          addLog(`${handNames[defender]}の${handNames[targetHand]}の「守護」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
+        } else {
+          addLog(`${handNames[defender]}の${handNames[targetHand]}には「守護」があるが、${sourceLabel}は1本未満にならない。`);
+        }
+        finalAmount = reduced;
+      }
+      return finalAmount;
+    }
+
+    function hasOwnCurse(player) {
+      return ["L", "R"].some(hand => state.traps[player][hand].some(slot => isCurseCard(trapCardId(slot))));
+    }
+
+    function chooseCpuOwnCurse(player) {
+      const options = [];
+      for (const hand of ["L", "R"]) {
+        state.traps[player][hand].forEach((slot, index) => {
+          const cardId = trapCardId(slot);
+          if (isCurseCard(cardId)) options.push({ hand, index, cardId });
+        });
+      }
+      if (options.length === 0) return null;
+      options.sort((a, b) => (CARD_LIBRARY[b.cardId].cost || 0) - (CARD_LIBRARY[a.cardId].cost || 0));
+      return options[0];
+    }
+
+    function removeOwnCurse(player, hand, index) {
+      const slot = state.traps[player][hand][index];
+      const cardId = trapCardId(slot);
+      if (!isCurseCard(cardId)) return false;
+      const instanceId = trapInstanceId(slot);
+      state.traps[player][hand].splice(index, 1);
+      if (instanceId) state.revealedTrapIds.delete(instanceId);
+      state.discard[player].push(cardId);
+      setLastAction(player, "解呪", `${handNames[hand]}の呪縛「${CARD_LIBRARY[cardId].name}」を捨て札にしました。`, "card");
+      addLog(`${handNames[player]}は「解呪」で${handNames[hand]}の呪縛「${CARD_LIBRARY[cardId].name}」を捨て札にした。`);
+      if (player === "human") {
+        state.mode = "attack";
+        state.pendingTrapTargetEffect = null;
+        setMessage(`「解呪」：${handNames[hand]}の呪縛を捨て札にしました。まだ攻撃か分けるができます。`);
+      }
+      render();
+      return true;
+    }
+
+    function chooseMagicMirrorTarget(owner) {
+      const options = ["L", "R"].filter(h => state[owner][h] > 0 && state.traps[owner][h].length < 2);
+      if (options.length === 0) return null;
+      options.sort((a, b) => {
+        const scoreA = state.traps[owner][a].length * -10 + state[owner][a];
+        const scoreB = state.traps[owner][b].length * -10 + state[owner][b];
+        return scoreB - scoreA;
+      });
+      return options[0];
+    }
+
+    function isBlessingOrCurseCard(cardId) {
+      return isBlessingCard(cardId) || isCurseCard(cardId);
+    }
+
+    function getAttachmentOptions(owner, predicate = isBlessingOrCurseCard) {
+      const options = [];
+      for (const hand of ["L", "R"]) {
+        state.traps[owner][hand].forEach((slot, index) => {
+          const cardId = trapCardId(slot);
+          if (predicate(cardId)) options.push({ owner, hand, index, cardId });
+        });
+      }
+      return options;
+    }
+
+    function hasSwapTargets(player) {
+      const opponent = player === "human" ? "cpu" : "human";
+      return getAttachmentOptions(opponent).length > 0 && getAttachmentOptions(player).length > 0;
+    }
+
+    function chooseCpuSwapPair(player) {
+      const opponent = player === "human" ? "cpu" : "human";
+      const opponentOptions = getAttachmentOptions(opponent);
+      const ownOptions = getAttachmentOptions(player);
+      if (opponentOptions.length === 0 || ownOptions.length === 0) return null;
+
+      opponentOptions.sort((a, b) => {
+        const score = (info) => {
+          if (isBlessingCard(info.cardId)) return 100 + (CARD_LIBRARY[info.cardId].cost || 0);
+          if (isCurseCard(info.cardId)) return 20 - (CARD_LIBRARY[info.cardId].cost || 0);
+          return 0;
+        };
+        return score(b) - score(a);
+      });
+      ownOptions.sort((a, b) => {
+        const score = (info) => {
+          if (isCurseCard(info.cardId)) return 100 + (CARD_LIBRARY[info.cardId].cost || 0);
+          if (isBlessingCard(info.cardId)) return 20 - (CARD_LIBRARY[info.cardId].cost || 0);
+          return 0;
+        };
+        return score(b) - score(a);
+      });
+
+      return { opponent: opponentOptions[0], own: ownOptions[0] };
+    }
+
+    function swapAttachments(player, opponentInfo, ownInfo) {
+      const opponent = player === "human" ? "cpu" : "human";
+      if (!opponentInfo || !ownInfo) return false;
+      if (opponentInfo.owner !== opponent || ownInfo.owner !== player) return false;
+
+      const opponentSlot = state.traps[opponentInfo.owner][opponentInfo.hand][opponentInfo.index];
+      const ownSlot = state.traps[ownInfo.owner][ownInfo.hand][ownInfo.index];
+      const opponentCardId = trapCardId(opponentSlot);
+      const ownCardId = trapCardId(ownSlot);
+      if (!isBlessingOrCurseCard(opponentCardId) || !isBlessingOrCurseCard(ownCardId)) return false;
+
+      state.traps[opponentInfo.owner][opponentInfo.hand][opponentInfo.index] = ownSlot;
+      state.traps[ownInfo.owner][ownInfo.hand][ownInfo.index] = opponentSlot;
+
+      setLastAction(player, "すりかえ", `「${CARD_LIBRARY[opponentCardId].name}」と「${CARD_LIBRARY[ownCardId].name}」を入れ替えました。`, "card");
+      addLog(`${handNames[player]}は「すりかえ」で、${handNames[opponent]}の${handNames[opponentInfo.hand]}の「${CARD_LIBRARY[opponentCardId].name}」と、自分の${handNames[ownInfo.hand]}の「${CARD_LIBRARY[ownCardId].name}」を入れ替えた。`);
+      if (player === "human") {
+        state.mode = "attack";
+        state.pendingSwapFirst = null;
+        setMessage("「すりかえ」：加護・呪縛を入れ替えました。まだ攻撃か分けるができます。");
+      }
+      render();
+      return true;
+    }
+
+    async function askHumanMagicMirrorChoice(owner, hand, cardId) {
+      return new Promise(resolve => {
+        elements.trapChoiceList.innerHTML = "";
+        elements.trapChoiceText.textContent = `${handNames[owner]}の${handNames[hand]}に「${CARD_LIBRARY[cardId].name}」が置かれようとしています。マジックミラーを発動しますか？`;
+        const div = document.createElement("div");
+        div.className = "trap-choice-card";
+        div.innerHTML = `
+          <div class="card-title">
+            <span>「マジックミラー」</span>
+            <span class="card-type trap">罠</span>
+          </div>
+          <div class="card-cost">設置場所：${handNames[hand]} / コスト 2</div>
+          <div class="card-text">その呪縛を相手側へ反射します。</div>
+        `;
+        div.addEventListener("click", () => {
+          cleanup();
+          resolve(true);
+        });
+        elements.trapChoiceList.appendChild(div);
+
+        const cleanup = () => {
+          elements.trapChoice.classList.remove("show");
+          elements.trapSkipBtn.onclick = null;
+        };
+        elements.trapSkipBtn.onclick = () => {
+          cleanup();
+          resolve(false);
+        };
+        elements.trapChoice.classList.add("show");
+      });
+    }
+
+    async function maybeReflectCurseWithMagicMirror(player, owner, hand, cardId) {
+      const mirrorIndex = state.traps[owner][hand].findIndex(slot => trapCardId(slot) === "magicMirror");
+      if (mirrorIndex < 0) return false;
+
+      let useMirror = false;
+      if (owner === "human") {
+        useMirror = await askHumanMagicMirrorChoice(owner, hand, cardId);
+      } else {
+        useMirror = true;
+      }
+      if (!useMirror) return false;
+
+      const [mirrorSlot] = state.traps[owner][hand].splice(mirrorIndex, 1);
+      const mirrorInstanceId = trapInstanceId(mirrorSlot);
+      if (mirrorInstanceId) state.revealedTrapIds.delete(mirrorInstanceId);
+      state.discard[owner].push("magicMirror");
+
+      const targetOwner = player;
+      const reflectedHand = chooseMagicMirrorTarget(targetOwner);
+      setLastAction(owner, "マジックミラー", `呪縛「${CARD_LIBRARY[cardId].name}」を反射しました。`, "trap");
+      addLog(`【罠】${handNames[owner]}の「マジックミラー」が発動。「${CARD_LIBRARY[cardId].name}」を反射した。`);
+      await showCardPopup(owner, CARD_LIBRARY.magicMirror, true, 760);
+
+      if (reflectedHand) {
+        state.traps[targetOwner][reflectedHand].push(makeTrapInstance(cardId));
+        addLog(`反射された「${CARD_LIBRARY[cardId].name}」は${handNames[targetOwner]}の${handNames[reflectedHand]}に表向きで置かれた。`);
+        setMessage(`「マジックミラー」：「${CARD_LIBRARY[cardId].name}」を${handNames[targetOwner]}の${handNames[reflectedHand]}へ反射しました。`);
+      } else {
+        state.discard[player].push(cardId);
+        addLog(`反射先がなかったため、「${CARD_LIBRARY[cardId].name}」は捨て札になった。`);
+        setMessage(`「マジックミラー」：反射先がなかったため、呪縛は捨て札になりました。`);
+      }
+      render();
+      return true;
     }
 
     function hasOpponentTrap(player) {
@@ -1728,7 +2090,7 @@ function wrapFinger(value) {
       const opponent = player === "human" ? "cpu" : "human";
       return ["L", "R"].some(hand => {
         const other = otherHand(hand);
-        return state.traps[opponent][hand].some(slot => isTrapCard(trapCardId(slot))) &&
+        return state.traps[opponent][hand].length > 0 &&
           state[opponent][other] > 0 &&
           state.traps[opponent][other].length < 2;
       });
@@ -1741,7 +2103,7 @@ function wrapFinger(value) {
         if (state[owner][other] <= 0 || state.traps[owner][other].length >= 2) continue;
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
-          if (!isTrapCard(cardId)) return;
+          if (!cardId) return;
           options.push({ owner, hand, index, cardId });
         });
       }
@@ -1828,16 +2190,17 @@ function wrapFinger(value) {
     async function applySnipe(player, defender, targetHand) {
       if (state[defender][targetHand] <= 0) return false;
       const before = state[defender][targetHand];
-      const total = before + 1;
+      const amount = applyGuardBlessingReduction(defender, targetHand, 1, "狙撃");
+      const total = before + amount;
       const finalValue = normalize(total, defender);
       await animateCalculation(defender, targetHand, total, finalValue);
       state[defender][targetHand] = finalValue;
-      addLog(`${handNames[player]}は「狙撃」で${handNames[defender]}の${handNames[targetHand]}を${before}→${total}${total >= 5 ? `→${finalValue}` : ""}にした。`);
+      addLog(`${handNames[player]}は「狙撃」で${handNames[defender]}の${handNames[targetHand]}に${amount}本加えた。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
       setLastAction(player, "狙撃", `${handNames[defender]}の${handNames[targetHand]}を+1しました。`, "card");
       clearBrokenTraps(defender);
       if (player === "human") {
         state.mode = "attack";
-        setMessage(`「狙撃」：${handNames[defender]}の${handNames[targetHand]}を+1しました。まだ攻撃か分けるができます。`);
+        setMessage(`「狙撃」：${handNames[defender]}の${handNames[targetHand]}に本数を加えました。まだ攻撃か分けるができます。`);
       }
       render();
       return true;
@@ -1908,17 +2271,18 @@ function wrapFinger(value) {
     function moveOpponentTrap(user, owner, hand, index) {
       const other = otherHand(hand);
       if (state[owner][other] <= 0 || state.traps[owner][other].length >= 2) {
-        setMessage("その伏せカードは移動先がないため選べません。");
+        setMessage("そのカードは移動先がないため選べません。");
         return false;
       }
       const slot = state.traps[owner][hand][index];
       const cardId = trapCardId(slot);
-      if (!isTrapCard(cardId)) return false;
+      if (!cardId) return false;
       state.traps[owner][hand].splice(index, 1);
       state.traps[owner][other].push(slot);
-      setLastAction(user, "手繰り寄せ", `${handNames[owner]}の伏せカードを${handNames[hand]}から${handNames[other]}へ移動しました。`, "card");
-      addLog(`${handNames[user]}は「手繰り寄せ」で、${handNames[owner]}の伏せカード「${CARD_LIBRARY[cardId].name}」を${handNames[hand]}から${handNames[other]}へ移動した。`);
-      setMessage(`「手繰り寄せ」：${handNames[owner]}の伏せカードを${handNames[hand]}から${handNames[other]}へ移動しました。`);
+      const label = attachmentLabel(cardId);
+      setLastAction(user, "手繰り寄せ", `${handNames[owner]}の${label}「${CARD_LIBRARY[cardId].name}」を${handNames[hand]}から${handNames[other]}へ移動しました。`, "card");
+      addLog(`${handNames[user]}は「手繰り寄せ」で、${handNames[owner]}の${label}「${CARD_LIBRARY[cardId].name}」を${handNames[hand]}から${handNames[other]}へ移動した。`);
+      setMessage(`「手繰り寄せ」：${handNames[owner]}のカードを${handNames[hand]}から${handNames[other]}へ移動しました。`);
       state.mode = "attack";
       state.pendingTrapTargetEffect = null;
       render();
@@ -1927,8 +2291,9 @@ function wrapFinger(value) {
 
     function chooseOpponentTrapSlot(owner, hand, index) {
       if (state.mode !== "chooseOpponentTrap" || owner !== "cpu") return;
-      if (!isTrapCard(trapCardId(state.traps[owner][hand][index]))) {
-        setMessage("加護・呪縛は罠対象カードでは選べません。");
+      const cardId = trapCardId(state.traps[owner][hand][index]);
+      if (state.pendingTrapTargetEffect !== "move" && !isTrapCard(cardId)) {
+        setMessage("加護・呪縛は解除・看破の対象にはできません。");
         return;
       }
       if (state.pendingTrapTargetEffect === "remove") {
@@ -1937,6 +2302,42 @@ function wrapFinger(value) {
         revealOpponentTrap("human", owner, hand, index);
       } else if (state.pendingTrapTargetEffect === "move") {
         moveOpponentTrap("human", owner, hand, index);
+      }
+    }
+
+    function chooseOwnCurseSlot(owner, hand, index) {
+      if (state.mode !== "chooseOwnCurse" || owner !== "human") return;
+      if (!isCurseCard(trapCardId(state.traps[owner][hand][index]))) {
+        setMessage("解呪では自分の手に置かれた呪縛だけを選べます。");
+        return;
+      }
+      removeOwnCurse("human", hand, index);
+    }
+
+    function chooseSwapAttachmentSlot(owner, hand, index) {
+      const slot = state.traps[owner][hand][index];
+      const cardId = trapCardId(slot);
+      if (!isBlessingOrCurseCard(cardId)) {
+        setMessage("すりかえでは加護・呪縛だけを選べます。");
+        return;
+      }
+      if (state.mode === "swapOpponentAttachment") {
+        if (owner !== "cpu") {
+          setMessage("まず相手の加護・呪縛を選んでください。");
+          return;
+        }
+        state.pendingSwapFirst = { owner, hand, index, cardId };
+        state.mode = "swapOwnAttachment";
+        setMessage("次に自分の加護・呪縛を選んでください。");
+        render();
+        return;
+      }
+      if (state.mode === "swapOwnAttachment") {
+        if (owner !== "human") {
+          setMessage("次に自分の加護・呪縛を選んでください。");
+          return;
+        }
+        swapAttachments("human", state.pendingSwapFirst, { owner, hand, index, cardId });
       }
     }
 
@@ -1955,8 +2356,14 @@ function wrapFinger(value) {
         const exposedByCurse = card?.trap && hasExposedCurse(player, hand);
         if (cardId) {
           const isTrap = isTrapCard(cardId);
-          const selectable = isTrap && state.turn === "human" && !state.animating && state.mode === "chooseOpponentTrap" && player === "cpu" &&
-            (state.pendingTrapTargetEffect !== "move" || (state[player][otherHand(hand)] > 0 && state.traps[player][otherHand(hand)].length < 2));
+          const selectableOpponentTrap = state.turn === "human" && !state.animating && state.mode === "chooseOpponentTrap" && player === "cpu" &&
+            (state.pendingTrapTargetEffect === "move"
+              ? (state[player][otherHand(hand)] > 0 && state.traps[player][otherHand(hand)].length < 2)
+              : isTrap);
+          const selectableOwnCurse = isCurseCard(cardId) && state.turn === "human" && !state.animating && state.mode === "chooseOwnCurse" && player === "human";
+          const selectableSwapOpponent = isBlessingOrCurseCard(cardId) && state.turn === "human" && !state.animating && state.mode === "swapOpponentAttachment" && player === "cpu";
+          const selectableSwapOwn = isBlessingOrCurseCard(cardId) && state.turn === "human" && !state.animating && state.mode === "swapOwnAttachment" && player === "human";
+          const selectable = selectableOpponentTrap || selectableOwnCurse || selectableSwapOpponent || selectableSwapOwn;
           const hidden = isTrap && player === "cpu" && !revealed && !exposedByCurse;
           div.className =
             "trap-slot filled" +
@@ -1967,10 +2374,12 @@ function wrapFinger(value) {
             (selectable ? " selectable-trap-card" : "");
           div.textContent = hidden ? `伏せ${i + 1}` : card.name;
           if (selectable) {
-            div.title = "この伏せ罠を選ぶ";
+            div.title = "このカードを選ぶ";
             div.addEventListener("click", (event) => {
               event.stopPropagation();
-              chooseOpponentTrapSlot(player, hand, i);
+              if (state.mode === "chooseOwnCurse") chooseOwnCurseSlot(player, hand, i);
+              else if (state.mode === "swapOpponentAttachment" || state.mode === "swapOwnAttachment") chooseSwapAttachmentSlot(player, hand, i);
+              else chooseOpponentTrapSlot(player, hand, i);
             });
           }
         } else {
@@ -2027,6 +2436,8 @@ function renderLastAction() {
         const div = document.createElement("div");
         div.className =
           "game-card" +
+          (card.blessing ? " blessing-card" : "") +
+          (card.curse ? " curse-card" : "") +
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
           (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable ? " playable" : "") +
@@ -2323,9 +2734,10 @@ function renderLastAction() {
       if (!card) return false;
       if (card.curse) {
         const opponent = player === "human" ? "cpu" : "human";
-        return canPlaceAttachment(player, opponent);
+        return ["L", "R"].some(h => state[opponent][h] > 0 && state.traps[opponent][h].length < 2);
       }
-      return canPlaceAttachment(player, player);
+      if (card.blessing) return ["L", "R"].some(h => canReceiveBlessing(player, h));
+      return ["L", "R"].some(h => state[player][h] > 0 && state.traps[player][h].length < 2);
     }
 
     function selectTrapCard(index) {
@@ -2353,7 +2765,7 @@ function renderLastAction() {
       render();
     }
 
-    function setTrap(player, hand, handIndex, owner = player) {
+    async function setTrap(player, hand, handIndex, owner = player) {
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
       if (!card || !isAttachmentCard(cardId)) return false;
@@ -2370,8 +2782,24 @@ function renderLastAction() {
         return false;
       }
       if (state[owner][hand] <= 0 || state.traps[owner][hand].length >= 2 || (state.temp[player].cardActionUsed && !setupActive)) return false;
+      if (card.blessing && hasSealCurse(owner, hand)) {
+        if (player === "human") setMessage("封印の呪縛により、その手には新たに加護を置けません。");
+        return false;
+      }
 
       state.hands[player].splice(handIndex, 1);
+      if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
+        if (!setupActive) {
+          state.temp[player].cardActionUsed = true;
+          state.mode = "attack";
+        } else {
+          state.mode = "setupTrap";
+        }
+        state.selectedTrapCardIndex = null;
+        render();
+        return true;
+      }
+
       state.traps[owner][hand].push(makeTrapInstance(cardId));
       if (!setupActive) {
         state.temp[player].cardActionUsed = true;
@@ -2534,23 +2962,76 @@ function renderLastAction() {
       return result;
     }
 
-    async function attack(attacker, attackHand, defender, targetHand) {
+        async function addFingersWithCalculation(player, hand, amount, sourceLabel, ignoreGuard = false) {
+      if (amount <= 0 || state[player][hand] <= 0) return false;
+      const actual = ignoreGuard ? Math.max(1, amount) : applyGuardBlessingReduction(player, hand, amount, sourceLabel);
+      const before = state[player][hand];
+      const total = before + actual;
+      const finalValue = normalize(total, player);
+      await animateCalculation(player, hand, total, finalValue);
+      state[player][hand] = finalValue;
+      addLog(`${sourceLabel}により、${handNames[player]}の${handNames[hand]}：${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
+      clearBrokenTraps(player);
+      return true;
+    }
+
+    async function resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, attackTotal, canceled = false) {
+      if (canceled) {
+        if (hasAttachment(attacker, attackHand, "recklessBlessing") && state[attacker][attackHand] > 0) {
+          await addFingersWithCalculation(attacker, attackHand, 1, "捨て身の反動");
+        }
+        return;
+      }
+
+      if (hasAttachment(attacker, attackHand, "growthBlessing") && attackTotal === 5) {
+        drawCard(attacker);
+        addLog(`${handNames[attacker]}の「成長」により、カードを1枚引いた。`);
+      }
+
+      if (hasAttachment(attacker, attackHand, "ricochetBlessing")) {
+        const other = otherHand(targetHand);
+        const rawDamage = Math.floor(state[attacker][attackHand] / 2);
+        if (rawDamage > 0 && state[defender][other] > 0) {
+          await addFingersWithCalculation(defender, other, rawDamage, "跳弾", ignoresOpponentBoardEffects(attacker));
+        } else {
+          addLog("「跳弾」は条件を満たしたが、ダメージが0または対象が0のため不発。");
+        }
+      }
+
+      if (hasAttachment(attacker, attackHand, "recklessBlessing") && state[attacker][attackHand] > 0) {
+        await addFingersWithCalculation(attacker, attackHand, 1, "捨て身の反動");
+      }
+    }
+
+async function attack(attacker, attackHand, defender, targetHand) {
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
 
       state.animating = true;
       render();
 
       const basePower = state[attacker][attackHand];
-      const bonus = state.temp[attacker].attackBonus || 0;
-      const berserkerBonus = state.berserkerTurns[attacker] > 0 ? 2 : 0;
-      const blessingBonus = hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0;
+      const immutable = hasImmutableCurse(attacker, attackHand);
+      const rawBonus = state.temp[attacker].attackBonus || 0;
+      const positiveCardBonus = Math.max(0, rawBonus);
+      const negativeCardBonus = Math.min(0, rawBonus);
+      const bonus = immutable ? negativeCardBonus : rawBonus;
+      const berserkerBonus = immutable ? 0 : (state.berserkerTurns[attacker] > 0 ? 2 : 0);
+      const blessingBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0);
+      const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
-      const guardBlessingPenalty = hasAttachment(defender, targetHand, "guardBlessing") ? -1 : 0;
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + cursePenalty + guardBlessingPenalty);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + cursePenalty);
       state.temp[attacker].attackBonus = 0;
+      if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing"))) {
+        addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
+      }
       if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
+      if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
-      if (guardBlessingPenalty) addLog(`${handNames[defender]}の「守護」により、受ける本数-1。`);
+      if (ignoresOpponentBoardEffects(attacker)) {
+        addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
+      } else {
+        power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
+      }
 
       let context = { defender, targetHand, attacker, attackHand, incomingPower: power };
       let trapUsed = false;
@@ -2560,7 +3041,7 @@ function renderLastAction() {
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
       if (state.temp[attacker].breakthrough) {
-        addLog(`${handNames[attacker]}の「強行突破」により、攻撃判定前の罠は発動できない。`);
+        addLog(`${handNames[attacker]}の「強行突破」により、攻撃中の相手側の罠は発動できない。`);
       } else {
         const beforeManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", true);
         const chosenBeforeManual = await maybeChooseManualTrap(defender, beforeManual, context);
@@ -2618,7 +3099,7 @@ function renderLastAction() {
       render();
 
       // 攻撃判定後：囮、踏み止まりなど。
-      if (!trapUsed) {
+      if (!trapUsed && !state.temp[attacker].breakthrough) {
         const afterContext = { ...context, attackTotal: total, resolvedFinal };
         const afterManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "after", true, afterContext);
         const chosenAfterManual = await maybeChooseManualTrap(defender, afterManual, afterContext);
@@ -2642,10 +3123,12 @@ function renderLastAction() {
 
       addLog(
         `${handNames[attacker]}の${handNames[attackHand]}${basePower}本` +
-        `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${blessingBonus ? `+${blessingBonus}` : ""}${cursePenalty ? `${cursePenalty}` : ""}${guardBlessingPenalty ? `${guardBlessingPenalty}` : ""}${power !== basePower + bonus + berserkerBonus + blessingBonus + cursePenalty + guardBlessingPenalty ? `→${power}` : ""}で、` +
+        `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${blessingBonus ? `+${blessingBonus}` : ""}${recklessBonus ? `+${recklessBonus}` : ""}${cursePenalty ? `${cursePenalty}` : ""}${power !== Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + cursePenalty) ? `→${power}` : ""}で、` +
         `${handNames[defender]}の${handNames[targetHand]}を攻撃。` +
         `${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`
       );
+
+      await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
 
       clearBrokenTraps(defender);
       clearBrokenTraps(attacker);
@@ -2684,7 +3167,22 @@ function renderLastAction() {
       render();
     }
 
-    async function endTurn() {
+        async function resolveEndTurnCurses(player) {
+      for (const hand of ["L", "R"]) {
+        if (state[player][hand] <= 0) continue;
+        if (!hasAttachment(player, hand, "weaknessCurse")) continue;
+        const before = state[player][hand];
+        state[player][hand] = Math.max(0, before - 1);
+        addLog(`${handNames[player]}の${handNames[hand]}の「衰弱の呪縛」により、ターン終了時に${before}→${state[player][hand]}。`);
+        if (state[player][hand] === 0) {
+          await animateCalculation(player, hand, before - 1, 0);
+          clearBrokenTraps(player);
+        }
+      }
+      render();
+    }
+
+async function endTurn() {
       if (checkWin()) {
         render();
         return;
@@ -2693,7 +3191,14 @@ function renderLastAction() {
       state.selectedAttackHand = null;
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
+      state.pendingSwapFirst = null;
       elements.splitBox.classList.remove("active");
+
+      await resolveEndTurnCurses(state.turn);
+      if (checkWin()) {
+        render();
+        return;
+      }
 
       if (state.berserkerTurns[state.turn] > 0) state.berserkerTurns[state.turn] -= 1;
       state.activeCostLimit[state.turn] = null;
@@ -2801,7 +3306,8 @@ function renderLastAction() {
       let best = null;
       for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
-          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + extraBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0) + (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
+          const immutable = hasImmutableCurse("cpu", a);
+          const power = Math.max(1, state.cpu[a] + (immutable ? Math.min(0, state.temp.cpu.attackBonus + extraBonus) : state.temp.cpu.attackBonus + extraBonus) + (immutable ? 0 : (state.berserkerTurns.cpu > 0 ? 2 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "recklessBlessing") ? 2 : 0)) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
           const result = wrapFinger(state.human[t] + power);
           let score = 20 + state.human[t] * 8 + state.cpu[a] * 2;
           if (result === 0) score += wouldCpuWinByZeroing(t) ? 10000 : 520;
@@ -2872,10 +3378,18 @@ function renderLastAction() {
             if (["deflect", "attention"].includes(cardId)) score += state.cpu[otherHand(hand)] > 0 ? 70 : -40;
             if (["thornTrap", "counterTrap", "swampMan"].includes(cardId)) score += state.cpu[hand] >= 2 ? 70 : 15;
             if (cardId === "baitTrap") score += 35;
+          if (cardId === "escapeDevice") score += (state.cpu[hand] > 0 && state.cpu[otherHand(hand)] === 0) ? 260 : 40;
+          if (cardId === "magicMirror") score += state.hands.human.some(id => CARD_LIBRARY[id]?.curse) ? 180 : 70;
           }
           if (cardId === "powerBlessing") score += state.cpu[hand] >= 2 ? 170 : 80;
           if (cardId === "guardBlessing") score += state.cpu[hand] >= 3 ? 190 : 100;
+          if (cardId === "growthBlessing") score += state.cpu[hand] >= 2 ? 120 : 50;
+          if (cardId === "recklessBlessing") score += state.cpu[hand] <= 3 ? 190 : -40;
+          if (cardId === "ricochetBlessing") score += state.cpu[hand] >= 2 ? 170 : 30;
           if (cardId === "slowCurse") score += state.human[hand] >= 2 ? 180 : 80;
+          if (cardId === "weaknessCurse") score += state.human[hand] <= 2 ? 210 : 120;
+          if (cardId === "immutableCurse") score += hasAttachment("human", hand, "powerBlessing") || hasAttachment("human", hand, "recklessBlessing") ? 230 : 90;
+          if (cardId === "sealCurse") score += state.traps.human[hand].some(slot => isBlessingCard(trapCardId(slot))) ? 160 : 100;
           if (cardId === "exposeCurse") score += state.traps.human[hand].some(slot => isTrapCard(trapCardId(slot))) ? 210 : 70;
           if (!best || score > best.score) best = { index, hand, owner, score, cardId };
         }
@@ -2913,6 +3427,9 @@ function renderLastAction() {
         addCard("lightHit", lightScore, "軽打調整");
       }
 
+      if (state.decks.cpu.some(id => CARD_LIBRARY[id]?.blessing || CARD_LIBRARY[id]?.curse)) addCard("prayer", 170 + profile.defenseBias * 140, "祈祷");
+      if (hasOwnCurse("cpu")) addCard("dispelCurse", 330, "解呪");
+      if (hasSwapTargets("cpu")) addCard("swapAttachment", 260, "すりかえ");
       if (state.cpu.L === 0 || state.cpu.R === 0) addCard("repair", 780 + (state.cpu.L === 0 && state.cpu.R === 0 ? 300 : 0), "復帰");
       if (cpuThreatScoreForHands() >= 120) addCard("guard", 300 + cpuThreatScoreForHands(), "防御");
       if (state.hands.cpu.length >= 5) addCard("calmDown", 180 + state.hands.cpu.length * 25, "手札整理");
@@ -2950,7 +3467,7 @@ function renderLastAction() {
           index: trap.index,
           score: trap.score,
           note: "罠設置",
-          action: async () => setTrap("cpu", trap.hand, trap.index, trap.owner || "cpu")
+          action: async () => await setTrap("cpu", trap.hand, trap.index, trap.owner || "cpu")
         });
       }
 
@@ -2961,11 +3478,10 @@ function renderLastAction() {
       return await chosen.action();
     }
 
-    function chooseCpuTrapSet() {
+    async function chooseCpuTrapSet() {
       const trap = cpuBestTrapPlacementScore();
       if (!trap) return false;
-      setTrap("cpu", trap.hand, trap.index, trap.owner || "cpu");
-      return true;
+      return await setTrap("cpu", trap.hand, trap.index, trap.owner || "cpu");
     }
 
     function chooseCpuMove() {
@@ -2973,7 +3489,8 @@ function renderLastAction() {
       const attacks = [];
       for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
-          const power = Math.max(1, state.cpu[a] + state.temp.cpu.attackBonus + (state.berserkerTurns.cpu > 0 ? 2 : 0) + (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
+          const immutable = hasImmutableCurse("cpu", a);
+          const power = Math.max(1, state.cpu[a] + (immutable ? Math.min(0, state.temp.cpu.attackBonus) : state.temp.cpu.attackBonus) + (immutable ? 0 : (state.berserkerTurns.cpu > 0 ? 2 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "recklessBlessing") ? 2 : 0)) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
           const result = wrapFinger(state.human[t] + power);
           let score = 25 + state.human[t] * 8 + state.cpu[a] * 3;
 
@@ -3072,7 +3589,8 @@ function renderLastAction() {
       const targetHand = otherHand(attackHand);
       const opponent = player === "human" ? "cpu" : "human";
       const before = state[player][targetHand];
-      const power = state[player][attackHand];
+      const rawPower = state[player][attackHand];
+      const power = applyGuardBlessingReduction(player, targetHand, rawPower, "凶弾");
       const total = before + power;
       const finalValue = wrapFinger(total);
 
@@ -3082,14 +3600,15 @@ function renderLastAction() {
       await animateCalculation(player, targetHand, total, finalValue);
 
       state[player][targetHand] = finalValue;
-      addLog(`${handNames[player]}は「凶弾」で、自分の${handNames[attackHand]}${power}本で${handNames[targetHand]}を攻撃。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
+      addLog(`${handNames[player]}は「凶弾」で、自分の${handNames[attackHand]}${rawPower}本を使い、${handNames[targetHand]}に${power}本加えた。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
 
       if (total === 5) {
         const targets = ["L", "R"].filter(h => state[opponent][h] > 0);
         addLog(`「凶弾」の追加効果。${handNames[opponent]}の1以上の手に3本ずつ加える。`);
         for (const h of targets) {
           const ob = state[opponent][h];
-          const ot = ob + 3;
+          const amount = applyGuardBlessingReduction(opponent, h, 3, "凶弾の追加効果");
+          const ot = ob + amount;
           const of = normalize(ot, opponent);
           await animateCalculation(opponent, h, ot, of);
           state[opponent][h] = of;
@@ -3109,7 +3628,7 @@ function renderLastAction() {
     }
 
     function canTriggerAgainstRapidFire(cardId) {
-      return ["dodgeTrap", "deflect", "attention", "braceTrap", "baitTrap", "puddleTrap", "partingGift"].includes(cardId);
+      return ["dodgeTrap", "deflect", "attention", "braceTrap", "baitTrap", "puddleTrap", "partingGift", "escapeDevice"].includes(cardId);
     }
 
     async function applyRapidFire(player, defender, discardIndex, targetHand) {
@@ -3139,6 +3658,7 @@ function renderLastAction() {
       }
 
       let damage = (ammo.cost || 0) + (ammo.bullet ? 1 : 0);
+      damage = applyGuardBlessingReduction(defender, targetHand, damage, "乱射");
       if (damage <= 0) {
         addLog(`${handNames[player]}は「乱射」で「${ammo.name}」を捨てたが、ダメージは0だった。`);
         await handleCardDiscardEffect(player, discarded);
@@ -3516,7 +4036,12 @@ function renderLastAction() {
           setMessage("その手にはすでに2枚置かれています。");
           return;
         }
-        setTrap("human", hand, state.selectedTrapCardIndex, targetOwner);
+        const selectedCardId = state.hands.human[state.selectedTrapCardIndex];
+        if (CARD_LIBRARY[selectedCardId]?.blessing && hasSealCurse(targetOwner, hand)) {
+          setMessage("封印の呪縛により、その手には新たに加護を置けません。");
+          return;
+        }
+        await setTrap("human", hand, state.selectedTrapCardIndex, targetOwner);
         return;
       }
 
@@ -3582,6 +4107,7 @@ function renderLastAction() {
       state.berserkerTurns = { human: 0, cpu: 0 };
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
+      state.pendingSwapFirst = null;
       state.highlight = null;
       state.lastAction = null;
       state.turn = "human";
@@ -3670,6 +4196,7 @@ function renderLastAction() {
         state.pendingRepairDiscard = null;
         state.pendingEqualTradeSelf = null;
         state.pendingRapidFireDiscard = null;
+        state.pendingSwapFirst = null;
         elements.splitBox.classList.remove("active");
         setMessage("仕込みを終了しました。相手にターンを渡します。");
         render();
