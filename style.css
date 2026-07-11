@@ -216,6 +216,53 @@
       white-space: pre-wrap;
     }
 
+    .friend-battle-card {
+      max-width: 780px;
+      width: min(780px, 96vw);
+    }
+
+    .friend-hand-cards {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .friend-simple-card {
+      flex: 0 0 150px;
+      display: grid;
+      gap: 5px;
+      text-align: left;
+      border: 1px solid #d9c4a8;
+      background: #fffefb;
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow: 0 4px 10px rgba(60,40,20,.08);
+      cursor: pointer;
+    }
+
+    .friend-simple-card[disabled] {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    .friend-simple-card strong {
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .friend-simple-card span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .friend-side-card small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
     .room-join-box input {
       border: 1px solid #d9c5a6;
       border-radius: 12px;

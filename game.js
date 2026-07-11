@@ -1031,8 +1031,13 @@ const CARD_LIBRARY = {
       friendGamePanel: document.getElementById("friendGamePanel"),
       friendGameStatus: document.getElementById("friendGameStatus"),
       friendStartGameBtn: document.getElementById("friendStartGameBtn"),
+      friendBattleScreen: document.getElementById("friendBattleScreen"),
+      friendBattleStatus: document.getElementById("friendBattleStatus"),
       friendHostHands: document.getElementById("friendHostHands"),
       friendGuestHands: document.getElementById("friendGuestHands"),
+      friendHostDeckInfo: document.getElementById("friendHostDeckInfo"),
+      friendGuestDeckInfo: document.getElementById("friendGuestDeckInfo"),
+      friendHandCards: document.getElementById("friendHandCards"),
       friendAttackFrom: document.getElementById("friendAttackFrom"),
       friendAttackTo: document.getElementById("friendAttackTo"),
       friendAttackBtn: document.getElementById("friendAttackBtn"),
@@ -1040,6 +1045,8 @@ const CARD_LIBRARY = {
       friendSplitRight: document.getElementById("friendSplitRight"),
       friendSplitBtn: document.getElementById("friendSplitBtn"),
       friendMiniLog: document.getElementById("friendMiniLog"),
+      friendBattleBackLobbyBtn: document.getElementById("friendBattleBackLobbyBtn"),
+      friendRestartSimpleBtn: document.getElementById("friendRestartSimpleBtn"),
       friendLobbyBackBtn: document.getElementById("friendLobbyBackBtn"),
       difficultyBackBtn: document.getElementById("difficultyBackBtn"),
       settingsBackBtn: document.getElementById("settingsBackBtn"),
@@ -1261,28 +1268,67 @@ const CARD_LIBRARY = {
     }
 
 
+    const FRIEND_SIMPLE_LIBRARY = {
+      insight: { name: "ひらめき", cost: 1, text: "1枚引く。" },
+      strongHit: { name: "強打", cost: 2, text: "このターン次の攻撃+1。" },
+      lightHit: { name: "軽打", cost: 1, text: "このターン次の攻撃-1。最低1。" },
+      lockSplit: { name: "固定", cost: 2, text: "次の相手ターン、相手は分ける不可。" },
+      snipe: { name: "狙撃", cost: 2, text: "相手の0でない手を1つ選び+1。" },
+      passCard: { name: "パス", cost: 0, text: "何もせずターン終了。" },
+      nekodamashi: { name: "ねこだまし", cost: 2, text: "1枚引く。手札誘発は未対応。" }
+    };
+
+    const FRIEND_SIMPLE_DECK = [
+      "insight", "insight", "strongHit", "lightHit", "lockSplit",
+      "snipe", "snipe", "passCard", "nekodamashi", "nekodamashi"
+    ];
+
+    function makeFriendDeck() {
+      return shuffle(FRIEND_SIMPLE_DECK);
+    }
+
+    function drawFriendCard(game, role, count = 1) {
+      const deck = [...(game[role].deck || [])];
+      const hand = [...(game[role].hand || [])];
+      const discard = [...(game[role].discard || [])];
+      for (let i = 0; i < count; i++) {
+        if (deck.length > 0) hand.push(deck.shift());
+      }
+      return { ...game[role], deck, hand, discard };
+    }
+
     function emptyFriendGameState() {
-      return {
+      let game = {
         started: true,
+        mode: "simple-card",
         turn: "host",
-        host: { L: 1, R: 1 },
-        guest: { L: 1, R: 1 },
+        phase: "action",
+        host: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false },
+        guest: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false },
         winner: null,
-        log: ["簡易試合を開始しました。カードなしの盤面同期テストです。"]
+        log: ["簡易カード試合を開始しました。対応カードは一部だけです。"]
       };
+      game.host = drawFriendCard(game, "host", 3);
+      game.guest = drawFriendCard(game, "guest", 3);
+      game.host = drawFriendCard(game, "host", 1);
+      game.log.push("ホストのターン。1枚ドロー。");
+      return game;
     }
 
     function friendRoleOpponent(role) {
       return role === "host" ? "guest" : "host";
     }
 
+    function friendRoleLabel(role) {
+      return role === "host" ? "ホスト" : "ゲスト";
+    }
+
     function friendHandText(side) {
       return `左${side?.L ?? 0} / 右${side?.R ?? 0}`;
     }
 
-    function friendWrap(value, ownerRole, hand) {
-      if (value >= 5) return value % 5;
-      return value;
+    function friendWrap(value) {
+      return value >= 5 ? value % 5 : value;
     }
 
     function friendIsDead(side) {
@@ -1295,16 +1341,68 @@ const CARD_LIBRARY = {
 
     function friendLogLines(game) {
       const lines = Array.isArray(game?.log) ? game.log : [];
-      return lines.slice(-8).reverse().join("\\n") || "ログはまだありません。";
+      return lines.slice(-10).reverse().join("\\n") || "ログはまだありません。";
+    }
+
+    function friendEndTurn(game, currentRole, extraLog = []) {
+      const opp = friendRoleOpponent(currentRole);
+      const nextSide = { ...game[opp], attackBonus: 0 };
+      const currentSide = { ...game[currentRole], attackBonus: 0 };
+      let nextGame = {
+        ...game,
+        [currentRole]: currentSide,
+        [opp]: nextSide,
+        turn: opp,
+        phase: "action",
+        log: [...(game.log || []), ...extraLog]
+      };
+      if (!nextGame.winner) {
+        nextGame[opp] = drawFriendCard(nextGame, opp, 1);
+        nextGame[opp].noSplit = !!nextGame[opp].noSplit;
+        nextGame.log.push(`${friendRoleLabel(opp)}のターン。1枚ドロー。`);
+      }
+      nextGame.log = nextGame.log.slice(-30);
+      return nextGame;
+    }
+
+    function renderFriendHandCards(game = state.friendRoomData?.game) {
+      if (!elements.friendHandCards) return;
+      if (!game?.started || !state.friendRole) {
+        elements.friendHandCards.textContent = "手札はまだありません。";
+        return;
+      }
+      const mySide = game[state.friendRole];
+      const myTurn = friendCanAct(game);
+      const hand = mySide?.hand || [];
+      if (hand.length === 0) {
+        elements.friendHandCards.textContent = "手札はありません。";
+        return;
+      }
+      elements.friendHandCards.innerHTML = "";
+      hand.forEach((cardId, index) => {
+        const card = FRIEND_SIMPLE_LIBRARY[cardId] || { name: cardId, cost: "?", text: "" };
+        const btn = document.createElement("button");
+        btn.className = "friend-simple-card";
+        btn.disabled = !myTurn;
+        btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${card.text}</span>`;
+        btn.addEventListener("click", () => friendUseCardAction(index).catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `カード使用エラー：${error.message || error}`;
+        }));
+        elements.friendHandCards.appendChild(btn);
+      });
     }
 
     function updateFriendGameView(game = state.friendRoomData?.game) {
       if (!elements.friendGameStatus) return;
-      const host = game?.host || { L: 1, R: 1 };
-      const guest = game?.guest || { L: 1, R: 1 };
+      const host = game?.host || { L: 1, R: 1, deck: [], hand: [], discard: [] };
+      const guest = game?.guest || { L: 1, R: 1, deck: [], hand: [], discard: [] };
       elements.friendHostHands.textContent = friendHandText(host);
       elements.friendGuestHands.textContent = friendHandText(guest);
-      elements.friendMiniLog.textContent = friendLogLines(game);
+      if (elements.friendHostDeckInfo) elements.friendHostDeckInfo.textContent = `山札${host.deck?.length ?? 0} / 手札${host.hand?.length ?? 0}`;
+      if (elements.friendGuestDeckInfo) elements.friendGuestDeckInfo.textContent = `山札${guest.deck?.length ?? 0} / 手札${guest.hand?.length ?? 0}`;
+      if (elements.friendMiniLog) elements.friendMiniLog.textContent = friendLogLines(game);
+      renderFriendHandCards(game);
 
       const hostReady = !!state.friendRoomData?.hostReady;
       const guestReady = !!state.friendRoomData?.guestReady;
@@ -1314,29 +1412,39 @@ const CARD_LIBRARY = {
       elements.friendStartGameBtn.disabled = !isHost || !bothReady || !!game?.started;
 
       if (!game?.started) {
-        elements.friendGameStatus.textContent = bothReady
-          ? (isHost ? "2人とも準備完了です。ホストは簡易試合を開始できます。" : "2人とも準備完了です。ホストの開始を待っています。")
+        const text = bothReady
+          ? (isHost ? "2人とも準備完了です。ホストは簡易カード試合を開始できます。" : "2人とも準備完了です。ホストの開始を待っています。")
           : "まだ試合は始まっていません。2人とも準備完了すると開始できます。";
+        elements.friendGameStatus.textContent = text;
+        if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
         elements.friendAttackBtn.disabled = true;
         elements.friendSplitBtn.disabled = true;
         return;
       }
 
       if (game.winner) {
-        elements.friendGameStatus.textContent = `${game.winner === state.friendRole ? "あなたの勝ちです！" : "相手の勝ちです。"}`;
+        const text = `${game.winner === state.friendRole ? "あなたの勝ちです！" : "相手の勝ちです。"}`;
+        elements.friendGameStatus.textContent = text;
+        if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
         elements.friendAttackBtn.disabled = true;
         elements.friendSplitBtn.disabled = true;
         return;
       }
 
       const myTurn = friendCanAct(game);
-      elements.friendGameStatus.textContent = myTurn ? "あなたの番です。攻撃または分けるを選んでください。" : "相手の番です。相手の行動を待っています。";
+      const text = myTurn ? "あなたの番です。カード使用、攻撃、分けるができます。" : "相手の番です。相手の行動を待っています。";
+      elements.friendGameStatus.textContent = text;
+      if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
       elements.friendAttackBtn.disabled = !myTurn;
       elements.friendSplitBtn.disabled = !myTurn;
 
       const me = game[state.friendRole] || { L: 1, R: 1 };
-      elements.friendSplitLeft.value = me.L;
-      elements.friendSplitRight.value = me.R;
+      elements.friendSplitLeft.value = Math.max(1, me.L || 1);
+      elements.friendSplitRight.value = Math.max(1, me.R || 1);
+
+      if (state.currentScreen === "friendLobby" && game.started && !game.winner) {
+        showScreen("friendBattle");
+      }
     }
 
     async function updateFriendGame(updater) {
@@ -1359,7 +1467,7 @@ const CARD_LIBRARY = {
 
     async function startFriendSimpleGame() {
       if (state.friendRole !== "host") {
-        elements.friendLobbyMessage.textContent = "簡易試合を開始できるのはホストだけです。";
+        elements.friendLobbyMessage.textContent = "簡易カード試合を開始できるのはホストだけです。";
         return;
       }
       await updateFriendGame((data) => {
@@ -1371,6 +1479,73 @@ const CARD_LIBRARY = {
           status: "playing",
           game: emptyFriendGameState()
         };
+      });
+      showScreen("friendBattle");
+    }
+
+    async function friendUseCardAction(index) {
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        const opp = friendRoleOpponent(role);
+        const me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])] };
+        const enemy = { ...game[opp] };
+        const cardId = me.hand[index];
+        const card = FRIEND_SIMPLE_LIBRARY[cardId];
+        if (!card) return null;
+        me.hand.splice(index, 1);
+        me.discard.push(cardId);
+        let logs = [`${friendRoleLabel(role)}：「${card.name}」を使用。`];
+
+        if (cardId === "insight" || cardId === "nekodamashi") {
+          let tempGame = { ...game, [role]: me };
+          tempGame[role] = drawFriendCard(tempGame, role, 1);
+          me.deck = tempGame[role].deck;
+          me.hand = tempGame[role].hand;
+          me.discard = tempGame[role].discard;
+          logs.push("1枚引いた。");
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "strongHit") {
+          me.attackBonus = (me.attackBonus || 0) + 1;
+          logs.push("このターン次の攻撃+1。");
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "lightHit") {
+          me.attackBonus = (me.attackBonus || 0) - 1;
+          logs.push("このターン次の攻撃-1。");
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "lockSplit") {
+          enemy.noSplit = true;
+          logs.push("次の相手ターン、相手は分ける不可。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "passCard") {
+          return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
+        }
+
+        if (cardId === "snipe") {
+          const target = (enemy.L >= enemy.R && enemy.L > 0) || enemy.R <= 0 ? "L" : "R";
+          if ((enemy[target] || 0) <= 0) {
+            logs.push("対象がなく不発。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const before = enemy[target];
+          const total = before + 1;
+          enemy[target] = friendWrap(total);
+          logs.push(`狙撃：相手の${target === "L" ? "左" : "右"} ${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
+          const winner = friendIsDead(enemy) ? role : null;
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs].slice(-30) };
+          return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
+        }
+
+        return null;
       });
     }
 
@@ -1385,20 +1560,23 @@ const CARD_LIBRARY = {
         const me = { ...game[role] };
         const enemy = { ...game[opp] };
         if ((me[from] || 0) <= 0 || (enemy[to] || 0) <= 0) return null;
+        const basePower = me[from];
+        const bonus = me.attackBonus || 0;
+        const power = Math.max(1, basePower + bonus);
         const before = enemy[to];
-        const total = before + me[from];
-        enemy[to] = friendWrap(total, opp, to);
-        const nextLog = [...(game.log || []), `${role === "host" ? "ホスト" : "ゲスト"}：${from === "L" ? "左" : "右"}${me[from]}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-20);
+        const total = before + power;
+        enemy[to] = friendWrap(total);
+        me.attackBonus = 0;
+        const nextLog = [...(game.log || []), `${friendRoleLabel(role)}：${from === "L" ? "左" : "右"}${basePower}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ""}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-30);
         const winner = friendIsDead(enemy) ? role : null;
-        return {
-          game: {
-            ...game,
-            [opp]: enemy,
-            turn: winner ? role : opp,
-            winner,
-            log: winner ? [...nextLog, `${role === "host" ? "ホスト" : "ゲスト"}の勝ち。`].slice(-20) : nextLog
-          }
+        const nextGame = {
+          ...game,
+          [role]: me,
+          [opp]: enemy,
+          winner,
+          log: winner ? [...nextLog, `${friendRoleLabel(role)}の勝ち。`].slice(-30) : nextLog
         };
+        return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
       });
     }
 
@@ -1409,10 +1587,17 @@ const CARD_LIBRARY = {
         const role = state.friendRole;
         const opp = friendRoleOpponent(role);
         const me = { ...game[role] };
+
+        if (me.noSplit) {
+          elements.friendLobbyMessage.textContent = "固定の効果で、このターンは分けられません。";
+          return null;
+        }
+
         const left = Math.max(0, Math.min(4, Number(elements.friendSplitLeft.value) || 0));
         const right = Math.max(0, Math.min(4, Number(elements.friendSplitRight.value) || 0));
-        if (left === 0 && right === 0) {
-          elements.friendLobbyMessage.textContent = "両手0には分けられません。";
+
+        if (left <= 0 || right <= 0) {
+          elements.friendLobbyMessage.textContent = "通常の分けるでは片手0にできません。";
           return null;
         }
         if (left === me.L && right === me.R) {
@@ -1423,15 +1608,17 @@ const CARD_LIBRARY = {
           elements.friendLobbyMessage.textContent = "左右の合計が変わらないようにしてください。";
           return null;
         }
-        const nextLog = [...(game.log || []), `${role === "host" ? "ホスト" : "ゲスト"}：分ける。${me.L}-${me.R} → ${left}-${right}`].slice(-20);
-        return {
-          game: {
-            ...game,
-            [role]: { L: left, R: right },
-            turn: opp,
-            log: nextLog
-          }
+
+        const nextLog = [...(game.log || []), `${friendRoleLabel(role)}：分ける。${me.L}-${me.R} → ${left}-${right}`].slice(-30);
+        me.L = left;
+        me.R = right;
+        me.noSplit = false;
+        const nextGame = {
+          ...game,
+          [role]: me,
+          log: nextLog
         };
+        return { game: friendEndTurn(nextGame, role, []) };
       });
     }
 
@@ -1587,6 +1774,7 @@ const CARD_LIBRARY = {
       const showMenu = screen === "menu";
       const showBattleSelect = screen === "battleSelect";
       const showFriendLobby = screen === "friendLobby";
+      const showFriendBattle = screen === "friendBattle";
       const showDifficulty = screen === "difficulty";
       const showSettings = screen === "settings";
       const showDeck = screen === "deck";
@@ -1595,6 +1783,7 @@ const CARD_LIBRARY = {
       elements.menuScreen.classList.toggle("screen-hidden", !showMenu);
       elements.battleSelectScreen.classList.toggle("screen-hidden", !showBattleSelect);
       elements.friendLobbyScreen.classList.toggle("screen-hidden", !showFriendLobby);
+      elements.friendBattleScreen.classList.toggle("screen-hidden", !showFriendBattle);
       elements.difficultyScreen.classList.toggle("screen-hidden", !showDifficulty);
       elements.settingsScreen.classList.toggle("screen-hidden", !showSettings);
       elements.deckEditorScreen.classList.toggle("screen-hidden", !showDeck);
@@ -4691,6 +4880,11 @@ async function endTurn() {
     elements.friendSplitBtn.addEventListener("click", () => friendSplitAction().catch(error => {
       console.error(error);
       elements.friendLobbyMessage.textContent = `分ける同期エラー：${error.message || error}`;
+    }));
+    elements.friendBattleBackLobbyBtn.addEventListener("click", () => showScreen("friendLobby"));
+    elements.friendRestartSimpleBtn.addEventListener("click", () => startFriendSimpleGame().catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `再開始エラー：${error.message || error}`;
     }));
     elements.copyRoomUrlBtn.addEventListener("click", async () => {
       if (!state.friendRoomUrl) return;

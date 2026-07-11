@@ -113,50 +113,73 @@
         <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
 
         <div class="friend-game-panel" id="friendGamePanel">
-          <div class="room-label">盤面同期テスト</div>
+          <div class="room-label">簡易カードPL対戦</div>
           <div class="friend-game-status" id="friendGameStatus">まだ試合は始まっていません。</div>
-          <button id="friendStartGameBtn" class="danger wide-btn" disabled>簡易試合を開始</button>
-
-          <div class="friend-board-mini">
-            <div class="friend-side-card">
-              <span id="friendHostName">ホスト</span>
-              <strong id="friendHostHands">左1 / 右1</strong>
-            </div>
-            <div class="friend-side-card">
-              <span id="friendGuestName">ゲスト</span>
-              <strong id="friendGuestHands">左1 / 右1</strong>
-            </div>
-          </div>
-
-          <div class="friend-action-box">
-            <div class="room-label">攻撃</div>
-            <div class="friend-action-row">
-              <select id="friendAttackFrom">
-                <option value="L">自分の左手</option>
-                <option value="R">自分の右手</option>
-              </select>
-              <select id="friendAttackTo">
-                <option value="L">相手の左手</option>
-                <option value="R">相手の右手</option>
-              </select>
-              <button id="friendAttackBtn" disabled>攻撃</button>
-            </div>
-          </div>
-
-          <div class="friend-action-box">
-            <div class="room-label">分ける</div>
-            <p class="small">カードなし同期テスト用です。左右の合計を変えずに分けます。両手0や完全に同じ形は不可です。</p>
-            <div class="friend-action-row">
-              <input id="friendSplitLeft" type="number" min="0" max="4" value="1" aria-label="左手">
-              <input id="friendSplitRight" type="number" min="0" max="4" value="1" aria-label="右手">
-              <button id="friendSplitBtn" disabled>分ける</button>
-            </div>
-          </div>
-
-          <div class="friend-mini-log" id="friendMiniLog">ログはまだありません。</div>
+          <button id="friendStartGameBtn" class="danger wide-btn" disabled>簡易カード試合を開始</button>
+          <p class="small">試合開始後は、別の対戦画面に移動します。対応カードは、ひらめき・強打・軽打・固定・狙撃・パス・ねこだまし通常使用です。</p>
         </div>
 
         <button id="friendLobbyBackBtn" class="secondary wide-btn">対戦形式に戻る</button>
+      </div>
+    </section>
+
+    <section class="screen friend-battle-screen screen-hidden" id="friendBattleScreen">
+      <div class="menu-card friend-battle-card">
+        <div class="menu-kicker">FRIEND SIMPLE CARD BATTLE</div>
+        <h2>PL vs PL 簡易カード対戦</h2>
+        <p class="small">Firebase同期テスト版です。まだ罠・加護・呪縛・乱射などの複雑な処理は未対応です。</p>
+
+        <div class="friend-game-status" id="friendBattleStatus">同期中...</div>
+
+        <div class="friend-board-mini">
+          <div class="friend-side-card">
+            <span id="friendHostName">ホスト</span>
+            <strong id="friendHostHands">左1 / 右1</strong>
+            <small id="friendHostDeckInfo">山札0 / 手札0</small>
+          </div>
+          <div class="friend-side-card">
+            <span id="friendGuestName">ゲスト</span>
+            <strong id="friendGuestHands">左1 / 右1</strong>
+            <small id="friendGuestDeckInfo">山札0 / 手札0</small>
+          </div>
+        </div>
+
+        <div class="friend-action-box">
+          <div class="room-label">自分の手札</div>
+          <div class="friend-hand-cards" id="friendHandCards">手札はまだありません。</div>
+        </div>
+
+        <div class="friend-action-box">
+          <div class="room-label">攻撃</div>
+          <div class="friend-action-row">
+            <select id="friendAttackFrom">
+              <option value="L">自分の左手</option>
+              <option value="R">自分の右手</option>
+            </select>
+            <select id="friendAttackTo">
+              <option value="L">相手の左手</option>
+              <option value="R">相手の右手</option>
+            </select>
+            <button id="friendAttackBtn" disabled>攻撃して終了</button>
+          </div>
+        </div>
+
+        <div class="friend-action-box">
+          <div class="room-label">分ける</div>
+          <p class="small">通常の分けるでは片手0にできません。左右の合計を変えず、完全に同じ形も不可です。</p>
+          <div class="friend-action-row">
+            <input id="friendSplitLeft" type="number" min="1" max="4" value="1" aria-label="左手">
+            <input id="friendSplitRight" type="number" min="1" max="4" value="1" aria-label="右手">
+            <button id="friendSplitBtn" disabled>分けて終了</button>
+          </div>
+        </div>
+
+        <div class="friend-mini-log" id="friendMiniLog">ログはまだありません。</div>
+
+        <div class="menu-actions">
+          <button id="friendBattleBackLobbyBtn" class="secondary">ロビーへ戻る</button>
+          <button id="friendRestartSimpleBtn" class="danger">ホストが再開始</button>
+        </div>
       </div>
     </section>
 
