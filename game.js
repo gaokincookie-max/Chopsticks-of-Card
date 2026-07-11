@@ -993,7 +993,8 @@ const CARD_LIBRARY = {
       friendUnsubscribe: null,
       friendRoomData: null,
       friendSelectedOwnHand: "L",
-      friendSelectedTargetHand: "L"
+      friendSelectedTargetHand: "L",
+      friendLastHandValues: null
     };
 
     const handNames = {
@@ -1321,8 +1322,8 @@ const CARD_LIBRARY = {
         mode: "simple-card",
         turn: "host",
         phase: "action",
-        host: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false },
-        guest: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false },
+        host: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false, cardPlayed: false },
+        guest: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false, cardPlayed: false },
         winner: null,
         log: ["簡易カード試合を開始しました。対応カードは一部だけです。"]
       };
@@ -1365,12 +1366,30 @@ const CARD_LIBRARY = {
       return FRIEND_SIMPLE_LIBRARY[cardId] || fallback[cardId] || { name: `未対応:${cardId}`, cost: "?", text: "この部屋に古い版/別版のカードIDが残っています。" };
     }
 
-    function updateFriendHandButton(button, value, selectedClass, isSelected) {
+    function friendHandKey(role, hand) {
+      return `${role}_${hand}`;
+    }
+
+    function animateFriendHandChange(button, oldValue, newValue) {
+      if (!button || oldValue === undefined || oldValue === null || oldValue === newValue) return;
+      const className = newValue > oldValue ? "bump" : "drop";
+      button.classList.remove("bump", "drop");
+      void button.offsetWidth;
+      button.classList.add(className);
+      window.setTimeout(() => button.classList.remove(className), 460);
+    }
+
+    function updateFriendHandButton(button, value, selectedClass, isSelected, ownerRole) {
       if (!button) return;
-      const label = button.dataset.hand === "L" ? "左" : "右";
-      button.innerHTML = `${label}<br><b>${value ?? 0}</b>`;
+      const hand = button.dataset.hand;
+      const key = friendHandKey(ownerRole || button.dataset.role, hand);
+      const nextValue = value ?? 0;
+      const oldValue = state.friendLastHandValues ? state.friendLastHandValues[key] : undefined;
+      animateFriendHandChange(button, oldValue, nextValue);
+      const label = hand === "L" ? "左" : "右";
+      button.innerHTML = `${label}<br><b>${nextValue}</b>`;
       button.classList.toggle(selectedClass, !!isSelected);
-      button.classList.toggle("dead", (value ?? 0) <= 0);
+      button.classList.toggle("dead", nextValue <= 0);
     }
 
     function syncFriendHandSelections(game) {
@@ -1390,15 +1409,22 @@ const CARD_LIBRARY = {
       elements.friendAttackFrom.value = state.friendSelectedOwnHand;
       elements.friendAttackTo.value = state.friendSelectedTargetHand;
 
-      updateFriendHandButton(elements.friendHostLeft, game.host?.L, "selected-own", role === "host" && state.friendSelectedOwnHand === "L");
-      updateFriendHandButton(elements.friendHostRight, game.host?.R, "selected-own", role === "host" && state.friendSelectedOwnHand === "R");
-      updateFriendHandButton(elements.friendGuestLeft, game.guest?.L, "selected-own", role === "guest" && state.friendSelectedOwnHand === "L");
-      updateFriendHandButton(elements.friendGuestRight, game.guest?.R, "selected-own", role === "guest" && state.friendSelectedOwnHand === "R");
+      updateFriendHandButton(elements.friendHostLeft, game.host?.L, "selected-own", role === "host" && state.friendSelectedOwnHand === "L", "host");
+      updateFriendHandButton(elements.friendHostRight, game.host?.R, "selected-own", role === "host" && state.friendSelectedOwnHand === "R", "host");
+      updateFriendHandButton(elements.friendGuestLeft, game.guest?.L, "selected-own", role === "guest" && state.friendSelectedOwnHand === "L", "guest");
+      updateFriendHandButton(elements.friendGuestRight, game.guest?.R, "selected-own", role === "guest" && state.friendSelectedOwnHand === "R", "guest");
 
       elements.friendHostLeft.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "L");
       elements.friendHostRight.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "R");
       elements.friendGuestLeft.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "L");
       elements.friendGuestRight.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "R");
+
+      state.friendLastHandValues = {
+        host_L: game.host?.L ?? 0,
+        host_R: game.host?.R ?? 0,
+        guest_L: game.guest?.L ?? 0,
+        guest_R: game.guest?.R ?? 0
+      };
     }
 
     function friendWrap(value) {
@@ -1420,7 +1446,7 @@ const CARD_LIBRARY = {
 
     function friendEndTurn(game, currentRole, extraLog = []) {
       const opp = friendRoleOpponent(currentRole);
-      const nextSide = { ...game[opp], attackBonus: 0 };
+      const nextSide = { ...game[opp], attackBonus: 0, cardPlayed: false };
       const currentSide = { ...game[currentRole], attackBonus: 0, noSplit: false };
       let nextGame = {
         ...game,
@@ -1447,6 +1473,7 @@ const CARD_LIBRARY = {
       }
       const mySide = game[state.friendRole];
       const myTurn = friendCanAct(game);
+      const cardLocked = !!mySide?.cardPlayed;
       const hand = mySide?.hand || [];
       if (hand.length === 0) {
         elements.friendHandCards.textContent = "手札はありません。";
@@ -1457,8 +1484,9 @@ const CARD_LIBRARY = {
         const card = friendCardInfo(cardId);
         const btn = document.createElement("button");
         btn.className = "friend-simple-card";
-        btn.disabled = !myTurn;
-        btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${card.text}</span>`;
+        btn.disabled = !myTurn || cardLocked;
+        btn.classList.toggle("card-used-locked", cardLocked);
+        btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${cardLocked ? "このターンはカード使用済み" : card.text}</span>`;
         btn.addEventListener("click", () => friendUseCardAction(index).catch(error => {
           console.error(error);
           elements.friendLobbyMessage.textContent = `カード使用エラー：${error.message || error}`;
@@ -1512,7 +1540,8 @@ const CARD_LIBRARY = {
       }
 
       const myTurn = friendCanAct(game);
-      const text = myTurn ? "あなたの番です。カード使用、攻撃、分けるができます。" : "相手の番です。相手の行動を待っています。";
+      const usedText = (game[state.friendRole]?.cardPlayed) ? "カード使用済み。攻撃か分けるでターンを進めてください。" : "カード使用、攻撃、分けるができます。";
+      const text = myTurn ? `あなたの番です。${usedText}` : "相手の番です。相手の行動を待っています。";
       elements.friendGameStatus.textContent = text;
       if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
       elements.friendAttackBtn.disabled = !myTurn;
@@ -1579,15 +1608,21 @@ const CARD_LIBRARY = {
         const opp = friendRoleOpponent(role);
         const me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])] };
         const enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])] };
+        if (me.cardPlayed) {
+          elements.friendLobbyMessage.textContent = "このターンはすでにカードを使っています。";
+          return null;
+        }
         const cardId = me.hand[index];
         const card = friendCardInfo(cardId);
         if (!FRIEND_SIMPLE_LIBRARY[cardId]) {
           me.hand.splice(index, 1);
           me.discard.push(cardId);
+          me.cardPlayed = true;
           return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：未対応カード「${card.name}」を捨てました。`].slice(-30) } };
         }
         me.hand.splice(index, 1);
         me.discard.push(cardId);
+        me.cardPlayed = true;
         let logs = [`${friendRoleLabel(role)}：「${card.name}」を使用。`];
 
         if (cardId === "insight" || cardId === "nekodamashi") {

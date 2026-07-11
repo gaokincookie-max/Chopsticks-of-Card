@@ -328,6 +328,32 @@
       filter: grayscale(.4);
     }
 
+    .friend-hand-button.bump {
+      animation: friendHandBump .42s ease;
+    }
+
+    .friend-hand-button.drop {
+      animation: friendHandDrop .42s ease;
+    }
+
+    @keyframes friendHandBump {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.12); box-shadow: 0 0 0 8px rgba(193,132,36,.18); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes friendHandDrop {
+      0% { transform: scale(1); }
+      45% { transform: scale(.9); box-shadow: 0 0 0 8px rgba(185,69,53,.16); }
+      100% { transform: scale(1); }
+    }
+
+    .friend-simple-card.card-used-locked {
+      opacity: .45;
+      cursor: not-allowed;
+      filter: grayscale(.25);
+    }
+
     .room-join-box input {
       border: 1px solid #d9c5a6;
       border-radius: 12px;
