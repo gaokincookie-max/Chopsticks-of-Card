@@ -984,7 +984,14 @@ const CARD_LIBRARY = {
       gameOver: false,
       log: [],
       turnNumber: 0,
-      currentScreen: "menu"
+      currentScreen: "menu",
+      battleMode: "cpu",
+      friendRoomId: null,
+      friendRoomUrl: null,
+      friendRole: null,
+      friendReady: false,
+      friendUnsubscribe: null,
+      friendRoomData: null
     };
 
     const handNames = {
@@ -999,12 +1006,29 @@ const CARD_LIBRARY = {
       deckEditorMessage: document.getElementById("deckEditorMessage"),
       log: document.getElementById("log"),
       menuScreen: document.getElementById("menuScreen"),
+      battleSelectScreen: document.getElementById("battleSelectScreen"),
+      friendLobbyScreen: document.getElementById("friendLobbyScreen"),
       difficultyScreen: document.getElementById("difficultyScreen"),
       settingsScreen: document.getElementById("settingsScreen"),
       deckEditorScreen: document.getElementById("deckEditorScreen"),
       menuStartBtn: document.getElementById("menuStartBtn"),
       menuDeckBtn: document.getElementById("menuDeckBtn"),
       menuSettingsBtn: document.getElementById("menuSettingsBtn"),
+      plVsCpuBtn: document.getElementById("plVsCpuBtn"),
+      plVsPlBtn: document.getElementById("plVsPlBtn"),
+      battleSelectBackBtn: document.getElementById("battleSelectBackBtn"),
+      createRoomBtn: document.getElementById("createRoomBtn"),
+      copyRoomUrlBtn: document.getElementById("copyRoomUrlBtn"),
+      roomUrlText: document.getElementById("roomUrlText"),
+      roomIdInput: document.getElementById("roomIdInput"),
+      joinRoomBtn: document.getElementById("joinRoomBtn"),
+      friendLobbyMessage: document.getElementById("friendLobbyMessage"),
+      roomStatusText: document.getElementById("roomStatusText"),
+      roomPlayersText: document.getElementById("roomPlayersText"),
+      friendReadyBtn: document.getElementById("friendReadyBtn"),
+      friendUnreadyBtn: document.getElementById("friendUnreadyBtn"),
+      friendReadyText: document.getElementById("friendReadyText"),
+      friendLobbyBackBtn: document.getElementById("friendLobbyBackBtn"),
       difficultyBackBtn: document.getElementById("difficultyBackBtn"),
       settingsBackBtn: document.getElementById("settingsBackBtn"),
       deckBackMenuBtn: document.getElementById("deckBackMenuBtn"),
@@ -1185,15 +1209,202 @@ const CARD_LIBRARY = {
     }
 
     
+    function makeRoomId() {
+      return Math.random().toString(36).slice(2, 8).toUpperCase();
+    }
+
+    function buildRoomUrl(roomId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("room", roomId);
+      url.searchParams.set("mode", "friend");
+      return url.toString();
+    }
+
+    function extractRoomId(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      try {
+        const url = new URL(raw);
+        return (url.searchParams.get("room") || "").trim();
+      } catch (_) {
+        const match = raw.match(/[?&]room=([^&]+)/);
+        return match ? decodeURIComponent(match[1]).trim() : raw.replace(/[^a-zA-Z0-9_-]/g, "").trim().toUpperCase();
+      }
+    }
+
+    function firebaseApi() {
+      return window.WaribashiFirebase && window.WaribashiFirebase.ready ? window.WaribashiFirebase : null;
+    }
+
+    function setFriendRoomUi(roomId, role = "host") {
+      const cleanId = extractRoomId(roomId) || makeRoomId();
+      state.battleMode = "friend";
+      state.friendRoomId = cleanId;
+      state.friendRole = role;
+      state.friendRoomUrl = buildRoomUrl(cleanId);
+      elements.roomUrlText.textContent = state.friendRoomUrl;
+      elements.roomIdInput.value = cleanId;
+      elements.copyRoomUrlBtn.disabled = false;
+      history.replaceState(null, "", state.friendRoomUrl);
+    }
+
+    function updateFriendLobbyView(data = state.friendRoomData) {
+      const role = state.friendRole;
+      const roleLabel = role === "host" ? "あなた：ホスト" : role === "guest" ? "あなた：ゲスト" : "あなた：未入室";
+      if (!state.friendRoomId) {
+        elements.roomStatusText.textContent = "未接続";
+        elements.roomPlayersText.textContent = "あなた：未入室 / 相手：未入室";
+        elements.friendReadyText.textContent = "2人が入室して準備完了すると「試合開始できます」と表示されます。";
+        elements.friendReadyBtn.disabled = true;
+        elements.friendUnreadyBtn.disabled = true;
+        return;
+      }
+
+      const hostJoined = !!data?.hostJoined;
+      const guestJoined = !!data?.guestJoined;
+      const hostReady = !!data?.hostReady;
+      const guestReady = !!data?.guestReady;
+      const bothJoined = hostJoined && guestJoined;
+      const bothReady = bothJoined && hostReady && guestReady;
+
+      elements.roomStatusText.textContent = `部屋ID：${state.friendRoomId} / 状態：${data?.status || "接続中"}`;
+      elements.roomPlayersText.textContent =
+        `ホスト：${hostJoined ? "入室済み" : "待機中"}${hostReady ? "・準備完了" : ""} / ` +
+        `ゲスト：${guestJoined ? "入室済み" : "待機中"}${guestReady ? "・準備完了" : ""} / ${roleLabel}`;
+
+      elements.friendReadyBtn.disabled = !bothJoined || (role === "host" ? hostReady : guestReady);
+      elements.friendUnreadyBtn.disabled = !(role === "host" ? hostReady : guestReady);
+
+      if (!bothJoined) {
+        elements.friendReadyText.textContent = role === "host"
+          ? "相手の入室を待っています。部屋URLを友達に送ってください。"
+          : "ホスト側の入室情報を確認中です。";
+      } else if (bothReady) {
+        elements.friendReadyText.textContent = "2人とも準備完了です。次の段階で、この状態から試合開始処理につなげます。";
+      } else {
+        elements.friendReadyText.textContent = "2人そろいました。準備完了を押してください。";
+      }
+    }
+
+    function subscribeFriendRoom(roomId) {
+      const fb = firebaseApi();
+      if (!fb) {
+        elements.friendLobbyMessage.textContent = "Firebaseの読み込みがまだ完了していません。数秒待ってもう一度試してください。";
+        return;
+      }
+      if (state.friendUnsubscribe) {
+        state.friendUnsubscribe();
+        state.friendUnsubscribe = null;
+      }
+      const roomRef = fb.doc(fb.db, "rooms", roomId);
+      state.friendUnsubscribe = fb.onSnapshot(roomRef, (snapshot) => {
+        if (!snapshot.exists()) {
+          elements.friendLobbyMessage.textContent = "この部屋はまだ作成されていません。ホストが部屋を作る必要があります。";
+          state.friendRoomData = null;
+          updateFriendLobbyView(null);
+          return;
+        }
+        const data = snapshot.data();
+        state.friendRoomData = data;
+        elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
+        updateFriendLobbyView(data);
+      }, (error) => {
+        console.error(error);
+        elements.friendLobbyMessage.textContent = `Firebase同期エラー：${error.message || error}`;
+      });
+    }
+
+    async function createFriendRoom() {
+      const fb = firebaseApi();
+      if (!fb) {
+        elements.friendLobbyMessage.textContent = "Firebaseの読み込み中です。数秒待ってからもう一度押してください。";
+        return;
+      }
+      const roomId = makeRoomId();
+      setFriendRoomUi(roomId, "host");
+      const roomRef = fb.doc(fb.db, "rooms", roomId);
+      await fb.setDoc(roomRef, {
+        createdAt: fb.serverTimestamp(),
+        updatedAt: fb.serverTimestamp(),
+        status: "waiting",
+        hostJoined: true,
+        guestJoined: false,
+        hostReady: false,
+        guestReady: false,
+        hostLastSeen: fb.serverTimestamp()
+      });
+      elements.friendLobbyMessage.textContent = "Firebaseに部屋を作成しました。URLをコピーして友達に送ってください。";
+      subscribeFriendRoom(roomId);
+      updateFriendLobbyView({ hostJoined: true, guestJoined: false, hostReady: false, guestReady: false, status: "waiting" });
+    }
+
+    async function joinFriendRoom(roomIdRaw) {
+      const fb = firebaseApi();
+      if (!fb) {
+        elements.friendLobbyMessage.textContent = "Firebaseの読み込み中です。数秒待ってからもう一度押してください。";
+        return;
+      }
+      const roomId = extractRoomId(roomIdRaw);
+      if (!roomId) {
+        elements.friendLobbyMessage.textContent = "部屋IDかURLを入力してください。";
+        return;
+      }
+
+      const roomRef = fb.doc(fb.db, "rooms", roomId);
+      const snapshot = await fb.getDoc(roomRef);
+      if (!snapshot.exists()) {
+        elements.friendLobbyMessage.textContent = "その部屋IDはまだ存在しません。ホストが部屋を作ってから入ってください。";
+        return;
+      }
+
+      setFriendRoomUi(roomId, "guest");
+      await fb.setDoc(roomRef, {
+        updatedAt: fb.serverTimestamp(),
+        guestJoined: true,
+        guestReady: false,
+        guestLastSeen: fb.serverTimestamp(),
+        status: "waiting"
+      }, { merge: true });
+      elements.friendLobbyMessage.textContent = "Firebase上の部屋に入室しました。";
+      subscribeFriendRoom(roomId);
+    }
+
+    async function setFriendReady(ready) {
+      const fb = firebaseApi();
+      if (!fb || !state.friendRoomId || !state.friendRole) return;
+      const key = state.friendRole === "host" ? "hostReady" : "guestReady";
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      await fb.setDoc(roomRef, {
+        [key]: ready,
+        updatedAt: fb.serverTimestamp(),
+        status: ready ? "ready-check" : "waiting"
+      }, { merge: true });
+    }
+
+    function loadRoomFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const roomId = params.get("room");
+      if (roomId) {
+        setFriendRoomUi(roomId, "guest");
+        showScreen("friendLobby");
+        if (firebaseApi()) joinFriendRoom(roomId);
+        else window.addEventListener("waribashi-firebase-ready", () => joinFriendRoom(roomId), { once: true });
+      }
+    }
+
     function showScreen(screen) {
       state.currentScreen = screen;
       const showMenu = screen === "menu";
+      const showBattleSelect = screen === "battleSelect";
+      const showFriendLobby = screen === "friendLobby";
       const showDifficulty = screen === "difficulty";
       const showSettings = screen === "settings";
       const showDeck = screen === "deck";
       const showBattle = screen === "battle";
 
       elements.menuScreen.classList.toggle("screen-hidden", !showMenu);
+      elements.battleSelectScreen.classList.toggle("screen-hidden", !showBattleSelect);
+      elements.friendLobbyScreen.classList.toggle("screen-hidden", !showFriendLobby);
       elements.difficultyScreen.classList.toggle("screen-hidden", !showDifficulty);
       elements.settingsScreen.classList.toggle("screen-hidden", !showSettings);
       elements.deckEditorScreen.classList.toggle("screen-hidden", !showDeck);
@@ -1226,6 +1437,7 @@ const CARD_LIBRARY = {
         else setMessage("対戦前に、あなた用・CPU用のどちらかのコストを40以内にしてください。");
         return;
       }
+      state.battleMode = "cpu";
       state.cpuDifficulty = difficulty;
       elements.cpuDifficultySelect.value = difficulty;
       showScreen("battle");
@@ -4252,7 +4464,41 @@ async function endTurn() {
       card.addEventListener("click", onHandClick);
     });
 
-    elements.menuStartBtn.addEventListener("click", () => showScreen("difficulty"));
+    elements.menuStartBtn.addEventListener("click", () => showScreen("battleSelect"));
+    elements.plVsCpuBtn.addEventListener("click", () => showScreen("difficulty"));
+    elements.plVsPlBtn.addEventListener("click", () => {
+      showScreen("friendLobby");
+      updateFriendLobbyView();
+    });
+    elements.battleSelectBackBtn.addEventListener("click", () => showScreen("menu"));
+    elements.friendLobbyBackBtn.addEventListener("click", () => showScreen("battleSelect"));
+    elements.createRoomBtn.addEventListener("click", () => createFriendRoom().catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `部屋作成エラー：${error.message || error}`;
+    }));
+    elements.joinRoomBtn.addEventListener("click", () => {
+      joinFriendRoom(elements.roomIdInput.value).catch(error => {
+        console.error(error);
+        elements.friendLobbyMessage.textContent = `入室エラー：${error.message || error}`;
+      });
+    });
+    elements.friendReadyBtn.addEventListener("click", () => setFriendReady(true).catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `準備完了エラー：${error.message || error}`;
+    }));
+    elements.friendUnreadyBtn.addEventListener("click", () => setFriendReady(false).catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `準備解除エラー：${error.message || error}`;
+    }));
+    elements.copyRoomUrlBtn.addEventListener("click", async () => {
+      if (!state.friendRoomUrl) return;
+      try {
+        await navigator.clipboard.writeText(state.friendRoomUrl);
+        elements.friendLobbyMessage.textContent = "部屋URLをコピーしました。友達に送ってください。";
+      } catch (_) {
+        elements.friendLobbyMessage.textContent = "コピーできない場合は、表示されたURLを長押し/選択してコピーしてください。";
+      }
+    });
     elements.menuDeckBtn.addEventListener("click", () => showScreen("deck"));
     elements.menuSettingsBtn.addEventListener("click", () => showScreen("settings"));
     elements.difficultyBackBtn.addEventListener("click", () => showScreen("menu"));
@@ -4425,3 +4671,4 @@ async function endTurn() {
 
     renderDeckBuilder();
     showScreen("menu");
+    loadRoomFromUrl();

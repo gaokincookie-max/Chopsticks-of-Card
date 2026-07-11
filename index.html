@@ -46,7 +46,7 @@
     <header>
       <h1>割り箸カード</h1>
       <p class="subtitle">
-        メニューから対戦開始・デッキ編集・設定を選べます。デッキ編集と対戦画面を分離しました。
+        CPU対戦・フレンド対戦の入口を分けました。フレンド対戦は部屋作成/入室の準備画面です。
       </p>
     </header>
 
@@ -54,12 +54,64 @@
       <div class="menu-card">
         <div class="menu-kicker">WARIBASHI CARD</div>
         <h2>割り箸カード</h2>
-        <p class="small">デッキを整えて、CPUと対戦します。加護・呪縛・罠・弾を使って相手の両手を0にしましょう。</p>
+        <p class="small">デッキを整えて、対戦形式を選びます。PL vs CPとPL vs PLの入口を分けました。</p>
         <div class="menu-actions">
           <button id="menuStartBtn">スタート</button>
           <button id="menuDeckBtn" class="blue">デッキ編集</button>
           <button id="menuSettingsBtn" class="secondary">設定</button>
         </div>
+      </div>
+    </section>
+
+    <section class="screen battle-select-screen screen-hidden" id="battleSelectScreen">
+      <div class="menu-card">
+        <div class="menu-kicker">BATTLE MODE</div>
+        <h2>対戦形式を選択</h2>
+        <p class="small">CPUと遊ぶ場合はPL vs CP、友達と遊ぶ準備をする場合はPL vs PLを選んでください。</p>
+        <div class="difficulty-grid">
+          <button class="difficulty-btn" id="plVsCpuBtn">
+            <strong>PL vs CP</strong>
+            <span>CPU難易度を選んで、これまで通り対戦します。</span>
+          </button>
+          <button class="difficulty-btn" id="plVsPlBtn">
+            <strong>PL vs PL</strong>
+            <span>Firebaseで部屋を作る/部屋に入る画面へ進みます。</span>
+          </button>
+        </div>
+        <button id="battleSelectBackBtn" class="secondary wide-btn">メニューに戻る</button>
+      </div>
+    </section>
+
+    <section class="screen friend-lobby-screen screen-hidden" id="friendLobbyScreen">
+      <div class="menu-card">
+        <div class="menu-kicker">FRIEND BATTLE</div>
+        <h2>フレンド対戦</h2>
+        <p class="small">Firebaseで部屋の入室状態と準備完了を同期します。まずは2人が同じ部屋に入れるかを確認します。</p>
+        <div class="menu-actions">
+          <button id="createRoomBtn">部屋を作る</button>
+          <button id="copyRoomUrlBtn" class="blue" disabled>URLをコピー</button>
+        </div>
+        <div class="room-box" id="roomResultBox">
+          <span class="room-label">部屋URL</span>
+          <div class="room-url" id="roomUrlText">まだ部屋を作っていません。</div>
+        </div>
+        <div class="room-join-box">
+          <label for="roomIdInput" class="small">部屋IDまたはURLを入力</label>
+          <input id="roomIdInput" type="text" placeholder="例：ABC123 または ?room=ABC123 のURL">
+          <button id="joinRoomBtn" class="secondary wide-btn">部屋に入る</button>
+        </div>
+        <p class="small" id="friendLobbyMessage">Firebase接続前です。部屋を作るか、部屋ID/URLを入力してください。</p>
+        <div class="room-box friend-sync-box">
+          <span class="room-label">同期状態</span>
+          <div class="room-url" id="roomStatusText">未接続</div>
+          <div class="small" id="roomPlayersText">あなた：未入室 / 相手：未入室</div>
+        </div>
+        <div class="menu-actions">
+          <button id="friendReadyBtn" class="blue" disabled>準備完了</button>
+          <button id="friendUnreadyBtn" class="secondary" disabled>準備解除</button>
+        </div>
+        <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
+        <button id="friendLobbyBackBtn" class="secondary wide-btn">対戦形式に戻る</button>
       </div>
     </section>
 
@@ -297,6 +349,49 @@
       <div class="log" id="log"></div>
     </section>
   </main>
+
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      updateDoc,
+      onSnapshot,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBkccgFgT8ifTNsHiAyPHi1hrftmfF-5R4",
+      authDomain: "waribashi-card-online.firebaseapp.com",
+      projectId: "waribashi-card-online",
+      storageBucket: "waribashi-card-online.firebasestorage.app",
+      messagingSenderId: "531867109129",
+      appId: "1:531867109129:web:7833c7fbaa62b97636f5d8"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      window.WaribashiFirebase = {
+        ready: true,
+        db,
+        doc,
+        getDoc,
+        setDoc,
+        updateDoc,
+        onSnapshot,
+        serverTimestamp
+      };
+      window.dispatchEvent(new CustomEvent("waribashi-firebase-ready"));
+    } catch (error) {
+      console.error("Firebase init failed", error);
+      window.WaribashiFirebase = { ready: false, error };
+      window.dispatchEvent(new CustomEvent("waribashi-firebase-error"));
+    }
+  </script>
 
   <script src="game.js"></script>
 </body>
