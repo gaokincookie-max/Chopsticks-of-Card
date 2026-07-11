@@ -111,6 +111,51 @@
           <button id="friendUnreadyBtn" class="secondary" disabled>準備解除</button>
         </div>
         <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
+
+        <div class="friend-game-panel" id="friendGamePanel">
+          <div class="room-label">盤面同期テスト</div>
+          <div class="friend-game-status" id="friendGameStatus">まだ試合は始まっていません。</div>
+          <button id="friendStartGameBtn" class="danger wide-btn" disabled>簡易試合を開始</button>
+
+          <div class="friend-board-mini">
+            <div class="friend-side-card">
+              <span id="friendHostName">ホスト</span>
+              <strong id="friendHostHands">左1 / 右1</strong>
+            </div>
+            <div class="friend-side-card">
+              <span id="friendGuestName">ゲスト</span>
+              <strong id="friendGuestHands">左1 / 右1</strong>
+            </div>
+          </div>
+
+          <div class="friend-action-box">
+            <div class="room-label">攻撃</div>
+            <div class="friend-action-row">
+              <select id="friendAttackFrom">
+                <option value="L">自分の左手</option>
+                <option value="R">自分の右手</option>
+              </select>
+              <select id="friendAttackTo">
+                <option value="L">相手の左手</option>
+                <option value="R">相手の右手</option>
+              </select>
+              <button id="friendAttackBtn" disabled>攻撃</button>
+            </div>
+          </div>
+
+          <div class="friend-action-box">
+            <div class="room-label">分ける</div>
+            <p class="small">カードなし同期テスト用です。左右の合計を変えずに分けます。両手0や完全に同じ形は不可です。</p>
+            <div class="friend-action-row">
+              <input id="friendSplitLeft" type="number" min="0" max="4" value="1" aria-label="左手">
+              <input id="friendSplitRight" type="number" min="0" max="4" value="1" aria-label="右手">
+              <button id="friendSplitBtn" disabled>分ける</button>
+            </div>
+          </div>
+
+          <div class="friend-mini-log" id="friendMiniLog">ログはまだありません。</div>
+        </div>
+
         <button id="friendLobbyBackBtn" class="secondary wide-btn">対戦形式に戻る</button>
       </div>
     </section>

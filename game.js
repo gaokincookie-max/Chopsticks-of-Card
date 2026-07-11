@@ -1028,6 +1028,18 @@ const CARD_LIBRARY = {
       friendReadyBtn: document.getElementById("friendReadyBtn"),
       friendUnreadyBtn: document.getElementById("friendUnreadyBtn"),
       friendReadyText: document.getElementById("friendReadyText"),
+      friendGamePanel: document.getElementById("friendGamePanel"),
+      friendGameStatus: document.getElementById("friendGameStatus"),
+      friendStartGameBtn: document.getElementById("friendStartGameBtn"),
+      friendHostHands: document.getElementById("friendHostHands"),
+      friendGuestHands: document.getElementById("friendGuestHands"),
+      friendAttackFrom: document.getElementById("friendAttackFrom"),
+      friendAttackTo: document.getElementById("friendAttackTo"),
+      friendAttackBtn: document.getElementById("friendAttackBtn"),
+      friendSplitLeft: document.getElementById("friendSplitLeft"),
+      friendSplitRight: document.getElementById("friendSplitRight"),
+      friendSplitBtn: document.getElementById("friendSplitBtn"),
+      friendMiniLog: document.getElementById("friendMiniLog"),
       friendLobbyBackBtn: document.getElementById("friendLobbyBackBtn"),
       difficultyBackBtn: document.getElementById("difficultyBackBtn"),
       settingsBackBtn: document.getElementById("settingsBackBtn"),
@@ -1248,6 +1260,181 @@ const CARD_LIBRARY = {
       history.replaceState(null, "", state.friendRoomUrl);
     }
 
+
+    function emptyFriendGameState() {
+      return {
+        started: true,
+        turn: "host",
+        host: { L: 1, R: 1 },
+        guest: { L: 1, R: 1 },
+        winner: null,
+        log: ["簡易試合を開始しました。カードなしの盤面同期テストです。"]
+      };
+    }
+
+    function friendRoleOpponent(role) {
+      return role === "host" ? "guest" : "host";
+    }
+
+    function friendHandText(side) {
+      return `左${side?.L ?? 0} / 右${side?.R ?? 0}`;
+    }
+
+    function friendWrap(value, ownerRole, hand) {
+      if (value >= 5) return value % 5;
+      return value;
+    }
+
+    function friendIsDead(side) {
+      return (side?.L || 0) === 0 && (side?.R || 0) === 0;
+    }
+
+    function friendCanAct(game) {
+      return !!game?.started && !game?.winner && game.turn === state.friendRole;
+    }
+
+    function friendLogLines(game) {
+      const lines = Array.isArray(game?.log) ? game.log : [];
+      return lines.slice(-8).reverse().join("\\n") || "ログはまだありません。";
+    }
+
+    function updateFriendGameView(game = state.friendRoomData?.game) {
+      if (!elements.friendGameStatus) return;
+      const host = game?.host || { L: 1, R: 1 };
+      const guest = game?.guest || { L: 1, R: 1 };
+      elements.friendHostHands.textContent = friendHandText(host);
+      elements.friendGuestHands.textContent = friendHandText(guest);
+      elements.friendMiniLog.textContent = friendLogLines(game);
+
+      const hostReady = !!state.friendRoomData?.hostReady;
+      const guestReady = !!state.friendRoomData?.guestReady;
+      const bothReady = hostReady && guestReady;
+      const isHost = state.friendRole === "host";
+
+      elements.friendStartGameBtn.disabled = !isHost || !bothReady || !!game?.started;
+
+      if (!game?.started) {
+        elements.friendGameStatus.textContent = bothReady
+          ? (isHost ? "2人とも準備完了です。ホストは簡易試合を開始できます。" : "2人とも準備完了です。ホストの開始を待っています。")
+          : "まだ試合は始まっていません。2人とも準備完了すると開始できます。";
+        elements.friendAttackBtn.disabled = true;
+        elements.friendSplitBtn.disabled = true;
+        return;
+      }
+
+      if (game.winner) {
+        elements.friendGameStatus.textContent = `${game.winner === state.friendRole ? "あなたの勝ちです！" : "相手の勝ちです。"}`;
+        elements.friendAttackBtn.disabled = true;
+        elements.friendSplitBtn.disabled = true;
+        return;
+      }
+
+      const myTurn = friendCanAct(game);
+      elements.friendGameStatus.textContent = myTurn ? "あなたの番です。攻撃または分けるを選んでください。" : "相手の番です。相手の行動を待っています。";
+      elements.friendAttackBtn.disabled = !myTurn;
+      elements.friendSplitBtn.disabled = !myTurn;
+
+      const me = game[state.friendRole] || { L: 1, R: 1 };
+      elements.friendSplitLeft.value = me.L;
+      elements.friendSplitRight.value = me.R;
+    }
+
+    async function updateFriendGame(updater) {
+      const fb = firebaseApi();
+      if (!fb || !state.friendRoomId) return;
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const snapshot = await fb.getDoc(roomRef);
+      if (!snapshot.exists()) {
+        elements.friendLobbyMessage.textContent = "部屋が見つかりません。";
+        return;
+      }
+      const data = snapshot.data();
+      const next = updater(data);
+      if (!next) return;
+      await fb.setDoc(roomRef, {
+        ...next,
+        updatedAt: fb.serverTimestamp()
+      }, { merge: true });
+    }
+
+    async function startFriendSimpleGame() {
+      if (state.friendRole !== "host") {
+        elements.friendLobbyMessage.textContent = "簡易試合を開始できるのはホストだけです。";
+        return;
+      }
+      await updateFriendGame((data) => {
+        if (!data.hostReady || !data.guestReady) {
+          elements.friendLobbyMessage.textContent = "2人とも準備完了してから開始してください。";
+          return null;
+        }
+        return {
+          status: "playing",
+          game: emptyFriendGameState()
+        };
+      });
+    }
+
+    async function friendAttackAction() {
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        const opp = friendRoleOpponent(role);
+        const from = elements.friendAttackFrom.value;
+        const to = elements.friendAttackTo.value;
+        const me = { ...game[role] };
+        const enemy = { ...game[opp] };
+        if ((me[from] || 0) <= 0 || (enemy[to] || 0) <= 0) return null;
+        const before = enemy[to];
+        const total = before + me[from];
+        enemy[to] = friendWrap(total, opp, to);
+        const nextLog = [...(game.log || []), `${role === "host" ? "ホスト" : "ゲスト"}：${from === "L" ? "左" : "右"}${me[from]}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-20);
+        const winner = friendIsDead(enemy) ? role : null;
+        return {
+          game: {
+            ...game,
+            [opp]: enemy,
+            turn: winner ? role : opp,
+            winner,
+            log: winner ? [...nextLog, `${role === "host" ? "ホスト" : "ゲスト"}の勝ち。`].slice(-20) : nextLog
+          }
+        };
+      });
+    }
+
+    async function friendSplitAction() {
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        const opp = friendRoleOpponent(role);
+        const me = { ...game[role] };
+        const left = Math.max(0, Math.min(4, Number(elements.friendSplitLeft.value) || 0));
+        const right = Math.max(0, Math.min(4, Number(elements.friendSplitRight.value) || 0));
+        if (left === 0 && right === 0) {
+          elements.friendLobbyMessage.textContent = "両手0には分けられません。";
+          return null;
+        }
+        if (left === me.L && right === me.R) {
+          elements.friendLobbyMessage.textContent = "同じ形には分けられません。";
+          return null;
+        }
+        if (left + right !== me.L + me.R) {
+          elements.friendLobbyMessage.textContent = "左右の合計が変わらないようにしてください。";
+          return null;
+        }
+        const nextLog = [...(game.log || []), `${role === "host" ? "ホスト" : "ゲスト"}：分ける。${me.L}-${me.R} → ${left}-${right}`].slice(-20);
+        return {
+          game: {
+            ...game,
+            [role]: { L: left, R: right },
+            turn: opp,
+            log: nextLog
+          }
+        };
+      });
+    }
+
     function updateFriendLobbyView(data = state.friendRoomData) {
       const role = state.friendRole;
       const roleLabel = role === "host" ? "あなた：ホスト" : role === "guest" ? "あなた：ゲスト" : "あなた：未入室";
@@ -1257,6 +1444,7 @@ const CARD_LIBRARY = {
         elements.friendReadyText.textContent = "2人が入室して準備完了すると「試合開始できます」と表示されます。";
         elements.friendReadyBtn.disabled = true;
         elements.friendUnreadyBtn.disabled = true;
+        updateFriendGameView(null);
         return;
       }
 
@@ -1280,10 +1468,12 @@ const CARD_LIBRARY = {
           ? "相手の入室を待っています。部屋URLを友達に送ってください。"
           : "ホスト側の入室情報を確認中です。";
       } else if (bothReady) {
-        elements.friendReadyText.textContent = "2人とも準備完了です。次の段階で、この状態から試合開始処理につなげます。";
+        elements.friendReadyText.textContent = data?.game?.started ? "簡易試合中です。" : "2人とも準備完了です。ホストが簡易試合を開始できます。";
       } else {
         elements.friendReadyText.textContent = "2人そろいました。準備完了を押してください。";
       }
+
+      updateFriendGameView(data?.game);
     }
 
     function subscribeFriendRoom(roomId) {
@@ -4489,6 +4679,18 @@ async function endTurn() {
     elements.friendUnreadyBtn.addEventListener("click", () => setFriendReady(false).catch(error => {
       console.error(error);
       elements.friendLobbyMessage.textContent = `準備解除エラー：${error.message || error}`;
+    }));
+    elements.friendStartGameBtn.addEventListener("click", () => startFriendSimpleGame().catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `簡易試合開始エラー：${error.message || error}`;
+    }));
+    elements.friendAttackBtn.addEventListener("click", () => friendAttackAction().catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `攻撃同期エラー：${error.message || error}`;
+    }));
+    elements.friendSplitBtn.addEventListener("click", () => friendSplitAction().catch(error => {
+      console.error(error);
+      elements.friendLobbyMessage.textContent = `分ける同期エラー：${error.message || error}`;
     }));
     elements.copyRoomUrlBtn.addEventListener("click", async () => {
       if (!state.friendRoomUrl) return;

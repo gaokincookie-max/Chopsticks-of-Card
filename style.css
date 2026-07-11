@@ -131,6 +131,91 @@
       border-color: #bdd7f0;
     }
 
+    .friend-game-panel {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      border: 1px solid #c9d9b8;
+      background: #fbfff6;
+      text-align: left;
+    }
+
+    .friend-game-status {
+      background: #f2ffe8;
+      border: 1px dashed #c6dea9;
+      border-radius: 12px;
+      padding: 10px;
+      font-weight: 900;
+      color: #45662b;
+    }
+
+    .friend-board-mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .friend-side-card {
+      display: grid;
+      gap: 6px;
+      background: white;
+      border: 1px solid #d9c4a8;
+      border-radius: 14px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .friend-side-card span {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .friend-side-card strong {
+      font-size: 18px;
+      color: var(--accent);
+    }
+
+    .friend-action-box {
+      display: grid;
+      gap: 8px;
+      background: #fffefb;
+      border: 1px solid #ead8bd;
+      border-radius: 14px;
+      padding: 10px;
+    }
+
+    .friend-action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .friend-action-row select,
+    .friend-action-row input {
+      border: 1px solid #d9c5a6;
+      border-radius: 12px;
+      padding: 10px;
+      font: inherit;
+      background: #fffaf2;
+      min-width: 0;
+    }
+
+    .friend-mini-log {
+      max-height: 120px;
+      overflow: auto;
+      background: #2b241c;
+      color: #fff8ec;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
     .room-join-box input {
       border: 1px solid #d9c5a6;
       border-radius: 12px;
