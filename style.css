@@ -221,6 +221,311 @@
       width: min(780px, 96vw);
     }
 
+    .friend-mobile-battle {
+      width: min(820px, 100%);
+      margin: 0 auto;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .friend-battle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      box-shadow: 0 6px 16px var(--shadow);
+    }
+
+    .friend-battle-header h2 {
+      margin: 0;
+      font-size: 22px;
+      color: var(--accent);
+    }
+
+    .friend-player-zone {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 12px;
+      box-shadow: 0 6px 16px var(--shadow);
+      display: grid;
+      gap: 10px;
+    }
+
+    .opponent-zone {
+      background: #fff7f2;
+    }
+
+    .own-zone {
+      background: #f8fff2;
+    }
+
+    .friend-zone-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--accent);
+      font-weight: 900;
+    }
+
+    .friend-zone-title small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .friend-hands-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .friend-hand-big {
+      min-height: 92px;
+      border: 2px solid #d9c4a8;
+      background: #fffefb;
+      color: var(--ink);
+      border-radius: 22px;
+      font-size: 15px;
+      font-weight: 900;
+      box-shadow: inset 0 -3px 0 rgba(80,50,20,.09), 0 6px 14px rgba(60,40,20,.08);
+      line-height: 1.25;
+    }
+
+    .friend-hand-big b {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 38px;
+      color: var(--accent);
+    }
+
+    .friend-hand-big.selected-own {
+      border-color: #315f8f;
+      background: #eaf4ff;
+    }
+
+    .friend-hand-big.selected-target {
+      border-color: #b94535;
+      background: #fff0ed;
+    }
+
+    .friend-hand-big.dead {
+      opacity: .42;
+      filter: grayscale(.4);
+    }
+
+    .friend-hand-big.bump {
+      animation: friendHandBump .42s ease;
+    }
+
+    .friend-hand-big.drop {
+      animation: friendHandDrop .42s ease;
+    }
+
+    .friend-hand-stack {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .friend-attachments-mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      min-height: 28px;
+    }
+
+    .friend-attach-chip {
+      border-radius: 10px;
+      padding: 5px 6px;
+      font-size: 10px;
+      font-weight: 900;
+      text-align: center;
+      border: 1px solid #d8c1a0;
+      background: #fff8ec;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .friend-attach-chip.blessing {
+      border-color: #7bbf92;
+      background: #ebfff1;
+      color: #2f7d50;
+    }
+
+    .friend-attach-chip.curse {
+      border-color: #b46cd0;
+      background: #fbf0ff;
+      color: #7b2b91;
+    }
+
+    .friend-center-actions {
+      background: #fffaf2;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      box-shadow: 0 6px 16px var(--shadow);
+    }
+
+    .friend-hand-dock {
+      position: sticky;
+      bottom: 0;
+      z-index: 8;
+      background: rgba(255,250,242,.96);
+      border: 1px solid var(--line);
+      border-radius: 20px 20px 0 0;
+      padding: 10px;
+      box-shadow: 0 -8px 22px rgba(60,40,20,.12);
+      display: grid;
+      gap: 8px;
+      backdrop-filter: blur(6px);
+    }
+
+    .friend-dock-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--accent);
+    }
+
+    .friend-dock-head span {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .friend-legacy-hidden {
+      display: none;
+    }
+
+    .online-deck-card {
+      max-width: 900px;
+      width: min(900px, 96vw);
+    }
+
+    .deck-summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: #fff8ec;
+      border: 1px solid #e1c9a6;
+      border-radius: 14px;
+      padding: 10px;
+      margin: 10px 0;
+    }
+
+    .online-deck-code-box,
+    .online-deck-save-box {
+      display: grid;
+      gap: 8px;
+      background: #fffefb;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      margin: 10px 0;
+      text-align: left;
+    }
+
+    .online-deck-code-box textarea,
+    .online-deck-save-box select {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #d9c5a6;
+      border-radius: 12px;
+      padding: 10px;
+      font: inherit;
+      background: #fffaf2;
+    }
+
+    .online-deck-list {
+      display: grid;
+      gap: 8px;
+      max-height: 62vh;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .online-deck-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      background: #fffefb;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      text-align: left;
+    }
+
+    .online-deck-row strong {
+      color: var(--accent);
+    }
+
+    .online-deck-row small {
+      color: var(--muted);
+      display: block;
+      margin-top: 3px;
+    }
+
+    .online-deck-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .online-deck-controls button {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 12px;
+    }
+
+    .online-deck-count {
+      min-width: 26px;
+      text-align: center;
+      font-weight: 900;
+      color: var(--accent);
+    }
+
+    @media (max-width: 560px) {
+      .friend-mobile-battle {
+        padding: 8px;
+      }
+
+      .friend-battle-header h2 {
+        font-size: 18px;
+      }
+
+      .friend-turn-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .friend-hand-big {
+        min-height: 82px;
+      }
+
+      .friend-hand-big b {
+        font-size: 34px;
+      }
+
+      .friend-action-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .friend-action-row button {
+        grid-column: 1 / -1;
+      }
+    }
+
     .friend-turn-panel {
       display: grid;
       grid-template-columns: repeat(3, 1fr);

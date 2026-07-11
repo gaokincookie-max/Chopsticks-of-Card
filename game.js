@@ -984,7 +984,7 @@ const CARD_LIBRARY = {
       gameOver: false,
       log: [],
       turnNumber: 0,
-      currentScreen: "menu",
+      currentScreen: "modeMenu",
       battleMode: "cpu",
       friendRoomId: null,
       friendRoomUrl: null,
@@ -994,7 +994,8 @@ const CARD_LIBRARY = {
       friendRoomData: null,
       friendSelectedOwnHand: "L",
       friendSelectedTargetHand: "L",
-      friendLastHandValues: null
+      friendLastHandValues: null,
+      onlineDeckCounts: null
     };
 
     const handNames = {
@@ -1008,6 +1009,28 @@ const CARD_LIBRARY = {
       message: document.getElementById("message"),
       deckEditorMessage: document.getElementById("deckEditorMessage"),
       log: document.getElementById("log"),
+      modeMenuScreen: document.getElementById("modeMenuScreen"),
+      onlineMenuScreen: document.getElementById("onlineMenuScreen"),
+      onlineDeckScreen: document.getElementById("onlineDeckScreen"),
+      offlineModeBtn: document.getElementById("offlineModeBtn"),
+      onlineModeBtn: document.getElementById("onlineModeBtn"),
+      offlineBackModeBtn: document.getElementById("offlineBackModeBtn"),
+      onlineStartBtn: document.getElementById("onlineStartBtn"),
+      onlineDeckBtn: document.getElementById("onlineDeckBtn"),
+      onlineBackModeBtn: document.getElementById("onlineBackModeBtn"),
+      onlineDeckList: document.getElementById("onlineDeckList"),
+      onlineDeckSummary: document.getElementById("onlineDeckSummary"),
+      onlineDeckMessage: document.getElementById("onlineDeckMessage"),
+      onlineDeckCodeBox: document.getElementById("onlineDeckCodeBox"),
+      onlineDeckCodeMessage: document.getElementById("onlineDeckCodeMessage"),
+      onlineDeckExportBtn: document.getElementById("onlineDeckExportBtn"),
+      onlineDeckImportBtn: document.getElementById("onlineDeckImportBtn"),
+      onlineDeckCopyBtn: document.getElementById("onlineDeckCopyBtn"),
+      onlineDeckSlotSelect: document.getElementById("onlineDeckSlotSelect"),
+      onlineDeckSaveSlotBtn: document.getElementById("onlineDeckSaveSlotBtn"),
+      onlineDeckLoadSlotBtn: document.getElementById("onlineDeckLoadSlotBtn"),
+      onlineDeckDefaultBtn: document.getElementById("onlineDeckDefaultBtn"),
+      onlineDeckBackBtn: document.getElementById("onlineDeckBackBtn"),
       menuScreen: document.getElementById("menuScreen"),
       battleSelectScreen: document.getElementById("battleSelectScreen"),
       friendLobbyScreen: document.getElementById("friendLobbyScreen"),
@@ -1047,6 +1070,16 @@ const CARD_LIBRARY = {
       friendGuestRight: document.getElementById("friendGuestRight"),
       friendHostDeckInfo: document.getElementById("friendHostDeckInfo"),
       friendGuestDeckInfo: document.getElementById("friendGuestDeckInfo"),
+      friendOpponentDeckInfo: document.getElementById("friendOpponentDeckInfo"),
+      friendOwnDeckInfo: document.getElementById("friendOwnDeckInfo"),
+      friendOpponentLeft: document.getElementById("friendOpponentLeft"),
+      friendOpponentRight: document.getElementById("friendOpponentRight"),
+      friendOwnLeft: document.getElementById("friendOwnLeft"),
+      friendOwnRight: document.getElementById("friendOwnRight"),
+      friendOpponentLeftAttach: document.getElementById("friendOpponentLeftAttach"),
+      friendOpponentRightAttach: document.getElementById("friendOpponentRightAttach"),
+      friendOwnLeftAttach: document.getElementById("friendOwnLeftAttach"),
+      friendOwnRightAttach: document.getElementById("friendOwnRightAttach"),
       friendHandCards: document.getElementById("friendHandCards"),
       friendAttackFrom: document.getElementById("friendAttackFrom"),
       friendAttackTo: document.getElementById("friendAttackTo"),
@@ -1292,18 +1325,195 @@ const CARD_LIBRARY = {
       adjust: { name: "整える", cost: 1, text: "選択中の自分の手からもう片方へ1本移す。カード効果なので片手0可。" },
       repair: { name: "補修", cost: 3, text: "手札1枚を追加で捨て、自分の0の手を1にしてターン終了。" },
       preparation: { name: "戦闘準備", cost: 1, text: "簡易版：山札から補助カードを1枚探して手札へ。" },
-      bulletSupply: { name: "弾丸補給", cost: 1, text: "簡易版：山札から狙撃を1枚探して手札へ。" }
+      bulletSupply: { name: "弾丸補給", cost: 1, text: "簡易版：山札から狙撃を1枚探して手札へ。" },
+      scout: { name: "探り", cost: 1, text: "相手の手札枚数をログに表示。" },
+      costLimit: { name: "倹約令", cost: 3, text: "次の相手ターン、相手はコスト2以下のカードしか使えない。" },
+      doubleDouble: { name: "ダブルダブル", cost: 3, text: "自分が2-2なら、このターン攻撃/分ける後も自分の番が続く。" },
+      overAccel: { name: "過加速", cost: 3, text: "次の自分ターン開始時に追加で1枚引く。" },
+      focusShot: { name: "一点狙い", cost: 3, text: "簡易版：山札/捨て札から狙撃を1枚手札へ。" },
+      reload: { name: "再装填", cost: 2, text: "簡易版：捨て札から狙撃を1枚手札へ。" },
+      breakthrough: { name: "強行突破", cost: 3, text: "簡易版：このターン攻撃+1。" },
+      powerBlessing: { name: "力の加護", cost: 2, type: "blessing", text: "選択中の自分の手に表向きで置く。この手で攻撃+1。" },
+      guardBlessing: { name: "守護", cost: 2, type: "blessing", text: "選択中の自分の手に表向きで置く。この手が受ける本数を-1、最低1。" },
+      growthBlessing: { name: "成長", cost: 2, type: "blessing", text: "選択中の自分の手に表向きで置く。この手で攻撃して相手がちょうど0にならず5なら1枚引く。" },
+      slowCurse: { name: "鈍重の呪縛", cost: 2, type: "curse", text: "選択中の相手の手に表向きで置く。この手で攻撃-1、最低1。" },
+      immutableCurse: { name: "不変の呪縛", cost: 2, type: "curse", text: "選択中の相手の手に表向きで置く。この手は攻撃力増加を受けない。" },
+      sealCurse: { name: "封印の呪縛", cost: 2, type: "curse", text: "選択中の相手の手に表向きで置く。この手には新たに加護を置けない。" },
+      rapidFire: { name: "乱射", cost: 2, text: "手札を1枚弾として捨て、選択中の相手の手にそのコスト分。弾なら+1。使用後ターン終了。" },
+      accelerationBullet: { name: "加速弾", cost: 1, bullet: true, text: "乱射で捨てると、通常ダメージ後に1枚引く。" },
+      specialBullet: { name: "特殊弾", cost: 2, bullet: true, text: "乱射で捨てると、相手の手札をランダムに1枚捨てる。" },
+      piercingBullet: { name: "貫通弾", cost: 3, bullet: true, text: "乱射で捨てると、選択中の相手の手の設置カードを1枚捨てる。" },
+      logicAtelier: { name: "ロジックアトリエ", cost: 0, bullet: true, token: true, text: "乱射で捨てると、選択中の相手の手を0にする。簡易版トークン。" }
     };
 
     const FRIEND_SIMPLE_DECK = [
       "insight", "insight", "strongHit", "lightHit", "lockSplit",
       "snipe", "snipe", "passCard", "nekodamashi", "nekodamashi",
       "calm", "randomDice", "equalTrade", "adjust", "repair",
-      "preparation", "bulletSupply", "strongHit", "lightHit", "snipe"
+      "preparation", "bulletSupply", "strongHit", "lightHit", "snipe",
+      "scout", "costLimit", "doubleDouble", "overAccel", "focusShot",
+      "reload", "breakthrough", "passCard", "insight", "snipe",
+      "powerBlessing", "guardBlessing", "growthBlessing", "slowCurse",
+      "immutableCurse", "sealCurse", "rapidFire", "accelerationBullet",
+      "specialBullet", "piercingBullet", "rapidFire", "accelerationBullet"
     ];
 
+
+    const ONLINE_DECK_LIMIT = 20;
+    const ONLINE_DECK_COST_LIMIT = 40;
+    const ONLINE_DECK_MAX_SAME = 3;
+    const ONLINE_DECK_STORAGE_KEY = "waribashiPvpDeckCountsV47";
+
+    function defaultOnlineDeckCounts() {
+      const counts = {};
+      FRIEND_SIMPLE_DECK.forEach(id => {
+        counts[id] = (counts[id] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function loadOnlineDeckCounts() {
+      try {
+        const raw = localStorage.getItem(ONLINE_DECK_STORAGE_KEY);
+        if (!raw) return defaultOnlineDeckCounts();
+        const parsed = JSON.parse(raw);
+        const counts = {};
+        Object.keys(FRIEND_SIMPLE_LIBRARY).forEach(id => {
+          const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(parsed[id]) || 0));
+          if (n > 0) counts[id] = n;
+        });
+        return counts;
+      } catch (_) {
+        return defaultOnlineDeckCounts();
+      }
+    }
+
+    function saveOnlineDeckCounts() {
+      localStorage.setItem(ONLINE_DECK_STORAGE_KEY, JSON.stringify(state.onlineDeckCounts || defaultOnlineDeckCounts()));
+    }
+
+    function onlineDeckListFromCounts(counts = state.onlineDeckCounts) {
+      const deck = [];
+      Object.entries(counts || {}).forEach(([id, count]) => {
+        for (let i = 0; i < count; i++) deck.push(id);
+      });
+      return deck;
+    }
+
+    function onlineDeckStats(counts = state.onlineDeckCounts) {
+      let cards = 0;
+      let cost = 0;
+      Object.entries(counts || {}).forEach(([id, count]) => {
+        const card = friendCardInfo(id);
+        cards += count;
+        cost += (Number(card.cost) || 0) * count;
+      });
+      return { cards, cost };
+    }
+
+    function onlineDeckIsValid(counts = state.onlineDeckCounts) {
+      const stats = onlineDeckStats(counts);
+      return stats.cards > 0 && stats.cards <= ONLINE_DECK_LIMIT && stats.cost <= ONLINE_DECK_COST_LIMIT;
+    }
+
+
+    function encodeOnlineDeckCode(counts = state.onlineDeckCounts) {
+      const compact = {};
+      Object.keys(counts || {}).sort().forEach(id => {
+        const n = counts[id] || 0;
+        if (n > 0) compact[id] = n;
+      });
+      const json = JSON.stringify({ v: 1, counts: compact });
+      return "WBPVP1:" + btoa(unescape(encodeURIComponent(json)));
+    }
+
+    function decodeOnlineDeckCode(code) {
+      const raw = String(code || "").trim();
+      if (!raw) throw new Error("コードが空です。");
+      const body = raw.startsWith("WBPVP1:") ? raw.slice("WBPVP1:".length) : raw;
+      const json = decodeURIComponent(escape(atob(body)));
+      const parsed = JSON.parse(json);
+      const source = parsed.counts || parsed;
+      const counts = {};
+      Object.keys(source).forEach(id => {
+        if (!FRIEND_SIMPLE_LIBRARY[id]) return;
+        const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(source[id]) || 0));
+        if (n > 0) counts[id] = n;
+      });
+      if (!onlineDeckIsValid(counts)) throw new Error("デッキ条件を満たしていません。20枚以内・コスト40以内・1枚以上にしてください。");
+      return counts;
+    }
+
+    function onlineDeckSlotKey() {
+      const slot = elements.onlineDeckSlotSelect ? elements.onlineDeckSlotSelect.value : "1";
+      return `${ONLINE_DECK_STORAGE_KEY}_slot_${slot}`;
+    }
+
+    function renderOnlineDeckEditor() {
+      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
+      const counts = state.onlineDeckCounts;
+      const stats = onlineDeckStats(counts);
+      if (elements.onlineDeckSummary) {
+        elements.onlineDeckSummary.textContent = `${stats.cards}枚 / コスト${stats.cost}`;
+      }
+      if (elements.onlineDeckMessage) {
+        elements.onlineDeckMessage.textContent = onlineDeckIsValid(counts)
+          ? "このデッキでオンライン対戦できます。"
+          : "20枚以内・コスト40以内・1枚以上にしてください。";
+      }
+      if (!elements.onlineDeckList) return;
+      elements.onlineDeckList.innerHTML = "";
+      Object.keys(FRIEND_SIMPLE_LIBRARY).forEach(id => {
+        const card = friendCardInfo(id);
+        const row = document.createElement("div");
+        row.className = "online-deck-row";
+        const count = counts[id] || 0;
+        row.innerHTML = `
+          <div>
+            <strong>${card.name}</strong>
+            <small>コスト ${card.cost} / ${card.type === "blessing" ? "加護" : card.type === "curse" ? "呪縛" : card.bullet ? "弾" : "カード"}：${card.text}</small>
+          </div>
+          <div class="online-deck-controls">
+            <button type="button" data-online-deck-minus="${id}" class="secondary">−</button>
+            <span class="online-deck-count">${count}</span>
+            <button type="button" data-online-deck-plus="${id}">＋</button>
+          </div>
+        `;
+        elements.onlineDeckList.appendChild(row);
+      });
+
+      elements.onlineDeckList.querySelectorAll("[data-online-deck-minus]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.onlineDeckMinus;
+          counts[id] = Math.max(0, (counts[id] || 0) - 1);
+          if (counts[id] === 0) delete counts[id];
+          saveOnlineDeckCounts();
+          renderOnlineDeckEditor();
+        });
+      });
+
+      elements.onlineDeckList.querySelectorAll("[data-online-deck-plus]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.onlineDeckPlus;
+          const current = counts[id] || 0;
+          if (current >= ONLINE_DECK_MAX_SAME) return;
+          counts[id] = current + 1;
+          const stats = onlineDeckStats(counts);
+          if (stats.cards > ONLINE_DECK_LIMIT || stats.cost > ONLINE_DECK_COST_LIMIT) {
+            counts[id] = current;
+            if (elements.onlineDeckMessage) elements.onlineDeckMessage.textContent = "デッキ上限を超えます。20枚以内・コスト40以内です。";
+            return;
+          }
+          saveOnlineDeckCounts();
+          renderOnlineDeckEditor();
+        });
+      });
+    }
+
     function makeFriendDeck() {
-      return shuffle(FRIEND_SIMPLE_DECK);
+      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
+      const customDeck = onlineDeckListFromCounts(state.onlineDeckCounts);
+      return shuffle(customDeck.length ? customDeck : FRIEND_SIMPLE_DECK);
     }
 
     function drawFriendCard(game, role, count = 1) {
@@ -1316,16 +1526,20 @@ const CARD_LIBRARY = {
       return { ...game[role], deck, hand, discard };
     }
 
-    function emptyFriendGameState() {
+    function makeSideState(deck) {
+      return { L: 1, R: 1, deck: shuffle(deck && deck.length ? deck : onlineDeckListFromCounts(loadOnlineDeckCounts())), hand: [], discard: [], attachments: { L: [], R: [] }, attackBonus: 0, noSplit: false, cardPlayed: false, extraAction: false, extraDrawNext: 0, costLimit: null };
+    }
+
+    function emptyFriendGameState(hostDeck = null, guestDeck = null) {
       let game = {
         started: true,
         mode: "simple-card",
         turn: "host",
         phase: "action",
-        host: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false, cardPlayed: false },
-        guest: { L: 1, R: 1, deck: makeFriendDeck(), hand: [], discard: [], attackBonus: 0, noSplit: false, cardPlayed: false },
+        host: makeSideState(hostDeck),
+        guest: makeSideState(guestDeck),
         winner: null,
-        log: ["簡易カード試合を開始しました。対応カードは一部だけです。"]
+        log: ["簡易カード試合を開始しました。ホスト/ゲストそれぞれのPVPデッキを使用します。"]
       };
       game.host = drawFriendCard(game, "host", 3);
       game.guest = drawFriendCard(game, "guest", 3);
@@ -1361,7 +1575,25 @@ const CARD_LIBRARY = {
         adjust: { name: "整える", cost: 1, text: "自分の手からもう片方へ1本移す。" },
         repair: { name: "補修", cost: 3, text: "0の手を1で復活。" },
         preparation: { name: "戦闘準備", cost: 1, text: "補助カードを探す。" },
-        bulletSupply: { name: "弾丸補給", cost: 1, text: "狙撃を探す。" }
+        bulletSupply: { name: "弾丸補給", cost: 1, text: "狙撃を探す。" },
+        scout: { name: "探り", cost: 1, text: "相手の手札枚数確認。" },
+        costLimit: { name: "倹約令", cost: 3, text: "相手の次ターンはコスト2以下だけ。" },
+        doubleDouble: { name: "ダブルダブル", cost: 3, text: "2-2なら追加行動。" },
+        overAccel: { name: "過加速", cost: 3, text: "次の自分ターンに追加ドロー。" },
+        focusShot: { name: "一点狙い", cost: 3, text: "狙撃を探す。" },
+        reload: { name: "再装填", cost: 2, text: "捨て札から狙撃。" },
+        breakthrough: { name: "強行突破", cost: 3, text: "簡易版：攻撃+1。" },
+        powerBlessing: { name: "力の加護", cost: 2, type: "blessing", text: "自分の手に置く。攻撃+1。" },
+        guardBlessing: { name: "守護", cost: 2, type: "blessing", text: "自分の手に置く。受ける本数-1。" },
+        growthBlessing: { name: "成長", cost: 2, type: "blessing", text: "自分の手に置く。攻撃後条件で1枚引く。" },
+        slowCurse: { name: "鈍重の呪縛", cost: 2, type: "curse", text: "相手の手に置く。攻撃-1。" },
+        immutableCurse: { name: "不変の呪縛", cost: 2, type: "curse", text: "相手の手に置く。攻撃増加無効。" },
+        sealCurse: { name: "封印の呪縛", cost: 2, type: "curse", text: "相手の手に置く。加護を置けない。" },
+        rapidFire: { name: "乱射", cost: 2, text: "手札を弾として捨ててダメージ。" },
+        accelerationBullet: { name: "加速弾", cost: 1, bullet: true, text: "乱射で捨てると1枚引く。" },
+        specialBullet: { name: "特殊弾", cost: 2, bullet: true, text: "乱射で捨てると相手手札破壊。" },
+        piercingBullet: { name: "貫通弾", cost: 3, bullet: true, text: "乱射で捨てると設置カード破壊。" },
+        logicAtelier: { name: "ロジックアトリエ", cost: 0, bullet: true, token: true, text: "乱射で捨てると相手の手を0。" }
       };
       return FRIEND_SIMPLE_LIBRARY[cardId] || fallback[cardId] || { name: `未対応:${cardId}`, cost: "?", text: "この部屋に古い版/別版のカードIDが残っています。" };
     }
@@ -1409,10 +1641,17 @@ const CARD_LIBRARY = {
       elements.friendAttackFrom.value = state.friendSelectedOwnHand;
       elements.friendAttackTo.value = state.friendSelectedTargetHand;
 
+      // Legacy hidden elements, kept for compatibility with older code.
       updateFriendHandButton(elements.friendHostLeft, game.host?.L, "selected-own", role === "host" && state.friendSelectedOwnHand === "L", "host");
       updateFriendHandButton(elements.friendHostRight, game.host?.R, "selected-own", role === "host" && state.friendSelectedOwnHand === "R", "host");
       updateFriendHandButton(elements.friendGuestLeft, game.guest?.L, "selected-own", role === "guest" && state.friendSelectedOwnHand === "L", "guest");
       updateFriendHandButton(elements.friendGuestRight, game.guest?.R, "selected-own", role === "guest" && state.friendSelectedOwnHand === "R", "guest");
+
+      // Mobile CPU-like visible elements.
+      updateFriendHandButton(elements.friendOwnLeft, own.L, "selected-own", state.friendSelectedOwnHand === "L", role);
+      updateFriendHandButton(elements.friendOwnRight, own.R, "selected-own", state.friendSelectedOwnHand === "R", role);
+      updateFriendHandButton(elements.friendOpponentLeft, enemy.L, "selected-target", state.friendSelectedTargetHand === "L", opp);
+      updateFriendHandButton(elements.friendOpponentRight, enemy.R, "selected-target", state.friendSelectedTargetHand === "R", opp);
 
       elements.friendHostLeft.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "L");
       elements.friendHostRight.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "R");
@@ -1425,6 +1664,73 @@ const CARD_LIBRARY = {
         guest_L: game.guest?.L ?? 0,
         guest_R: game.guest?.R ?? 0
       };
+    }
+
+
+    function friendAttachments(side, hand) {
+      if (!side.attachments) side.attachments = { L: [], R: [] };
+      if (!side.attachments.L) side.attachments.L = [];
+      if (!side.attachments.R) side.attachments.R = [];
+      return side.attachments[hand] || [];
+    }
+
+    function friendHasAttachment(side, hand, cardId) {
+      return friendAttachments(side, hand).includes(cardId);
+    }
+
+    function friendCanAddAttachment(side, hand, cardId) {
+      const card = friendCardInfo(cardId);
+      const list = friendAttachments(side, hand);
+      if ((side[hand] || 0) <= 0) return false;
+      if (list.length >= 2) return false;
+      if (card.type === "blessing" && friendHasAttachment(side, hand, "sealCurse")) return false;
+      return true;
+    }
+
+    function friendAddAttachment(side, hand, cardId) {
+      const next = { ...side, attachments: { L: [...friendAttachments(side, "L")], R: [...friendAttachments(side, "R")] } };
+      next.attachments[hand].push(cardId);
+      return next;
+    }
+
+    function friendClearAttachmentsIfDead(side) {
+      const next = { ...side, attachments: { L: [...friendAttachments(side, "L")], R: [...friendAttachments(side, "R")] } };
+      if ((next.L || 0) <= 0) next.attachments.L = [];
+      if ((next.R || 0) <= 0) next.attachments.R = [];
+      return next;
+    }
+
+    function renderFriendAttachments(container, side, hand) {
+      if (!container) return;
+      const list = friendAttachments(side || {}, hand);
+      if (!list.length) {
+        container.innerHTML = '<span class="friend-attach-chip">空き</span><span class="friend-attach-chip">空き</span>';
+        return;
+      }
+      container.innerHTML = "";
+      for (let i = 0; i < 2; i++) {
+        const cardId = list[i];
+        const chip = document.createElement("span");
+        if (cardId) {
+          const card = friendCardInfo(cardId);
+          chip.className = `friend-attach-chip ${card.type === "curse" ? "curse" : "blessing"}`;
+          chip.textContent = card.name;
+        } else {
+          chip.className = "friend-attach-chip";
+          chip.textContent = "空き";
+        }
+        container.appendChild(chip);
+      }
+    }
+
+    function friendApplyGuard(defenderSide, targetHand, amount, logs) {
+      if (amount <= 0) return amount;
+      if (friendHasAttachment(defenderSide, targetHand, "guardBlessing")) {
+        const reduced = Math.max(1, amount - 1);
+        logs.push(`守護：受ける本数 ${amount}→${reduced}。`);
+        return reduced;
+      }
+      return amount;
     }
 
     function friendWrap(value) {
@@ -1446,20 +1752,29 @@ const CARD_LIBRARY = {
 
     function friendEndTurn(game, currentRole, extraLog = []) {
       const opp = friendRoleOpponent(currentRole);
+      const hadExtraAction = !!game[currentRole]?.extraAction;
       const nextSide = { ...game[opp], attackBonus: 0, cardPlayed: false };
-      const currentSide = { ...game[currentRole], attackBonus: 0, noSplit: false };
+      const currentSide = { ...game[currentRole], attackBonus: 0, noSplit: false, extraAction: false, costLimit: null };
       let nextGame = {
         ...game,
         [currentRole]: currentSide,
         [opp]: nextSide,
-        turn: opp,
+        turn: hadExtraAction ? currentRole : opp,
         phase: "action",
         log: [...(game.log || []), ...extraLog]
       };
-      if (!nextGame.winner) {
-        nextGame[opp] = drawFriendCard(nextGame, opp, 1);
+
+      if (hadExtraAction && !nextGame.winner) {
+        nextGame[currentRole] = drawFriendCard(nextGame, currentRole, 1);
+        nextGame[currentRole].cardPlayed = false;
+        nextGame.log.push(`${friendRoleLabel(currentRole)}は追加行動。1枚ドロー。`);
+      } else if (!nextGame.winner) {
+        let drawCount = 1 + (nextGame[opp].extraDrawNext || 0);
+        nextGame[opp] = { ...nextGame[opp], extraDrawNext: 0 };
+        nextGame[opp] = drawFriendCard(nextGame, opp, drawCount);
         nextGame[opp].noSplit = !!nextGame[opp].noSplit;
-        nextGame.log.push(`${friendRoleLabel(opp)}のターン。1枚ドロー。`);
+        nextGame[opp].cardPlayed = false;
+        nextGame.log.push(`${friendRoleLabel(opp)}のターン。${drawCount}枚ドロー。`);
       }
       nextGame.log = nextGame.log.slice(-30);
       return nextGame;
@@ -1474,6 +1789,7 @@ const CARD_LIBRARY = {
       const mySide = game[state.friendRole];
       const myTurn = friendCanAct(game);
       const cardLocked = !!mySide?.cardPlayed;
+      const costLimit = mySide?.costLimit;
       const hand = mySide?.hand || [];
       if (hand.length === 0) {
         elements.friendHandCards.textContent = "手札はありません。";
@@ -1484,9 +1800,11 @@ const CARD_LIBRARY = {
         const card = friendCardInfo(cardId);
         const btn = document.createElement("button");
         btn.className = "friend-simple-card";
-        btn.disabled = !myTurn || cardLocked;
-        btn.classList.toggle("card-used-locked", cardLocked);
-        btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${cardLocked ? "このターンはカード使用済み" : card.text}</span>`;
+        const overCostLimit = costLimit !== null && costLimit !== undefined && Number(card.cost) > Number(costLimit);
+        btn.disabled = !myTurn || cardLocked || overCostLimit;
+        btn.classList.toggle("card-used-locked", cardLocked || overCostLimit);
+        const disabledText = cardLocked ? "このターンはカード使用済み" : overCostLimit ? `倹約令中：コスト${costLimit}以下のみ` : card.text;
+        btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${disabledText}</span>`;
         btn.addEventListener("click", () => friendUseCardAction(index).catch(error => {
           console.error(error);
           elements.friendLobbyMessage.textContent = `カード使用エラー：${error.message || error}`;
@@ -1497,12 +1815,26 @@ const CARD_LIBRARY = {
 
     function updateFriendGameView(game = state.friendRoomData?.game) {
       if (!elements.friendGameStatus) return;
-      const host = game?.host || { L: 1, R: 1, deck: [], hand: [], discard: [] };
-      const guest = game?.guest || { L: 1, R: 1, deck: [], hand: [], discard: [] };
+      const host = game?.host || { L: 1, R: 1, deck: [], hand: [], discard: [], attachments: { L: [], R: [] } };
+      const guest = game?.guest || { L: 1, R: 1, deck: [], hand: [], discard: [], attachments: { L: [], R: [] } };
       elements.friendHostHands.textContent = friendHandText(host);
       elements.friendGuestHands.textContent = friendHandText(guest);
       if (elements.friendHostDeckInfo) elements.friendHostDeckInfo.textContent = `山札${host.deck?.length ?? 0} / 手札${host.hand?.length ?? 0}`;
       if (elements.friendGuestDeckInfo) elements.friendGuestDeckInfo.textContent = `山札${guest.deck?.length ?? 0} / 手札${guest.hand?.length ?? 0}`;
+      if (state.friendRole && game?.started) {
+        const own = game[state.friendRole] || {};
+        const opp = game[friendRoleOpponent(state.friendRole)] || {};
+        if (elements.friendOwnDeckInfo) elements.friendOwnDeckInfo.textContent = `山札${own.deck?.length ?? 0} / 手札${own.hand?.length ?? 0}`;
+        if (elements.friendOpponentDeckInfo) elements.friendOpponentDeckInfo.textContent = `山札${opp.deck?.length ?? 0} / 手札${opp.hand?.length ?? 0}`;
+      }
+      if (game?.started && state.friendRole) {
+        const own = game[state.friendRole] || {};
+        const oppSide = game[friendRoleOpponent(state.friendRole)] || {};
+        renderFriendAttachments(elements.friendOwnLeftAttach, own, "L");
+        renderFriendAttachments(elements.friendOwnRightAttach, own, "R");
+        renderFriendAttachments(elements.friendOpponentLeftAttach, oppSide, "L");
+        renderFriendAttachments(elements.friendOpponentRightAttach, oppSide, "R");
+      }
       if (elements.friendMiniLog) elements.friendMiniLog.textContent = friendLogLines(game);
       if (elements.friendYourRoleText) elements.friendYourRoleText.textContent = state.friendRole ? friendRoleLabel(state.friendRole) : "---";
       if (elements.friendTurnText) elements.friendTurnText.textContent = game?.turn ? friendRoleLabel(game.turn) : "---";
@@ -1586,7 +1918,7 @@ const CARD_LIBRARY = {
         }
         return {
           status: "playing",
-          game: emptyFriendGameState()
+          game: emptyFriendGameState(data.hostDeck || null, data.guestDeck || null)
         };
       });
       showScreen("friendBattle");
@@ -1600,20 +1932,58 @@ const CARD_LIBRARY = {
       return { side: { ...side, deck, hand: [...(side.hand || []), found] }, found };
     }
 
+
+    function takeCardFromDiscard(side, predicate) {
+      const discard = [...(side.discard || [])];
+      const index = discard.findIndex(predicate);
+      if (index < 0) return { side, found: null };
+      const [found] = discard.splice(index, 1);
+      return { side: { ...side, discard, hand: [...(side.hand || []), found] }, found };
+    }
+
+    function takeCardFromDeckOrDiscard(side, predicate) {
+      const fromDeck = takeCardFromDeck(side, predicate);
+      if (fromDeck.found) return fromDeck;
+      return takeCardFromDiscard(fromDeck.side, predicate);
+    }
+
+
+    function friendDiscardRandomHandCard(side) {
+      const next = { ...side, hand: [...(side.hand || [])], discard: [...(side.discard || [])] };
+      if (!next.hand.length) return { side: next, discarded: null };
+      const index = Math.floor(Math.random() * next.hand.length);
+      const [discarded] = next.hand.splice(index, 1);
+      next.discard.push(discarded);
+      return { side: next, discarded };
+    }
+
+    function friendRemoveOneAttachment(side, hand) {
+      const next = { ...side, attachments: { L: [...friendAttachments(side || {}, "L")], R: [...friendAttachments(side || {}, "R")] } };
+      const list = next.attachments[hand] || [];
+      if (!list.length) return { side: next, removed: null };
+      const removed = list.shift();
+      next.attachments[hand] = list;
+      return { side: next, removed };
+    }
+
     async function friendUseCardAction(index) {
       await updateFriendGame((data) => {
         const game = data.game;
         if (!friendCanAct(game)) return null;
         const role = state.friendRole;
         const opp = friendRoleOpponent(role);
-        const me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])] };
-        const enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])] };
+        let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
+        let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
         if (me.cardPlayed) {
           elements.friendLobbyMessage.textContent = "このターンはすでにカードを使っています。";
           return null;
         }
         const cardId = me.hand[index];
         const card = friendCardInfo(cardId);
+        if (me.costLimit !== null && me.costLimit !== undefined && Number(card.cost) > Number(me.costLimit)) {
+          elements.friendLobbyMessage.textContent = `倹約令中です。コスト${me.costLimit}以下のカードしか使えません。`;
+          return null;
+        }
         if (!FRIEND_SIMPLE_LIBRARY[cardId]) {
           me.hand.splice(index, 1);
           me.discard.push(cardId);
@@ -1674,10 +2044,10 @@ const CARD_LIBRARY = {
         }
 
         if (cardId === "bulletSupply") {
-          const result = takeCardFromDeck(me, id => id === "snipe");
+          const result = takeCardFromDeck(me, id => !!friendCardInfo(id).bullet);
           me.deck = result.side.deck;
           me.hand = result.side.hand;
-          logs.push(result.found ? "山札から「狙撃」を手札へ。" : "狙撃が山札になかった。");
+          logs.push(result.found ? `山札から弾「${friendCardInfo(result.found).name}」を手札へ。` : "弾カードが山札になかった。");
           return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
@@ -1690,6 +2060,7 @@ const CARD_LIBRARY = {
           const before = me[hand];
           me[hand] = Math.floor(Math.random() * 5);
           logs.push(`ランダムダイス：自分の${hand === "L" ? "左" : "右"} ${before}→${me[hand]}。`);
+          me = friendClearAttachmentsIfDead(me);
           const winner = friendIsDead(me) ? opp : null;
           const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) };
           return { game: winner ? nextGame : nextGame };
@@ -1707,6 +2078,8 @@ const CARD_LIBRARY = {
           me[ownHand] -= 1;
           enemy[enemyHand] -= 1;
           logs.push(`等価交換：自分${ownHand === "L" ? "左" : "右"} ${ownBefore}→${me[ownHand]} / 相手${enemyHand === "L" ? "左" : "右"} ${enemyBefore}→${enemy[enemyHand]}。`);
+          me = friendClearAttachmentsIfDead(me);
+          enemy = friendClearAttachmentsIfDead(enemy);
           const winner = friendIsDead(enemy) ? role : friendIsDead(me) ? opp : null;
           const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(winner)}の勝ち。`] : [])].slice(-30) };
           return { game: nextGame };
@@ -1743,6 +2116,130 @@ const CARD_LIBRARY = {
           return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
         }
 
+        if (cardId === "rapidFire") {
+          if (!me.hand.length) {
+            logs.push("捨てる手札がないため不発。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const target = elements.friendAttackTo.value;
+          if ((enemy[target] || 0) <= 0) {
+            logs.push("対象が0なので不発。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+
+          const bulletId = me.hand.shift();
+          const bullet = friendCardInfo(bulletId);
+          me.discard.push(bulletId);
+
+          let damage = Number(bullet.cost) || 0;
+          if (bullet.bullet) damage += 1;
+
+          if (bulletId === "logicAtelier") {
+            logs.push("ロジックアトリエ：選択中の相手の手を0にした。");
+            enemy[target] = 0;
+          } else {
+            damage = friendApplyGuard(enemy, target, Math.max(1, damage), logs);
+            const before = enemy[target];
+            const total = before + damage;
+            enemy[target] = friendWrap(total);
+            logs.push(`乱射：弾「${bullet.name}」を捨て、相手の${target === "L" ? "左" : "右"}に${damage}。${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
+          }
+
+          if (bulletId === "accelerationBullet") {
+            me = drawFriendCard({ ...game, [role]: me }, role, 1);
+            logs.push("加速弾：1枚引いた。");
+          }
+
+          if (bulletId === "specialBullet") {
+            const result = friendDiscardRandomHandCard(enemy);
+            enemy = result.side;
+            logs.push(result.discarded ? `特殊弾：相手の手札「${friendCardInfo(result.discarded).name}」を捨てた。` : "特殊弾：相手の手札がなかった。");
+          }
+
+          if (bulletId === "piercingBullet") {
+            const result = friendRemoveOneAttachment(enemy, target);
+            enemy = result.side;
+            logs.push(result.removed ? `貫通弾：相手の設置カード「${friendCardInfo(result.removed).name}」を捨てた。` : "貫通弾：相手の設置カードがなかった。");
+          }
+
+          enemy = friendClearAttachmentsIfDead(enemy);
+          const winner = friendIsDead(enemy) ? role : null;
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
+          return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
+        }
+
+        if (card.type === "blessing") {
+          const hand = elements.friendAttackFrom.value;
+          if (!friendCanAddAttachment(me, hand, cardId)) {
+            logs.push("その手には加護を置けません。手が0、枠が満杯、または封印されています。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          me = friendAddAttachment(me, hand, cardId);
+          logs.push(`${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (card.type === "curse") {
+          const hand = elements.friendAttackTo.value;
+          if (!friendCanAddAttachment(enemy, hand, cardId)) {
+            logs.push("その相手の手には呪縛を置けません。手が0か枠が満杯です。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          enemy = friendAddAttachment(enemy, hand, cardId);
+          logs.push(`相手の${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "scout") {
+          logs.push(`相手の手札は${enemy.hand.length}枚。`);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "costLimit") {
+          enemy.costLimit = 2;
+          logs.push("次の相手ターン、相手はコスト2以下のカードしか使えない。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "doubleDouble") {
+          if (me.L === 2 && me.R === 2) {
+            me.extraAction = true;
+            logs.push("2-2なので、次の攻撃/分ける後に追加行動できる。");
+          } else {
+            logs.push("自分が2-2ではないため不発。");
+          }
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "overAccel") {
+          me.extraDrawNext = (me.extraDrawNext || 0) + 1;
+          logs.push("次の自分ターン開始時、追加で1枚引く。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "breakthrough") {
+          me.attackBonus = (me.attackBonus || 0) + 1;
+          logs.push("簡易版：このターン次の攻撃+1。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "focusShot") {
+          const result = takeCardFromDeckOrDiscard(me, id => id === "snipe");
+          me.deck = result.side.deck;
+          me.discard = result.side.discard;
+          me.hand = result.side.hand;
+          logs.push(result.found ? "山札/捨て札から「狙撃」を手札へ。" : "狙撃が見つからなかった。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "reload") {
+          const result = takeCardFromDiscard(me, id => id === "snipe");
+          me.discard = result.side.discard;
+          me.hand = result.side.hand;
+          logs.push(result.found ? "捨て札から「狙撃」を手札へ。" : "捨て札に狙撃がなかった。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
         if (cardId === "passCard") {
           return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
         }
@@ -1757,6 +2254,7 @@ const CARD_LIBRARY = {
           const total = before + 1;
           enemy[target] = friendWrap(total);
           logs.push(`狙撃：相手の${target === "L" ? "左" : "右"} ${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
+          enemy = friendClearAttachmentsIfDead(enemy);
           const winner = friendIsDead(enemy) ? role : null;
           const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
           return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
@@ -1774,17 +2272,44 @@ const CARD_LIBRARY = {
         const opp = friendRoleOpponent(role);
         const from = elements.friendAttackFrom.value;
         const to = elements.friendAttackTo.value;
-        const me = { ...game[role] };
-        const enemy = { ...game[opp] };
+        let me = { ...game[role], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
+        let enemy = { ...game[opp], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
         if ((me[from] || 0) <= 0 || (enemy[to] || 0) <= 0) return null;
+
+        const logs = [];
         const basePower = me[from];
-        const bonus = me.attackBonus || 0;
-        const power = Math.max(1, basePower + bonus);
+        let bonus = me.attackBonus || 0;
+        if (friendHasAttachment(me, from, "powerBlessing")) {
+          bonus += 1;
+          logs.push("力の加護：攻撃+1。");
+        }
+        if (friendHasAttachment(me, from, "slowCurse")) {
+          bonus -= 1;
+          logs.push("鈍重の呪縛：攻撃-1。");
+        }
+        if (friendHasAttachment(me, from, "immutableCurse") && bonus > 0) {
+          logs.push("不変の呪縛：攻撃増加を無効化。");
+          bonus = Math.min(0, bonus);
+        }
+        let power = Math.max(1, basePower + bonus);
+        power = friendApplyGuard(enemy, to, power, logs);
+
         const before = enemy[to];
         const total = before + power;
         enemy[to] = friendWrap(total);
         me.attackBonus = 0;
-        const nextLog = [...(game.log || []), `${friendRoleLabel(role)}：${from === "L" ? "左" : "右"}${basePower}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ""}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-30);
+
+        let afterAttackDraw = false;
+        if (friendHasAttachment(me, from, "growthBlessing") && total === 5) {
+          afterAttackDraw = true;
+          logs.push("成長：ちょうど5にしたので1枚引く。");
+        }
+
+        enemy = friendClearAttachmentsIfDead(enemy);
+        me = friendClearAttachmentsIfDead(me);
+        if (afterAttackDraw) me = drawFriendCard({ ...game, [role]: me }, role, 1);
+
+        const nextLog = [...(game.log || []), ...logs, `${friendRoleLabel(role)}：${from === "L" ? "左" : "右"}${basePower}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ""}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-30);
         const winner = friendIsDead(enemy) ? role : null;
         const nextGame = {
           ...game,
@@ -1803,7 +2328,7 @@ const CARD_LIBRARY = {
         if (!friendCanAct(game)) return null;
         const role = state.friendRole;
         const opp = friendRoleOpponent(role);
-        const me = { ...game[role] };
+        let me = { ...game[role], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
 
         if (me.noSplit) {
           elements.friendLobbyMessage.textContent = "固定の効果で、このターンは分けられません。";
@@ -1966,10 +2491,17 @@ const CARD_LIBRARY = {
     async function setFriendReady(ready) {
       const fb = firebaseApi();
       if (!fb || !state.friendRoomId || !state.friendRole) return;
+      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
+      if (ready && !onlineDeckIsValid(state.onlineDeckCounts)) {
+        elements.friendLobbyMessage.textContent = "PVPデッキが条件を満たしていません。オンラインメニューからPVP用デッキ編集を確認してください。";
+        return;
+      }
       const key = state.friendRole === "host" ? "hostReady" : "guestReady";
+      const deckKey = state.friendRole === "host" ? "hostDeck" : "guestDeck";
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       await fb.setDoc(roomRef, {
         [key]: ready,
+        [deckKey]: onlineDeckListFromCounts(state.onlineDeckCounts),
         updatedAt: fb.serverTimestamp(),
         status: ready ? "ready-check" : "waiting"
       }, { merge: true });
@@ -1988,7 +2520,10 @@ const CARD_LIBRARY = {
 
     function showScreen(screen) {
       state.currentScreen = screen;
+      const showModeMenu = screen === "modeMenu";
       const showMenu = screen === "menu";
+      const showOnlineMenu = screen === "onlineMenu";
+      const showOnlineDeck = screen === "onlineDeck";
       const showBattleSelect = screen === "battleSelect";
       const showFriendLobby = screen === "friendLobby";
       const showFriendBattle = screen === "friendBattle";
@@ -1997,7 +2532,10 @@ const CARD_LIBRARY = {
       const showDeck = screen === "deck";
       const showBattle = screen === "battle";
 
+      elements.modeMenuScreen.classList.toggle("screen-hidden", !showModeMenu);
       elements.menuScreen.classList.toggle("screen-hidden", !showMenu);
+      elements.onlineMenuScreen.classList.toggle("screen-hidden", !showOnlineMenu);
+      elements.onlineDeckScreen.classList.toggle("screen-hidden", !showOnlineDeck);
       elements.battleSelectScreen.classList.toggle("screen-hidden", !showBattleSelect);
       elements.friendLobbyScreen.classList.toggle("screen-hidden", !showFriendLobby);
       elements.friendBattleScreen.classList.toggle("screen-hidden", !showFriendBattle);
@@ -2018,6 +2556,10 @@ const CARD_LIBRARY = {
         setMessage("デッキ編集画面です。対戦を始める場合はメニューからスタートを選んでください。");
       } else {
         elements.deckBottomBar.classList.add("hidden");
+      }
+
+      if (showOnlineDeck) {
+        renderOnlineDeckEditor();
       }
 
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -5060,6 +5602,81 @@ async function endTurn() {
       card.addEventListener("click", onHandClick);
     });
 
+    elements.offlineModeBtn.addEventListener("click", () => showScreen("menu"));
+    elements.onlineModeBtn.addEventListener("click", () => showScreen("onlineMenu"));
+    elements.offlineBackModeBtn.addEventListener("click", () => showScreen("modeMenu"));
+    elements.onlineBackModeBtn.addEventListener("click", () => showScreen("modeMenu"));
+    elements.onlineStartBtn.addEventListener("click", () => {
+      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
+      if (!onlineDeckIsValid(state.onlineDeckCounts)) {
+        showScreen("onlineDeck");
+        return;
+      }
+      showScreen("friendLobby");
+      updateFriendLobbyView();
+    });
+    elements.onlineDeckBtn.addEventListener("click", () => showScreen("onlineDeck"));
+    elements.onlineDeckBackBtn.addEventListener("click", () => showScreen("onlineMenu"));
+    elements.onlineDeckDefaultBtn.addEventListener("click", () => {
+      state.onlineDeckCounts = defaultOnlineDeckCounts();
+      saveOnlineDeckCounts();
+      renderOnlineDeckEditor();
+    });
+    elements.onlineDeckExportBtn.addEventListener("click", () => {
+      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
+      const code = encodeOnlineDeckCode(state.onlineDeckCounts);
+      elements.onlineDeckCodeBox.value = code;
+      elements.onlineDeckCodeMessage.textContent = "デッキコードを作成しました。";
+    });
+    elements.onlineDeckImportBtn.addEventListener("click", () => {
+      try {
+        const counts = decodeOnlineDeckCode(elements.onlineDeckCodeBox.value);
+        state.onlineDeckCounts = counts;
+        saveOnlineDeckCounts();
+        renderOnlineDeckEditor();
+        elements.onlineDeckCodeMessage.textContent = "デッキコードを読み込みました。";
+      } catch (error) {
+        elements.onlineDeckCodeMessage.textContent = `読み込み失敗：${error.message || error}`;
+      }
+    });
+    elements.onlineDeckCopyBtn.addEventListener("click", async () => {
+      try {
+        if (!elements.onlineDeckCodeBox.value.trim()) {
+          elements.onlineDeckCodeBox.value = encodeOnlineDeckCode(state.onlineDeckCounts || loadOnlineDeckCounts());
+        }
+        await navigator.clipboard.writeText(elements.onlineDeckCodeBox.value);
+        elements.onlineDeckCodeMessage.textContent = "デッキコードをコピーしました。";
+      } catch (_) {
+        elements.onlineDeckCodeMessage.textContent = "コピーできない場合はコード欄を選択してコピーしてください。";
+      }
+    });
+    elements.onlineDeckSaveSlotBtn.addEventListener("click", () => {
+      localStorage.setItem(onlineDeckSlotKey(), JSON.stringify(state.onlineDeckCounts || loadOnlineDeckCounts()));
+      elements.onlineDeckCodeMessage.textContent = `${elements.onlineDeckSlotSelect.value}番スロットに保存しました。`;
+    });
+    elements.onlineDeckLoadSlotBtn.addEventListener("click", () => {
+      try {
+        const raw = localStorage.getItem(onlineDeckSlotKey());
+        if (!raw) {
+          elements.onlineDeckCodeMessage.textContent = "このスロットにはまだ保存されていません。";
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        const counts = {};
+        Object.keys(parsed).forEach(id => {
+          if (!FRIEND_SIMPLE_LIBRARY[id]) return;
+          const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(parsed[id]) || 0));
+          if (n > 0) counts[id] = n;
+        });
+        if (!onlineDeckIsValid(counts)) throw new Error("保存デッキが条件を満たしていません。");
+        state.onlineDeckCounts = counts;
+        saveOnlineDeckCounts();
+        renderOnlineDeckEditor();
+        elements.onlineDeckCodeMessage.textContent = `${elements.onlineDeckSlotSelect.value}番スロットを読み込みました。`;
+      } catch (error) {
+        elements.onlineDeckCodeMessage.textContent = `スロット読込失敗：${error.message || error}`;
+      }
+    });
     elements.menuStartBtn.addEventListener("click", () => showScreen("battleSelect"));
     elements.plVsCpuBtn.addEventListener("click", () => showScreen("difficulty"));
     elements.plVsPlBtn.addEventListener("click", () => {
@@ -5067,7 +5684,7 @@ async function endTurn() {
       updateFriendLobbyView();
     });
     elements.battleSelectBackBtn.addEventListener("click", () => showScreen("menu"));
-    elements.friendLobbyBackBtn.addEventListener("click", () => showScreen("battleSelect"));
+    elements.friendLobbyBackBtn.addEventListener("click", () => showScreen("onlineMenu"));
     elements.createRoomBtn.addEventListener("click", () => createFriendRoom().catch(error => {
       console.error(error);
       elements.friendLobbyMessage.textContent = `部屋作成エラー：${error.message || error}`;
@@ -5105,6 +5722,23 @@ async function endTurn() {
         const clickedHand = btn.dataset.hand;
         if (!state.friendRole) return;
         if (clickedRole === state.friendRole) {
+          state.friendSelectedOwnHand = clickedHand;
+          elements.friendAttackFrom.value = clickedHand;
+        } else {
+          state.friendSelectedTargetHand = clickedHand;
+          elements.friendAttackTo.value = clickedHand;
+        }
+        updateFriendGameView(state.friendRoomData?.game);
+      });
+    });
+
+    [elements.friendOwnLeft, elements.friendOwnRight, elements.friendOpponentLeft, elements.friendOpponentRight].forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        const clickedSide = btn.dataset.side;
+        const clickedHand = btn.dataset.hand;
+        if (!state.friendRole) return;
+        if (clickedSide === "own") {
           state.friendSelectedOwnHand = clickedHand;
           elements.friendAttackFrom.value = clickedHand;
         } else {
@@ -5306,6 +5940,8 @@ async function endTurn() {
       btn.addEventListener("click", () => renderHelp(btn.dataset.helpTab));
     });
 
+    state.onlineDeckCounts = loadOnlineDeckCounts();
     renderDeckBuilder();
-    showScreen("menu");
+    renderOnlineDeckEditor();
+    showScreen("modeMenu");
     loadRoomFromUrl();
