@@ -1033,6 +1033,9 @@ const CARD_LIBRARY = {
       friendStartGameBtn: document.getElementById("friendStartGameBtn"),
       friendBattleScreen: document.getElementById("friendBattleScreen"),
       friendBattleStatus: document.getElementById("friendBattleStatus"),
+      friendYourRoleText: document.getElementById("friendYourRoleText"),
+      friendTurnText: document.getElementById("friendTurnText"),
+      friendSelectHint: document.getElementById("friendSelectHint"),
       friendHostHands: document.getElementById("friendHostHands"),
       friendGuestHands: document.getElementById("friendGuestHands"),
       friendHostDeckInfo: document.getElementById("friendHostDeckInfo"),
@@ -1273,14 +1276,23 @@ const CARD_LIBRARY = {
       strongHit: { name: "強打", cost: 2, text: "このターン次の攻撃+1。" },
       lightHit: { name: "軽打", cost: 1, text: "このターン次の攻撃-1。最低1。" },
       lockSplit: { name: "固定", cost: 2, text: "次の相手ターン、相手は分ける不可。" },
-      snipe: { name: "狙撃", cost: 2, text: "相手の0でない手を1つ選び+1。" },
+      snipe: { name: "狙撃", cost: 2, text: "選択中の相手の手を+1してターン終了。" },
       passCard: { name: "パス", cost: 0, text: "何もせずターン終了。" },
-      nekodamashi: { name: "ねこだまし", cost: 2, text: "1枚引く。手札誘発は未対応。" }
+      nekodamashi: { name: "ねこだまし", cost: 2, text: "1枚引く。手札誘発は未対応。" },
+      calm: { name: "落ち着ける", cost: 1, text: "手札を1枚捨てて2枚引く。" },
+      randomDice: { name: "ランダムダイス", cost: 1, text: "選択中の自分の手を0〜4にランダム変更。" },
+      equalTrade: { name: "等価交換", cost: 2, text: "選択中の自分の手-1、相手の手-1。" },
+      adjust: { name: "整える", cost: 1, text: "選択中の自分の手からもう片方へ1本移す。カード効果なので片手0可。" },
+      repair: { name: "補修", cost: 3, text: "手札1枚を追加で捨て、自分の0の手を1にしてターン終了。" },
+      preparation: { name: "戦闘準備", cost: 1, text: "簡易版：山札から補助カードを1枚探して手札へ。" },
+      bulletSupply: { name: "弾丸補給", cost: 1, text: "簡易版：山札から狙撃を1枚探して手札へ。" }
     };
 
     const FRIEND_SIMPLE_DECK = [
       "insight", "insight", "strongHit", "lightHit", "lockSplit",
-      "snipe", "snipe", "passCard", "nekodamashi", "nekodamashi"
+      "snipe", "snipe", "passCard", "nekodamashi", "nekodamashi",
+      "calm", "randomDice", "equalTrade", "adjust", "repair",
+      "preparation", "bulletSupply", "strongHit", "lightHit", "snipe"
     ];
 
     function makeFriendDeck() {
@@ -1347,7 +1359,7 @@ const CARD_LIBRARY = {
     function friendEndTurn(game, currentRole, extraLog = []) {
       const opp = friendRoleOpponent(currentRole);
       const nextSide = { ...game[opp], attackBonus: 0 };
-      const currentSide = { ...game[currentRole], attackBonus: 0 };
+      const currentSide = { ...game[currentRole], attackBonus: 0, noSplit: false };
       let nextGame = {
         ...game,
         [currentRole]: currentSide,
@@ -1402,6 +1414,9 @@ const CARD_LIBRARY = {
       if (elements.friendHostDeckInfo) elements.friendHostDeckInfo.textContent = `山札${host.deck?.length ?? 0} / 手札${host.hand?.length ?? 0}`;
       if (elements.friendGuestDeckInfo) elements.friendGuestDeckInfo.textContent = `山札${guest.deck?.length ?? 0} / 手札${guest.hand?.length ?? 0}`;
       if (elements.friendMiniLog) elements.friendMiniLog.textContent = friendLogLines(game);
+      if (elements.friendYourRoleText) elements.friendYourRoleText.textContent = state.friendRole ? friendRoleLabel(state.friendRole) : "---";
+      if (elements.friendTurnText) elements.friendTurnText.textContent = game?.turn ? friendRoleLabel(game.turn) : "---";
+      if (elements.friendSelectHint) elements.friendSelectHint.textContent = "カード効果は下の選択欄を参照します";
       renderFriendHandCards(game);
 
       const hostReady = !!state.friendRoomData?.hostReady;
@@ -1483,6 +1498,14 @@ const CARD_LIBRARY = {
       showScreen("friendBattle");
     }
 
+    function takeCardFromDeck(side, predicate) {
+      const deck = [...(side.deck || [])];
+      const index = deck.findIndex(predicate);
+      if (index < 0) return { side, found: null };
+      const [found] = deck.splice(index, 1);
+      return { side: { ...side, deck, hand: [...(side.hand || []), found] }, found };
+    }
+
     async function friendUseCardAction(index) {
       await updateFriendGame((data) => {
         const game = data.game;
@@ -1490,7 +1513,7 @@ const CARD_LIBRARY = {
         const role = state.friendRole;
         const opp = friendRoleOpponent(role);
         const me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])] };
-        const enemy = { ...game[opp] };
+        const enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])] };
         const cardId = me.hand[index];
         const card = FRIEND_SIMPLE_LIBRARY[cardId];
         if (!card) return null;
@@ -1501,11 +1524,23 @@ const CARD_LIBRARY = {
         if (cardId === "insight" || cardId === "nekodamashi") {
           let tempGame = { ...game, [role]: me };
           tempGame[role] = drawFriendCard(tempGame, role, 1);
-          me.deck = tempGame[role].deck;
-          me.hand = tempGame[role].hand;
-          me.discard = tempGame[role].discard;
           logs.push("1枚引いた。");
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "calm") {
+          if (me.hand.length <= 0) {
+            logs.push("追加で捨てる手札がないため、1枚だけ引いた。");
+            let tempGame = { ...game, [role]: me };
+            tempGame[role] = drawFriendCard(tempGame, role, 1);
+            return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const discarded = me.hand.pop();
+          me.discard.push(discarded);
+          let tempGame = { ...game, [role]: me };
+          tempGame[role] = drawFriendCard(tempGame, role, 2);
+          logs.push(`手札を1枚捨てて2枚引いた。`);
+          return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (cardId === "strongHit") {
@@ -1526,14 +1561,92 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
+        if (cardId === "preparation") {
+          const result = takeCardFromDeck(me, id => ["insight", "strongHit", "lightHit", "adjust", "equalTrade", "calm"].includes(id));
+          me.deck = result.side.deck;
+          me.hand = result.side.hand;
+          logs.push(result.found ? `山札から「${FRIEND_SIMPLE_LIBRARY[result.found].name}」を手札へ。` : "対象カードが山札になかった。");
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "bulletSupply") {
+          const result = takeCardFromDeck(me, id => id === "snipe");
+          me.deck = result.side.deck;
+          me.hand = result.side.hand;
+          logs.push(result.found ? "山札から「狙撃」を手札へ。" : "狙撃が山札になかった。");
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "randomDice") {
+          const hand = elements.friendAttackFrom.value;
+          if ((me[hand] || 0) <= 0) {
+            logs.push("選択した手が0なので不発。");
+            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const before = me[hand];
+          me[hand] = Math.floor(Math.random() * 5);
+          logs.push(`ランダムダイス：自分の${hand === "L" ? "左" : "右"} ${before}→${me[hand]}。`);
+          const winner = friendIsDead(me) ? opp : null;
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) };
+          return { game: winner ? nextGame : nextGame };
+        }
+
+        if (cardId === "equalTrade") {
+          const ownHand = elements.friendAttackFrom.value;
+          const enemyHand = elements.friendAttackTo.value;
+          if ((me[ownHand] || 0) <= 0 || (enemy[enemyHand] || 0) < 2) {
+            logs.push("条件を満たさず不発。自分は1以上、相手は2以上の手を選んでください。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const ownBefore = me[ownHand];
+          const enemyBefore = enemy[enemyHand];
+          me[ownHand] -= 1;
+          enemy[enemyHand] -= 1;
+          logs.push(`等価交換：自分${ownHand === "L" ? "左" : "右"} ${ownBefore}→${me[ownHand]} / 相手${enemyHand === "L" ? "左" : "右"} ${enemyBefore}→${enemy[enemyHand]}。`);
+          const winner = friendIsDead(enemy) ? role : friendIsDead(me) ? opp : null;
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(winner)}の勝ち。`] : [])].slice(-30) };
+          return { game: nextGame };
+        }
+
+        if (cardId === "adjust") {
+          const from = elements.friendAttackFrom.value;
+          const to = from === "L" ? "R" : "L";
+          if ((me[from] || 0) <= 0 || (me[to] || 0) >= 4) {
+            logs.push("移せる形ではないため不発。");
+            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const before = `${me.L}-${me.R}`;
+          me[from] -= 1;
+          me[to] += 1;
+          logs.push(`整える：${before} → ${me.L}-${me.R}。`);
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (cardId === "repair") {
+          const zeroHand = me.L === 0 ? "L" : me.R === 0 ? "R" : null;
+          if (!zeroHand) {
+            logs.push("0の手がないため不発。");
+            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          if (me.hand.length <= 0) {
+            logs.push("追加で捨てる手札がないため不発。");
+            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const discarded = me.hand.pop();
+          me.discard.push(discarded);
+          me[zeroHand] = 1;
+          logs.push(`追加で手札を1枚捨て、${zeroHand === "L" ? "左" : "右"}手を1で復活。`);
+          return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
+        }
+
         if (cardId === "passCard") {
           return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
         }
 
         if (cardId === "snipe") {
-          const target = (enemy.L >= enemy.R && enemy.L > 0) || enemy.R <= 0 ? "L" : "R";
+          const target = elements.friendAttackTo.value;
           if ((enemy[target] || 0) <= 0) {
-            logs.push("対象がなく不発。");
+            logs.push("対象が0なので不発。");
             return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
           }
           const before = enemy[target];
@@ -1541,7 +1654,7 @@ const CARD_LIBRARY = {
           enemy[target] = friendWrap(total);
           logs.push(`狙撃：相手の${target === "L" ? "左" : "右"} ${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
           const winner = friendIsDead(enemy) ? role : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs].slice(-30) };
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
           return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
         }
 

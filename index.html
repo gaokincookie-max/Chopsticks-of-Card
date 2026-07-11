@@ -113,7 +113,7 @@
         <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
 
         <div class="friend-game-panel" id="friendGamePanel">
-          <div class="room-label">簡易カードPL対戦</div>
+          <div class="room-label">カード追加UI調整</div>
           <div class="friend-game-status" id="friendGameStatus">まだ試合は始まっていません。</div>
           <button id="friendStartGameBtn" class="danger wide-btn" disabled>簡易カード試合を開始</button>
           <p class="small">試合開始後は、別の対戦画面に移動します。対応カードは、ひらめき・強打・軽打・固定・狙撃・パス・ねこだまし通常使用です。</p>
@@ -127,9 +127,15 @@
       <div class="menu-card friend-battle-card">
         <div class="menu-kicker">FRIEND SIMPLE CARD BATTLE</div>
         <h2>PL vs PL 簡易カード対戦</h2>
-        <p class="small">Firebase同期テスト版です。まだ罠・加護・呪縛・乱射などの複雑な処理は未対応です。</p>
+        <p class="small">Firebase同期テスト版です。罠・加護・呪縛はまだ未対応ですが、補助カードを増やしました。</p>
 
         <div class="friend-game-status" id="friendBattleStatus">同期中...</div>
+
+        <div class="friend-turn-panel">
+          <div><span>あなた</span><strong id="friendYourRoleText">---</strong></div>
+          <div><span>現在の番</span><strong id="friendTurnText">---</strong></div>
+          <div><span>選択</span><strong id="friendSelectHint">攻撃/カード用に手を選べます</strong></div>
+        </div>
 
         <div class="friend-board-mini">
           <div class="friend-side-card">
@@ -146,6 +152,7 @@
 
         <div class="friend-action-box">
           <div class="room-label">自分の手札</div>
+          <p class="small">カードによっては、下の「自分の手」「相手の手」の選択を使います。例：狙撃は相手の手、整えるは自分の手。</p>
           <div class="friend-hand-cards" id="friendHandCards">手札はまだありません。</div>
         </div>
 
