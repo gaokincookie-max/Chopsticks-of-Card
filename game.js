@@ -991,7 +991,9 @@ const CARD_LIBRARY = {
       friendRole: null,
       friendReady: false,
       friendUnsubscribe: null,
-      friendRoomData: null
+      friendRoomData: null,
+      friendSelectedOwnHand: "L",
+      friendSelectedTargetHand: "L"
     };
 
     const handNames = {
@@ -1038,6 +1040,10 @@ const CARD_LIBRARY = {
       friendSelectHint: document.getElementById("friendSelectHint"),
       friendHostHands: document.getElementById("friendHostHands"),
       friendGuestHands: document.getElementById("friendGuestHands"),
+      friendHostLeft: document.getElementById("friendHostLeft"),
+      friendHostRight: document.getElementById("friendHostRight"),
+      friendGuestLeft: document.getElementById("friendGuestLeft"),
+      friendGuestRight: document.getElementById("friendGuestRight"),
       friendHostDeckInfo: document.getElementById("friendHostDeckInfo"),
       friendGuestDeckInfo: document.getElementById("friendGuestDeckInfo"),
       friendHandCards: document.getElementById("friendHandCards"),
@@ -1339,6 +1345,62 @@ const CARD_LIBRARY = {
       return `左${side?.L ?? 0} / 右${side?.R ?? 0}`;
     }
 
+    function friendCardInfo(cardId) {
+      const fallback = {
+        insight: { name: "ひらめき", cost: 1, text: "1枚引く。" },
+        strongHit: { name: "強打", cost: 2, text: "このターン次の攻撃+1。" },
+        lightHit: { name: "軽打", cost: 1, text: "このターン次の攻撃-1。" },
+        lockSplit: { name: "固定", cost: 2, text: "次の相手ターン、相手は分ける不可。" },
+        snipe: { name: "狙撃", cost: 2, text: "選択中の相手の手を+1。" },
+        passCard: { name: "パス", cost: 0, text: "ターン終了。" },
+        nekodamashi: { name: "ねこだまし", cost: 2, text: "1枚引く。" },
+        calm: { name: "落ち着ける", cost: 1, text: "手札を1枚捨てて2枚引く。" },
+        randomDice: { name: "ランダムダイス", cost: 1, text: "選択中の自分の手を0〜4に変更。" },
+        equalTrade: { name: "等価交換", cost: 2, text: "自分-1、相手-1。" },
+        adjust: { name: "整える", cost: 1, text: "自分の手からもう片方へ1本移す。" },
+        repair: { name: "補修", cost: 3, text: "0の手を1で復活。" },
+        preparation: { name: "戦闘準備", cost: 1, text: "補助カードを探す。" },
+        bulletSupply: { name: "弾丸補給", cost: 1, text: "狙撃を探す。" }
+      };
+      return FRIEND_SIMPLE_LIBRARY[cardId] || fallback[cardId] || { name: `未対応:${cardId}`, cost: "?", text: "この部屋に古い版/別版のカードIDが残っています。" };
+    }
+
+    function updateFriendHandButton(button, value, selectedClass, isSelected) {
+      if (!button) return;
+      const label = button.dataset.hand === "L" ? "左" : "右";
+      button.innerHTML = `${label}<br><b>${value ?? 0}</b>`;
+      button.classList.toggle(selectedClass, !!isSelected);
+      button.classList.toggle("dead", (value ?? 0) <= 0);
+    }
+
+    function syncFriendHandSelections(game) {
+      if (!game?.started) return;
+      const role = state.friendRole;
+      const opp = friendRoleOpponent(role);
+      const own = game[role] || {};
+      const enemy = game[opp] || {};
+
+      if ((own[state.friendSelectedOwnHand] || 0) <= 0) {
+        state.friendSelectedOwnHand = (own.L || 0) > 0 ? "L" : "R";
+      }
+      if ((enemy[state.friendSelectedTargetHand] || 0) <= 0) {
+        state.friendSelectedTargetHand = (enemy.L || 0) > 0 ? "L" : "R";
+      }
+
+      elements.friendAttackFrom.value = state.friendSelectedOwnHand;
+      elements.friendAttackTo.value = state.friendSelectedTargetHand;
+
+      updateFriendHandButton(elements.friendHostLeft, game.host?.L, "selected-own", role === "host" && state.friendSelectedOwnHand === "L");
+      updateFriendHandButton(elements.friendHostRight, game.host?.R, "selected-own", role === "host" && state.friendSelectedOwnHand === "R");
+      updateFriendHandButton(elements.friendGuestLeft, game.guest?.L, "selected-own", role === "guest" && state.friendSelectedOwnHand === "L");
+      updateFriendHandButton(elements.friendGuestRight, game.guest?.R, "selected-own", role === "guest" && state.friendSelectedOwnHand === "R");
+
+      elements.friendHostLeft.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "L");
+      elements.friendHostRight.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "R");
+      elements.friendGuestLeft.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "L");
+      elements.friendGuestRight.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "R");
+    }
+
     function friendWrap(value) {
       return value >= 5 ? value % 5 : value;
     }
@@ -1392,7 +1454,7 @@ const CARD_LIBRARY = {
       }
       elements.friendHandCards.innerHTML = "";
       hand.forEach((cardId, index) => {
-        const card = FRIEND_SIMPLE_LIBRARY[cardId] || { name: cardId, cost: "?", text: "" };
+        const card = friendCardInfo(cardId);
         const btn = document.createElement("button");
         btn.className = "friend-simple-card";
         btn.disabled = !myTurn;
@@ -1416,7 +1478,10 @@ const CARD_LIBRARY = {
       if (elements.friendMiniLog) elements.friendMiniLog.textContent = friendLogLines(game);
       if (elements.friendYourRoleText) elements.friendYourRoleText.textContent = state.friendRole ? friendRoleLabel(state.friendRole) : "---";
       if (elements.friendTurnText) elements.friendTurnText.textContent = game?.turn ? friendRoleLabel(game.turn) : "---";
-      if (elements.friendSelectHint) elements.friendSelectHint.textContent = "カード効果は下の選択欄を参照します";
+      if (game?.started) syncFriendHandSelections(game);
+      if (elements.friendSelectHint) {
+        elements.friendSelectHint.textContent = `自分:${state.friendSelectedOwnHand === "L" ? "左" : "右"} / 相手:${state.friendSelectedTargetHand === "L" ? "左" : "右"}`;
+      }
       renderFriendHandCards(game);
 
       const hostReady = !!state.friendRoomData?.hostReady;
@@ -1515,8 +1580,12 @@ const CARD_LIBRARY = {
         const me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])] };
         const enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])] };
         const cardId = me.hand[index];
-        const card = FRIEND_SIMPLE_LIBRARY[cardId];
-        if (!card) return null;
+        const card = friendCardInfo(cardId);
+        if (!FRIEND_SIMPLE_LIBRARY[cardId]) {
+          me.hand.splice(index, 1);
+          me.discard.push(cardId);
+          return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：未対応カード「${card.name}」を捨てました。`].slice(-30) } };
+        }
         me.hand.splice(index, 1);
         me.discard.push(cardId);
         let logs = [`${friendRoleLabel(role)}：「${card.name}」を使用。`];
@@ -4994,6 +5063,30 @@ async function endTurn() {
       console.error(error);
       elements.friendLobbyMessage.textContent = `分ける同期エラー：${error.message || error}`;
     }));
+    [elements.friendHostLeft, elements.friendHostRight, elements.friendGuestLeft, elements.friendGuestRight].forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        const clickedRole = btn.dataset.role;
+        const clickedHand = btn.dataset.hand;
+        if (!state.friendRole) return;
+        if (clickedRole === state.friendRole) {
+          state.friendSelectedOwnHand = clickedHand;
+          elements.friendAttackFrom.value = clickedHand;
+        } else {
+          state.friendSelectedTargetHand = clickedHand;
+          elements.friendAttackTo.value = clickedHand;
+        }
+        updateFriendGameView(state.friendRoomData?.game);
+      });
+    });
+    elements.friendAttackFrom.addEventListener("change", () => {
+      state.friendSelectedOwnHand = elements.friendAttackFrom.value;
+      updateFriendGameView(state.friendRoomData?.game);
+    });
+    elements.friendAttackTo.addEventListener("change", () => {
+      state.friendSelectedTargetHand = elements.friendAttackTo.value;
+      updateFriendGameView(state.friendRoomData?.game);
+    });
     elements.friendBattleBackLobbyBtn.addEventListener("click", () => showScreen("friendLobby"));
     elements.friendRestartSimpleBtn.addEventListener("click", () => startFriendSimpleGame().catch(error => {
       console.error(error);

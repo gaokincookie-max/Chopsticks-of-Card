@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -113,7 +113,7 @@
         <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
 
         <div class="friend-game-panel" id="friendGamePanel">
-          <div class="room-label">カード追加UI調整</div>
+          <div class="room-label">手選択UI改善</div>
           <div class="friend-game-status" id="friendGameStatus">まだ試合は始まっていません。</div>
           <button id="friendStartGameBtn" class="danger wide-btn" disabled>簡易カード試合を開始</button>
           <p class="small">試合開始後は、別の対戦画面に移動します。対応カードは、ひらめき・強打・軽打・固定・狙撃・パス・ねこだまし通常使用です。</p>
@@ -138,14 +138,22 @@
         </div>
 
         <div class="friend-board-mini">
-          <div class="friend-side-card">
+          <div class="friend-side-card" id="friendHostCard">
             <span id="friendHostName">ホスト</span>
             <strong id="friendHostHands">左1 / 右1</strong>
+            <div class="friend-hand-button-row">
+              <button id="friendHostLeft" class="friend-hand-button" data-role="host" data-hand="L">左<br><b>1</b></button>
+              <button id="friendHostRight" class="friend-hand-button" data-role="host" data-hand="R">右<br><b>1</b></button>
+            </div>
             <small id="friendHostDeckInfo">山札0 / 手札0</small>
           </div>
-          <div class="friend-side-card">
+          <div class="friend-side-card" id="friendGuestCard">
             <span id="friendGuestName">ゲスト</span>
             <strong id="friendGuestHands">左1 / 右1</strong>
+            <div class="friend-hand-button-row">
+              <button id="friendGuestLeft" class="friend-hand-button" data-role="guest" data-hand="L">左<br><b>1</b></button>
+              <button id="friendGuestRight" class="friend-hand-button" data-role="guest" data-hand="R">右<br><b>1</b></button>
+            </div>
             <small id="friendGuestDeckInfo">山札0 / 手札0</small>
           </div>
         </div>
@@ -158,6 +166,7 @@
 
         <div class="friend-action-box">
           <div class="room-label">攻撃</div>
+          <p class="small">上の盤面で「自分の攻撃する手」と「相手の攻撃先」をタップして選べます。下の選択欄も補助として残しています。</p>
           <div class="friend-action-row">
             <select id="friendAttackFrom">
               <option value="L">自分の左手</option>
@@ -468,6 +477,6 @@
     }
   </script>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=42"></script>
 </body>
 </html>
