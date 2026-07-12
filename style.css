@@ -1947,3 +1947,17 @@
   .friend-board-cpu .own-zone { order: 1; }
   .friend-card-area-cpu .friend-hand-cards { flex-wrap: wrap; overflow: visible; }
 }
+
+
+    /* v56: PVPカード使用演出をCPU戦の中央ポップアップへ統合 */
+    .popup-card.friend-card-popup {
+      border-color: var(--gold);
+    }
+
+    .popup-user.friend-own-user {
+      background: var(--blue);
+    }
+
+    .popup-user.friend-opponent-user {
+      background: var(--danger);
+    }
