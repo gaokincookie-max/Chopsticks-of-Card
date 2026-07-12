@@ -997,6 +997,7 @@ const CARD_LIBRARY = {
       friendSyncRevision: 0,
       friendLastAppliedRevision: 0,
       friendApplyingRemoteState: false,
+      friendCardResolving: false,
       friendLastPublishedSignature: "",
       friendPublishTimer: null
     };
@@ -1266,6 +1267,8 @@ const CARD_LIBRARY = {
         extraActions: Number(state.extraActions[player] || 0),
         pendingAcceleration: Number(state.pendingAcceleration[player] || 0),
         activeAcceleration: Number(state.activeAcceleration[player] || 0),
+        pendingNoDraw: Number(state.pendingNoDraw?.[player] || 0),
+        activeNoDraw: Number(state.activeNoDraw?.[player] || 0),
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
@@ -1305,6 +1308,10 @@ const CARD_LIBRARY = {
       state.extraActions[player] = Number(side.extraActions || 0);
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
       state.activeAcceleration[player] = Number(side.activeAcceleration || 0);
+      if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
+      if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
+      state.pendingNoDraw[player] = Number(side.pendingNoDraw || 0);
+      state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
@@ -1366,7 +1373,7 @@ const CARD_LIBRARY = {
       await fb.setDoc(roomRef, {
         match: {
           ...existingMatch,
-          version: 41,
+          version: 42,
           stateRevision: nextRevision,
           state: snapshot
         },
@@ -1374,8 +1381,18 @@ const CARD_LIBRARY = {
       }, { merge: true });
     }
 
+    function canPublishFriendStateSafely() {
+      if (state.battleMode !== "friend" || state.friendApplyingRemoteState || !state.friendMatchStarted) return false;
+      if (state.animating || state.friendCardResolving) return false;
+      if (!["attack", "setupTrap"].includes(state.mode)) return false;
+      if (state.pendingRepairDiscard || state.pendingEqualTradeSelf || state.pendingRapidFireDiscard || state.pendingSwapFirst) return false;
+      if (state.pendingTrapTargetEffect || state.selectedTrapCardIndex !== null) return false;
+      if (state.pendingTerminalEnd?.human || state.pendingTerminalEnd?.cpu) return false;
+      return true;
+    }
+
     function scheduleFriendStatePublish() {
-      if (state.battleMode !== "friend" || state.friendApplyingRemoteState || !state.friendMatchStarted) return;
+      if (!canPublishFriendStateSafely()) return;
       if (state.friendPublishTimer) clearTimeout(state.friendPublishTimer);
       state.friendPublishTimer = setTimeout(() => {
         state.friendPublishTimer = null;
@@ -1575,11 +1592,11 @@ const CARD_LIBRARY = {
       const emptySideState = (side) => ({
         L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
         temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false },
-        noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingTerminalEnd: false,
+        noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
       const match = {
-        version: 41,
+        version: 42,
         createdAtMs: Date.now(),
         turnSide: "host",
         turnNumber: 1,
@@ -1625,6 +1642,17 @@ const CARD_LIBRARY = {
       state.traps.cpu = { L: [], R: [] };
       state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
       state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+      state.noSplit = state.noSplit || { human: false, cpu: false };
+      state.extraActions = state.extraActions || { human: 0, cpu: 0 };
+      state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
+      state.activeAcceleration = state.activeAcceleration || { human: 0, cpu: 0 };
+      state.pendingNoDraw = { human: 0, cpu: 0 };
+      state.activeNoDraw = { human: 0, cpu: 0 };
+      state.pendingTerminalEnd = state.pendingTerminalEnd || { human: false, cpu: false };
+      state.costLimitNextTurn = state.costLimitNextTurn || { human: null, cpu: null };
+      state.activeCostLimit = state.activeCostLimit || { human: null, cpu: null };
+      state.berserkerTurns = state.berserkerTurns || { human: 0, cpu: 0 };
+      state.firstTurnStarted = state.firstTurnStarted || { human: false, cpu: false };
       state.turn = match.turnSide === state.friendRole ? "human" : "cpu";
       state.turnNumber = match.turnNumber || 1;
       state.mode = "attack";
@@ -2145,6 +2173,9 @@ function wrapFinger(value) {
     }
 
     async function startTurn(player) {
+      if (!state.firstTurnStarted) state.firstTurnStarted = { human: false, cpu: false };
+      if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
+      if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
       state.turn = player;
@@ -3353,6 +3384,7 @@ function renderLastAction() {
         return false;
       }
 
+      if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(cardId);
       state.temp[player].cardActionUsed = true;
@@ -3395,6 +3427,10 @@ function renderLastAction() {
       }
 
       render();
+      if (state.battleMode === "friend") {
+        state.friendCardResolving = false;
+        scheduleFriendStatePublish();
+      }
 
       if (state.pendingTerminalEnd[player] && player === "human" && state.turn === "human") {
         state.pendingTerminalEnd[player] = false;
