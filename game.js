@@ -1254,7 +1254,32 @@ const CARD_LIBRARY = {
       return JSON.parse(JSON.stringify(value));
     }
 
+    function ensureOnlineStateMaps() {
+      const pairDefaults = { human: 0, cpu: 0 };
+      if (!state.pendingNoDraw || typeof state.pendingNoDraw !== "object") state.pendingNoDraw = { ...pairDefaults };
+      if (!state.activeNoDraw || typeof state.activeNoDraw !== "object") state.activeNoDraw = { ...pairDefaults };
+      if (!state.pendingAcceleration || typeof state.pendingAcceleration !== "object") state.pendingAcceleration = { ...pairDefaults };
+      if (!state.activeAcceleration || typeof state.activeAcceleration !== "object") state.activeAcceleration = { ...pairDefaults };
+      if (!state.extraActions || typeof state.extraActions !== "object") state.extraActions = { ...pairDefaults };
+      if (!state.berserkerTurns || typeof state.berserkerTurns !== "object") state.berserkerTurns = { ...pairDefaults };
+      if (!state.noSplit || typeof state.noSplit !== "object") state.noSplit = { human: false, cpu: false };
+      if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
+      if (!state.costLimitNextTurn || typeof state.costLimitNextTurn !== "object") state.costLimitNextTurn = { human: null, cpu: null };
+      if (!state.activeCostLimit || typeof state.activeCostLimit !== "object") state.activeCostLimit = { human: null, cpu: null };
+      if (!state.firstTurnStarted || typeof state.firstTurnStarted !== "object") state.firstTurnStarted = { human: false, cpu: false };
+      if (!state.temp || typeof state.temp !== "object") state.temp = {};
+      for (const player of ["human", "cpu"]) {
+        if (!state.temp[player] || typeof state.temp[player] !== "object") {
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+        }
+        for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
+          if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
+        }
+      }
+    }
+
     function serializeFriendSide(player) {
+      ensureOnlineStateMaps();
       return {
         L: state[player].L,
         R: state[player].R,
@@ -1297,6 +1322,7 @@ const CARD_LIBRARY = {
     }
 
     function applyFriendSideToLocal(player, side) {
+      ensureOnlineStateMaps();
       if (!side) return;
       state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
       state.traps[player] = cloneJson(side.traps || { L: [], R: [] });
@@ -1321,6 +1347,11 @@ const CARD_LIBRARY = {
 
     async function applyFriendCanonicalSnapshot(snapshot, revision = 0) {
       if (!snapshot || !state.friendRole) return;
+      ensureOnlineStateMaps();
+      if (state.friendPublishTimer) {
+        clearTimeout(state.friendPublishTimer);
+        state.friendPublishTimer = null;
+      }
       if (revision && revision <= state.friendLastAppliedRevision) return;
       const previousTurn = state.turn;
       state.friendApplyingRemoteState = true;
@@ -1373,7 +1404,7 @@ const CARD_LIBRARY = {
       await fb.setDoc(roomRef, {
         match: {
           ...existingMatch,
-          version: 42,
+          version: 43,
           stateRevision: nextRevision,
           state: snapshot
         },
@@ -1383,6 +1414,9 @@ const CARD_LIBRARY = {
 
     function canPublishFriendStateSafely() {
       if (state.battleMode !== "friend" || state.friendApplyingRemoteState || !state.friendMatchStarted) return false;
+      // 通常の自動同期は、現在手番を持つ端末だけが書き込む。
+      // ターンを相手へ渡す瞬間は endTurn() から明示的に publishFriendStateNow() を呼ぶ。
+      if (state.turn !== "human") return false;
       if (state.animating || state.friendCardResolving) return false;
       if (!["attack", "setupTrap"].includes(state.mode)) return false;
       if (state.pendingRepairDiscard || state.pendingEqualTradeSelf || state.pendingRapidFireDiscard || state.pendingSwapFirst) return false;
@@ -1596,7 +1630,7 @@ const CARD_LIBRARY = {
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
       const match = {
-        version: 42,
+        version: 43,
         createdAtMs: Date.now(),
         turnSide: "host",
         turnNumber: 1,
@@ -2173,6 +2207,7 @@ function wrapFinger(value) {
     }
 
     async function startTurn(player) {
+      ensureOnlineStateMaps();
       if (!state.firstTurnStarted) state.firstTurnStarted = { human: false, cpu: false };
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
@@ -2260,6 +2295,7 @@ function wrapFinger(value) {
     }
 
     function render() {
+      ensureOnlineStateMaps();
       scheduleFriendStatePublish();
       for (const player of ["human", "cpu"]) {
         for (const hand of ["L", "R"]) {
