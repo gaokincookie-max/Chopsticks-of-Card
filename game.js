@@ -1324,62 +1324,51 @@ const CARD_LIBRARY = {
     }
 
 
-    const FRIEND_SIMPLE_LIBRARY = {
-      insight: { name: "ひらめき", cost: 1, text: "1枚引く。" },
-      strongHit: { name: "強打", cost: 2, text: "このターン次の攻撃+1。" },
-      lightHit: { name: "軽打", cost: 1, text: "このターン次の攻撃-1。最低1。" },
-      lockSplit: { name: "固定", cost: 2, text: "次の相手ターン、相手は分ける不可。" },
-      snipe: { name: "狙撃", cost: 2, text: "選択中の相手の手を+1してターン終了。" },
-      passCard: { name: "パス", cost: 0, text: "何もせずターン終了。" },
-      nekodamashi: { name: "ねこだまし", cost: 2, text: "1枚引く。手札誘発は未対応。" },
-      calm: { name: "落ち着ける", cost: 1, text: "手札を1枚捨てて2枚引く。" },
-      randomDice: { name: "ランダムダイス", cost: 1, text: "選択中の自分の手を0〜4にランダム変更。" },
-      equalTrade: { name: "等価交換", cost: 2, text: "選択中の自分の手-1、相手の手-1。" },
-      adjust: { name: "整える", cost: 1, text: "選択中の自分の手からもう片方へ1本移す。カード効果なので片手0可。" },
-      repair: { name: "補修", cost: 3, text: "手札1枚を追加で捨て、自分の0の手を1にしてターン終了。" },
-      preparation: { name: "戦闘準備", cost: 1, text: "簡易版：山札から補助カードを1枚探して手札へ。" },
-      bulletSupply: { name: "弾丸補給", cost: 1, text: "簡易版：山札から狙撃を1枚探して手札へ。" },
-      scout: { name: "探り", cost: 1, text: "相手の手札枚数をログに表示。" },
-      costLimit: { name: "倹約令", cost: 3, text: "次の相手ターン、相手はコスト2以下のカードしか使えない。" },
-      doubleDouble: { name: "ダブルダブル", cost: 3, text: "自分が2-2なら、このターン攻撃/分ける後も自分の番が続く。" },
-      overAccel: { name: "過加速", cost: 3, text: "次の自分ターン開始時に追加で1枚引く。" },
-      focusShot: { name: "一点狙い", cost: 3, text: "簡易版：山札/捨て札から狙撃を1枚手札へ。" },
-      reload: { name: "再装填", cost: 2, text: "簡易版：捨て札から狙撃を1枚手札へ。" },
-      breakthrough: { name: "強行突破", cost: 3, text: "簡易版：このターン攻撃+1。" },
-      powerBlessing: { name: "力の加護", cost: 2, type: "blessing", text: "選択中の自分の手に表向きで置く。この手で攻撃+1。" },
-      guardBlessing: { name: "守護", cost: 2, type: "blessing", text: "選択中の自分の手に表向きで置く。この手が受ける本数を-1、最低1。" },
-      growthBlessing: { name: "成長", cost: 2, type: "blessing", text: "選択中の自分の手に表向きで置く。この手で攻撃して相手がちょうど0にならず5なら1枚引く。" },
-      slowCurse: { name: "鈍重の呪縛", cost: 2, type: "curse", text: "選択中の相手の手に表向きで置く。この手で攻撃-1、最低1。" },
-      immutableCurse: { name: "不変の呪縛", cost: 2, type: "curse", text: "選択中の相手の手に表向きで置く。この手は攻撃力増加を受けない。" },
-      sealCurse: { name: "封印の呪縛", cost: 2, type: "curse", text: "選択中の相手の手に表向きで置く。この手には新たに加護を置けない。" },
-      rapidFire: { name: "乱射", cost: 2, text: "手札を1枚弾として捨て、選択中の相手の手にそのコスト分。弾なら+1。使用後ターン終了。" },
-      accelerationBullet: { name: "加速弾", cost: 1, bullet: true, text: "乱射で捨てると、通常ダメージ後に1枚引く。" },
-      specialBullet: { name: "特殊弾", cost: 2, bullet: true, text: "乱射で捨てると、相手の手札をランダムに1枚捨てる。" },
-      piercingBullet: { name: "貫通弾", cost: 3, bullet: true, text: "乱射で捨てると、選択中の相手の手の設置カードを1枚捨てる。" },
-      logicAtelier: { name: "ロジックアトリエ", cost: 0, bullet: true, token: true, text: "乱射で捨てると、選択中の相手の手を0にする。簡易版トークン。" }
+    // PVPでもカード情報の正本はCPU戦と同じCARD_LIBRARYを使用する。
+    // 未対応カードは別の簡易効果を作らず、PVPデッキ候補から外す。
+    const PVP_SUPPORTED_CARD_IDS = [
+      "insight", "strongHit", "lightHit", "lockSplit",
+      "bulletSupply", "scout", "thriftLaw", "doubleDouble",
+      "reload", "passCard", "snipe", "randomDice",
+      "equalTrade", "calm", "repair", "calmDown", "rapidFire",
+      "accelBullet", "specialBullet", "pierceBullet",
+      "powerBlessing", "guardBlessing", "growthBlessing", "slowCurse"
+    ];
+
+    const PVP_SUPPORTED_CARD_SET = new Set(PVP_SUPPORTED_CARD_IDS);
+
+    // v60以前のPVP専用IDをCPU戦の正式IDへ移行する。
+    const LEGACY_PVP_CARD_ID_MAP = {
+      adjust: "calm",
+      preparation: "battlePrep",
+      costLimit: "thriftLaw",
+      overAccel: "acceleration",
+      focusShot: "focusedShot",
+      accelerationBullet: "accelBullet",
+      piercingBullet: "pierceBullet",
+      logicAtelier: "logicCrusherBullet"
     };
 
-    const FRIEND_SIMPLE_DECK = [
+    function normalizePvpCardId(id) {
+      return LEGACY_PVP_CARD_ID_MAP[id] || id;
+    }
+
+    const PVP_DEFAULT_DECK = [
       "insight", "insight", "strongHit", "lightHit", "lockSplit",
-      "snipe", "snipe", "passCard", "nekodamashi", "nekodamashi",
-      "calm", "randomDice", "equalTrade", "adjust", "repair",
-      "preparation", "bulletSupply", "strongHit", "lightHit", "snipe",
-      "scout", "costLimit", "doubleDouble", "overAccel", "focusShot",
-      "reload", "breakthrough", "passCard", "insight", "snipe",
-      "powerBlessing", "guardBlessing", "growthBlessing", "slowCurse",
-      "immutableCurse", "sealCurse", "rapidFire", "accelerationBullet",
-      "specialBullet", "piercingBullet", "rapidFire", "accelerationBullet"
+      "snipe", "snipe", "passCard", "calmDown", "calmDown",
+      "randomDice", "equalTrade", "calm", "repair", "bulletSupply",
+      "scout", "thriftLaw", "reload", "rapidFire", "accelBullet"
     ];
 
 
     const ONLINE_DECK_LIMIT = 20;
     const ONLINE_DECK_COST_LIMIT = 40;
     const ONLINE_DECK_MAX_SAME = 3;
-    const ONLINE_DECK_STORAGE_KEY = "waribashiPvpDeckCountsV47";
+    const ONLINE_DECK_STORAGE_KEY = "waribashiPvpDeckCountsV61";
 
     function defaultOnlineDeckCounts() {
       const counts = {};
-      FRIEND_SIMPLE_DECK.forEach(id => {
+      PVP_DEFAULT_DECK.forEach(id => {
         counts[id] = (counts[id] || 0) + 1;
       });
       return counts;
@@ -1391,11 +1380,13 @@ const CARD_LIBRARY = {
         if (!raw) return defaultOnlineDeckCounts();
         const parsed = JSON.parse(raw);
         const counts = {};
-        Object.keys(FRIEND_SIMPLE_LIBRARY).forEach(id => {
-          const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(parsed[id]) || 0));
-          if (n > 0) counts[id] = n;
+        Object.entries(parsed || {}).forEach(([rawId, rawCount]) => {
+          const id = normalizePvpCardId(rawId);
+          if (!PVP_SUPPORTED_CARD_SET.has(id) || !CARD_LIBRARY[id]) return;
+          const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(rawCount) || 0));
+          if (n > 0) counts[id] = Math.min(ONLINE_DECK_MAX_SAME, (counts[id] || 0) + n);
         });
-        return counts;
+        return Object.keys(counts).length ? counts : defaultOnlineDeckCounts();
       } catch (_) {
         return defaultOnlineDeckCounts();
       }
@@ -1448,10 +1439,11 @@ const CARD_LIBRARY = {
       const parsed = JSON.parse(json);
       const source = parsed.counts || parsed;
       const counts = {};
-      Object.keys(source).forEach(id => {
-        if (!FRIEND_SIMPLE_LIBRARY[id]) return;
-        const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(source[id]) || 0));
-        if (n > 0) counts[id] = n;
+      Object.entries(source).forEach(([rawId, rawCount]) => {
+        const id = normalizePvpCardId(rawId);
+        if (!PVP_SUPPORTED_CARD_SET.has(id) || !CARD_LIBRARY[id]) return;
+        const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(rawCount) || 0));
+        if (n > 0) counts[id] = Math.min(ONLINE_DECK_MAX_SAME, (counts[id] || 0) + n);
       });
       if (!onlineDeckIsValid(counts)) throw new Error("デッキ条件を満たしていません。20枚以内・コスト40以内・1枚以上にしてください。");
       return counts;
@@ -1476,7 +1468,7 @@ const CARD_LIBRARY = {
       }
       if (!elements.onlineDeckList) return;
       elements.onlineDeckList.innerHTML = "";
-      Object.keys(FRIEND_SIMPLE_LIBRARY).forEach(id => {
+      PVP_SUPPORTED_CARD_IDS.forEach(id => {
         const card = friendCardInfo(id);
         const row = document.createElement("div");
         row.className = "online-deck-row";
@@ -1484,7 +1476,7 @@ const CARD_LIBRARY = {
         row.innerHTML = `
           <div>
             <strong>${card.name}</strong>
-            <small>コスト ${card.cost} / ${card.type === "blessing" ? "加護" : card.type === "curse" ? "呪縛" : card.bullet ? "弾" : "カード"}：${card.text}</small>
+            <small>コスト ${card.cost} / ${card.blessing ? "加護" : card.curse ? "呪縛" : card.bullet ? "弾" : card.type || "カード"}：${card.text}</small>
           </div>
           <div class="online-deck-controls">
             <button type="button" data-online-deck-minus="${id}" class="secondary">−</button>
@@ -1526,7 +1518,7 @@ const CARD_LIBRARY = {
     function makeFriendDeck() {
       if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
       const customDeck = onlineDeckListFromCounts(state.onlineDeckCounts);
-      return shuffle(customDeck.length ? customDeck : FRIEND_SIMPLE_DECK);
+      return shuffle(customDeck.length ? customDeck : PVP_DEFAULT_DECK);
     }
 
     function drawFriendCard(game, role, count = 1) {
@@ -1552,7 +1544,7 @@ const CARD_LIBRARY = {
         host: makeSideState(hostDeck),
         guest: makeSideState(guestDeck),
         winner: null,
-        log: ["簡易カード試合を開始しました。ホスト/ゲストそれぞれのPVPデッキを使用します。"]
+        log: ["PVP試合を開始しました。CPU戦と共通のカード情報を使用します。"]
       };
       game.host = drawFriendCard(game, "host", 3);
       game.guest = drawFriendCard(game, "guest", 3);
@@ -1574,41 +1566,13 @@ const CARD_LIBRARY = {
     }
 
     function friendCardInfo(cardId) {
-      const fallback = {
-        insight: { name: "ひらめき", cost: 1, text: "1枚引く。" },
-        strongHit: { name: "強打", cost: 2, text: "このターン次の攻撃+1。" },
-        lightHit: { name: "軽打", cost: 1, text: "このターン次の攻撃-1。" },
-        lockSplit: { name: "固定", cost: 2, text: "次の相手ターン、相手は分ける不可。" },
-        snipe: { name: "狙撃", cost: 2, text: "選択中の相手の手を+1。" },
-        passCard: { name: "パス", cost: 0, text: "ターン終了。" },
-        nekodamashi: { name: "ねこだまし", cost: 2, text: "1枚引く。" },
-        calm: { name: "落ち着ける", cost: 1, text: "手札を1枚捨てて2枚引く。" },
-        randomDice: { name: "ランダムダイス", cost: 1, text: "選択中の自分の手を0〜4に変更。" },
-        equalTrade: { name: "等価交換", cost: 2, text: "自分-1、相手-1。" },
-        adjust: { name: "整える", cost: 1, text: "自分の手からもう片方へ1本移す。" },
-        repair: { name: "補修", cost: 3, text: "0の手を1で復活。" },
-        preparation: { name: "戦闘準備", cost: 1, text: "補助カードを探す。" },
-        bulletSupply: { name: "弾丸補給", cost: 1, text: "狙撃を探す。" },
-        scout: { name: "探り", cost: 1, text: "相手の手札枚数確認。" },
-        costLimit: { name: "倹約令", cost: 3, text: "相手の次ターンはコスト2以下だけ。" },
-        doubleDouble: { name: "ダブルダブル", cost: 3, text: "2-2なら追加行動。" },
-        overAccel: { name: "過加速", cost: 3, text: "次の自分ターンに追加ドロー。" },
-        focusShot: { name: "一点狙い", cost: 3, text: "狙撃を探す。" },
-        reload: { name: "再装填", cost: 2, text: "捨て札から狙撃。" },
-        breakthrough: { name: "強行突破", cost: 3, text: "簡易版：攻撃+1。" },
-        powerBlessing: { name: "力の加護", cost: 2, type: "blessing", text: "自分の手に置く。攻撃+1。" },
-        guardBlessing: { name: "守護", cost: 2, type: "blessing", text: "自分の手に置く。受ける本数-1。" },
-        growthBlessing: { name: "成長", cost: 2, type: "blessing", text: "自分の手に置く。攻撃後条件で1枚引く。" },
-        slowCurse: { name: "鈍重の呪縛", cost: 2, type: "curse", text: "相手の手に置く。攻撃-1。" },
-        immutableCurse: { name: "不変の呪縛", cost: 2, type: "curse", text: "相手の手に置く。攻撃増加無効。" },
-        sealCurse: { name: "封印の呪縛", cost: 2, type: "curse", text: "相手の手に置く。加護を置けない。" },
-        rapidFire: { name: "乱射", cost: 2, text: "手札を弾として捨ててダメージ。" },
-        accelerationBullet: { name: "加速弾", cost: 1, bullet: true, text: "乱射で捨てると1枚引く。" },
-        specialBullet: { name: "特殊弾", cost: 2, bullet: true, text: "乱射で捨てると相手手札破壊。" },
-        piercingBullet: { name: "貫通弾", cost: 3, bullet: true, text: "乱射で捨てると設置カード破壊。" },
-        logicAtelier: { name: "ロジックアトリエ", cost: 0, bullet: true, token: true, text: "乱射で捨てると相手の手を0。" }
+      const normalizedId = normalizePvpCardId(cardId);
+      return CARD_LIBRARY[normalizedId] || {
+        name: `未対応:${normalizedId}`,
+        cost: "?",
+        type: "未対応",
+        text: "このカードは現在PVP未対応です。"
       };
-      return FRIEND_SIMPLE_LIBRARY[cardId] || fallback[cardId] || { name: `未対応:${cardId}`, cost: "?", text: "この部屋に古い版/別版のカードIDが残っています。" };
     }
 
     function friendHandKey(role, hand) {
@@ -1964,7 +1928,7 @@ const CARD_LIBRARY = {
 
       if (!game?.started) {
         const text = bothReady
-          ? (isHost ? "2人とも準備完了です。ホストは簡易カード試合を開始できます。" : "2人とも準備完了です。ホストの開始を待っています。")
+          ? (isHost ? "2人とも準備完了です。ホストはPVP試合を開始できます。" : "2人とも準備完了です。ホストの開始を待っています。")
           : "まだ試合は始まっていません。2人とも準備完了すると開始できます。";
         elements.friendGameStatus.textContent = text;
         if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
@@ -2031,8 +1995,17 @@ const CARD_LIBRARY = {
       if (next.game && !next.game.fx) {
         const beforeLogs = Array.isArray(data.game?.log) ? data.game.log : [];
         const afterLogs = Array.isArray(next.game.log) ? next.game.log : [];
-        const addedLogs = afterLogs.slice(Math.min(beforeLogs.length, afterLogs.length));
-        const candidates = addedLogs.length ? addedLogs : afterLogs.slice(-6);
+        // ログは最大30件で先頭が押し出されるため、単純なlength差では新規ログを取れない。
+        // beforeの末尾とafterの先頭が一致する最大オーバーラップを探す。
+        let overlap = 0;
+        const maxOverlap = Math.min(beforeLogs.length, afterLogs.length);
+        for (let size = maxOverlap; size >= 0; size--) {
+          const beforeTail = beforeLogs.slice(beforeLogs.length - size);
+          const afterHead = afterLogs.slice(0, size);
+          if (beforeTail.every((entry, i) => entry === afterHead[i])) { overlap = size; break; }
+        }
+        const addedLogs = afterLogs.slice(overlap);
+        const candidates = addedLogs.length ? addedLogs : afterLogs.slice(-8);
         let cardMatch = null;
         for (let i = candidates.length - 1; i >= 0; i--) {
           const match = String(candidates[i] || "").match(/(ホスト|ゲスト)：「([^」]+)」を使用/);
@@ -2064,7 +2037,7 @@ const CARD_LIBRARY = {
 
     async function startFriendSimpleGame() {
       if (state.friendRole !== "host") {
-        elements.friendLobbyMessage.textContent = "簡易カード試合を開始できるのはホストだけです。";
+        elements.friendLobbyMessage.textContent = "PVP試合を開始できるのはホストだけです。";
         return;
       }
       await updateFriendGame((data) => {
@@ -2360,7 +2333,7 @@ const CARD_LIBRARY = {
       let damage = Number(bullet.cost) || 0;
       if (bullet.bullet) damage += 1;
 
-      if (bulletId === "logicAtelier") {
+      if (bulletId === "logicCrusherBullet") {
         logs.push("ロジックアトリエ：選択中の相手の手を0にした。");
         showFriendCardBurst("ロジックアトリエ", "相手の手を0にした");
         discardFx = makeFriendFx("discardEffect", { role, cardName: "ロジックアトリエ", detail: "相手の手を0にした" });
@@ -2373,7 +2346,7 @@ const CARD_LIBRARY = {
         logs.push(`乱射：弾「${bullet.name}」を捨て、相手の${target === "L" ? "左" : "右"}に${damage}。${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
       }
 
-      if (bulletId === "accelerationBullet") {
+      if (bulletId === "accelBullet") {
         me = drawFriendCard({ ...game, [role]: me }, role, 1);
         logs.push("加速弾：1枚引いた。");
         showFriendCardBurst("加速弾", "1枚引いた");
@@ -2389,7 +2362,7 @@ const CARD_LIBRARY = {
         discardFx = makeFriendFx("discardEffect", { role, cardName: "特殊弾", detail });
       }
 
-      if (bulletId === "piercingBullet") {
+      if (bulletId === "pierceBullet") {
         const result = friendRemoveOneAttachment(enemy, target);
         enemy = result.side;
         logs.push(result.removed ? `貫通弾：相手の設置カード「${friendCardInfo(result.removed).name}」を捨てた。` : "貫通弾：相手の設置カードがなかった。");
@@ -2640,13 +2613,15 @@ const CARD_LIBRARY = {
           elements.friendLobbyMessage.textContent = "このターンはすでにカードを使っています。";
           return null;
         }
-        const cardId = me.hand[index];
+        const rawCardId = me.hand[index];
+        const cardId = normalizePvpCardId(rawCardId);
+        if (cardId !== rawCardId) me.hand[index] = cardId;
         const card = friendCardInfo(cardId);
         if (me.costLimit !== null && me.costLimit !== undefined && Number(card.cost) > Number(me.costLimit)) {
           elements.friendLobbyMessage.textContent = `倹約令中です。コスト${me.costLimit}以下のカードしか使えません。`;
           return null;
         }
-        if (!FRIEND_SIMPLE_LIBRARY[cardId]) {
+        if (!PVP_SUPPORTED_CARD_SET.has(normalizePvpCardId(cardId)) || !CARD_LIBRARY[normalizePvpCardId(cardId)]) {
           me.hand.splice(index, 1);
           me.discard.push(cardId);
           me.cardPlayed = true;
@@ -2664,7 +2639,7 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (cardId === "calm") {
+        if (cardId === "calmDown") {
           if (me.hand.length <= 0) {
             logs.push("追加で捨てる手札がないため、1枚だけ引いた。");
             let tempGame = { ...game, [role]: me };
@@ -2695,11 +2670,11 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (cardId === "preparation") {
+        if (cardId === "battlePrep") {
           const result = takeCardFromDeck(me, id => ["insight", "strongHit", "lightHit", "adjust", "equalTrade", "calm"].includes(id));
           me.deck = result.side.deck;
           me.hand = result.side.hand;
-          logs.push(result.found ? `山札から「${FRIEND_SIMPLE_LIBRARY[result.found].name}」を手札へ。` : "対象カードが山札になかった。");
+          logs.push(result.found ? `山札から「${friendCardInfo(result.found).name}」を手札へ。` : "対象カードが山札になかった。");
           return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
@@ -2723,7 +2698,7 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (cardId === "adjust") {
+        if (cardId === "calm") {
           friendSetPendingTapAction({ type: "ownHand", action: { kind: "adjust", cardId }, label: "整える" });
           logs.push("整える：1本移す元の自分の手をタップしてください。");
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
@@ -2756,13 +2731,13 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (card.type === "blessing") {
+        if (card.blessing) {
           friendSetPendingTapAction({ type: "ownHand", action: { kind: "blessing", cardId }, label: card.name });
           logs.push(`${card.name}：置く自分の手をタップしてください。`);
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (card.type === "curse") {
+        if (card.curse) {
           friendSetPendingTapAction({ type: "opponentHand", action: { kind: "curse", cardId }, label: card.name });
           logs.push(`${card.name}：置く相手の手をタップしてください。`);
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
@@ -2773,7 +2748,7 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (cardId === "costLimit") {
+        if (cardId === "thriftLaw") {
           enemy.costLimit = 2;
           logs.push("次の相手ターン、相手はコスト2以下のカードしか使えない。");
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
@@ -2789,7 +2764,7 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (cardId === "overAccel") {
+        if (cardId === "acceleration") {
           me.extraDrawNext = (me.extraDrawNext || 0) + 1;
           logs.push("次の自分ターン開始時、追加で1枚引く。");
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
@@ -2801,7 +2776,7 @@ const CARD_LIBRARY = {
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        if (cardId === "focusShot") {
+        if (cardId === "focusedShot") {
           const result = takeCardFromDeckOrDiscard(me, id => id === "snipe");
           me.deck = result.side.deck;
           me.discard = result.side.discard;
@@ -2811,10 +2786,10 @@ const CARD_LIBRARY = {
         }
 
         if (cardId === "reload") {
-          const result = takeCardFromDiscard(me, id => id === "snipe");
+          const result = takeCardFromDiscard(me, id => id === "rapidFire");
           me.discard = result.side.discard;
           me.hand = result.side.hand;
-          logs.push(result.found ? "捨て札から「狙撃」を手札へ。" : "捨て札に狙撃がなかった。");
+          logs.push(result.found ? "捨て札から「乱射」を手札へ。" : "捨て札に乱射がなかった。");
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
@@ -4867,7 +4842,7 @@ function renderLastAction() {
       checkWin();
 
       if (player === "human") {
-        if (cardId === "calm" && state.mode === "moveOne") {
+        if (cardId === "calmDown" && state.mode === "moveOne") {
           setMessage("「整える」：1本移したい元の手を選んでください。");
         } else if (cardId === "repair" && state.mode === "repairDiscard") {
           setMessage("「補修」：捨てる手札を1枚選んでください。補修後、ターンは終了します。");
@@ -6299,7 +6274,8 @@ async function endTurn() {
         const parsed = JSON.parse(raw);
         const counts = {};
         Object.keys(parsed).forEach(id => {
-          if (!FRIEND_SIMPLE_LIBRARY[id]) return;
+          id = normalizePvpCardId(id);
+        if (!PVP_SUPPORTED_CARD_SET.has(id) || !CARD_LIBRARY[id]) return;
           const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(parsed[id]) || 0));
           if (n > 0) counts[id] = n;
         });
