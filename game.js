@@ -999,7 +999,10 @@ const CARD_LIBRARY = {
       friendApplyingRemoteState: false,
       friendCardResolving: false,
       friendLastPublishedSignature: "",
-      friendPublishTimer: null
+      friendPublishTimer: null,
+      friendInterruptWaiting: null,
+      friendInterruptHandling: false,
+      friendHandledInterruptIds: new Set()
     };
 
     const handNames = {
@@ -1404,7 +1407,7 @@ const CARD_LIBRARY = {
       await fb.setDoc(roomRef, {
         match: {
           ...existingMatch,
-          version: 43,
+          version: 44,
           stateRevision: nextRevision,
           state: snapshot
         },
@@ -1417,7 +1420,7 @@ const CARD_LIBRARY = {
       // 通常の自動同期は、現在手番を持つ端末だけが書き込む。
       // ターンを相手へ渡す瞬間は endTurn() から明示的に publishFriendStateNow() を呼ぶ。
       if (state.turn !== "human") return false;
-      if (state.animating || state.friendCardResolving) return false;
+      if (state.animating || state.friendCardResolving || state.friendInterruptWaiting || state.friendInterruptHandling) return false;
       if (!["attack", "setupTrap"].includes(state.mode)) return false;
       if (state.pendingRepairDiscard || state.pendingEqualTradeSelf || state.pendingRapidFireDiscard || state.pendingSwapFirst) return false;
       if (state.pendingTrapTargetEffect || state.selectedTrapCardIndex !== null) return false;
@@ -1435,6 +1438,102 @@ const CARD_LIBRARY = {
           setMessage(`オンライン同期エラー：${error.message || error}`);
         });
       }, 120);
+    }
+
+
+    function makeFriendInterruptId() {
+      return `${state.friendRole || "side"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    async function writeFriendInterrupt(interrupt) {
+      const fb = firebaseApi();
+      if (!fb || !state.friendRoomId) throw new Error("Firebaseに接続されていません。");
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const existingMatch = state.friendRoomData?.match || {};
+      await fb.setDoc(roomRef, {
+        match: { ...existingMatch, version: 44, interrupt },
+        updatedAt: fb.serverTimestamp()
+      }, { merge: true });
+    }
+
+    async function requestRemoteFriendDecision(type, payload = {}) {
+      if (state.battleMode !== "friend" || !state.friendRole) return null;
+      if (state.friendInterruptWaiting) throw new Error("別のオンライン割り込み処理を待っています。");
+      const id = makeFriendInterruptId();
+      const interrupt = {
+        id,
+        type,
+        requesterSide: state.friendRole,
+        targetSide: otherFriendRole(),
+        status: "pending",
+        payload: cloneJson(payload),
+        createdAtMs: Date.now()
+      };
+      const resultPromise = new Promise((resolve, reject) => {
+        state.friendInterruptWaiting = { id, resolve, reject, type };
+      });
+      await writeFriendInterrupt(interrupt);
+      setMessage("相手の判断を待っています…");
+      render();
+      return await resultPromise;
+    }
+
+    async function respondFriendInterrupt(interrupt, response) {
+      if (!interrupt?.id) return;
+      await writeFriendInterrupt({
+        ...interrupt,
+        status: "resolved",
+        response: cloneJson(response),
+        resolvedBy: state.friendRole,
+        resolvedAtMs: Date.now()
+      });
+    }
+
+    async function handleIncomingFriendInterrupt(interrupt) {
+      if (!interrupt || interrupt.status !== "pending" || interrupt.targetSide !== state.friendRole) return;
+      if (state.friendHandledInterruptIds.has(interrupt.id) || state.friendInterruptHandling) return;
+      state.friendInterruptHandling = true;
+      state.friendHandledInterruptIds.add(interrupt.id);
+      try {
+        let response = null;
+        const payload = interrupt.payload || {};
+        if (interrupt.type === "nekodamashi") {
+          const use = await askHumanNekodamashi({ attacker: "cpu", targetHand: payload.targetHand || "L", isRapidFire: !!payload.isRapidFire });
+          response = { use: !!use };
+        } else if (interrupt.type === "manualTrap") {
+          const localCandidates = (payload.candidates || []).map(item => ({
+            placedHand: item.placedHand,
+            index: Number(item.index),
+            cardId: item.cardId,
+            card: CARD_LIBRARY[item.cardId]
+          })).filter(item => item.card);
+          const chosen = await askHumanTrapChoice(localCandidates, {
+            attacker: "cpu",
+            attackHand: payload.attackHand || "L",
+            targetHand: payload.targetHand || "L",
+            isRapidFire: !!payload.isRapidFire
+          });
+          response = chosen ? { chosen: { placedHand: chosen.placedHand, index: chosen.index, cardId: chosen.cardId } } : { chosen: null };
+        } else if (interrupt.type === "magicMirror") {
+          const use = await askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId);
+          response = { use: !!use };
+        }
+        await respondFriendInterrupt(interrupt, response || {});
+      } catch (error) {
+        console.error("PVP interrupt handling failed", error);
+        await respondFriendInterrupt(interrupt, { error: String(error?.message || error) });
+      } finally {
+        state.friendInterruptHandling = false;
+      }
+    }
+
+    function consumeResolvedFriendInterrupt(interrupt) {
+      const waiting = state.friendInterruptWaiting;
+      if (!waiting || !interrupt || interrupt.id !== waiting.id || interrupt.status !== "resolved") return false;
+      state.friendInterruptWaiting = null;
+      if (interrupt.response?.error) waiting.reject(new Error(interrupt.response.error));
+      else waiting.resolve(interrupt.response || {});
+      return true;
     }
 
     function setFriendRoomUi(roomId, role = "host") {
@@ -1515,6 +1614,15 @@ const CARD_LIBRARY = {
         state.friendRoomData = data;
         elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
         updateFriendLobbyView(data);
+        const interrupt = data?.match?.interrupt;
+        if (interrupt) {
+          if (!consumeResolvedFriendInterrupt(interrupt)) {
+            handleIncomingFriendInterrupt(interrupt).catch(error => {
+              console.error("PVP interrupt receive failed", error);
+              setMessage(`オンライン割り込みエラー：${error.message || error}`);
+            });
+          }
+        }
         if (data?.status === "playing" && data?.match && !state.friendMatchStarted) {
           enterFriendCommonBattle(data.match);
         } else if (data?.status === "playing" && data?.match?.state && state.friendMatchStarted) {
@@ -1630,7 +1738,7 @@ const CARD_LIBRARY = {
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
       const match = {
-        version: 43,
+        version: 44,
         createdAtMs: Date.now(),
         turnSide: "host",
         turnNumber: 1,
@@ -1662,6 +1770,9 @@ const CARD_LIBRARY = {
       state.friendSyncRevision = Number(match.stateRevision || 0);
       state.friendLastAppliedRevision = Number(match.stateRevision || 0);
       state.friendLastPublishedSignature = match.state ? JSON.stringify(match.state) : "";
+      state.friendInterruptWaiting = null;
+      state.friendInterruptHandling = false;
+      state.friendHandledInterruptIds = new Set();
       state.deckCounts.human = { ...DEFAULT_DECK_COUNTS, ...(mine.deckCounts || {}) };
       state.deckCounts.cpu = { ...DEFAULT_DECK_COUNTS, ...(other.deckCounts || {}) };
       state.human = { L: mine.L ?? 1, R: mine.R ?? 1 };
@@ -2633,6 +2744,9 @@ function wrapFinger(value) {
       let useMirror = false;
       if (owner === "human") {
         useMirror = await askHumanMagicMirrorChoice(owner, hand, cardId);
+      } else if (state.battleMode === "friend") {
+        const response = await requestRemoteFriendDecision("magicMirror", { hand, cardId });
+        useMirror = !!response?.use;
       } else {
         useMirror = true;
       }
@@ -3566,6 +3680,13 @@ function renderLastAction() {
       let use = false;
       if (defender === "human") {
         use = await askHumanNekodamashi(context);
+      } else if (state.battleMode === "friend") {
+        const response = await requestRemoteFriendDecision("nekodamashi", {
+          targetHand: context.targetHand,
+          attackHand: context.attackHand,
+          isRapidFire: !!context.isRapidFire
+        });
+        use = !!response?.use;
       } else {
         use = true;
       }
@@ -3585,6 +3706,18 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       if (candidates.length === 0) return null;
       if (defender === "human") {
         return await askHumanTrapChoice(candidates, context);
+      }
+      if (state.battleMode === "friend") {
+        const response = await requestRemoteFriendDecision("manualTrap", {
+          candidates: candidates.map(info => ({ placedHand: info.placedHand, index: info.index, cardId: info.cardId })),
+          attackHand: context.attackHand,
+          targetHand: context.targetHand,
+          isRapidFire: !!context.isRapidFire,
+          timing: context.resolvedFinal !== undefined ? "after" : "before"
+        });
+        const chosen = response?.chosen;
+        if (!chosen) return null;
+        return candidates.find(info => info.placedHand === chosen.placedHand && info.index === Number(chosen.index) && info.cardId === chosen.cardId) || null;
       }
       return chooseCpuManualTrap(candidates, context);
     }
