@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=54">
+  <title>割り箸カード v55</title>
+  <link rel="stylesheet" href="style.css?v=55">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -195,104 +195,114 @@
     </section>
 
     <section class="screen friend-battle-screen screen-hidden" id="friendBattleScreen">
-      <div class="friend-mobile-battle">
-        <div class="friend-battle-header">
-          <div>
-            <div class="menu-kicker">FRIEND CARD BATTLE</div>
-            <h2>PL vs PL 簡易カード対戦</h2>
-          </div>
+      <div class="friend-mobile-battle friend-cpu-layout">
+        <section class="battle-top friend-battle-top">
           <button id="friendBattleBackLobbyBtn" class="secondary">ロビーへ</button>
-        </div>
+          <button id="friendRestartSimpleBtn" class="danger">ホストが再開始</button>
+        </section>
 
-        <div class="friend-game-status" id="friendBattleStatus">同期中...</div>
-
-        <div class="friend-turn-panel">
-          <div><span>あなた</span><strong id="friendYourRoleText">---</strong></div>
-          <div><span>現在の番</span><strong id="friendTurnText">---</strong></div>
-          <div><span>選択</span><strong id="friendSelectHint">手をタップして選択</strong></div>
-        </div>
-
-        <section class="friend-player-zone opponent-zone">
-          <div class="friend-zone-title">
-            <span>相手</span>
-            <small id="friendOpponentDeckInfo">山札0 / 手札0</small>
+        <section class="status-strip friend-status-strip">
+          <div class="status-card">
+            <span>あなたの山札 / 手札</span>
+            <strong id="friendOwnDeckInfo">山札0 / 手札0</strong>
           </div>
-          <div class="friend-hands-row" id="friendOpponentHandsRow">
-            <div class="friend-hand-stack">
-              <button id="friendOpponentLeft" class="friend-hand-big" data-side="opponent" data-hand="L">左<br><b>1</b></button>
-              <div id="friendOpponentLeftAttach" class="friend-attachments-mini"></div>
+          <div class="status-card">
+            <span>相手の山札 / 手札</span>
+            <strong id="friendOpponentDeckInfo">山札0 / 手札0</strong>
+          </div>
+        </section>
+
+        <section class="event-area friend-event-area">
+          <div class="event-title">対戦状況</div>
+          <div class="last-card empty" id="friendBattleStatus">同期中...</div>
+          <div class="friend-turn-panel friend-turn-panel-compact">
+            <div><span>あなた</span><strong id="friendYourRoleText">---</strong></div>
+            <div><span>現在の番</span><strong id="friendTurnText">---</strong></div>
+            <div><span>選択</span><strong id="friendSelectHint">手をタップして選択</strong></div>
+          </div>
+        </section>
+
+        <section class="board friend-board-cpu">
+          <div class="player-panel cpu friend-player-zone opponent-zone">
+            <div class="panel-head">
+              <div>
+                <div class="name">相手</div>
+                <div class="state-label" id="friendOpponentState">待機中</div>
+              </div>
             </div>
-            <div class="friend-hand-stack">
-              <button id="friendOpponentRight" class="friend-hand-big" data-side="opponent" data-hand="R">右<br><b>1</b></button>
-              <div id="friendOpponentRightAttach" class="friend-attachments-mini"></div>
+            <div class="hands" id="friendOpponentHandsRow">
+              <div class="friend-hand-stack">
+                <button id="friendOpponentLeft" class="friend-hand-big friend-cpu-hand" data-side="opponent" data-hand="L">左手<br><b>1</b></button>
+                <div id="friendOpponentLeftAttach" class="friend-attachments-mini"></div>
+              </div>
+              <div class="friend-hand-stack">
+                <button id="friendOpponentRight" class="friend-hand-big friend-cpu-hand" data-side="opponent" data-hand="R">右手<br><b>1</b></button>
+                <div id="friendOpponentRightAttach" class="friend-attachments-mini"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="player-panel human friend-player-zone own-zone">
+            <div class="panel-head">
+              <div>
+                <div class="name">あなた</div>
+                <div class="state-label" id="friendOwnState">あなたの番です</div>
+              </div>
+            </div>
+            <div class="hands" id="friendOwnHandsRow">
+              <div class="friend-hand-stack">
+                <button id="friendOwnLeft" class="friend-hand-big friend-cpu-hand" data-side="own" data-hand="L">左手<br><b>1</b></button>
+                <div id="friendOwnLeftAttach" class="friend-attachments-mini"></div>
+              </div>
+              <div class="friend-hand-stack">
+                <button id="friendOwnRight" class="friend-hand-big friend-cpu-hand" data-side="own" data-hand="R">右手<br><b>1</b></button>
+                <div id="friendOwnRightAttach" class="friend-attachments-mini"></div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section class="friend-player-zone own-zone">
-          <div class="friend-zone-title">
-            <span>あなた</span>
-            <small id="friendOwnDeckInfo">山札0 / 手札0</small>
-          </div>
-          <div class="friend-hands-row" id="friendOwnHandsRow">
-            <div class="friend-hand-stack">
-              <button id="friendOwnLeft" class="friend-hand-big" data-side="own" data-hand="L">左<br><b>1</b></button>
-              <div id="friendOwnLeftAttach" class="friend-attachments-mini"></div>
-            </div>
-            <div class="friend-hand-stack">
-              <button id="friendOwnRight" class="friend-hand-big" data-side="own" data-hand="R">右<br><b>1</b></button>
-              <div id="friendOwnRightAttach" class="friend-attachments-mini"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="friend-bottom-actions">
-          <div class="friend-main-buttons">
+        <section class="actions friend-bottom-actions friend-actions-cpu">
+          <div class="mode-row friend-main-buttons">
             <button id="friendAttackBtn" disabled>攻撃</button>
-            <button id="friendSplitBtn" disabled>分ける</button>
+            <button id="friendSplitBtn" class="secondary" disabled>分ける</button>
+            <button id="friendCancelBtn" class="secondary">解除</button>
           </div>
-          <div class="friend-split-editor">
-            <span>分ける後</span>
-            <input id="friendSplitLeft" type="number" min="1" max="4" value="1" aria-label="左手">
-            <span>-</span>
-            <input id="friendSplitRight" type="number" min="1" max="4" value="1" aria-label="右手">
+          <div class="message" id="friendMessage">攻撃する場合は「攻撃」を押し、自分の手、相手の手の順にタップしてください。</div>
+          <div class="split-box" id="friendSplitBox">
+            <span>分け直し：</span>
+            <label>左
+              <select id="friendSplitLeft" aria-label="左手"></select>
+            </label>
+            <label>右
+              <select id="friendSplitRight" aria-label="右手"></select>
+            </label>
+            <button id="friendConfirmSplitBtn">決定</button>
+            <span class="small" id="friendSplitHint">左右の合計は変えられません。</span>
           </div>
-          <p class="small">攻撃は「攻撃 → 自分の手 → 相手の手」の順にタップします。分けるは数字を入れてから分けるを押します。</p>
           <div class="friend-hidden-selects">
-            <select id="friendAttackFrom">
-              <option value="L">自分の左手</option>
-              <option value="R">自分の右手</option>
-            </select>
-            <select id="friendAttackTo">
-              <option value="L">相手の左手</option>
-              <option value="R">相手の右手</option>
-            </select>
+            <select id="friendAttackFrom"><option value="L">自分の左手</option><option value="R">自分の右手</option></select>
+            <select id="friendAttackTo"><option value="L">相手の左手</option><option value="R">相手の右手</option></select>
           </div>
         </section>
 
         <div class="friend-card-burst" id="friendCardBurst" aria-live="polite"></div>
 
-        <section class="friend-hand-dock">
-          <div class="friend-dock-head">
-            <strong>手札</strong>
-            <span>カードは1ターンに1枚まで</span>
-          </div>
-          <div class="friend-hand-cards" id="friendHandCards">手札はまだありません。</div>
+        <section class="card-area friend-hand-dock friend-card-area-cpu">
+          <h2>手札 <span class="small">カード関連行動は1ターン1回まで</span></h2>
+          <div class="friend-hand-cards hand-cards" id="friendHandCards">手札はまだありません。</div>
         </section>
 
-        <div class="friend-mini-log" id="friendMiniLog">ログはまだありません。</div>
-
-        <button id="friendRestartSimpleBtn" class="danger wide-btn">ホストが再開始</button>
+        <section class="actions friend-log-area">
+          <h3>ログ</h3>
+          <div class="friend-mini-log log" id="friendMiniLog">ログはまだありません。</div>
+        </section>
 
         <div class="friend-legacy-hidden" aria-hidden="true">
-          <span id="friendHostHands">左1 / 右1</span>
-          <span id="friendGuestHands">左1 / 右1</span>
-          <small id="friendHostDeckInfo">山札0 / 手札0</small>
-          <small id="friendGuestDeckInfo">山札0 / 手札0</small>
-          <button id="friendHostLeft" data-role="host" data-hand="L"></button>
-          <button id="friendHostRight" data-role="host" data-hand="R"></button>
-          <button id="friendGuestLeft" data-role="guest" data-hand="L"></button>
-          <button id="friendGuestRight" data-role="guest" data-hand="R"></button>
+          <span id="friendHostHands">左1 / 右1</span><span id="friendGuestHands">左1 / 右1</span>
+          <small id="friendHostDeckInfo">山札0 / 手札0</small><small id="friendGuestDeckInfo">山札0 / 手札0</small>
+          <button id="friendHostLeft" data-role="host" data-hand="L"></button><button id="friendHostRight" data-role="host" data-hand="R"></button>
+          <button id="friendGuestLeft" data-role="guest" data-hand="L"></button><button id="friendGuestRight" data-role="guest" data-hand="R"></button>
         </div>
       </div>
     </section>
@@ -575,6 +585,6 @@
     }
   </script>
 
-  <script src="game.js?v=54"></script>
+  <script src="game.js?v=55"></script>
 </body>
 </html>

@@ -1093,6 +1093,13 @@ const CARD_LIBRARY = {
       friendSplitLeft: document.getElementById("friendSplitLeft"),
       friendSplitRight: document.getElementById("friendSplitRight"),
       friendSplitBtn: document.getElementById("friendSplitBtn"),
+      friendSplitBox: document.getElementById("friendSplitBox"),
+      friendConfirmSplitBtn: document.getElementById("friendConfirmSplitBtn"),
+      friendCancelBtn: document.getElementById("friendCancelBtn"),
+      friendMessage: document.getElementById("friendMessage"),
+      friendSplitHint: document.getElementById("friendSplitHint"),
+      friendOwnState: document.getElementById("friendOwnState"),
+      friendOpponentState: document.getElementById("friendOpponentState"),
       friendMiniLog: document.getElementById("friendMiniLog"),
       friendBattleBackLobbyBtn: document.getElementById("friendBattleBackLobbyBtn"),
       friendRestartSimpleBtn: document.getElementById("friendRestartSimpleBtn"),
@@ -1624,8 +1631,9 @@ const CARD_LIBRARY = {
       const nextValue = value ?? 0;
       const oldValue = state.friendLastHandValues ? state.friendLastHandValues[key] : undefined;
       animateFriendHandChange(button, oldValue, nextValue);
-      const label = hand === "L" ? "左" : "右";
-      button.innerHTML = `${label}<br><b>${nextValue}</b>`;
+      const label = hand === "L" ? "左手" : "右手";
+      const dots = Array.from({ length: Math.max(0, nextValue) }, () => '<span class="friend-finger-dot"></span>').join("");
+      button.innerHTML = `<span class="hand-name">${label}</span><b class="fingers">${nextValue}</b><span class="friend-finger-icons">${dots}</span>`;
       button.classList.toggle(selectedClass, !!isSelected);
       button.classList.toggle("dead", nextValue <= 0);
     }
@@ -1879,6 +1887,34 @@ const CARD_LIBRARY = {
       });
     }
 
+    function friendPrepareSplitEditor(game = state.friendRoomData?.game) {
+      if (!game?.started || !state.friendRole) return;
+      const me = game[state.friendRole] || { L: 1, R: 1 };
+      const fill = (select, selected) => {
+        if (!select) return;
+        select.innerHTML = "";
+        for (let value = 1; value <= 4; value += 1) {
+          const option = document.createElement("option");
+          option.value = String(value);
+          option.textContent = String(value);
+          option.selected = value === selected;
+          select.appendChild(option);
+        }
+      };
+      fill(elements.friendSplitLeft, Math.max(1, me.L || 1));
+      fill(elements.friendSplitRight, Math.max(1, me.R || 1));
+      if (elements.friendSplitHint) elements.friendSplitHint.textContent = `現在 ${me.L}-${me.R} / 合計 ${me.L + me.R}。両手とも1〜4で、合計を変えずに分け直します。`;
+    }
+
+    function friendCloseActionEditors(resetPending = false) {
+      elements.friendSplitBox?.classList.remove("active");
+      if (resetPending) {
+        state.friendPendingTapAction = null;
+        state.friendPendingRapidFire = null;
+        state.friendPendingDiscardAction = null;
+      }
+    }
+
     function updateFriendGameView(game = state.friendRoomData?.game) {
       if (!elements.friendGameStatus) return;
       const host = game?.host || { L: 1, R: 1, deck: [], hand: [], discard: [], attachments: { L: [], R: [] } };
@@ -1932,6 +1968,9 @@ const CARD_LIBRARY = {
         if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
         elements.friendAttackBtn.disabled = true;
         elements.friendSplitBtn.disabled = true;
+        if (elements.friendConfirmSplitBtn) elements.friendConfirmSplitBtn.disabled = true;
+        if (elements.friendOwnState) elements.friendOwnState.textContent = "待機中";
+        if (elements.friendOpponentState) elements.friendOpponentState.textContent = "待機中";
         return;
       }
 
@@ -1941,6 +1980,9 @@ const CARD_LIBRARY = {
         if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
         elements.friendAttackBtn.disabled = true;
         elements.friendSplitBtn.disabled = true;
+        if (elements.friendConfirmSplitBtn) elements.friendConfirmSplitBtn.disabled = true;
+        if (elements.friendOwnState) elements.friendOwnState.textContent = "待機中";
+        if (elements.friendOpponentState) elements.friendOpponentState.textContent = "待機中";
         return;
       }
 
@@ -1951,10 +1993,20 @@ const CARD_LIBRARY = {
       if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
       elements.friendAttackBtn.disabled = !myTurn;
       elements.friendSplitBtn.disabled = !myTurn;
-
-      const me = game[state.friendRole] || { L: 1, R: 1 };
-      elements.friendSplitLeft.value = Math.max(1, me.L || 1);
-      elements.friendSplitRight.value = Math.max(1, me.R || 1);
+      if (elements.friendConfirmSplitBtn) elements.friendConfirmSplitBtn.disabled = !myTurn;
+      if (elements.friendOwnState) elements.friendOwnState.textContent = myTurn ? "あなたの番です" : "相手の行動を待っています";
+      if (elements.friendOpponentState) elements.friendOpponentState.textContent = myTurn ? "待機中" : "相手の番です";
+      if (elements.friendMessage) {
+        elements.friendMessage.textContent = state.friendPendingRapidFire
+          ? "乱射：弾として捨てるカードを手札から選んでください。"
+          : state.friendPendingDiscardAction
+            ? `${state.friendPendingDiscardAction.label || "カード効果"}：捨てるカードを手札から選んでください。`
+            : state.friendPendingTapAction
+              ? friendPendingMessage()
+              : myTurn
+                ? "攻撃する場合は「攻撃」を押し、自分の手、相手の手の順にタップしてください。カードも手札から直接使えます。"
+                : "相手の番です。相手の行動が同期されるまでお待ちください。";
+      }
 
       if (state.currentScreen === "friendLobby" && game.started && !game.winner) {
         showScreen("friendBattle");
@@ -6124,7 +6176,7 @@ async function endTurn() {
     elements.onlineStartBtn.addEventListener("click", () => {
       if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
       if (!onlineDeckIsValid(state.onlineDeckCounts)) {
-        showScreen("onlineDeck");
+        alert("PVPデッキが無効です。デッキ編集から条件を満たすデッキを作成してください。");
         return;
       }
       showScreen("friendLobby");
@@ -6224,12 +6276,26 @@ async function endTurn() {
     }));
     elements.friendAttackBtn.addEventListener("click", () => {
       if (!friendCanAct(state.friendRoomData?.game)) return;
+      friendCloseActionEditors();
       friendSetPendingTapAction({ type: "attackFrom" });
     });
-    elements.friendSplitBtn.addEventListener("click", () => friendSplitAction().catch(error => {
+    elements.friendSplitBtn.addEventListener("click", () => {
+      if (!friendCanAct(state.friendRoomData?.game)) return;
+      state.friendPendingTapAction = null;
+      friendPrepareSplitEditor(state.friendRoomData?.game);
+      elements.friendSplitBox?.classList.toggle("active");
+      updateFriendGameView(state.friendRoomData?.game);
+    });
+    elements.friendConfirmSplitBtn?.addEventListener("click", () => friendSplitAction().then(() => {
+      friendCloseActionEditors();
+    }).catch(error => {
       console.error(error);
       elements.friendLobbyMessage.textContent = `分ける同期エラー：${error.message || error}`;
     }));
+    elements.friendCancelBtn?.addEventListener("click", () => {
+      friendCloseActionEditors(true);
+      updateFriendGameView(state.friendRoomData?.game);
+    });
     [elements.friendHostLeft, elements.friendHostRight, elements.friendGuestLeft, elements.friendGuestRight].forEach(btn => {
       if (!btn) return;
       btn.addEventListener("click", () => {

@@ -1885,3 +1885,65 @@
       .hand-cards { flex-wrap: wrap; overflow: visible; }
       .game-card { flex-basis: 190px; }
     }
+
+
+/* ===== v55: PVP CPU戦UI統合 ===== */
+.friend-cpu-layout {
+  width: min(var(--maxw), 100%);
+  padding: 0;
+  gap: 10px;
+}
+.friend-battle-top { display: flex; justify-content: space-between; gap: 8px; }
+.friend-status-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.friend-status-strip .status-card strong { font-size: 15px; }
+.friend-event-area { padding: 12px; }
+.friend-event-area .last-card { min-height: 44px; }
+.friend-turn-panel-compact { margin-top: 8px; }
+.friend-board-cpu { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.friend-board-cpu .friend-player-zone { padding: 12px; display: block; }
+.friend-board-cpu .opponent-zone { background: #fff5e7; }
+.friend-board-cpu .own-zone { background: #fffdf8; }
+.friend-board-cpu .friend-hand-stack { min-width: 0; gap: 6px; }
+.friend-cpu-hand {
+  width: 100%;
+  min-height: 166px;
+  border: 2px solid var(--line);
+  background: white;
+  color: var(--text);
+  border-radius: 16px;
+  padding: 12px 8px 8px;
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: none;
+}
+.friend-cpu-hand .hand-name { font-size: 13px; color: var(--muted); font-weight: 900; }
+.friend-cpu-hand .fingers { margin: 0; font-size: clamp(44px, 11vw, 70px); line-height: 1; color: var(--accent); }
+.friend-finger-icons { min-height: 20px; display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.friend-finger-dot { width: 9px; height: 18px; border-radius: 999px; background: var(--accent); display: inline-block; opacity: .72; }
+.friend-cpu-hand.selected-own { border-color: var(--ok); background: #f2fff7; box-shadow: 0 0 0 5px rgba(47,125,80,.17); }
+.friend-cpu-hand.selected-target { border-color: var(--blue); background: #eef6ff; box-shadow: 0 0 0 5px rgba(49,95,143,.20); }
+.friend-cpu-hand.pending-pick { border-color: var(--accent); background: white; box-shadow: 0 0 0 4px rgba(139,94,52,.13); }
+.friend-cpu-hand.attack-source { border-color: var(--blue); background: #eef6ff; }
+.friend-cpu-hand.attack-target { border-color: var(--hit); background: #fff0df; }
+.friend-cpu-hand.total-preview { border-color: var(--gold); background: #fff8d9; }
+.friend-cpu-hand.dead { opacity: .42; filter: grayscale(.4); }
+.friend-actions-cpu { display: block; }
+.friend-actions-cpu .friend-main-buttons { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 10px; }
+.friend-actions-cpu .split-box { margin-top: 10px; }
+.friend-card-area-cpu { display: block; padding: 12px; }
+.friend-card-area-cpu h2 { margin: 0 0 10px; font-size: 18px; }
+.friend-card-area-cpu .friend-hand-cards { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.friend-card-area-cpu .friend-simple-card { flex: 0 0 min(210px, 72vw); min-height: 142px; text-align: left; }
+.friend-log-area { padding: 12px; }
+.friend-log-area h3 { margin: 0 0 8px; }
+.friend-log-area .friend-mini-log { max-height: 150px; }
+
+@media (min-width: 760px) {
+  .friend-board-cpu { grid-template-columns: 1fr 1fr; gap: 14px; }
+  .friend-board-cpu .opponent-zone { order: 2; }
+  .friend-board-cpu .own-zone { order: 1; }
+  .friend-card-area-cpu .friend-hand-cards { flex-wrap: wrap; overflow: visible; }
+}
