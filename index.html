@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>割り箸カード v55</title>
-  <link rel="stylesheet" href="style.css?v=61">
+  <title>割り箸カード</title>
+  <link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -50,64 +50,35 @@
       </p>
     </header>
 
-    <section class="screen mode-menu-screen" id="modeMenuScreen">
+    <section class="screen menu-screen" id="menuScreen">
       <div class="menu-card">
         <div class="menu-kicker">WARIBASHI CARD</div>
         <h2>割り箸カード</h2>
-        <p class="small">遊び方を選んでください。CPU戦とオンライン対戦は、使えるカードやデッキを分けて管理します。</p>
-        <div class="difficulty-grid">
-          <button class="difficulty-btn" id="offlineModeBtn">
-            <strong>オフラインで遊ぶ</strong>
-            <span>PL vs CP。今までのCPU戦とCPU用デッキ編集を使います。</span>
-          </button>
-          <button class="difficulty-btn" id="onlineModeBtn">
-            <strong>オンラインで遊ぶ</strong>
-            <span>PL vs PL。Firebase部屋対戦とPVP用デッキ編集を使います。</span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section class="screen menu-screen screen-hidden" id="menuScreen">
-      <div class="menu-card">
-        <div class="menu-kicker">OFFLINE / PL vs CP</div>
-        <h2>オフラインで遊ぶ</h2>
-        <p class="small">CPUと対戦します。こちらはCPU戦用の既存デッキ編集を使います。</p>
+        <p class="small">デッキを整えて、対戦形式を選びます。PL vs CPとPL vs PLの入口を分けました。</p>
         <div class="menu-actions">
           <button id="menuStartBtn">スタート</button>
-          <button id="menuDeckBtn" class="blue">CPU用デッキ編集</button>
+          <button id="menuDeckBtn" class="blue">デッキ編集</button>
           <button id="menuSettingsBtn" class="secondary">設定</button>
-          <button id="offlineBackModeBtn" class="secondary">遊び方選択へ</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="screen online-menu-screen screen-hidden" id="onlineMenuScreen">
-      <div class="menu-card">
-        <div class="menu-kicker">ONLINE / PL vs PL</div>
-        <h2>オンラインで遊ぶ</h2>
-        <p class="small">友達とFirebaseで同期して対戦します。PVP用の簡易デッキを編集できます。</p>
-        <div class="menu-actions">
-          <button id="onlineStartBtn">オンライン対戦スタート</button>
-          <button id="onlineDeckBtn" class="blue">PVP用デッキ編集</button>
-          <button id="onlineBackModeBtn" class="secondary">遊び方選択へ</button>
         </div>
       </div>
     </section>
 
     <section class="screen battle-select-screen screen-hidden" id="battleSelectScreen">
       <div class="menu-card">
-        <div class="menu-kicker">OFFLINE DIFFICULTY</div>
-        <h2>CPU難易度を選択</h2>
-        <p class="small">オフラインCPU戦の難易度を選びます。</p>
+        <div class="menu-kicker">BATTLE MODE</div>
+        <h2>対戦形式を選択</h2>
+        <p class="small">CPUと遊ぶ場合はPL vs CP、友達と遊ぶ準備をする場合はPL vs PLを選んでください。</p>
         <div class="difficulty-grid">
           <button class="difficulty-btn" id="plVsCpuBtn">
             <strong>PL vs CP</strong>
-            <span>難易度選択へ進みます。</span>
+            <span>CPU難易度を選んで、これまで通り対戦します。</span>
+          </button>
+          <button class="difficulty-btn" id="plVsPlBtn">
+            <strong>PL vs PL</strong>
+            <span>Firebaseで部屋を作る/部屋に入る画面へ進みます。</span>
           </button>
         </div>
-        <button id="plVsPlBtn" class="screen-hidden">PL vs PL</button>
-        <button id="battleSelectBackBtn" class="secondary wide-btn">オフラインメニューに戻る</button>
+        <button id="battleSelectBackBtn" class="secondary wide-btn">メニューに戻る</button>
       </div>
     </section>
 
@@ -140,182 +111,9 @@
           <button id="friendUnreadyBtn" class="secondary" disabled>準備解除</button>
         </div>
         <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
-
-        <div class="friend-game-panel" id="friendGamePanel">
-          <div class="room-label">PVP演出強化</div>
-          <div class="friend-game-status" id="friendGameStatus">まだ試合は始まっていません。</div>
-          <button id="friendStartGameBtn" class="danger wide-btn" disabled>PVP試合を開始</button>
-          <p class="small">試合開始後は、別の対戦画面に移動します。PVP対応カードはCPU戦と同じカード情報を使用します。対応範囲は順次拡大します。</p>
-        </div>
-
+        <button id="friendStartBattleBtn" class="danger wide-btn" disabled>共通画面で試合開始</button>
+        <p class="small">v40ではCPU戦と同じ戦闘画面をオンラインでも使う共通基盤へ切り替えます。</p>
         <button id="friendLobbyBackBtn" class="secondary wide-btn">対戦形式に戻る</button>
-      </div>
-    </section>
-
-    <section class="screen online-deck-screen screen-hidden" id="onlineDeckScreen">
-      <div class="menu-card online-deck-card">
-        <div class="menu-kicker">ONLINE DECK</div>
-        <h2>PVP用デッキ編集</h2>
-        <p class="small">オンライン対戦用の簡易デッキです。まずはPVP対応済みカードだけを選べます。</p>
-        <div class="deck-summary">
-          <strong id="onlineDeckSummary">0枚 / コスト0</strong>
-          <span id="onlineDeckMessage">20枚以内・コスト40以内・同名3枚まで。</span>
-        </div>
-        <div class="online-deck-code-box">
-          <div class="room-label">デッキコード</div>
-          <textarea id="onlineDeckCodeBox" rows="3" placeholder="ここにデッキコードが表示されます。読み込む場合はコードを貼ってください。"></textarea>
-          <div class="menu-actions">
-            <button id="onlineDeckExportBtn" class="blue">コード作成</button>
-            <button id="onlineDeckImportBtn" class="secondary">コード読込</button>
-            <button id="onlineDeckCopyBtn" class="secondary">コピー</button>
-          </div>
-          <p class="small" id="onlineDeckCodeMessage">PVP用デッキコードを作成・共有できます。</p>
-        </div>
-
-        <div class="online-deck-save-box">
-          <div class="room-label">保存スロット</div>
-          <select id="onlineDeckSlotSelect">
-            <option value="1">スロット1</option>
-            <option value="2">スロット2</option>
-            <option value="3">スロット3</option>
-          </select>
-          <div class="menu-actions">
-            <button id="onlineDeckSaveSlotBtn" class="blue">保存</button>
-            <button id="onlineDeckLoadSlotBtn" class="secondary">読込</button>
-          </div>
-          <p class="small">この端末のブラウザ内に保存します。</p>
-        </div>
-
-        <div class="online-deck-list" id="onlineDeckList"></div>
-        <div class="menu-actions">
-          <button id="onlineDeckDefaultBtn" class="blue">おすすめに戻す</button>
-          <button id="onlineDeckBackBtn" class="secondary">オンラインメニューへ</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="screen friend-battle-screen screen-hidden" id="friendBattleScreen">
-      <div class="friend-mobile-battle friend-cpu-layout">
-        <section class="battle-top friend-battle-top">
-          <button id="friendBattleBackLobbyBtn" class="secondary">ロビーへ</button>
-          <button id="friendRestartSimpleBtn" class="danger">ホストが再開始</button>
-        </section>
-
-        <section class="status-strip friend-status-strip">
-          <div class="status-card">
-            <span>あなたの山札 / 手札</span>
-            <strong id="friendOwnDeckInfo">山札0 / 手札0</strong>
-          </div>
-          <div class="status-card">
-            <span>相手の山札 / 手札</span>
-            <strong id="friendOpponentDeckInfo">山札0 / 手札0</strong>
-          </div>
-        </section>
-
-        <section class="event-area friend-event-area">
-          <div class="event-title">対戦状況</div>
-          <div class="last-card empty" id="friendBattleStatus">同期中...</div>
-          <div class="friend-turn-panel friend-turn-panel-compact">
-            <div><span>あなた</span><strong id="friendYourRoleText">---</strong></div>
-            <div><span>現在の番</span><strong id="friendTurnText">---</strong></div>
-            <div><span>選択</span><strong id="friendSelectHint">手をタップして選択</strong></div>
-          </div>
-        </section>
-
-        <section class="board friend-board-cpu">
-          <div class="player-panel cpu friend-player-zone opponent-zone">
-            <div class="panel-head">
-              <div>
-                <div class="name">相手</div>
-                <div class="state-label" id="friendOpponentState">待機中</div>
-              </div>
-            </div>
-            <div class="hands" id="friendOpponentHandsRow">
-              <div id="friendOpponentLeft" class="hand friend-cpu-hand" data-side="opponent" data-hand="L">
-                <div class="calc-badge"></div>
-                <div class="hand-name">左手</div>
-                <div class="fingers">1</div>
-                <div class="finger-icons"></div>
-                <div id="friendOpponentLeftAttach" class="trap-slots"></div>
-              </div>
-              <div id="friendOpponentRight" class="hand friend-cpu-hand" data-side="opponent" data-hand="R">
-                <div class="calc-badge"></div>
-                <div class="hand-name">右手</div>
-                <div class="fingers">1</div>
-                <div class="finger-icons"></div>
-                <div id="friendOpponentRightAttach" class="trap-slots"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="player-panel human friend-player-zone own-zone">
-            <div class="panel-head">
-              <div>
-                <div class="name">あなた</div>
-                <div class="state-label" id="friendOwnState">あなたの番です</div>
-              </div>
-            </div>
-            <div class="hands" id="friendOwnHandsRow">
-              <div id="friendOwnLeft" class="hand friend-cpu-hand" data-side="own" data-hand="L">
-                <div class="calc-badge"></div>
-                <div class="hand-name">左手</div>
-                <div class="fingers">1</div>
-                <div class="finger-icons"></div>
-                <div id="friendOwnLeftAttach" class="trap-slots"></div>
-              </div>
-              <div id="friendOwnRight" class="hand friend-cpu-hand" data-side="own" data-hand="R">
-                <div class="calc-badge"></div>
-                <div class="hand-name">右手</div>
-                <div class="fingers">1</div>
-                <div class="finger-icons"></div>
-                <div id="friendOwnRightAttach" class="trap-slots"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="actions friend-bottom-actions friend-actions-cpu">
-          <div class="mode-row friend-main-buttons">
-            <button id="friendAttackBtn" disabled>攻撃</button>
-            <button id="friendSplitBtn" class="secondary" disabled>分ける</button>
-            <button id="friendCancelBtn" class="secondary">解除</button>
-          </div>
-          <div class="message" id="friendMessage">攻撃する場合は「攻撃」を押し、自分の手、相手の手の順にタップしてください。</div>
-          <div class="split-box" id="friendSplitBox">
-            <span>分け直し：</span>
-            <label>左
-              <select id="friendSplitLeft" aria-label="左手"></select>
-            </label>
-            <label>右
-              <select id="friendSplitRight" aria-label="右手"></select>
-            </label>
-            <button id="friendConfirmSplitBtn">決定</button>
-            <span class="small" id="friendSplitHint">左右の合計は変えられません。</span>
-          </div>
-          <div class="friend-hidden-selects">
-            <select id="friendAttackFrom"><option value="L">自分の左手</option><option value="R">自分の右手</option></select>
-            <select id="friendAttackTo"><option value="L">相手の左手</option><option value="R">相手の右手</option></select>
-          </div>
-        </section>
-
-        <div class="friend-card-burst" id="friendCardBurst" aria-live="polite"></div>
-
-        <section class="card-area friend-hand-dock friend-card-area-cpu">
-          <h2>手札 <span class="small">カード関連行動は1ターン1回まで</span></h2>
-          <div class="friend-hand-cards hand-cards" id="friendHandCards">手札はまだありません。</div>
-        </section>
-
-        <section class="actions friend-log-area">
-          <h3>ログ</h3>
-          <div class="friend-mini-log log" id="friendMiniLog">ログはまだありません。</div>
-        </section>
-
-        <div class="friend-legacy-hidden" aria-hidden="true">
-          <span id="friendHostHands">左1 / 右1</span><span id="friendGuestHands">左1 / 右1</span>
-          <small id="friendHostDeckInfo">山札0 / 手札0</small><small id="friendGuestDeckInfo">山札0 / 手札0</small>
-          <button id="friendHostLeft" data-role="host" data-hand="L"></button><button id="friendHostRight" data-role="host" data-hand="R"></button>
-          <button id="friendGuestLeft" data-role="guest" data-hand="L"></button><button id="friendGuestRight" data-role="guest" data-hand="R"></button>
-        </div>
       </div>
     </section>
 
@@ -597,6 +395,6 @@
     }
   </script>
 
-  <script src="game.js?v=61"></script>
+  <script src="game.js?v=41"></script>
 </body>
 </html>

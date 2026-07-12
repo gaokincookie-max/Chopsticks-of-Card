@@ -984,23 +984,21 @@ const CARD_LIBRARY = {
       gameOver: false,
       log: [],
       turnNumber: 0,
-      currentScreen: "modeMenu",
+      currentScreen: "menu",
       battleMode: "cpu",
       friendRoomId: null,
       friendRoomUrl: null,
       friendRole: null,
       friendReady: false,
       friendUnsubscribe: null,
-      friendPollTimer: null,
       friendRoomData: null,
-      friendSelectedOwnHand: "L",
-      friendSelectedTargetHand: "L",
-      friendLastHandValues: null,
-      friendPendingRapidFire: null,
-      friendPendingDiscardAction: null,
-      friendPendingTapAction: null,
-      friendLastFxId: null,
-      onlineDeckCounts: null
+      friendMatchId: null,
+      friendMatchStarted: false,
+      friendSyncRevision: 0,
+      friendLastAppliedRevision: 0,
+      friendApplyingRemoteState: false,
+      friendLastPublishedSignature: "",
+      friendPublishTimer: null
     };
 
     const handNames = {
@@ -1014,28 +1012,6 @@ const CARD_LIBRARY = {
       message: document.getElementById("message"),
       deckEditorMessage: document.getElementById("deckEditorMessage"),
       log: document.getElementById("log"),
-      modeMenuScreen: document.getElementById("modeMenuScreen"),
-      onlineMenuScreen: document.getElementById("onlineMenuScreen"),
-      onlineDeckScreen: document.getElementById("onlineDeckScreen"),
-      offlineModeBtn: document.getElementById("offlineModeBtn"),
-      onlineModeBtn: document.getElementById("onlineModeBtn"),
-      offlineBackModeBtn: document.getElementById("offlineBackModeBtn"),
-      onlineStartBtn: document.getElementById("onlineStartBtn"),
-      onlineDeckBtn: document.getElementById("onlineDeckBtn"),
-      onlineBackModeBtn: document.getElementById("onlineBackModeBtn"),
-      onlineDeckList: document.getElementById("onlineDeckList"),
-      onlineDeckSummary: document.getElementById("onlineDeckSummary"),
-      onlineDeckMessage: document.getElementById("onlineDeckMessage"),
-      onlineDeckCodeBox: document.getElementById("onlineDeckCodeBox"),
-      onlineDeckCodeMessage: document.getElementById("onlineDeckCodeMessage"),
-      onlineDeckExportBtn: document.getElementById("onlineDeckExportBtn"),
-      onlineDeckImportBtn: document.getElementById("onlineDeckImportBtn"),
-      onlineDeckCopyBtn: document.getElementById("onlineDeckCopyBtn"),
-      onlineDeckSlotSelect: document.getElementById("onlineDeckSlotSelect"),
-      onlineDeckSaveSlotBtn: document.getElementById("onlineDeckSaveSlotBtn"),
-      onlineDeckLoadSlotBtn: document.getElementById("onlineDeckLoadSlotBtn"),
-      onlineDeckDefaultBtn: document.getElementById("onlineDeckDefaultBtn"),
-      onlineDeckBackBtn: document.getElementById("onlineDeckBackBtn"),
       menuScreen: document.getElementById("menuScreen"),
       battleSelectScreen: document.getElementById("battleSelectScreen"),
       friendLobbyScreen: document.getElementById("friendLobbyScreen"),
@@ -1059,50 +1035,7 @@ const CARD_LIBRARY = {
       friendReadyBtn: document.getElementById("friendReadyBtn"),
       friendUnreadyBtn: document.getElementById("friendUnreadyBtn"),
       friendReadyText: document.getElementById("friendReadyText"),
-      friendGamePanel: document.getElementById("friendGamePanel"),
-      friendGameStatus: document.getElementById("friendGameStatus"),
-      friendStartGameBtn: document.getElementById("friendStartGameBtn"),
-      friendBattleScreen: document.getElementById("friendBattleScreen"),
-      friendBattleStatus: document.getElementById("friendBattleStatus"),
-      friendYourRoleText: document.getElementById("friendYourRoleText"),
-      friendTurnText: document.getElementById("friendTurnText"),
-      friendSelectHint: document.getElementById("friendSelectHint"),
-      friendHostHands: document.getElementById("friendHostHands"),
-      friendGuestHands: document.getElementById("friendGuestHands"),
-      friendHostLeft: document.getElementById("friendHostLeft"),
-      friendHostRight: document.getElementById("friendHostRight"),
-      friendGuestLeft: document.getElementById("friendGuestLeft"),
-      friendGuestRight: document.getElementById("friendGuestRight"),
-      friendHostDeckInfo: document.getElementById("friendHostDeckInfo"),
-      friendGuestDeckInfo: document.getElementById("friendGuestDeckInfo"),
-      friendOpponentDeckInfo: document.getElementById("friendOpponentDeckInfo"),
-      friendOwnDeckInfo: document.getElementById("friendOwnDeckInfo"),
-      friendOpponentLeft: document.getElementById("friendOpponentLeft"),
-      friendOpponentRight: document.getElementById("friendOpponentRight"),
-      friendOwnLeft: document.getElementById("friendOwnLeft"),
-      friendOwnRight: document.getElementById("friendOwnRight"),
-      friendOpponentLeftAttach: document.getElementById("friendOpponentLeftAttach"),
-      friendOpponentRightAttach: document.getElementById("friendOpponentRightAttach"),
-      friendOwnLeftAttach: document.getElementById("friendOwnLeftAttach"),
-      friendOwnRightAttach: document.getElementById("friendOwnRightAttach"),
-      friendHandCards: document.getElementById("friendHandCards"),
-      friendCardBurst: document.getElementById("friendCardBurst"),
-      friendAttackFrom: document.getElementById("friendAttackFrom"),
-      friendAttackTo: document.getElementById("friendAttackTo"),
-      friendAttackBtn: document.getElementById("friendAttackBtn"),
-      friendSplitLeft: document.getElementById("friendSplitLeft"),
-      friendSplitRight: document.getElementById("friendSplitRight"),
-      friendSplitBtn: document.getElementById("friendSplitBtn"),
-      friendSplitBox: document.getElementById("friendSplitBox"),
-      friendConfirmSplitBtn: document.getElementById("friendConfirmSplitBtn"),
-      friendCancelBtn: document.getElementById("friendCancelBtn"),
-      friendMessage: document.getElementById("friendMessage"),
-      friendSplitHint: document.getElementById("friendSplitHint"),
-      friendOwnState: document.getElementById("friendOwnState"),
-      friendOpponentState: document.getElementById("friendOpponentState"),
-      friendMiniLog: document.getElementById("friendMiniLog"),
-      friendBattleBackLobbyBtn: document.getElementById("friendBattleBackLobbyBtn"),
-      friendRestartSimpleBtn: document.getElementById("friendRestartSimpleBtn"),
+      friendStartBattleBtn: document.getElementById("friendStartBattleBtn"),
       friendLobbyBackBtn: document.getElementById("friendLobbyBackBtn"),
       difficultyBackBtn: document.getElementById("difficultyBackBtn"),
       settingsBackBtn: document.getElementById("settingsBackBtn"),
@@ -1311,6 +1244,148 @@ const CARD_LIBRARY = {
       return window.WaribashiFirebase && window.WaribashiFirebase.ready ? window.WaribashiFirebase : null;
     }
 
+
+    function otherFriendRole(role = state.friendRole) {
+      return role === "host" ? "guest" : "host";
+    }
+
+    function cloneJson(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function serializeFriendSide(player) {
+      return {
+        L: state[player].L,
+        R: state[player].R,
+        traps: cloneJson(state.traps[player]),
+        deck: [...state.decks[player]],
+        hand: [...state.hands[player]],
+        discard: [...state.discard[player]],
+        temp: cloneJson(state.temp[player]),
+        noSplit: !!state.noSplit[player],
+        extraActions: Number(state.extraActions[player] || 0),
+        pendingAcceleration: Number(state.pendingAcceleration[player] || 0),
+        activeAcceleration: Number(state.activeAcceleration[player] || 0),
+        pendingTerminalEnd: !!state.pendingTerminalEnd[player],
+        costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
+        activeCostLimit: state.activeCostLimit[player] ?? null,
+        berserkerTurns: Number(state.berserkerTurns[player] || 0),
+        firstTurnStarted: !!state.firstTurnStarted[player]
+      };
+    }
+
+    function buildFriendCanonicalSnapshot() {
+      const role = state.friendRole;
+      if (!role) return null;
+      const otherRole = otherFriendRole(role);
+      const snapshot = {
+        schemaVersion: 1,
+        host: null,
+        guest: null,
+        turnSide: state.turn === "human" ? role : otherRole,
+        turnNumber: state.turnNumber,
+        gameOver: !!state.gameOver,
+        log: [...state.log],
+        lastAction: state.lastAction ? cloneJson(state.lastAction) : null
+      };
+      snapshot[role] = serializeFriendSide("human");
+      snapshot[otherRole] = serializeFriendSide("cpu");
+      return snapshot;
+    }
+
+    function applyFriendSideToLocal(player, side) {
+      if (!side) return;
+      state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
+      state.traps[player] = cloneJson(side.traps || { L: [], R: [] });
+      state.decks[player] = [...(side.deck || [])];
+      state.hands[player] = [...(side.hand || [])];
+      state.discard[player] = [...(side.discard || [])];
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, ...(side.temp || {}) };
+      state.noSplit[player] = !!side.noSplit;
+      state.extraActions[player] = Number(side.extraActions || 0);
+      state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
+      state.activeAcceleration[player] = Number(side.activeAcceleration || 0);
+      state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
+      state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
+      state.activeCostLimit[player] = side.activeCostLimit ?? null;
+      state.berserkerTurns[player] = Number(side.berserkerTurns || 0);
+      state.firstTurnStarted[player] = !!side.firstTurnStarted;
+    }
+
+    async function applyFriendCanonicalSnapshot(snapshot, revision = 0) {
+      if (!snapshot || !state.friendRole) return;
+      if (revision && revision <= state.friendLastAppliedRevision) return;
+      const previousTurn = state.turn;
+      state.friendApplyingRemoteState = true;
+      try {
+        applyFriendSideToLocal("human", snapshot[state.friendRole]);
+        applyFriendSideToLocal("cpu", snapshot[otherFriendRole()]);
+        state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
+        state.turnNumber = Number(snapshot.turnNumber || 1);
+        state.gameOver = !!snapshot.gameOver;
+        state.log = [...(snapshot.log || [])];
+        state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
+        state.friendLastAppliedRevision = Math.max(state.friendLastAppliedRevision, Number(revision || 0));
+        state.friendSyncRevision = Math.max(state.friendSyncRevision, Number(revision || 0));
+        state.mode = "attack";
+        state.selectedAttackHand = null;
+        state.selectedTrapCardIndex = null;
+        state.pendingTrapTargetEffect = null;
+        state.pendingRepairDiscard = null;
+        state.pendingEqualTradeSelf = null;
+        state.pendingRapidFireDiscard = null;
+        state.pendingSwapFirst = null;
+        elements.splitBox.classList.remove("active");
+        clearHighlights();
+        render();
+      } finally {
+        state.friendApplyingRemoteState = false;
+      }
+
+      if (!state.gameOver && previousTurn !== "human" && state.turn === "human") {
+        await startTurn("human");
+      } else if (!state.gameOver) {
+        setMessage(state.turn === "human" ? "あなたの番です。" : "相手の番です。同期を待っています。");
+        render();
+      }
+    }
+
+    async function publishFriendStateNow() {
+      if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || state.friendApplyingRemoteState) return;
+      const fb = firebaseApi();
+      if (!fb) return;
+      const snapshot = buildFriendCanonicalSnapshot();
+      if (!snapshot) return;
+      const signature = JSON.stringify(snapshot);
+      if (signature === state.friendLastPublishedSignature) return;
+      const nextRevision = Math.max(state.friendSyncRevision, state.friendLastAppliedRevision) + 1;
+      state.friendSyncRevision = nextRevision;
+      state.friendLastPublishedSignature = signature;
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const existingMatch = state.friendRoomData?.match || {};
+      await fb.setDoc(roomRef, {
+        match: {
+          ...existingMatch,
+          version: 41,
+          stateRevision: nextRevision,
+          state: snapshot
+        },
+        updatedAt: fb.serverTimestamp()
+      }, { merge: true });
+    }
+
+    function scheduleFriendStatePublish() {
+      if (state.battleMode !== "friend" || state.friendApplyingRemoteState || !state.friendMatchStarted) return;
+      if (state.friendPublishTimer) clearTimeout(state.friendPublishTimer);
+      state.friendPublishTimer = setTimeout(() => {
+        state.friendPublishTimer = null;
+        publishFriendStateNow().catch(error => {
+          console.error("PVP state publish failed", error);
+          setMessage(`オンライン同期エラー：${error.message || error}`);
+        });
+      }, 120);
+    }
+
     function setFriendRoomUi(roomId, role = "host") {
       const cleanId = extractRoomId(roomId) || makeRoomId();
       state.battleMode = "friend";
@@ -1323,1631 +1398,6 @@ const CARD_LIBRARY = {
       history.replaceState(null, "", state.friendRoomUrl);
     }
 
-
-    // PVPでもカード情報の正本はCPU戦と同じCARD_LIBRARYを使用する。
-    // 未対応カードは別の簡易効果を作らず、PVPデッキ候補から外す。
-    const PVP_SUPPORTED_CARD_IDS = [
-      "insight", "strongHit", "lightHit", "lockSplit",
-      "bulletSupply", "scout", "thriftLaw", "doubleDouble",
-      "reload", "passCard", "snipe", "randomDice",
-      "equalTrade", "calm", "repair", "calmDown", "rapidFire",
-      "accelBullet", "specialBullet", "pierceBullet",
-      "powerBlessing", "guardBlessing", "growthBlessing", "slowCurse"
-    ];
-
-    const PVP_SUPPORTED_CARD_SET = new Set(PVP_SUPPORTED_CARD_IDS);
-
-    // v60以前のPVP専用IDをCPU戦の正式IDへ移行する。
-    const LEGACY_PVP_CARD_ID_MAP = {
-      adjust: "calm",
-      preparation: "battlePrep",
-      costLimit: "thriftLaw",
-      overAccel: "acceleration",
-      focusShot: "focusedShot",
-      accelerationBullet: "accelBullet",
-      piercingBullet: "pierceBullet",
-      logicAtelier: "logicCrusherBullet"
-    };
-
-    function normalizePvpCardId(id) {
-      return LEGACY_PVP_CARD_ID_MAP[id] || id;
-    }
-
-    const PVP_DEFAULT_DECK = [
-      "insight", "insight", "strongHit", "lightHit", "lockSplit",
-      "snipe", "snipe", "passCard", "calmDown", "calmDown",
-      "randomDice", "equalTrade", "calm", "repair", "bulletSupply",
-      "scout", "thriftLaw", "reload", "rapidFire", "accelBullet"
-    ];
-
-
-    const ONLINE_DECK_LIMIT = 20;
-    const ONLINE_DECK_COST_LIMIT = 40;
-    const ONLINE_DECK_MAX_SAME = 3;
-    const ONLINE_DECK_STORAGE_KEY = "waribashiPvpDeckCountsV61";
-
-    function defaultOnlineDeckCounts() {
-      const counts = {};
-      PVP_DEFAULT_DECK.forEach(id => {
-        counts[id] = (counts[id] || 0) + 1;
-      });
-      return counts;
-    }
-
-    function loadOnlineDeckCounts() {
-      try {
-        const raw = localStorage.getItem(ONLINE_DECK_STORAGE_KEY);
-        if (!raw) return defaultOnlineDeckCounts();
-        const parsed = JSON.parse(raw);
-        const counts = {};
-        Object.entries(parsed || {}).forEach(([rawId, rawCount]) => {
-          const id = normalizePvpCardId(rawId);
-          if (!PVP_SUPPORTED_CARD_SET.has(id) || !CARD_LIBRARY[id]) return;
-          const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(rawCount) || 0));
-          if (n > 0) counts[id] = Math.min(ONLINE_DECK_MAX_SAME, (counts[id] || 0) + n);
-        });
-        return Object.keys(counts).length ? counts : defaultOnlineDeckCounts();
-      } catch (_) {
-        return defaultOnlineDeckCounts();
-      }
-    }
-
-    function saveOnlineDeckCounts() {
-      localStorage.setItem(ONLINE_DECK_STORAGE_KEY, JSON.stringify(state.onlineDeckCounts || defaultOnlineDeckCounts()));
-    }
-
-    function onlineDeckListFromCounts(counts = state.onlineDeckCounts) {
-      const deck = [];
-      Object.entries(counts || {}).forEach(([id, count]) => {
-        for (let i = 0; i < count; i++) deck.push(id);
-      });
-      return deck;
-    }
-
-    function onlineDeckStats(counts = state.onlineDeckCounts) {
-      let cards = 0;
-      let cost = 0;
-      Object.entries(counts || {}).forEach(([id, count]) => {
-        const card = friendCardInfo(id);
-        cards += count;
-        cost += (Number(card.cost) || 0) * count;
-      });
-      return { cards, cost };
-    }
-
-    function onlineDeckIsValid(counts = state.onlineDeckCounts) {
-      const stats = onlineDeckStats(counts);
-      return stats.cards > 0 && stats.cards <= ONLINE_DECK_LIMIT && stats.cost <= ONLINE_DECK_COST_LIMIT;
-    }
-
-
-    function encodeOnlineDeckCode(counts = state.onlineDeckCounts) {
-      const compact = {};
-      Object.keys(counts || {}).sort().forEach(id => {
-        const n = counts[id] || 0;
-        if (n > 0) compact[id] = n;
-      });
-      const json = JSON.stringify({ v: 1, counts: compact });
-      return "WBPVP1:" + btoa(unescape(encodeURIComponent(json)));
-    }
-
-    function decodeOnlineDeckCode(code) {
-      const raw = String(code || "").trim();
-      if (!raw) throw new Error("コードが空です。");
-      const body = raw.startsWith("WBPVP1:") ? raw.slice("WBPVP1:".length) : raw;
-      const json = decodeURIComponent(escape(atob(body)));
-      const parsed = JSON.parse(json);
-      const source = parsed.counts || parsed;
-      const counts = {};
-      Object.entries(source).forEach(([rawId, rawCount]) => {
-        const id = normalizePvpCardId(rawId);
-        if (!PVP_SUPPORTED_CARD_SET.has(id) || !CARD_LIBRARY[id]) return;
-        const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(rawCount) || 0));
-        if (n > 0) counts[id] = Math.min(ONLINE_DECK_MAX_SAME, (counts[id] || 0) + n);
-      });
-      if (!onlineDeckIsValid(counts)) throw new Error("デッキ条件を満たしていません。20枚以内・コスト40以内・1枚以上にしてください。");
-      return counts;
-    }
-
-    function onlineDeckSlotKey() {
-      const slot = elements.onlineDeckSlotSelect ? elements.onlineDeckSlotSelect.value : "1";
-      return `${ONLINE_DECK_STORAGE_KEY}_slot_${slot}`;
-    }
-
-    function renderOnlineDeckEditor() {
-      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
-      const counts = state.onlineDeckCounts;
-      const stats = onlineDeckStats(counts);
-      if (elements.onlineDeckSummary) {
-        elements.onlineDeckSummary.textContent = `${stats.cards}枚 / コスト${stats.cost}`;
-      }
-      if (elements.onlineDeckMessage) {
-        elements.onlineDeckMessage.textContent = onlineDeckIsValid(counts)
-          ? "このデッキでオンライン対戦できます。"
-          : "20枚以内・コスト40以内・1枚以上にしてください。";
-      }
-      if (!elements.onlineDeckList) return;
-      elements.onlineDeckList.innerHTML = "";
-      PVP_SUPPORTED_CARD_IDS.forEach(id => {
-        const card = friendCardInfo(id);
-        const row = document.createElement("div");
-        row.className = "online-deck-row";
-        const count = counts[id] || 0;
-        row.innerHTML = `
-          <div>
-            <strong>${card.name}</strong>
-            <small>コスト ${card.cost} / ${card.blessing ? "加護" : card.curse ? "呪縛" : card.bullet ? "弾" : card.type || "カード"}：${card.text}</small>
-          </div>
-          <div class="online-deck-controls">
-            <button type="button" data-online-deck-minus="${id}" class="secondary">−</button>
-            <span class="online-deck-count">${count}</span>
-            <button type="button" data-online-deck-plus="${id}">＋</button>
-          </div>
-        `;
-        elements.onlineDeckList.appendChild(row);
-      });
-
-      elements.onlineDeckList.querySelectorAll("[data-online-deck-minus]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const id = btn.dataset.onlineDeckMinus;
-          counts[id] = Math.max(0, (counts[id] || 0) - 1);
-          if (counts[id] === 0) delete counts[id];
-          saveOnlineDeckCounts();
-          renderOnlineDeckEditor();
-        });
-      });
-
-      elements.onlineDeckList.querySelectorAll("[data-online-deck-plus]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const id = btn.dataset.onlineDeckPlus;
-          const current = counts[id] || 0;
-          if (current >= ONLINE_DECK_MAX_SAME) return;
-          counts[id] = current + 1;
-          const stats = onlineDeckStats(counts);
-          if (stats.cards > ONLINE_DECK_LIMIT || stats.cost > ONLINE_DECK_COST_LIMIT) {
-            counts[id] = current;
-            if (elements.onlineDeckMessage) elements.onlineDeckMessage.textContent = "デッキ上限を超えます。20枚以内・コスト40以内です。";
-            return;
-          }
-          saveOnlineDeckCounts();
-          renderOnlineDeckEditor();
-        });
-      });
-    }
-
-    function makeFriendDeck() {
-      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
-      const customDeck = onlineDeckListFromCounts(state.onlineDeckCounts);
-      return shuffle(customDeck.length ? customDeck : PVP_DEFAULT_DECK);
-    }
-
-    function drawFriendCard(game, role, count = 1) {
-      const deck = [...(game[role].deck || [])];
-      const hand = [...(game[role].hand || [])];
-      const discard = [...(game[role].discard || [])];
-      for (let i = 0; i < count; i++) {
-        if (deck.length > 0) hand.push(deck.shift());
-      }
-      return { ...game[role], deck, hand, discard };
-    }
-
-    function makeSideState(deck) {
-      return { L: 1, R: 1, deck: shuffle(deck && deck.length ? deck : onlineDeckListFromCounts(loadOnlineDeckCounts())), hand: [], discard: [], attachments: { L: [], R: [] }, attackBonus: 0, noSplit: false, cardPlayed: false, extraAction: false, extraDrawNext: 0, costLimit: null };
-    }
-
-    function emptyFriendGameState(hostDeck = null, guestDeck = null) {
-      let game = {
-        started: true,
-        mode: "simple-card",
-        turn: "host",
-        phase: "action",
-        host: makeSideState(hostDeck),
-        guest: makeSideState(guestDeck),
-        winner: null,
-        log: ["PVP試合を開始しました。CPU戦と共通のカード情報を使用します。"]
-      };
-      game.host = drawFriendCard(game, "host", 3);
-      game.guest = drawFriendCard(game, "guest", 3);
-      game.host = drawFriendCard(game, "host", 1);
-      game.log.push("ホストのターン。1枚ドロー。");
-      return game;
-    }
-
-    function friendRoleOpponent(role) {
-      return role === "host" ? "guest" : "host";
-    }
-
-    function friendRoleLabel(role) {
-      return role === "host" ? "ホスト" : "ゲスト";
-    }
-
-    function friendHandText(side) {
-      return `左${side?.L ?? 0} / 右${side?.R ?? 0}`;
-    }
-
-    function friendCardInfo(cardId) {
-      const normalizedId = normalizePvpCardId(cardId);
-      return CARD_LIBRARY[normalizedId] || {
-        name: `未対応:${normalizedId}`,
-        cost: "?",
-        type: "未対応",
-        text: "このカードは現在PVP未対応です。"
-      };
-    }
-
-    function friendHandKey(role, hand) {
-      return `${role}_${hand}`;
-    }
-
-    function animateFriendHandChange(button, oldValue, newValue) {
-      if (!button || oldValue === undefined || oldValue === null || oldValue === newValue) return;
-      const className = newValue > oldValue ? "bump" : "drop";
-      button.classList.remove("bump", "drop");
-      void button.offsetWidth;
-      button.classList.add(className);
-      window.setTimeout(() => button.classList.remove(className), 460);
-    }
-
-    function updateFriendHandButton(button, value, selectedClass, isSelected, ownerRole) {
-      if (!button) return;
-      const hand = button.dataset.hand;
-      const key = friendHandKey(ownerRole || button.dataset.role, hand);
-      const nextValue = value ?? 0;
-      const oldValue = state.friendLastHandValues ? state.friendLastHandValues[key] : undefined;
-      animateFriendHandChange(button, oldValue, nextValue);
-      const num = button.querySelector(".fingers");
-      const icons = button.querySelector(".finger-icons");
-      if (num) num.textContent = String(nextValue);
-      if (icons) icons.textContent = "●".repeat(Math.max(0, nextValue));
-      button.classList.toggle(selectedClass, !!isSelected);
-      button.classList.toggle("selected", selectedClass === "selected-own" && !!isSelected);
-      button.classList.toggle("hit-target", selectedClass === "selected-target" && !!isSelected);
-      button.classList.toggle("zero", nextValue <= 0);
-      button.classList.toggle("dead", nextValue <= 0);
-    }
-
-    function syncFriendHandSelections(game) {
-      if (!game?.started) return;
-      const role = state.friendRole;
-      const opp = friendRoleOpponent(role);
-      const own = game[role] || {};
-      const enemy = game[opp] || {};
-
-      if ((own[state.friendSelectedOwnHand] || 0) <= 0) {
-        state.friendSelectedOwnHand = (own.L || 0) > 0 ? "L" : "R";
-      }
-      if ((enemy[state.friendSelectedTargetHand] || 0) <= 0) {
-        state.friendSelectedTargetHand = (enemy.L || 0) > 0 ? "L" : "R";
-      }
-
-      elements.friendAttackFrom.value = state.friendSelectedOwnHand;
-      elements.friendAttackTo.value = state.friendSelectedTargetHand;
-
-      // Legacy hidden elements, kept for compatibility with older code.
-      updateFriendHandButton(elements.friendHostLeft, game.host?.L, "selected-own", role === "host" && state.friendSelectedOwnHand === "L", "host");
-      updateFriendHandButton(elements.friendHostRight, game.host?.R, "selected-own", role === "host" && state.friendSelectedOwnHand === "R", "host");
-      updateFriendHandButton(elements.friendGuestLeft, game.guest?.L, "selected-own", role === "guest" && state.friendSelectedOwnHand === "L", "guest");
-      updateFriendHandButton(elements.friendGuestRight, game.guest?.R, "selected-own", role === "guest" && state.friendSelectedOwnHand === "R", "guest");
-
-      // Mobile CPU-like visible elements. Idle hand taps no longer create persistent selection highlighting.
-      const pending = state.friendPendingTapAction;
-      const ownSelectionVisible = !!pending && ["attackFrom", "attackTo", "ownHand", "equalOwn", "equalOpponent"].includes(pending.type);
-      const targetSelectionVisible = !!pending && ["attackTo", "opponentHand", "equalOpponent"].includes(pending.type);
-      updateFriendHandButton(elements.friendOwnLeft, own.L, "selected-own", ownSelectionVisible && state.friendSelectedOwnHand === "L", role);
-      updateFriendHandButton(elements.friendOwnRight, own.R, "selected-own", ownSelectionVisible && state.friendSelectedOwnHand === "R", role);
-      updateFriendHandButton(elements.friendOpponentLeft, enemy.L, "selected-target", targetSelectionVisible && state.friendSelectedTargetHand === "L", opp);
-      updateFriendHandButton(elements.friendOpponentRight, enemy.R, "selected-target", targetSelectionVisible && state.friendSelectedTargetHand === "R", opp);
-
-      [elements.friendOwnLeft, elements.friendOwnRight, elements.friendOpponentLeft, elements.friendOpponentRight].forEach(btn => btn?.classList.remove("pending-pick", "selectable"));
-      if (pending) {
-        if (["attackFrom", "ownHand", "equalOwn"].includes(pending.type)) {
-          elements.friendOwnLeft?.classList.add("pending-pick", "selectable");
-          elements.friendOwnRight?.classList.add("pending-pick", "selectable");
-        }
-        if (["attackTo", "opponentHand", "equalOpponent"].includes(pending.type)) {
-          elements.friendOpponentLeft?.classList.add("pending-pick", "selectable");
-          elements.friendOpponentRight?.classList.add("pending-pick", "selectable");
-        }
-      }
-
-      elements.friendHostLeft.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "L");
-      elements.friendHostRight.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "R");
-      elements.friendGuestLeft.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "L");
-      elements.friendGuestRight.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "R");
-
-      state.friendLastHandValues = {
-        host_L: game.host?.L ?? 0,
-        host_R: game.host?.R ?? 0,
-        guest_L: game.guest?.L ?? 0,
-        guest_R: game.guest?.R ?? 0
-      };
-    }
-
-
-    function friendAttachments(side, hand) {
-      if (!side.attachments) side.attachments = { L: [], R: [] };
-      if (!side.attachments.L) side.attachments.L = [];
-      if (!side.attachments.R) side.attachments.R = [];
-      return side.attachments[hand] || [];
-    }
-
-    function friendHasAttachment(side, hand, cardId) {
-      return friendAttachments(side, hand).includes(cardId);
-    }
-
-    function friendCanAddAttachment(side, hand, cardId) {
-      const card = friendCardInfo(cardId);
-      const list = friendAttachments(side, hand);
-      if ((side[hand] || 0) <= 0) return false;
-      if (list.length >= 2) return false;
-      if (card.type === "blessing" && friendHasAttachment(side, hand, "sealCurse")) return false;
-      return true;
-    }
-
-    function friendAddAttachment(side, hand, cardId) {
-      const next = { ...side, attachments: { L: [...friendAttachments(side, "L")], R: [...friendAttachments(side, "R")] } };
-      next.attachments[hand].push(cardId);
-      return next;
-    }
-
-    function friendClearAttachmentsIfDead(side) {
-      const next = { ...side, attachments: { L: [...friendAttachments(side, "L")], R: [...friendAttachments(side, "R")] } };
-      if ((next.L || 0) <= 0) next.attachments.L = [];
-      if ((next.R || 0) <= 0) next.attachments.R = [];
-      return next;
-    }
-
-    function renderFriendAttachments(container, side, hand) {
-      if (!container) return;
-      const list = friendAttachments(side || {}, hand);
-      container.innerHTML = "";
-      for (let i = 0; i < 2; i++) {
-        const cardId = list[i];
-        const slot = document.createElement("div");
-        if (cardId) {
-          const card = friendCardInfo(cardId);
-          slot.className = `trap-slot filled revealed-info${card.type === "curse" ? " curse-slot" : " blessing-slot"}`;
-          slot.textContent = card.name;
-        } else {
-          slot.className = "trap-slot";
-          slot.textContent = "空き";
-        }
-        container.appendChild(slot);
-      }
-    }
-
-    function friendApplyGuard(defenderSide, targetHand, amount, logs) {
-      if (amount <= 0) return amount;
-      if (friendHasAttachment(defenderSide, targetHand, "guardBlessing")) {
-        const reduced = Math.max(1, amount - 1);
-        logs.push(`守護：受ける本数 ${amount}→${reduced}。`);
-        return reduced;
-      }
-      return amount;
-    }
-
-    function friendWrap(value) {
-      return value >= 5 ? value % 5 : value;
-    }
-
-    function friendIsDead(side) {
-      return (side?.L || 0) === 0 && (side?.R || 0) === 0;
-    }
-
-    function friendCanAct(game) {
-      return !!game?.started && !game?.winner && game.turn === state.friendRole;
-    }
-
-    function friendLogLines(game) {
-      const lines = Array.isArray(game?.log) ? game.log : [];
-      return lines.slice(-10).reverse().join("\\n") || "ログはまだありません。";
-    }
-
-    function friendEndTurn(game, currentRole, extraLog = []) {
-      const opp = friendRoleOpponent(currentRole);
-      const hadExtraAction = !!game[currentRole]?.extraAction;
-      const nextSide = { ...game[opp], attackBonus: 0, cardPlayed: false };
-      const currentSide = { ...game[currentRole], attackBonus: 0, noSplit: false, extraAction: false, costLimit: null };
-      let nextGame = {
-        ...game,
-        [currentRole]: currentSide,
-        [opp]: nextSide,
-        turn: hadExtraAction ? currentRole : opp,
-        phase: "action",
-        log: [...(game.log || []), ...extraLog]
-      };
-
-      if (hadExtraAction && !nextGame.winner) {
-        nextGame[currentRole] = drawFriendCard(nextGame, currentRole, 1);
-        nextGame[currentRole].cardPlayed = false;
-        nextGame.log.push(`${friendRoleLabel(currentRole)}は追加行動。1枚ドロー。`);
-      } else if (!nextGame.winner) {
-        let drawCount = 1 + (nextGame[opp].extraDrawNext || 0);
-        nextGame[opp] = { ...nextGame[opp], extraDrawNext: 0 };
-        nextGame[opp] = drawFriendCard(nextGame, opp, drawCount);
-        nextGame[opp].noSplit = !!nextGame[opp].noSplit;
-        nextGame[opp].cardPlayed = false;
-        nextGame.log.push(`${friendRoleLabel(opp)}のターン。${drawCount}枚ドロー。`);
-      }
-      nextGame.log = nextGame.log.slice(-30);
-      return nextGame;
-    }
-
-    function renderFriendHandCards(game = state.friendRoomData?.game) {
-      if (!elements.friendHandCards) return;
-      if (!game?.started || !state.friendRole) {
-        elements.friendHandCards.textContent = "手札はまだありません。";
-        return;
-      }
-      const mySide = game[state.friendRole];
-      const myTurn = friendCanAct(game);
-      const cardLocked = !!mySide?.cardPlayed;
-      const costLimit = mySide?.costLimit;
-      const pendingRapid = state.friendPendingRapidFire;
-      const pendingDiscard = state.friendPendingDiscardAction;
-      const hand = mySide?.hand || [];
-      if (hand.length === 0) {
-        elements.friendHandCards.textContent = pendingRapid
-          ? "捨てるカードがありません。乱射をキャンセルしてください。"
-          : pendingDiscard
-            ? "捨てるカードがありません。キャンセルしてください。"
-            : "手札はありません。";
-      } else {
-        elements.friendHandCards.innerHTML = "";
-      }
-
-      if (pendingRapid) {
-        const cancelBtn = document.createElement("button");
-        cancelBtn.className = "friend-simple-card rapid-cancel";
-        cancelBtn.innerHTML = `<strong>乱射をキャンセル</strong><span>カード使用を取り消します</span><span>捨てるカードを選ばない場合はこちら</span>`;
-        cancelBtn.addEventListener("click", () => friendCancelRapidFire().catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `乱射キャンセルエラー：${error.message || error}`;
-        }));
-        elements.friendHandCards.appendChild(cancelBtn);
-      }
-
-      if (pendingDiscard) {
-        const cancelBtn = document.createElement("button");
-        cancelBtn.className = "friend-simple-card rapid-cancel";
-        cancelBtn.innerHTML = `<strong>${pendingDiscard.label || "カード効果"}をキャンセル</strong><span>カード使用を取り消します</span><span>捨てるカードを選ばない場合はこちら</span>`;
-        cancelBtn.addEventListener("click", () => friendCancelDiscardAction().catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `キャンセルエラー：${error.message || error}`;
-        }));
-        elements.friendHandCards.appendChild(cancelBtn);
-      }
-
-      hand.forEach((cardId, index) => {
-        const card = friendCardInfo(cardId);
-        const btn = document.createElement("button");
-        btn.className = "friend-simple-card";
-        if (pendingRapid) {
-          btn.classList.add("rapid-selectable");
-          btn.disabled = !myTurn;
-          btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}${card.bullet ? " / 弾" : ""}</span><span>タップして乱射の弾として捨てる</span>`;
-          btn.addEventListener("click", () => friendChooseRapidFireAmmo(index).catch(error => {
-            console.error(error);
-            elements.friendLobbyMessage.textContent = `乱射エラー：${error.message || error}`;
-          }));
-        } else if (pendingDiscard) {
-          btn.classList.add("discard-selectable");
-          btn.disabled = !myTurn;
-          btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>タップして捨てる</span>`;
-          btn.addEventListener("click", () => friendResolveDiscardAction(index).catch(error => {
-            console.error(error);
-            elements.friendLobbyMessage.textContent = `捨て札選択エラー：${error.message || error}`;
-          }));
-        } else {
-          const overCostLimit = costLimit !== null && costLimit !== undefined && Number(card.cost) > Number(costLimit);
-          btn.disabled = !myTurn || cardLocked || overCostLimit;
-          btn.classList.toggle("card-used-locked", cardLocked || overCostLimit);
-          const disabledText = cardLocked ? "このターンはカード使用済み" : overCostLimit ? `倹約令中：コスト${costLimit}以下のみ` : card.text;
-          btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${disabledText}</span>`;
-          btn.addEventListener("click", () => friendUseCardAction(index).catch(error => {
-            console.error(error);
-            elements.friendLobbyMessage.textContent = `カード使用エラー：${error.message || error}`;
-          }));
-        }
-        elements.friendHandCards.appendChild(btn);
-      });
-    }
-
-    function friendPrepareSplitEditor(game = state.friendRoomData?.game) {
-      if (!game?.started || !state.friendRole) return;
-      const me = game[state.friendRole] || { L: 1, R: 1 };
-      const fill = (select, selected) => {
-        if (!select) return;
-        select.innerHTML = "";
-        for (let value = 1; value <= 4; value += 1) {
-          const option = document.createElement("option");
-          option.value = String(value);
-          option.textContent = String(value);
-          option.selected = value === selected;
-          select.appendChild(option);
-        }
-      };
-      fill(elements.friendSplitLeft, Math.max(1, me.L || 1));
-      fill(elements.friendSplitRight, Math.max(1, me.R || 1));
-      if (elements.friendSplitHint) elements.friendSplitHint.textContent = `現在 ${me.L}-${me.R} / 合計 ${me.L + me.R}。両手とも1〜4で、合計を変えずに分け直します。`;
-    }
-
-    function friendCloseActionEditors(resetPending = false) {
-      elements.friendSplitBox?.classList.remove("active");
-      if (resetPending) {
-        state.friendPendingTapAction = null;
-        state.friendPendingRapidFire = null;
-        state.friendPendingDiscardAction = null;
-      }
-    }
-
-    function updateFriendGameView(game = state.friendRoomData?.game) {
-      if (!elements.friendGameStatus) return;
-      const host = game?.host || { L: 1, R: 1, deck: [], hand: [], discard: [], attachments: { L: [], R: [] } };
-      const guest = game?.guest || { L: 1, R: 1, deck: [], hand: [], discard: [], attachments: { L: [], R: [] } };
-      elements.friendHostHands.textContent = friendHandText(host);
-      elements.friendGuestHands.textContent = friendHandText(guest);
-      if (elements.friendHostDeckInfo) elements.friendHostDeckInfo.textContent = `山札${host.deck?.length ?? 0} / 手札${host.hand?.length ?? 0}`;
-      if (elements.friendGuestDeckInfo) elements.friendGuestDeckInfo.textContent = `山札${guest.deck?.length ?? 0} / 手札${guest.hand?.length ?? 0}`;
-      if (state.friendRole && game?.started) {
-        const own = game[state.friendRole] || {};
-        const opp = game[friendRoleOpponent(state.friendRole)] || {};
-        if (elements.friendOwnDeckInfo) elements.friendOwnDeckInfo.textContent = `山札${own.deck?.length ?? 0} / 手札${own.hand?.length ?? 0}`;
-        if (elements.friendOpponentDeckInfo) elements.friendOpponentDeckInfo.textContent = `山札${opp.deck?.length ?? 0} / 手札${opp.hand?.length ?? 0}`;
-      }
-      if (game?.started && state.friendRole) {
-        const own = game[state.friendRole] || {};
-        const oppSide = game[friendRoleOpponent(state.friendRole)] || {};
-        renderFriendAttachments(elements.friendOwnLeftAttach, own, "L");
-        renderFriendAttachments(elements.friendOwnRightAttach, own, "R");
-        renderFriendAttachments(elements.friendOpponentLeftAttach, oppSide, "L");
-        renderFriendAttachments(elements.friendOpponentRightAttach, oppSide, "R");
-      }
-      if (elements.friendMiniLog) elements.friendMiniLog.textContent = friendLogLines(game);
-      if (elements.friendYourRoleText) elements.friendYourRoleText.textContent = state.friendRole ? friendRoleLabel(state.friendRole) : "---";
-      if (elements.friendTurnText) elements.friendTurnText.textContent = game?.turn ? friendRoleLabel(game.turn) : "---";
-      if (game?.started) syncFriendHandSelections(game);
-      if (elements.friendSelectHint) {
-        elements.friendSelectHint.textContent = state.friendPendingRapidFire
-          ? (state.friendPendingRapidFire.stage === "target" ? "乱射：攻撃する相手の手をタップ" : "乱射：捨てるカードを手札からタップ")
-          : state.friendPendingDiscardAction
-            ? `${state.friendPendingDiscardAction.label || "カード効果"}：捨てるカードを手札からタップ`
-            : state.friendPendingTapAction
-              ? friendPendingMessage()
-              : "攻撃・分ける・カードを選んで行動してください。";
-      }
-      renderFriendHandCards(game);
-      handleFriendFx(game);
-
-      const hostReady = !!state.friendRoomData?.hostReady;
-      const guestReady = !!state.friendRoomData?.guestReady;
-      const bothReady = hostReady && guestReady;
-      const isHost = state.friendRole === "host";
-
-      elements.friendStartGameBtn.disabled = !isHost || !bothReady || !!game?.started;
-
-      if (!game?.started) {
-        const text = bothReady
-          ? (isHost ? "2人とも準備完了です。ホストはPVP試合を開始できます。" : "2人とも準備完了です。ホストの開始を待っています。")
-          : "まだ試合は始まっていません。2人とも準備完了すると開始できます。";
-        elements.friendGameStatus.textContent = text;
-        if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
-        elements.friendAttackBtn.disabled = true;
-        elements.friendSplitBtn.disabled = true;
-        if (elements.friendConfirmSplitBtn) elements.friendConfirmSplitBtn.disabled = true;
-        if (elements.friendOwnState) elements.friendOwnState.textContent = "待機中";
-        if (elements.friendOpponentState) elements.friendOpponentState.textContent = "待機中";
-        return;
-      }
-
-      if (game.winner) {
-        const text = `${game.winner === state.friendRole ? "あなたの勝ちです！" : "相手の勝ちです。"}`;
-        elements.friendGameStatus.textContent = text;
-        if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
-        elements.friendAttackBtn.disabled = true;
-        elements.friendSplitBtn.disabled = true;
-        if (elements.friendConfirmSplitBtn) elements.friendConfirmSplitBtn.disabled = true;
-        if (elements.friendOwnState) elements.friendOwnState.textContent = "待機中";
-        if (elements.friendOpponentState) elements.friendOpponentState.textContent = "待機中";
-        return;
-      }
-
-      const myTurn = friendCanAct(game);
-      const usedText = (game[state.friendRole]?.cardPlayed) ? "カード使用済み。攻撃か分けるでターンを進めてください。" : "カード使用、攻撃、分けるができます。";
-      const text = myTurn ? `あなたの番です。${usedText}` : "相手の番です。相手の行動を待っています。";
-      elements.friendGameStatus.textContent = text;
-      if (elements.friendBattleStatus) elements.friendBattleStatus.textContent = text;
-      elements.friendAttackBtn.disabled = !myTurn;
-      elements.friendSplitBtn.disabled = !myTurn;
-      if (elements.friendConfirmSplitBtn) elements.friendConfirmSplitBtn.disabled = !myTurn;
-      if (elements.friendOwnState) elements.friendOwnState.textContent = myTurn ? "あなたの番です" : "相手の行動を待っています";
-      if (elements.friendOpponentState) elements.friendOpponentState.textContent = myTurn ? "待機中" : "相手の番です";
-      if (elements.friendMessage) {
-        elements.friendMessage.textContent = state.friendPendingRapidFire
-          ? "乱射：弾として捨てるカードを手札から選んでください。"
-          : state.friendPendingDiscardAction
-            ? `${state.friendPendingDiscardAction.label || "カード効果"}：捨てるカードを手札から選んでください。`
-            : state.friendPendingTapAction
-              ? friendPendingMessage()
-              : myTurn
-                ? "攻撃する場合は「攻撃」を押し、自分の手、相手の手の順にタップしてください。カードも手札から直接使えます。"
-                : "相手の番です。相手の行動が同期されるまでお待ちください。";
-      }
-
-      if (state.currentScreen === "friendLobby" && game.started && !game.winner) {
-        showScreen("friendBattle");
-      }
-    }
-
-    async function updateFriendGame(updater) {
-      const fb = firebaseApi();
-      if (!fb || !state.friendRoomId) return;
-      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      const snapshot = await fb.getDoc(roomRef);
-      if (!snapshot.exists()) {
-        elements.friendLobbyMessage.textContent = "部屋が見つかりません。";
-        return;
-      }
-      const data = snapshot.data();
-      const next = updater(data);
-      if (!next) return;
-
-      if (next.game && !next.game.fx) {
-        const beforeLogs = Array.isArray(data.game?.log) ? data.game.log : [];
-        const afterLogs = Array.isArray(next.game.log) ? next.game.log : [];
-        // ログは最大30件で先頭が押し出されるため、単純なlength差では新規ログを取れない。
-        // beforeの末尾とafterの先頭が一致する最大オーバーラップを探す。
-        let overlap = 0;
-        const maxOverlap = Math.min(beforeLogs.length, afterLogs.length);
-        for (let size = maxOverlap; size >= 0; size--) {
-          const beforeTail = beforeLogs.slice(beforeLogs.length - size);
-          const afterHead = afterLogs.slice(0, size);
-          if (beforeTail.every((entry, i) => entry === afterHead[i])) { overlap = size; break; }
-        }
-        const addedLogs = afterLogs.slice(overlap);
-        const candidates = addedLogs.length ? addedLogs : afterLogs.slice(-8);
-        let cardMatch = null;
-        for (let i = candidates.length - 1; i >= 0; i--) {
-          const match = String(candidates[i] || "").match(/(ホスト|ゲスト)：「([^」]+)」を使用/);
-          if (match) { cardMatch = match; break; }
-        }
-        if (cardMatch) {
-          next.game.fx = makeFriendFx("card", {
-            role: cardMatch[1] === "ホスト" ? "host" : "guest",
-            cardName: cardMatch[2],
-            detail: `${cardMatch[1]}が使用`
-          });
-        }
-      }
-
-      await fb.setDoc(roomRef, {
-        ...next,
-        updatedAt: fb.serverTimestamp()
-      }, { merge: true });
-
-      // スマホ環境でonSnapshotの反映が遅れる場合に備え、書き込み直後にも再取得して画面更新する。
-      try {
-        const updated = await fb.getDoc(roomRef);
-        if (updated.exists()) {
-          state.friendRoomData = updated.data();
-          updateFriendLobbyView(state.friendRoomData);
-        }
-      } catch (_) {}
-    }
-
-    async function startFriendSimpleGame() {
-      if (state.friendRole !== "host") {
-        elements.friendLobbyMessage.textContent = "PVP試合を開始できるのはホストだけです。";
-        return;
-      }
-      await updateFriendGame((data) => {
-        if (!data.hostReady || !data.guestReady) {
-          elements.friendLobbyMessage.textContent = "2人とも準備完了してから開始してください。";
-          return null;
-        }
-        return {
-          status: "playing",
-          game: emptyFriendGameState(data.hostDeck || null, data.guestDeck || null)
-        };
-      });
-      showScreen("friendBattle");
-    }
-
-    function takeCardFromDeck(side, predicate) {
-      const deck = [...(side.deck || [])];
-      const index = deck.findIndex(predicate);
-      if (index < 0) return { side, found: null };
-      const [found] = deck.splice(index, 1);
-      return { side: { ...side, deck, hand: [...(side.hand || []), found] }, found };
-    }
-
-
-    function takeCardFromDiscard(side, predicate) {
-      const discard = [...(side.discard || [])];
-      const index = discard.findIndex(predicate);
-      if (index < 0) return { side, found: null };
-      const [found] = discard.splice(index, 1);
-      return { side: { ...side, discard, hand: [...(side.hand || []), found] }, found };
-    }
-
-    function takeCardFromDeckOrDiscard(side, predicate) {
-      const fromDeck = takeCardFromDeck(side, predicate);
-      if (fromDeck.found) return fromDeck;
-      return takeCardFromDiscard(fromDeck.side, predicate);
-    }
-
-
-    function friendDiscardRandomHandCard(side) {
-      const next = { ...side, hand: [...(side.hand || [])], discard: [...(side.discard || [])] };
-      if (!next.hand.length) return { side: next, discarded: null };
-      const index = Math.floor(Math.random() * next.hand.length);
-      const [discarded] = next.hand.splice(index, 1);
-      next.discard.push(discarded);
-      return { side: next, discarded };
-    }
-
-    function friendRemoveOneAttachment(side, hand) {
-      const next = { ...side, attachments: { L: [...friendAttachments(side || {}, "L")], R: [...friendAttachments(side || {}, "R")] } };
-      const list = next.attachments[hand] || [];
-      if (!list.length) return { side: next, removed: null };
-      const removed = list.shift();
-      next.attachments[hand] = list;
-      return { side: next, removed };
-    }
-
-
-
-    function friendSetPendingTapAction(action) {
-      state.friendPendingTapAction = action;
-      state.friendPendingRapidFire = null;
-      renderFriendHandCards(state.friendRoomData?.game);
-      updateFriendGameView(state.friendRoomData?.game);
-    }
-
-    function friendClearPendingTapAction() {
-      state.friendPendingTapAction = null;
-      updateFriendGameView(state.friendRoomData?.game);
-    }
-
-    function friendPendingMessage() {
-      const a = state.friendPendingTapAction;
-      if (!a) return "";
-      if (a.type === "attackFrom") return "攻撃：自分の攻撃する手をタップ";
-      if (a.type === "attackTo") return "攻撃：攻撃する相手の手をタップ";
-      if (a.type === "ownHand") return `${a.label || "カード"}：自分の手をタップ`;
-      if (a.type === "opponentHand") return `${a.label || "カード"}：相手の手をタップ`;
-      if (a.type === "equalOwn") return "等価交換：まず自分の手をタップ";
-      if (a.type === "equalOpponent") return "等価交換：次に相手の手をタップ";
-      return "対象をタップ";
-    }
-
-    function friendHandleTapAction(side, hand) {
-      const a = state.friendPendingTapAction;
-      if (!a) return false;
-      if (a.type === "attackFrom") {
-        if (side !== "own") return true;
-        state.friendSelectedOwnHand = hand;
-        elements.friendAttackFrom.value = hand;
-        state.friendPendingTapAction = { type: "attackTo", from: hand };
-        updateFriendGameView(state.friendRoomData?.game);
-        return true;
-      }
-      if (a.type === "attackTo") {
-        if (side !== "opponent") return true;
-        state.friendSelectedTargetHand = hand;
-        elements.friendAttackTo.value = hand;
-        const from = a.from || state.friendSelectedOwnHand;
-        state.friendPendingTapAction = null;
-        friendAttackAction(from, hand).catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `攻撃同期エラー：${error.message || error}`;
-        });
-        return true;
-      }
-      if (a.type === "ownHand") {
-        if (side !== "own") return true;
-        state.friendSelectedOwnHand = hand;
-        elements.friendAttackFrom.value = hand;
-        const action = a.action;
-        state.friendPendingTapAction = null;
-        friendResolvePendingCardAction(action, { ownHand: hand }).catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `カード対象エラー：${error.message || error}`;
-        });
-        return true;
-      }
-      if (a.type === "opponentHand") {
-        if (side !== "opponent") return true;
-        state.friendSelectedTargetHand = hand;
-        elements.friendAttackTo.value = hand;
-        const action = a.action;
-        if (action?.kind === "rapidFireTarget") {
-          friendResolveRapidFireTarget(hand).catch(error => {
-            console.error(error);
-            elements.friendLobbyMessage.textContent = `乱射対象エラー：${error.message || error}`;
-          });
-          return true;
-        }
-        state.friendPendingTapAction = null;
-        friendResolvePendingCardAction(action, { enemyHand: hand }).catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `カード対象エラー：${error.message || error}`;
-        });
-        return true;
-      }
-      if (a.type === "equalOwn") {
-        if (side !== "own") return true;
-        state.friendSelectedOwnHand = hand;
-        elements.friendAttackFrom.value = hand;
-        state.friendPendingTapAction = { ...a, type: "equalOpponent", ownHand: hand };
-        updateFriendGameView(state.friendRoomData?.game);
-        return true;
-      }
-      if (a.type === "equalOpponent") {
-        if (side !== "opponent") return true;
-        state.friendSelectedTargetHand = hand;
-        elements.friendAttackTo.value = hand;
-        const action = a.action;
-        const ownHand = a.ownHand;
-        state.friendPendingTapAction = null;
-        friendResolvePendingCardAction(action, { ownHand, enemyHand: hand }).catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `カード対象エラー：${error.message || error}`;
-        });
-        return true;
-      }
-      return false;
-    }
-
-
-    function showFriendCardBurst(cardName, detail = "") {
-      const el = elements.friendCardBurst;
-      if (!el) return;
-      el.innerHTML = `<strong>${cardName}</strong>${detail ? `<span>${detail}</span>` : ""}`;
-      el.classList.remove("show");
-      void el.offsetWidth;
-      el.classList.add("show");
-      window.setTimeout(() => el.classList.remove("show"), 1400);
-    }
-
-    function friendCardByName(cardName) {
-      return Object.values(CARD_LIBRARY).find(card => card?.name === cardName) || null;
-    }
-
-    let friendPopupTimer = null;
-    function showFriendUnifiedCardPopup(role, cardName, detail = "") {
-      if (!elements.overlay || !elements.popupCard || !elements.popupUser || !elements.popupName || !elements.popupText) return;
-      const card = friendCardByName(cardName);
-      const isOwn = role === state.friendRole;
-      const ownerLabel = isOwn ? "あなた" : "相手";
-
-      if (friendPopupTimer) {
-        clearTimeout(friendPopupTimer);
-        friendPopupTimer = null;
-      }
-
-      elements.popupCard.className = "popup-card friend-card-popup";
-      elements.popupUser.className = `popup-user ${isOwn ? "friend-own-user" : "friend-opponent-user"}`;
-      elements.popupUser.textContent = `${ownerLabel}が使用`;
-      elements.popupName.textContent = `「${cardName || "カード"}」`;
-      elements.popupText.textContent = card?.text || detail || "カードが使用されました。";
-      elements.overlay.classList.remove("show");
-      void elements.overlay.offsetWidth;
-      elements.overlay.classList.add("show");
-
-      friendPopupTimer = window.setTimeout(() => {
-        elements.overlay.classList.remove("show");
-        friendPopupTimer = null;
-      }, 1500);
-    }
-
-
-    function makeFriendFx(type, payload = {}) {
-      return { id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, type, ...payload };
-    }
-
-    function visibleFriendHandButton(ownerRole, hand) {
-      if (!state.friendRole || !ownerRole) return null;
-      const isOwn = ownerRole === state.friendRole;
-      if (isOwn) return hand === "L" ? elements.friendOwnLeft : elements.friendOwnRight;
-      return hand === "L" ? elements.friendOpponentLeft : elements.friendOpponentRight;
-    }
-
-    function setFriendButtonDisplay(button, value) {
-      if (!button) return;
-      const num = button.querySelector(".fingers");
-      const icons = button.querySelector(".finger-icons");
-      const nextValue = value ?? 0;
-      if (num) num.textContent = String(nextValue);
-      if (icons) icons.textContent = "●".repeat(Math.max(0, nextValue));
-      button.classList.toggle("zero", nextValue <= 0);
-    }
-
-    function animateFriendAttackFx(fx, game) {
-      const source = visibleFriendHandButton(fx.attacker, fx.from);
-      const target = visibleFriendHandButton(fx.defender, fx.to);
-      if (source) {
-        source.classList.remove("attack-source");
-        void source.offsetWidth;
-        source.classList.add("attack-source");
-        window.setTimeout(() => source.classList.remove("attack-source"), 720);
-      }
-      if (target) {
-        target.classList.remove("attack-target", "total-preview");
-        void target.offsetWidth;
-        target.classList.add("attack-target");
-        if (Number(fx.total) >= 5) {
-          window.setTimeout(() => {
-            target.classList.add("total-preview");
-            setFriendButtonDisplay(target, fx.total);
-          }, 180);
-          window.setTimeout(() => {
-            const finalSide = game?.[fx.defender] || {};
-            setFriendButtonDisplay(target, finalSide[fx.to] ?? fx.after);
-            target.classList.remove("total-preview");
-          }, 950);
-        }
-        window.setTimeout(() => target.classList.remove("attack-target"), 720);
-      }
-    }
-
-    function handleFriendFx(game) {
-      const fx = game?.fx;
-      if (!fx || state.friendLastFxId === fx.id) return;
-      state.friendLastFxId = fx.id;
-
-      if (fx.type === "card") {
-        showFriendUnifiedCardPopup(fx.role, fx.cardName || "カード", fx.detail || "");
-      }
-      if (fx.type === "discardEffect") {
-        showFriendCardBurst(fx.cardName || "追加効果", fx.detail || "");
-      }
-      if (fx.type === "attack") {
-        showFriendCardBurst("攻撃", `${friendRoleLabel(fx.attacker)}：${fx.from === "L" ? "左" : "右"} → ${fx.to === "L" ? "左" : "右"}`);
-        animateFriendAttackFx(fx, game);
-      }
-    }
-
-    function applyFriendRapidFire(game, role, bulletIndex, targetHand, logsPrefix = []) {
-      const opp = friendRoleOpponent(role);
-      let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
-      let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
-      const target = targetHand || state.friendPendingRapidFire?.target;
-      const logs = [...logsPrefix];
-      let discardFx = null;
-
-      if (!me.hand.length) {
-        logs.push("捨てる手札がないため乱射は不発。");
-        return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-      }
-      if ((enemy[target] || 0) <= 0) {
-        logs.push("対象が0なので乱射は不発。");
-        return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-      }
-
-      const safeIndex = Math.max(0, Math.min(me.hand.length - 1, Number(bulletIndex) || 0));
-      const [bulletId] = me.hand.splice(safeIndex, 1);
-      const bullet = friendCardInfo(bulletId);
-      me.discard.push(bulletId);
-
-      let damage = Number(bullet.cost) || 0;
-      if (bullet.bullet) damage += 1;
-
-      if (bulletId === "logicCrusherBullet") {
-        logs.push("ロジックアトリエ：選択中の相手の手を0にした。");
-        showFriendCardBurst("ロジックアトリエ", "相手の手を0にした");
-        discardFx = makeFriendFx("discardEffect", { role, cardName: "ロジックアトリエ", detail: "相手の手を0にした" });
-        enemy[target] = 0;
-      } else {
-        damage = friendApplyGuard(enemy, target, Math.max(1, damage), logs);
-        const before = enemy[target];
-        const total = before + damage;
-        enemy[target] = friendWrap(total);
-        logs.push(`乱射：弾「${bullet.name}」を捨て、相手の${target === "L" ? "左" : "右"}に${damage}。${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
-      }
-
-      if (bulletId === "accelBullet") {
-        me = drawFriendCard({ ...game, [role]: me }, role, 1);
-        logs.push("加速弾：1枚引いた。");
-        showFriendCardBurst("加速弾", "1枚引いた");
-        discardFx = makeFriendFx("discardEffect", { role, cardName: "加速弾", detail: "1枚引いた" });
-      }
-
-      if (bulletId === "specialBullet") {
-        const result = friendDiscardRandomHandCard(enemy);
-        enemy = result.side;
-        logs.push(result.discarded ? `特殊弾：相手の手札「${friendCardInfo(result.discarded).name}」を捨てた。` : "特殊弾：相手の手札がなかった。");
-        const detail = result.discarded ? `相手の「${friendCardInfo(result.discarded).name}」を捨てた` : "相手の手札がなかった";
-        showFriendCardBurst("特殊弾", detail);
-        discardFx = makeFriendFx("discardEffect", { role, cardName: "特殊弾", detail });
-      }
-
-      if (bulletId === "pierceBullet") {
-        const result = friendRemoveOneAttachment(enemy, target);
-        enemy = result.side;
-        logs.push(result.removed ? `貫通弾：相手の設置カード「${friendCardInfo(result.removed).name}」を捨てた。` : "貫通弾：相手の設置カードがなかった。");
-        const detail = result.removed ? `「${friendCardInfo(result.removed).name}」を破壊` : "設置カードなし";
-        showFriendCardBurst("貫通弾", detail);
-        discardFx = makeFriendFx("discardEffect", { role, cardName: "貫通弾", detail });
-      }
-
-      enemy = friendClearAttachmentsIfDead(enemy);
-      const winner = friendIsDead(enemy) ? role : null;
-      const nextGame = { ...game, [role]: me, [opp]: enemy, winner, fx: discardFx || makeFriendFx("card", { role, cardName: "乱射", detail: `弾「${bullet.name}」を捨てた` }), log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
-      return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
-    }
-
-    async function friendChooseRapidFireAmmo(bulletIndex) {
-      if (!state.friendPendingRapidFire || state.friendPendingRapidFire.stage !== "discard") return;
-      const game = state.friendRoomData?.game;
-      if (!friendCanAct(game)) return;
-      const hand = game?.[state.friendRole]?.hand || [];
-      if (!hand.length) return;
-      const safeIndex = Math.max(0, Math.min(hand.length - 1, Number(bulletIndex) || 0));
-      state.friendPendingRapidFire = {
-        ...state.friendPendingRapidFire,
-        bulletIndex: safeIndex,
-        stage: "target"
-      };
-      state.friendPendingTapAction = { type: "opponentHand", action: { kind: "rapidFireTarget" }, label: "乱射" };
-      updateFriendGameView(game);
-    }
-
-    async function friendResolveRapidFireTarget(targetHand) {
-      const pending = state.friendPendingRapidFire;
-      if (!pending || pending.stage !== "target" || pending.bulletIndex === null) return;
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const enemy = game?.[friendRoleOpponent(state.friendRole)] || {};
-        if ((enemy[targetHand] || 0) <= 0) {
-          elements.friendLobbyMessage.textContent = "乱射では0の手を対象にできません。別の手を選んでください。";
-          return null;
-        }
-        const result = applyFriendRapidFire(game, state.friendRole, pending.bulletIndex, targetHand, []);
-        state.friendPendingRapidFire = null;
-        state.friendPendingTapAction = null;
-        return result;
-      });
-    }
-
-    async function friendCancelRapidFire() {
-      if (!state.friendPendingRapidFire) return;
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        let me = { ...game[role], hand: [...(game[role].hand || [])], discard: [...(game[role].discard || [])] };
-        me.hand.push("rapidFire");
-        const discardIndex = me.discard.lastIndexOf("rapidFire");
-        if (discardIndex >= 0) me.discard.splice(discardIndex, 1);
-        me.cardPlayed = false;
-        state.friendPendingRapidFire = null;
-        return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：乱射をキャンセル。`].slice(-30) } };
-      });
-    }
-
-
-
-    async function friendResolveDiscardAction(discardIndex) {
-      const pending = state.friendPendingDiscardAction;
-      if (!pending) return;
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        const opp = friendRoleOpponent(role);
-        let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
-        let logs = [`${friendRoleLabel(role)}：「${pending.label || friendCardInfo(pending.cardId).name}」のため手札を捨てた。`];
-
-        if (!me.hand.length) {
-          logs.push("捨てる手札がなかったため不発。");
-          state.friendPendingDiscardAction = null;
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        const safeIndex = Math.max(0, Math.min(me.hand.length - 1, Number(discardIndex) || 0));
-        const [discarded] = me.hand.splice(safeIndex, 1);
-        me.discard.push(discarded);
-        logs.push(`「${friendCardInfo(discarded).name}」を捨てた。`);
-
-        if (pending.kind === "calm") {
-          const tempGame = { ...game, [role]: me };
-          me = drawFriendCard(tempGame, role, 2);
-          logs.push("2枚引いた。");
-          state.friendPendingDiscardAction = null;
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (pending.kind === "repair") {
-          const zeroHand = pending.zeroHand;
-          if (!zeroHand || me[zeroHand] !== 0) {
-            logs.push("復活対象の手が0ではなくなったため不発。");
-            state.friendPendingDiscardAction = null;
-            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          me[zeroHand] = 1;
-          logs.push(`${zeroHand === "L" ? "左" : "右"}手を1で復活。`);
-          state.friendPendingDiscardAction = null;
-          return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
-        }
-
-        state.friendPendingDiscardAction = null;
-        return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-      });
-    }
-
-    async function friendCancelDiscardAction() {
-      const pending = state.friendPendingDiscardAction;
-      if (!pending) return;
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        let me = { ...game[role], hand: [...(game[role].hand || [])], discard: [...(game[role].discard || [])] };
-        me.hand.push(pending.cardId);
-        const discardIndex = me.discard.lastIndexOf(pending.cardId);
-        if (discardIndex >= 0) me.discard.splice(discardIndex, 1);
-        me.cardPlayed = false;
-        state.friendPendingDiscardAction = null;
-        return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：「${pending.label || friendCardInfo(pending.cardId).name}」をキャンセル。`].slice(-30) } };
-      });
-    }
-
-    async function friendResolvePendingCardAction(action, target) {
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        const opp = friendRoleOpponent(role);
-        if (state.friendPendingTapAction || state.friendPendingRapidFire || state.friendPendingDiscardAction) {
-          elements.friendLobbyMessage.textContent = "先に現在の対象選択を完了するかキャンセルしてください。";
-          return null;
-        }
-        let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
-        let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
-        const cardId = action.cardId;
-        const card = friendCardInfo(cardId);
-        const logs = [`${friendRoleLabel(role)}：「${card.name}」の対象を選択。`];
-
-        if (action.kind === "snipe") {
-          const hand = target.enemyHand;
-          if ((enemy[hand] || 0) <= 0) {
-            logs.push("対象が0なので不発。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          const before = enemy[hand];
-          enemy[hand] = friendWrap(before + 1);
-          enemy = friendClearAttachmentsIfDead(enemy);
-          logs.push(`狙撃：相手の${hand === "L" ? "左" : "右"} ${before}→${enemy[hand]}。`);
-          const winner = friendIsDead(enemy) ? role : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
-          return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
-        }
-
-        if (action.kind === "randomDice") {
-          const hand = target.ownHand;
-          if ((me[hand] || 0) <= 0) {
-            logs.push("対象が0なので不発。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          const before = me[hand];
-          me[hand] = Math.floor(Math.random() * 5);
-          me = friendClearAttachmentsIfDead(me);
-          logs.push(`ランダムダイス：自分の${hand === "L" ? "左" : "右"} ${before}→${me[hand]}。`);
-          const winner = friendIsDead(me) ? opp : null;
-          return { game: { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) } };
-        }
-
-        if (action.kind === "adjust") {
-          const from = target.ownHand;
-          const to = from === "L" ? "R" : "L";
-          if ((me[from] || 0) <= 0) {
-            logs.push("選択した手が0なので不発。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          me[from] -= 1;
-          me[to] = friendWrap((me[to] || 0) + 1);
-          me = friendClearAttachmentsIfDead(me);
-          logs.push(`整える：自分の${from === "L" ? "左" : "右"}からもう片方へ1本移した。`);
-          const winner = friendIsDead(me) ? opp : null;
-          return { game: { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) } };
-        }
-
-        if (action.kind === "equalTrade") {
-          const ownHand = target.ownHand;
-          const enemyHand = target.enemyHand;
-          if ((me[ownHand] || 0) <= 0 || (enemy[enemyHand] || 0) < 2) {
-            logs.push("条件を満たさないため不発。自分は1以上、相手は2以上が必要。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          me[ownHand] -= 1;
-          enemy[enemyHand] -= 1;
-          me = friendClearAttachmentsIfDead(me);
-          enemy = friendClearAttachmentsIfDead(enemy);
-          logs.push("等価交換：選択した自分の手と相手の手を-1。");
-          const winner = friendIsDead(enemy) ? role : friendIsDead(me) ? opp : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(winner)}の勝ち。`] : [])].slice(-30) };
-          return { game: winner ? nextGame : nextGame };
-        }
-
-        if (action.kind === "blessing") {
-          const hand = target.ownHand;
-          if (!friendCanAddAttachment(me, hand, cardId)) {
-            logs.push("その手には加護を置けません。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          me = friendAddAttachment(me, hand, cardId);
-          logs.push(`${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (action.kind === "curse") {
-          const hand = target.enemyHand;
-          if (!friendCanAddAttachment(enemy, hand, cardId)) {
-            logs.push("その相手の手には呪縛を置けません。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          enemy = friendAddAttachment(enemy, hand, cardId);
-          logs.push(`相手の${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        return null;
-      });
-    }
-
-    async function friendUseCardAction(index) {
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        const opp = friendRoleOpponent(role);
-        if (state.friendPendingTapAction || state.friendPendingRapidFire || state.friendPendingDiscardAction) {
-          elements.friendLobbyMessage.textContent = "先に現在の対象選択を完了するかキャンセルしてください。";
-          return null;
-        }
-        let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
-        let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
-        if (me.cardPlayed) {
-          elements.friendLobbyMessage.textContent = "このターンはすでにカードを使っています。";
-          return null;
-        }
-        const rawCardId = me.hand[index];
-        const cardId = normalizePvpCardId(rawCardId);
-        if (cardId !== rawCardId) me.hand[index] = cardId;
-        const card = friendCardInfo(cardId);
-        if (me.costLimit !== null && me.costLimit !== undefined && Number(card.cost) > Number(me.costLimit)) {
-          elements.friendLobbyMessage.textContent = `倹約令中です。コスト${me.costLimit}以下のカードしか使えません。`;
-          return null;
-        }
-        if (!PVP_SUPPORTED_CARD_SET.has(normalizePvpCardId(cardId)) || !CARD_LIBRARY[normalizePvpCardId(cardId)]) {
-          me.hand.splice(index, 1);
-          me.discard.push(cardId);
-          me.cardPlayed = true;
-          return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：未対応カード「${card.name}」を捨てました。`].slice(-30) } };
-        }
-        me.hand.splice(index, 1);
-        me.discard.push(cardId);
-        me.cardPlayed = true;
-        let logs = [`${friendRoleLabel(role)}：「${card.name}」を使用。`];
-
-        if (cardId === "insight" || cardId === "nekodamashi") {
-          let tempGame = { ...game, [role]: me };
-          tempGame[role] = drawFriendCard(tempGame, role, 1);
-          logs.push("1枚引いた。");
-          return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "calmDown") {
-          if (me.hand.length <= 0) {
-            logs.push("追加で捨てる手札がないため、1枚だけ引いた。");
-            let tempGame = { ...game, [role]: me };
-            tempGame[role] = drawFriendCard(tempGame, role, 1);
-            return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          state.friendPendingDiscardAction = { kind: "calm", cardId, label: "落ち着ける" };
-          logs.push("落ち着ける：捨てるカードを手札からタップしてください。");
-          setTimeout(() => renderFriendHandCards({ ...game, [role]: me, [opp]: enemy }), 0);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "strongHit") {
-          me.attackBonus = (me.attackBonus || 0) + 1;
-          logs.push("このターン次の攻撃+1。");
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "lightHit") {
-          me.attackBonus = (me.attackBonus || 0) - 1;
-          logs.push("このターン次の攻撃-1。");
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "lockSplit") {
-          enemy.noSplit = true;
-          logs.push("次の相手ターン、相手は分ける不可。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "battlePrep") {
-          const result = takeCardFromDeck(me, id => ["insight", "strongHit", "lightHit", "adjust", "equalTrade", "calm"].includes(id));
-          me.deck = result.side.deck;
-          me.hand = result.side.hand;
-          logs.push(result.found ? `山札から「${friendCardInfo(result.found).name}」を手札へ。` : "対象カードが山札になかった。");
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "bulletSupply") {
-          const result = takeCardFromDeck(me, id => !!friendCardInfo(id).bullet);
-          me.deck = result.side.deck;
-          me.hand = result.side.hand;
-          logs.push(result.found ? `山札から弾「${friendCardInfo(result.found).name}」を手札へ。` : "弾カードが山札になかった。");
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "randomDice") {
-          friendSetPendingTapAction({ type: "ownHand", action: { kind: "randomDice", cardId }, label: "ランダムダイス" });
-          logs.push("ランダムダイス：対象にする自分の手をタップしてください。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "equalTrade") {
-          friendSetPendingTapAction({ type: "equalOwn", action: { kind: "equalTrade", cardId }, label: "等価交換" });
-          logs.push("等価交換：まず自分の手をタップしてください。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "calm") {
-          friendSetPendingTapAction({ type: "ownHand", action: { kind: "adjust", cardId }, label: "整える" });
-          logs.push("整える：1本移す元の自分の手をタップしてください。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "repair") {
-          const zeroHand = me.L === 0 ? "L" : me.R === 0 ? "R" : null;
-          if (!zeroHand) {
-            logs.push("0の手がないため不発。");
-            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          if (me.hand.length <= 0) {
-            logs.push("追加で捨てる手札がないため不発。");
-            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          state.friendPendingDiscardAction = { kind: "repair", cardId, label: "補修", zeroHand };
-          logs.push(`補修：捨てるカードを手札からタップしてください。対象は${zeroHand === "L" ? "左" : "右"}手。`);
-          setTimeout(() => renderFriendHandCards({ ...game, [role]: me, [opp]: enemy }), 0);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "rapidFire") {
-          if (!me.hand.length) {
-            logs.push("捨てる手札がないため不発。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          state.friendPendingRapidFire = { role, bulletIndex: null, target: null, stage: "discard" };
-          logs.push("乱射：まず弾薬として捨てるカードを手札からタップしてください。");
-          setTimeout(() => renderFriendHandCards({ ...game, [role]: me, [opp]: enemy }), 0);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (card.blessing) {
-          friendSetPendingTapAction({ type: "ownHand", action: { kind: "blessing", cardId }, label: card.name });
-          logs.push(`${card.name}：置く自分の手をタップしてください。`);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (card.curse) {
-          friendSetPendingTapAction({ type: "opponentHand", action: { kind: "curse", cardId }, label: card.name });
-          logs.push(`${card.name}：置く相手の手をタップしてください。`);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "scout") {
-          logs.push(`相手の手札は${enemy.hand.length}枚。`);
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "thriftLaw") {
-          enemy.costLimit = 2;
-          logs.push("次の相手ターン、相手はコスト2以下のカードしか使えない。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "doubleDouble") {
-          if (me.L === 2 && me.R === 2) {
-            me.extraAction = true;
-            logs.push("2-2なので、次の攻撃/分ける後に追加行動できる。");
-          } else {
-            logs.push("自分が2-2ではないため不発。");
-          }
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "acceleration") {
-          me.extraDrawNext = (me.extraDrawNext || 0) + 1;
-          logs.push("次の自分ターン開始時、追加で1枚引く。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "breakthrough") {
-          me.attackBonus = (me.attackBonus || 0) + 1;
-          logs.push("簡易版：このターン次の攻撃+1。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "focusedShot") {
-          const result = takeCardFromDeckOrDiscard(me, id => id === "snipe");
-          me.deck = result.side.deck;
-          me.discard = result.side.discard;
-          me.hand = result.side.hand;
-          logs.push(result.found ? "山札/捨て札から「狙撃」を手札へ。" : "狙撃が見つからなかった。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "reload") {
-          const result = takeCardFromDiscard(me, id => id === "rapidFire");
-          me.discard = result.side.discard;
-          me.hand = result.side.hand;
-          logs.push(result.found ? "捨て札から「乱射」を手札へ。" : "捨て札に乱射がなかった。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (cardId === "passCard") {
-          return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
-        }
-
-        if (cardId === "snipe") {
-          friendSetPendingTapAction({ type: "opponentHand", action: { kind: "snipe", cardId }, label: "狙撃" });
-          logs.push("狙撃：攻撃したい相手の手をタップしてください。");
-          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-        }
-
-        if (me.noSplit) {
-          elements.friendLobbyMessage.textContent = "固定の効果で、このターンは分けられません。";
-          return null;
-        }
-
-        const left = Math.max(0, Math.min(4, Number(elements.friendSplitLeft.value) || 0));
-        const right = Math.max(0, Math.min(4, Number(elements.friendSplitRight.value) || 0));
-
-        if (left <= 0 || right <= 0) {
-          elements.friendLobbyMessage.textContent = "通常の分けるでは片手0にできません。";
-          return null;
-        }
-        if (left === me.L && right === me.R) {
-          elements.friendLobbyMessage.textContent = "同じ形には分けられません。";
-          return null;
-        }
-        if (left + right !== me.L + me.R) {
-          elements.friendLobbyMessage.textContent = "左右の合計が変わらないようにしてください。";
-          return null;
-        }
-
-        const nextLog = [...(game.log || []), `${friendRoleLabel(role)}：分ける。${me.L}-${me.R} → ${left}-${right}`].slice(-30);
-        me.L = left;
-        me.R = right;
-        me.noSplit = false;
-        const nextGame = {
-          ...game,
-          [role]: me,
-          log: nextLog
-        };
-        return { game: friendEndTurn(nextGame, role, []) };
-      });
-    }
-
-
-    async function friendAttackAction(fromOverride = null, toOverride = null) {
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        const opp = friendRoleOpponent(role);
-        const from = fromOverride || elements.friendAttackFrom.value;
-        const to = toOverride || elements.friendAttackTo.value;
-        let me = { ...game[role], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
-        let enemy = { ...game[opp], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
-        if ((me[from] || 0) <= 0 || (enemy[to] || 0) <= 0) return null;
-
-        const logs = [];
-        const basePower = me[from];
-        let bonus = me.attackBonus || 0;
-        if (friendHasAttachment(me, from, "powerBlessing")) {
-          bonus += 1;
-          logs.push("力の加護：攻撃+1。");
-        }
-        if (friendHasAttachment(me, from, "slowCurse")) {
-          bonus -= 1;
-          logs.push("鈍重の呪縛：攻撃-1。");
-        }
-        if (friendHasAttachment(me, from, "immutableCurse") && bonus > 0) {
-          logs.push("不変の呪縛：攻撃増加を無効化。");
-          bonus = Math.min(0, bonus);
-        }
-        let power = Math.max(1, basePower + bonus);
-        power = friendApplyGuard(enemy, to, power, logs);
-
-        const before = enemy[to];
-        const total = before + power;
-        enemy[to] = friendWrap(total);
-        me.attackBonus = 0;
-
-        let afterAttackDraw = false;
-        if (friendHasAttachment(me, from, "growthBlessing") && total === 5) {
-          afterAttackDraw = true;
-          logs.push("成長：ちょうど5にしたので1枚引く。");
-        }
-
-        enemy = friendClearAttachmentsIfDead(enemy);
-        me = friendClearAttachmentsIfDead(me);
-        if (afterAttackDraw) me = drawFriendCard({ ...game, [role]: me }, role, 1);
-
-        const nextLog = [...(game.log || []), ...logs, `${friendRoleLabel(role)}：${from === "L" ? "左" : "右"}${basePower}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ""}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-30);
-        const winner = friendIsDead(enemy) ? role : null;
-        const attackFx = makeFriendFx("attack", {
-          attacker: role,
-          defender: opp,
-          from,
-          to,
-          before,
-          total,
-          after: enemy[to],
-          power
-        });
-        const nextGame = {
-          ...game,
-          [role]: me,
-          [opp]: enemy,
-          winner,
-          fx: attackFx,
-          log: winner ? [...nextLog, `${friendRoleLabel(role)}の勝ち。`].slice(-30) : nextLog
-        };
-        return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
-      });
-    }
-
-    async function friendSplitAction() {
-      await updateFriendGame((data) => {
-        const game = data.game;
-        if (!friendCanAct(game)) return null;
-        const role = state.friendRole;
-        let me = { ...game[role], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
-
-        if (me.noSplit) {
-          elements.friendLobbyMessage.textContent = "固定の効果で、このターンは分けられません。";
-          return null;
-        }
-
-        const left = Math.max(0, Math.min(4, Number(elements.friendSplitLeft.value) || 0));
-        const right = Math.max(0, Math.min(4, Number(elements.friendSplitRight.value) || 0));
-
-        if (left <= 0 || right <= 0) {
-          elements.friendLobbyMessage.textContent = "通常の分けるでは片手0にできません。";
-          return null;
-        }
-        if (left === me.L && right === me.R) {
-          elements.friendLobbyMessage.textContent = "同じ形には分けられません。";
-          return null;
-        }
-        if (left + right !== me.L + me.R) {
-          elements.friendLobbyMessage.textContent = "左右の合計が変わらないようにしてください。";
-          return null;
-        }
-
-        const nextLog = [...(game.log || []), `${friendRoleLabel(role)}：分ける。${me.L}-${me.R} → ${left}-${right}`].slice(-30);
-        me.L = left;
-        me.R = right;
-        me.noSplit = false;
-        const nextGame = {
-          ...game,
-          [role]: me,
-          log: nextLog
-        };
-        return { game: friendEndTurn(nextGame, role, []) };
-      });
-    }
-
     function updateFriendLobbyView(data = state.friendRoomData) {
       const role = state.friendRole;
       const roleLabel = role === "host" ? "あなた：ホスト" : role === "guest" ? "あなた：ゲスト" : "あなた：未入室";
@@ -2957,7 +1407,6 @@ const CARD_LIBRARY = {
         elements.friendReadyText.textContent = "2人が入室して準備完了すると「試合開始できます」と表示されます。";
         elements.friendReadyBtn.disabled = true;
         elements.friendUnreadyBtn.disabled = true;
-        updateFriendGameView(null);
         return;
       }
 
@@ -2975,18 +1424,22 @@ const CARD_LIBRARY = {
 
       elements.friendReadyBtn.disabled = !bothJoined || (role === "host" ? hostReady : guestReady);
       elements.friendUnreadyBtn.disabled = !(role === "host" ? hostReady : guestReady);
+      const hostDeckOk = !!data?.hostDeckCounts;
+      const guestDeckOk = !!data?.guestDeckCounts;
+      if (elements.friendStartBattleBtn) {
+        elements.friendStartBattleBtn.disabled = !(role === "host" && bothReady && hostDeckOk && guestDeckOk);
+        elements.friendStartBattleBtn.textContent = role === "host" ? "共通画面で試合開始" : "ホストの試合開始を待っています";
+      }
 
       if (!bothJoined) {
         elements.friendReadyText.textContent = role === "host"
           ? "相手の入室を待っています。部屋URLを友達に送ってください。"
           : "ホスト側の入室情報を確認中です。";
       } else if (bothReady) {
-        elements.friendReadyText.textContent = data?.game?.started ? "簡易試合中です。" : "2人とも準備完了です。ホストが簡易試合を開始できます。";
+        elements.friendReadyText.textContent = role === "host" ? "2人とも準備完了です。共通戦闘画面で試合を開始できます。" : "2人とも準備完了です。ホストの試合開始を待っています。";
       } else {
         elements.friendReadyText.textContent = "2人そろいました。準備完了を押してください。";
       }
-
-      updateFriendGameView(data?.game);
     }
 
     function subscribeFriendRoom(roomId) {
@@ -3011,39 +1464,24 @@ const CARD_LIBRARY = {
         state.friendRoomData = data;
         elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
         updateFriendLobbyView(data);
+        if (data?.status === "playing" && data?.match && !state.friendMatchStarted) {
+          enterFriendCommonBattle(data.match);
+        } else if (data?.status === "playing" && data?.match?.state && state.friendMatchStarted) {
+          const revision = Number(data.match.stateRevision || 0);
+          if (revision > state.friendLastAppliedRevision && revision > state.friendSyncRevision) {
+            applyFriendCanonicalSnapshot(data.match.state, revision).catch(error => {
+              console.error("PVP state apply failed", error);
+              setMessage(`オンライン同期エラー：${error.message || error}`);
+            });
+          }
+        }
       }, (error) => {
         console.error(error);
         elements.friendLobbyMessage.textContent = `Firebase同期エラー：${error.message || error}`;
       });
-      startFriendRoomPolling(roomId);
     }
 
-    
-    function startFriendRoomPolling(roomId) {
-      const fb = firebaseApi();
-      if (!fb || !roomId) return;
-      if (state.friendPollTimer) {
-        window.clearInterval(state.friendPollTimer);
-        state.friendPollTimer = null;
-      }
-      state.friendPollTimer = window.setInterval(async () => {
-        if (!state.friendRoomId || state.friendRoomId !== roomId) return;
-        if (!["friendLobby", "friendBattle"].includes(state.currentScreen)) return;
-        try {
-          const roomRef = fb.doc(fb.db, "rooms", roomId);
-          const snapshot = await fb.getDoc(roomRef);
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            state.friendRoomData = data;
-            updateFriendLobbyView(data);
-          }
-        } catch (error) {
-          console.warn("poll failed", error);
-        }
-      }, 2500);
-    }
-
-async function createFriendRoom() {
+    async function createFriendRoom() {
       const fb = firebaseApi();
       if (!fb) {
         elements.friendLobbyMessage.textContent = "Firebaseの読み込み中です。数秒待ってからもう一度押してください。";
@@ -3101,20 +1539,119 @@ async function createFriendRoom() {
     async function setFriendReady(ready) {
       const fb = firebaseApi();
       if (!fb || !state.friendRoomId || !state.friendRole) return;
-      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
-      if (ready && !onlineDeckIsValid(state.onlineDeckCounts)) {
-        elements.friendLobbyMessage.textContent = "PVPデッキが条件を満たしていません。オンラインメニューからPVP用デッキ編集を確認してください。";
-        return;
-      }
       const key = state.friendRole === "host" ? "hostReady" : "guestReady";
-      const deckKey = state.friendRole === "host" ? "hostDeck" : "guestDeck";
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const deckKey = state.friendRole === "host" ? "hostDeckCounts" : "guestDeckCounts";
       await fb.setDoc(roomRef, {
         [key]: ready,
-        [deckKey]: onlineDeckListFromCounts(state.onlineDeckCounts),
+        [deckKey]: ready ? cloneValidDeckCounts(state.deckCounts.human) : null,
         updatedAt: fb.serverTimestamp(),
         status: ready ? "ready-check" : "waiting"
       }, { merge: true });
+    }
+
+    function buildDeckFromSubmittedCounts(counts) {
+      const deck = [];
+      const fixed = cloneValidDeckCounts(counts || {});
+      for (const [cardId, qty] of Object.entries(fixed)) {
+        for (let i = 0; i < qty; i++) deck.push(cardId);
+      }
+      return deck;
+    }
+
+    async function startFriendCommonBattle() {
+      if (state.friendRole !== "host" || !state.friendRoomId) return;
+      const data = state.friendRoomData;
+      if (!data?.hostReady || !data?.guestReady || !data?.hostDeckCounts || !data?.guestDeckCounts) {
+        elements.friendLobbyMessage.textContent = "2人の準備完了とデッキ提出が必要です。";
+        return;
+      }
+      const fb = firebaseApi();
+      if (!fb) return;
+      const hostDeck = shuffle(buildDeckFromSubmittedCounts(data.hostDeckCounts));
+      const guestDeck = shuffle(buildDeckFromSubmittedCounts(data.guestDeckCounts));
+      const initialHost = { L: 1, R: 1, deckCounts: data.hostDeckCounts, deck: hostDeck.slice(3), hand: hostDeck.slice(0, 3), discard: [] };
+      const initialGuest = { L: 1, R: 1, deckCounts: data.guestDeckCounts, deck: guestDeck.slice(3), hand: guestDeck.slice(0, 3), discard: [] };
+      const emptySideState = (side) => ({
+        L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
+        temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false },
+        noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingTerminalEnd: false,
+        costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
+      });
+      const match = {
+        version: 41,
+        createdAtMs: Date.now(),
+        turnSide: "host",
+        turnNumber: 1,
+        host: initialHost,
+        guest: initialGuest,
+        stateRevision: 1,
+        state: {
+          schemaVersion: 1,
+          host: emptySideState(initialHost),
+          guest: emptySideState(initialGuest),
+          turnSide: "host",
+          turnNumber: 1,
+          gameOver: false,
+          log: ["オンライン対戦を開始しました。"],
+          lastAction: null
+        }
+      };
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      await fb.setDoc(roomRef, { status: "playing", match, updatedAt: fb.serverTimestamp() }, { merge: true });
+    }
+
+    function enterFriendCommonBattle(match) {
+      const mine = state.friendRole === "host" ? match.host : match.guest;
+      const other = state.friendRole === "host" ? match.guest : match.host;
+      state.battleMode = "friend";
+      handNames.cpu = "相手";
+      state.friendMatchStarted = true;
+      state.friendMatchId = String(match.createdAtMs || Date.now());
+      state.friendSyncRevision = Number(match.stateRevision || 0);
+      state.friendLastAppliedRevision = Number(match.stateRevision || 0);
+      state.friendLastPublishedSignature = match.state ? JSON.stringify(match.state) : "";
+      state.deckCounts.human = { ...DEFAULT_DECK_COUNTS, ...(mine.deckCounts || {}) };
+      state.deckCounts.cpu = { ...DEFAULT_DECK_COUNTS, ...(other.deckCounts || {}) };
+      state.human = { L: mine.L ?? 1, R: mine.R ?? 1 };
+      state.cpu = { L: other.L ?? 1, R: other.R ?? 1 };
+      state.decks.human = [...(mine.deck || [])];
+      state.decks.cpu = [...(other.deck || [])];
+      state.hands.human = [...(mine.hand || [])];
+      state.hands.cpu = [...(other.hand || [])];
+      state.discard.human = [...(mine.discard || [])];
+      state.discard.cpu = [...(other.discard || [])];
+      state.traps.human = { L: [], R: [] };
+      state.traps.cpu = { L: [], R: [] };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+      state.turn = match.turnSide === state.friendRole ? "human" : "cpu";
+      state.turnNumber = match.turnNumber || 1;
+      state.mode = "attack";
+      state.selectedAttackHand = null;
+      state.animating = false;
+      state.gameOver = false;
+      state.log = ["オンライン共通戦闘画面に入りました。ゲーム状態同期を開始します。"];
+      elements.splitBox.classList.remove("active");
+      clearHighlights();
+      showScreen("battle");
+      if (match.state) {
+        state.friendApplyingRemoteState = true;
+        const snapshot = match.state;
+        applyFriendSideToLocal("human", snapshot[state.friendRole]);
+        applyFriendSideToLocal("cpu", snapshot[otherFriendRole()]);
+        state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
+        state.turnNumber = Number(snapshot.turnNumber || 1);
+        state.gameOver = !!snapshot.gameOver;
+        state.log = [...(snapshot.log || [])];
+        state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
+        state.friendApplyingRemoteState = false;
+      }
+      setMessage(state.turn === "human" ? "あなたの番です。CPU戦と同じ画面・カード処理を使用します。" : "相手の番です。同期を待っています。");
+      render();
+      if (state.turn === "human" && !state.firstTurnStarted.human) {
+        startTurn("human");
+      }
     }
 
     function loadRoomFromUrl() {
@@ -3130,25 +1667,17 @@ async function createFriendRoom() {
 
     function showScreen(screen) {
       state.currentScreen = screen;
-      const showModeMenu = screen === "modeMenu";
       const showMenu = screen === "menu";
-      const showOnlineMenu = screen === "onlineMenu";
-      const showOnlineDeck = screen === "onlineDeck";
       const showBattleSelect = screen === "battleSelect";
       const showFriendLobby = screen === "friendLobby";
-      const showFriendBattle = screen === "friendBattle";
       const showDifficulty = screen === "difficulty";
       const showSettings = screen === "settings";
       const showDeck = screen === "deck";
       const showBattle = screen === "battle";
 
-      elements.modeMenuScreen.classList.toggle("screen-hidden", !showModeMenu);
       elements.menuScreen.classList.toggle("screen-hidden", !showMenu);
-      elements.onlineMenuScreen.classList.toggle("screen-hidden", !showOnlineMenu);
-      elements.onlineDeckScreen.classList.toggle("screen-hidden", !showOnlineDeck);
       elements.battleSelectScreen.classList.toggle("screen-hidden", !showBattleSelect);
       elements.friendLobbyScreen.classList.toggle("screen-hidden", !showFriendLobby);
-      elements.friendBattleScreen.classList.toggle("screen-hidden", !showFriendBattle);
       elements.difficultyScreen.classList.toggle("screen-hidden", !showDifficulty);
       elements.settingsScreen.classList.toggle("screen-hidden", !showSettings);
       elements.deckEditorScreen.classList.toggle("screen-hidden", !showDeck);
@@ -3168,10 +1697,6 @@ async function createFriendRoom() {
         elements.deckBottomBar.classList.add("hidden");
       }
 
-      if (showOnlineDeck) {
-        renderOnlineDeckEditor();
-      }
-
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -3186,6 +1711,7 @@ async function createFriendRoom() {
         return;
       }
       state.battleMode = "cpu";
+      handNames.cpu = "CPU";
       state.cpuDifficulty = difficulty;
       elements.cpuDifficultySelect.value = difficulty;
       showScreen("battle");
@@ -3703,6 +2229,7 @@ function wrapFinger(value) {
     }
 
     function render() {
+      scheduleFriendStatePublish();
       for (const player of ["human", "cpu"]) {
         for (const hand of ["L", "R"]) {
           const value = state[player][hand];
@@ -4842,7 +3369,7 @@ function renderLastAction() {
       checkWin();
 
       if (player === "human") {
-        if (cardId === "calmDown" && state.mode === "moveOne") {
+        if (cardId === "calm" && state.mode === "moveOne") {
           setMessage("「整える」：1本移したい元の手を選んでください。");
         } else if (cardId === "repair" && state.mode === "repairDiscard") {
           setMessage("「補修」：捨てる手札を1枚選んでください。補修後、ターンは終了します。");
@@ -5276,6 +3803,12 @@ async function endTurn() {
 
       if (next === "cpu") {
         state.turn = "cpu";
+        if (state.battleMode === "friend") {
+          setMessage("相手の番です。同期を待っています。");
+          render();
+          await publishFriendStateNow();
+          return;
+        }
         setMessage("CPUの番です。");
         render();
         await delay(450);
@@ -5291,7 +3824,7 @@ async function endTurn() {
     function checkWin() {
       if (isDead("cpu")) {
         state.gameOver = true;
-        setMessage("勝利！ CPUの両手を0にしました。");
+        setMessage(state.battleMode === "friend" ? "勝利！ 相手の両手を0にしました。" : "勝利！ CPUの両手を0にしました。");
         addLog("あなたの勝ち！");
         return true;
       }
@@ -5299,7 +3832,7 @@ async function endTurn() {
       if (isDead("human")) {
         state.gameOver = true;
         setMessage("敗北…。あなたの両手が0になりました。");
-        addLog("CPUの勝ち。");
+        addLog(state.battleMode === "friend" ? "相手の勝ち。" : "CPUの勝ち。");
         return true;
       }
 
@@ -6212,82 +4745,6 @@ async function endTurn() {
       card.addEventListener("click", onHandClick);
     });
 
-    elements.offlineModeBtn.addEventListener("click", () => showScreen("menu"));
-    elements.onlineModeBtn.addEventListener("click", () => showScreen("onlineMenu"));
-    elements.offlineBackModeBtn.addEventListener("click", () => showScreen("modeMenu"));
-    elements.onlineBackModeBtn.addEventListener("click", () => showScreen("modeMenu"));
-    elements.onlineStartBtn.addEventListener("click", () => {
-      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
-      if (!onlineDeckIsValid(state.onlineDeckCounts)) {
-        alert("PVPデッキが無効です。デッキ編集から条件を満たすデッキを作成してください。");
-        return;
-      }
-      showScreen("friendLobby");
-      updateFriendLobbyView();
-    });
-    elements.onlineDeckBtn.addEventListener("click", () => showScreen("onlineDeck"));
-    elements.onlineDeckBackBtn.addEventListener("click", () => showScreen("onlineMenu"));
-    elements.onlineDeckDefaultBtn.addEventListener("click", () => {
-      state.onlineDeckCounts = defaultOnlineDeckCounts();
-      saveOnlineDeckCounts();
-      renderOnlineDeckEditor();
-    });
-    elements.onlineDeckExportBtn.addEventListener("click", () => {
-      if (!state.onlineDeckCounts) state.onlineDeckCounts = loadOnlineDeckCounts();
-      const code = encodeOnlineDeckCode(state.onlineDeckCounts);
-      elements.onlineDeckCodeBox.value = code;
-      elements.onlineDeckCodeMessage.textContent = "デッキコードを作成しました。";
-    });
-    elements.onlineDeckImportBtn.addEventListener("click", () => {
-      try {
-        const counts = decodeOnlineDeckCode(elements.onlineDeckCodeBox.value);
-        state.onlineDeckCounts = counts;
-        saveOnlineDeckCounts();
-        renderOnlineDeckEditor();
-        elements.onlineDeckCodeMessage.textContent = "デッキコードを読み込みました。";
-      } catch (error) {
-        elements.onlineDeckCodeMessage.textContent = `読み込み失敗：${error.message || error}`;
-      }
-    });
-    elements.onlineDeckCopyBtn.addEventListener("click", async () => {
-      try {
-        if (!elements.onlineDeckCodeBox.value.trim()) {
-          elements.onlineDeckCodeBox.value = encodeOnlineDeckCode(state.onlineDeckCounts || loadOnlineDeckCounts());
-        }
-        await navigator.clipboard.writeText(elements.onlineDeckCodeBox.value);
-        elements.onlineDeckCodeMessage.textContent = "デッキコードをコピーしました。";
-      } catch (_) {
-        elements.onlineDeckCodeMessage.textContent = "コピーできない場合はコード欄を選択してコピーしてください。";
-      }
-    });
-    elements.onlineDeckSaveSlotBtn.addEventListener("click", () => {
-      localStorage.setItem(onlineDeckSlotKey(), JSON.stringify(state.onlineDeckCounts || loadOnlineDeckCounts()));
-      elements.onlineDeckCodeMessage.textContent = `${elements.onlineDeckSlotSelect.value}番スロットに保存しました。`;
-    });
-    elements.onlineDeckLoadSlotBtn.addEventListener("click", () => {
-      try {
-        const raw = localStorage.getItem(onlineDeckSlotKey());
-        if (!raw) {
-          elements.onlineDeckCodeMessage.textContent = "このスロットにはまだ保存されていません。";
-          return;
-        }
-        const parsed = JSON.parse(raw);
-        const counts = {};
-        Object.keys(parsed).forEach(id => {
-          id = normalizePvpCardId(id);
-        if (!PVP_SUPPORTED_CARD_SET.has(id) || !CARD_LIBRARY[id]) return;
-          const n = Math.max(0, Math.min(ONLINE_DECK_MAX_SAME, Number(parsed[id]) || 0));
-          if (n > 0) counts[id] = n;
-        });
-        if (!onlineDeckIsValid(counts)) throw new Error("保存デッキが条件を満たしていません。");
-        state.onlineDeckCounts = counts;
-        saveOnlineDeckCounts();
-        renderOnlineDeckEditor();
-        elements.onlineDeckCodeMessage.textContent = `${elements.onlineDeckSlotSelect.value}番スロットを読み込みました。`;
-      } catch (error) {
-        elements.onlineDeckCodeMessage.textContent = `スロット読込失敗：${error.message || error}`;
-      }
-    });
     elements.menuStartBtn.addEventListener("click", () => showScreen("battleSelect"));
     elements.plVsCpuBtn.addEventListener("click", () => showScreen("difficulty"));
     elements.plVsPlBtn.addEventListener("click", () => {
@@ -6295,7 +4752,7 @@ async function endTurn() {
       updateFriendLobbyView();
     });
     elements.battleSelectBackBtn.addEventListener("click", () => showScreen("menu"));
-    elements.friendLobbyBackBtn.addEventListener("click", () => showScreen("onlineMenu"));
+    elements.friendLobbyBackBtn.addEventListener("click", () => showScreen("battleSelect"));
     elements.createRoomBtn.addEventListener("click", () => createFriendRoom().catch(error => {
       console.error(error);
       elements.friendLobbyMessage.textContent = `部屋作成エラー：${error.message || error}`;
@@ -6314,66 +4771,9 @@ async function endTurn() {
       console.error(error);
       elements.friendLobbyMessage.textContent = `準備解除エラー：${error.message || error}`;
     }));
-    elements.friendStartGameBtn.addEventListener("click", () => startFriendSimpleGame().catch(error => {
+    elements.friendStartBattleBtn.addEventListener("click", () => startFriendCommonBattle().catch(error => {
       console.error(error);
-      elements.friendLobbyMessage.textContent = `簡易試合開始エラー：${error.message || error}`;
-    }));
-    elements.friendAttackBtn.addEventListener("click", () => {
-      if (!friendCanAct(state.friendRoomData?.game)) return;
-      friendCloseActionEditors();
-      friendSetPendingTapAction({ type: "attackFrom" });
-    });
-    elements.friendSplitBtn.addEventListener("click", () => {
-      if (!friendCanAct(state.friendRoomData?.game)) return;
-      state.friendPendingTapAction = null;
-      friendPrepareSplitEditor(state.friendRoomData?.game);
-      elements.friendSplitBox?.classList.toggle("active");
-      updateFriendGameView(state.friendRoomData?.game);
-    });
-    elements.friendConfirmSplitBtn?.addEventListener("click", () => friendSplitAction().then(() => {
-      friendCloseActionEditors();
-    }).catch(error => {
-      console.error(error);
-      elements.friendLobbyMessage.textContent = `分ける同期エラー：${error.message || error}`;
-    }));
-    elements.friendCancelBtn?.addEventListener("click", () => {
-      friendCloseActionEditors(true);
-      updateFriendGameView(state.friendRoomData?.game);
-    });
-    [elements.friendHostLeft, elements.friendHostRight, elements.friendGuestLeft, elements.friendGuestRight].forEach(btn => {
-      if (!btn) return;
-      btn.addEventListener("click", () => {
-        const clickedRole = btn.dataset.role;
-        const clickedHand = btn.dataset.hand;
-        if (!state.friendRole) return;
-        // Legacy hidden hand buttons do not change selection while idle.
-        const side = clickedRole === state.friendRole ? "own" : "opponent";
-        friendHandleTapAction(side, clickedHand);
-      });
-    });
-
-    [elements.friendOwnLeft, elements.friendOwnRight, elements.friendOpponentLeft, elements.friendOpponentRight].forEach(btn => {
-      if (!btn) return;
-      btn.addEventListener("click", () => {
-        const clickedSide = btn.dataset.side;
-        const clickedHand = btn.dataset.hand;
-        if (!state.friendRole) return;
-        if (friendHandleTapAction(clickedSide, clickedHand)) return;
-        // 通常時の手タップは何もしない。対象選択が必要な行動中だけ反応する。
-      });
-    });
-    elements.friendAttackFrom.addEventListener("change", () => {
-      state.friendSelectedOwnHand = elements.friendAttackFrom.value;
-      updateFriendGameView(state.friendRoomData?.game);
-    });
-    elements.friendAttackTo.addEventListener("change", () => {
-      state.friendSelectedTargetHand = elements.friendAttackTo.value;
-      updateFriendGameView(state.friendRoomData?.game);
-    });
-    elements.friendBattleBackLobbyBtn.addEventListener("click", () => showScreen("friendLobby"));
-    elements.friendRestartSimpleBtn.addEventListener("click", () => startFriendSimpleGame().catch(error => {
-      console.error(error);
-      elements.friendLobbyMessage.textContent = `再開始エラー：${error.message || error}`;
+      elements.friendLobbyMessage.textContent = `試合開始エラー：${error.message || error}`;
     }));
     elements.copyRoomUrlBtn.addEventListener("click", async () => {
       if (!state.friendRoomUrl) return;
@@ -6554,8 +4954,6 @@ async function endTurn() {
       btn.addEventListener("click", () => renderHelp(btn.dataset.helpTab));
     });
 
-    state.onlineDeckCounts = loadOnlineDeckCounts();
     renderDeckBuilder();
-    renderOnlineDeckEditor();
-    showScreen("modeMenu");
+    showScreen("menu");
     loadRoomFromUrl();
