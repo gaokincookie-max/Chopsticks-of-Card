@@ -991,10 +991,14 @@ const CARD_LIBRARY = {
       friendRole: null,
       friendReady: false,
       friendUnsubscribe: null,
+      friendPollTimer: null,
       friendRoomData: null,
       friendSelectedOwnHand: "L",
       friendSelectedTargetHand: "L",
       friendLastHandValues: null,
+      friendPendingRapidFire: null,
+      friendPendingDiscardAction: null,
+      friendPendingTapAction: null,
       onlineDeckCounts: null
     };
 
@@ -1653,6 +1657,19 @@ const CARD_LIBRARY = {
       updateFriendHandButton(elements.friendOpponentLeft, enemy.L, "selected-target", state.friendSelectedTargetHand === "L", opp);
       updateFriendHandButton(elements.friendOpponentRight, enemy.R, "selected-target", state.friendSelectedTargetHand === "R", opp);
 
+      const pending = state.friendPendingTapAction;
+      [elements.friendOwnLeft, elements.friendOwnRight, elements.friendOpponentLeft, elements.friendOpponentRight].forEach(btn => btn?.classList.remove("pending-pick"));
+      if (pending) {
+        if (["attackFrom", "ownHand", "equalOwn"].includes(pending.type)) {
+          elements.friendOwnLeft?.classList.add("pending-pick");
+          elements.friendOwnRight?.classList.add("pending-pick");
+        }
+        if (["attackTo", "opponentHand", "equalOpponent"].includes(pending.type)) {
+          elements.friendOpponentLeft?.classList.add("pending-pick");
+          elements.friendOpponentRight?.classList.add("pending-pick");
+        }
+      }
+
       elements.friendHostLeft.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "L");
       elements.friendHostRight.classList.toggle("selected-target", role === "guest" && state.friendSelectedTargetHand === "R");
       elements.friendGuestLeft.classList.toggle("selected-target", role === "host" && state.friendSelectedTargetHand === "L");
@@ -1790,25 +1807,72 @@ const CARD_LIBRARY = {
       const myTurn = friendCanAct(game);
       const cardLocked = !!mySide?.cardPlayed;
       const costLimit = mySide?.costLimit;
+      const pendingRapid = state.friendPendingRapidFire;
+      const pendingDiscard = state.friendPendingDiscardAction;
       const hand = mySide?.hand || [];
       if (hand.length === 0) {
-        elements.friendHandCards.textContent = "手札はありません。";
-        return;
+        elements.friendHandCards.textContent = pendingRapid
+          ? "捨てるカードがありません。乱射をキャンセルしてください。"
+          : pendingDiscard
+            ? "捨てるカードがありません。キャンセルしてください。"
+            : "手札はありません。";
+      } else {
+        elements.friendHandCards.innerHTML = "";
       }
-      elements.friendHandCards.innerHTML = "";
+
+      if (pendingRapid) {
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "friend-simple-card rapid-cancel";
+        cancelBtn.innerHTML = `<strong>乱射をキャンセル</strong><span>カード使用を取り消します</span><span>捨てるカードを選ばない場合はこちら</span>`;
+        cancelBtn.addEventListener("click", () => friendCancelRapidFire().catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `乱射キャンセルエラー：${error.message || error}`;
+        }));
+        elements.friendHandCards.appendChild(cancelBtn);
+      }
+
+      if (pendingDiscard) {
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "friend-simple-card rapid-cancel";
+        cancelBtn.innerHTML = `<strong>${pendingDiscard.label || "カード効果"}をキャンセル</strong><span>カード使用を取り消します</span><span>捨てるカードを選ばない場合はこちら</span>`;
+        cancelBtn.addEventListener("click", () => friendCancelDiscardAction().catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `キャンセルエラー：${error.message || error}`;
+        }));
+        elements.friendHandCards.appendChild(cancelBtn);
+      }
+
       hand.forEach((cardId, index) => {
         const card = friendCardInfo(cardId);
         const btn = document.createElement("button");
         btn.className = "friend-simple-card";
-        const overCostLimit = costLimit !== null && costLimit !== undefined && Number(card.cost) > Number(costLimit);
-        btn.disabled = !myTurn || cardLocked || overCostLimit;
-        btn.classList.toggle("card-used-locked", cardLocked || overCostLimit);
-        const disabledText = cardLocked ? "このターンはカード使用済み" : overCostLimit ? `倹約令中：コスト${costLimit}以下のみ` : card.text;
-        btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${disabledText}</span>`;
-        btn.addEventListener("click", () => friendUseCardAction(index).catch(error => {
-          console.error(error);
-          elements.friendLobbyMessage.textContent = `カード使用エラー：${error.message || error}`;
-        }));
+        if (pendingRapid) {
+          btn.classList.add("rapid-selectable");
+          btn.disabled = !myTurn;
+          btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}${card.bullet ? " / 弾" : ""}</span><span>タップして乱射の弾として捨てる</span>`;
+          btn.addEventListener("click", () => friendResolveRapidFire(index).catch(error => {
+            console.error(error);
+            elements.friendLobbyMessage.textContent = `乱射エラー：${error.message || error}`;
+          }));
+        } else if (pendingDiscard) {
+          btn.classList.add("discard-selectable");
+          btn.disabled = !myTurn;
+          btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>タップして捨てる</span>`;
+          btn.addEventListener("click", () => friendResolveDiscardAction(index).catch(error => {
+            console.error(error);
+            elements.friendLobbyMessage.textContent = `捨て札選択エラー：${error.message || error}`;
+          }));
+        } else {
+          const overCostLimit = costLimit !== null && costLimit !== undefined && Number(card.cost) > Number(costLimit);
+          btn.disabled = !myTurn || cardLocked || overCostLimit;
+          btn.classList.toggle("card-used-locked", cardLocked || overCostLimit);
+          const disabledText = cardLocked ? "このターンはカード使用済み" : overCostLimit ? `倹約令中：コスト${costLimit}以下のみ` : card.text;
+          btn.innerHTML = `<strong>${card.name}</strong><span>コスト ${card.cost}</span><span>${disabledText}</span>`;
+          btn.addEventListener("click", () => friendUseCardAction(index).catch(error => {
+            console.error(error);
+            elements.friendLobbyMessage.textContent = `カード使用エラー：${error.message || error}`;
+          }));
+        }
         elements.friendHandCards.appendChild(btn);
       });
     }
@@ -1840,7 +1904,13 @@ const CARD_LIBRARY = {
       if (elements.friendTurnText) elements.friendTurnText.textContent = game?.turn ? friendRoleLabel(game.turn) : "---";
       if (game?.started) syncFriendHandSelections(game);
       if (elements.friendSelectHint) {
-        elements.friendSelectHint.textContent = `自分:${state.friendSelectedOwnHand === "L" ? "左" : "右"} / 相手:${state.friendSelectedTargetHand === "L" ? "左" : "右"}`;
+        elements.friendSelectHint.textContent = state.friendPendingRapidFire
+          ? "乱射：捨てるカードを手札からタップ"
+          : state.friendPendingDiscardAction
+            ? `${state.friendPendingDiscardAction.label || "カード効果"}：捨てるカードを手札からタップ`
+            : state.friendPendingTapAction
+              ? friendPendingMessage()
+              : `自分:${state.friendSelectedOwnHand === "L" ? "左" : "右"} / 相手:${state.friendSelectedTargetHand === "L" ? "左" : "右"}`;
       }
       renderFriendHandCards(game);
 
@@ -1904,6 +1974,15 @@ const CARD_LIBRARY = {
         ...next,
         updatedAt: fb.serverTimestamp()
       }, { merge: true });
+
+      // スマホ環境でonSnapshotの反映が遅れる場合に備え、書き込み直後にも再取得して画面更新する。
+      try {
+        const updated = await fb.getDoc(roomRef);
+        if (updated.exists()) {
+          state.friendRoomData = updated.data();
+          updateFriendLobbyView(state.friendRoomData);
+        }
+      } catch (_) {}
     }
 
     async function startFriendSimpleGame() {
@@ -1966,12 +2045,368 @@ const CARD_LIBRARY = {
       return { side: next, removed };
     }
 
+
+
+    function friendSetPendingTapAction(action) {
+      state.friendPendingTapAction = action;
+      state.friendPendingRapidFire = null;
+      renderFriendHandCards(state.friendRoomData?.game);
+      updateFriendGameView(state.friendRoomData?.game);
+    }
+
+    function friendClearPendingTapAction() {
+      state.friendPendingTapAction = null;
+      updateFriendGameView(state.friendRoomData?.game);
+    }
+
+    function friendPendingMessage() {
+      const a = state.friendPendingTapAction;
+      if (!a) return "";
+      if (a.type === "attackFrom") return "攻撃：自分の攻撃する手をタップ";
+      if (a.type === "attackTo") return "攻撃：攻撃する相手の手をタップ";
+      if (a.type === "ownHand") return `${a.label || "カード"}：自分の手をタップ`;
+      if (a.type === "opponentHand") return `${a.label || "カード"}：相手の手をタップ`;
+      if (a.type === "equalOwn") return "等価交換：まず自分の手をタップ";
+      if (a.type === "equalOpponent") return "等価交換：次に相手の手をタップ";
+      return "対象をタップ";
+    }
+
+    function friendHandleTapAction(side, hand) {
+      const a = state.friendPendingTapAction;
+      if (!a) return false;
+      if (a.type === "attackFrom") {
+        if (side !== "own") return true;
+        state.friendSelectedOwnHand = hand;
+        elements.friendAttackFrom.value = hand;
+        state.friendPendingTapAction = { type: "attackTo", from: hand };
+        updateFriendGameView(state.friendRoomData?.game);
+        return true;
+      }
+      if (a.type === "attackTo") {
+        if (side !== "opponent") return true;
+        state.friendSelectedTargetHand = hand;
+        elements.friendAttackTo.value = hand;
+        const from = a.from || state.friendSelectedOwnHand;
+        state.friendPendingTapAction = null;
+        friendAttackAction(from, hand).catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `攻撃同期エラー：${error.message || error}`;
+        });
+        return true;
+      }
+      if (a.type === "ownHand") {
+        if (side !== "own") return true;
+        state.friendSelectedOwnHand = hand;
+        elements.friendAttackFrom.value = hand;
+        const action = a.action;
+        state.friendPendingTapAction = null;
+        friendResolvePendingCardAction(action, { ownHand: hand }).catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `カード対象エラー：${error.message || error}`;
+        });
+        return true;
+      }
+      if (a.type === "opponentHand") {
+        if (side !== "opponent") return true;
+        state.friendSelectedTargetHand = hand;
+        elements.friendAttackTo.value = hand;
+        const action = a.action;
+        state.friendPendingTapAction = null;
+        friendResolvePendingCardAction(action, { enemyHand: hand }).catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `カード対象エラー：${error.message || error}`;
+        });
+        return true;
+      }
+      if (a.type === "equalOwn") {
+        if (side !== "own") return true;
+        state.friendSelectedOwnHand = hand;
+        elements.friendAttackFrom.value = hand;
+        state.friendPendingTapAction = { ...a, type: "equalOpponent", ownHand: hand };
+        updateFriendGameView(state.friendRoomData?.game);
+        return true;
+      }
+      if (a.type === "equalOpponent") {
+        if (side !== "opponent") return true;
+        state.friendSelectedTargetHand = hand;
+        elements.friendAttackTo.value = hand;
+        const action = a.action;
+        const ownHand = a.ownHand;
+        state.friendPendingTapAction = null;
+        friendResolvePendingCardAction(action, { ownHand, enemyHand: hand }).catch(error => {
+          console.error(error);
+          elements.friendLobbyMessage.textContent = `カード対象エラー：${error.message || error}`;
+        });
+        return true;
+      }
+      return false;
+    }
+
+    function applyFriendRapidFire(game, role, bulletIndex, logsPrefix = []) {
+      const opp = friendRoleOpponent(role);
+      let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
+      let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
+      const target = state.friendPendingRapidFire?.target || elements.friendAttackTo.value;
+      const logs = [...logsPrefix];
+
+      if (!me.hand.length) {
+        logs.push("捨てる手札がないため乱射は不発。");
+        return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+      }
+      if ((enemy[target] || 0) <= 0) {
+        logs.push("対象が0なので乱射は不発。");
+        return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+      }
+
+      const safeIndex = Math.max(0, Math.min(me.hand.length - 1, Number(bulletIndex) || 0));
+      const [bulletId] = me.hand.splice(safeIndex, 1);
+      const bullet = friendCardInfo(bulletId);
+      me.discard.push(bulletId);
+
+      let damage = Number(bullet.cost) || 0;
+      if (bullet.bullet) damage += 1;
+
+      if (bulletId === "logicAtelier") {
+        logs.push("ロジックアトリエ：選択中の相手の手を0にした。");
+        enemy[target] = 0;
+      } else {
+        damage = friendApplyGuard(enemy, target, Math.max(1, damage), logs);
+        const before = enemy[target];
+        const total = before + damage;
+        enemy[target] = friendWrap(total);
+        logs.push(`乱射：弾「${bullet.name}」を捨て、相手の${target === "L" ? "左" : "右"}に${damage}。${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
+      }
+
+      if (bulletId === "accelerationBullet") {
+        me = drawFriendCard({ ...game, [role]: me }, role, 1);
+        logs.push("加速弾：1枚引いた。");
+      }
+
+      if (bulletId === "specialBullet") {
+        const result = friendDiscardRandomHandCard(enemy);
+        enemy = result.side;
+        logs.push(result.discarded ? `特殊弾：相手の手札「${friendCardInfo(result.discarded).name}」を捨てた。` : "特殊弾：相手の手札がなかった。");
+      }
+
+      if (bulletId === "piercingBullet") {
+        const result = friendRemoveOneAttachment(enemy, target);
+        enemy = result.side;
+        logs.push(result.removed ? `貫通弾：相手の設置カード「${friendCardInfo(result.removed).name}」を捨てた。` : "貫通弾：相手の設置カードがなかった。");
+      }
+
+      enemy = friendClearAttachmentsIfDead(enemy);
+      const winner = friendIsDead(enemy) ? role : null;
+      const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
+      return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
+    }
+
+    async function friendResolveRapidFire(bulletIndex) {
+      if (!state.friendPendingRapidFire) return;
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const result = applyFriendRapidFire(game, state.friendRole, bulletIndex, []);
+        state.friendPendingRapidFire = null;
+        return result;
+      });
+    }
+
+    async function friendCancelRapidFire() {
+      if (!state.friendPendingRapidFire) return;
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        let me = { ...game[role], hand: [...(game[role].hand || [])], discard: [...(game[role].discard || [])] };
+        me.hand.push("rapidFire");
+        const discardIndex = me.discard.lastIndexOf("rapidFire");
+        if (discardIndex >= 0) me.discard.splice(discardIndex, 1);
+        me.cardPlayed = false;
+        state.friendPendingRapidFire = null;
+        return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：乱射をキャンセル。`].slice(-30) } };
+      });
+    }
+
+
+
+    async function friendResolveDiscardAction(discardIndex) {
+      const pending = state.friendPendingDiscardAction;
+      if (!pending) return;
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        const opp = friendRoleOpponent(role);
+        let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
+        let logs = [`${friendRoleLabel(role)}：「${pending.label || friendCardInfo(pending.cardId).name}」のため手札を捨てた。`];
+
+        if (!me.hand.length) {
+          logs.push("捨てる手札がなかったため不発。");
+          state.friendPendingDiscardAction = null;
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        const safeIndex = Math.max(0, Math.min(me.hand.length - 1, Number(discardIndex) || 0));
+        const [discarded] = me.hand.splice(safeIndex, 1);
+        me.discard.push(discarded);
+        logs.push(`「${friendCardInfo(discarded).name}」を捨てた。`);
+
+        if (pending.kind === "calm") {
+          const tempGame = { ...game, [role]: me };
+          me = drawFriendCard(tempGame, role, 2);
+          logs.push("2枚引いた。");
+          state.friendPendingDiscardAction = null;
+          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (pending.kind === "repair") {
+          const zeroHand = pending.zeroHand;
+          if (!zeroHand || me[zeroHand] !== 0) {
+            logs.push("復活対象の手が0ではなくなったため不発。");
+            state.friendPendingDiscardAction = null;
+            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          me[zeroHand] = 1;
+          logs.push(`${zeroHand === "L" ? "左" : "右"}手を1で復活。`);
+          state.friendPendingDiscardAction = null;
+          return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
+        }
+
+        state.friendPendingDiscardAction = null;
+        return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+      });
+    }
+
+    async function friendCancelDiscardAction() {
+      const pending = state.friendPendingDiscardAction;
+      if (!pending) return;
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        let me = { ...game[role], hand: [...(game[role].hand || [])], discard: [...(game[role].discard || [])] };
+        me.hand.push(pending.cardId);
+        const discardIndex = me.discard.lastIndexOf(pending.cardId);
+        if (discardIndex >= 0) me.discard.splice(discardIndex, 1);
+        me.cardPlayed = false;
+        state.friendPendingDiscardAction = null;
+        return { game: { ...game, [role]: me, log: [...(game.log || []), `${friendRoleLabel(role)}：「${pending.label || friendCardInfo(pending.cardId).name}」をキャンセル。`].slice(-30) } };
+      });
+    }
+
+    async function friendResolvePendingCardAction(action, target) {
+      await updateFriendGame((data) => {
+        const game = data.game;
+        if (!friendCanAct(game)) return null;
+        const role = state.friendRole;
+        const opp = friendRoleOpponent(role);
+        if (state.friendPendingTapAction || state.friendPendingRapidFire || state.friendPendingDiscardAction) {
+          elements.friendLobbyMessage.textContent = "先に現在の対象選択を完了するかキャンセルしてください。";
+          return null;
+        }
+        let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
+        let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
+        const cardId = action.cardId;
+        const card = friendCardInfo(cardId);
+        const logs = [`${friendRoleLabel(role)}：「${card.name}」の対象を選択。`];
+
+        if (action.kind === "snipe") {
+          const hand = target.enemyHand;
+          if ((enemy[hand] || 0) <= 0) {
+            logs.push("対象が0なので不発。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const before = enemy[hand];
+          enemy[hand] = friendWrap(before + 1);
+          enemy = friendClearAttachmentsIfDead(enemy);
+          logs.push(`狙撃：相手の${hand === "L" ? "左" : "右"} ${before}→${enemy[hand]}。`);
+          const winner = friendIsDead(enemy) ? role : null;
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
+          return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
+        }
+
+        if (action.kind === "randomDice") {
+          const hand = target.ownHand;
+          if ((me[hand] || 0) <= 0) {
+            logs.push("対象が0なので不発。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          const before = me[hand];
+          me[hand] = Math.floor(Math.random() * 5);
+          me = friendClearAttachmentsIfDead(me);
+          logs.push(`ランダムダイス：自分の${hand === "L" ? "左" : "右"} ${before}→${me[hand]}。`);
+          const winner = friendIsDead(me) ? opp : null;
+          return { game: { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) } };
+        }
+
+        if (action.kind === "adjust") {
+          const from = target.ownHand;
+          const to = from === "L" ? "R" : "L";
+          if ((me[from] || 0) <= 0) {
+            logs.push("選択した手が0なので不発。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          me[from] -= 1;
+          me[to] = friendWrap((me[to] || 0) + 1);
+          me = friendClearAttachmentsIfDead(me);
+          logs.push(`整える：自分の${from === "L" ? "左" : "右"}からもう片方へ1本移した。`);
+          const winner = friendIsDead(me) ? opp : null;
+          return { game: { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) } };
+        }
+
+        if (action.kind === "equalTrade") {
+          const ownHand = target.ownHand;
+          const enemyHand = target.enemyHand;
+          if ((me[ownHand] || 0) <= 0 || (enemy[enemyHand] || 0) < 2) {
+            logs.push("条件を満たさないため不発。自分は1以上、相手は2以上が必要。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          me[ownHand] -= 1;
+          enemy[enemyHand] -= 1;
+          me = friendClearAttachmentsIfDead(me);
+          enemy = friendClearAttachmentsIfDead(enemy);
+          logs.push("等価交換：選択した自分の手と相手の手を-1。");
+          const winner = friendIsDead(enemy) ? role : friendIsDead(me) ? opp : null;
+          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(winner)}の勝ち。`] : [])].slice(-30) };
+          return { game: winner ? nextGame : nextGame };
+        }
+
+        if (action.kind === "blessing") {
+          const hand = target.ownHand;
+          if (!friendCanAddAttachment(me, hand, cardId)) {
+            logs.push("その手には加護を置けません。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          me = friendAddAttachment(me, hand, cardId);
+          logs.push(`${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        if (action.kind === "curse") {
+          const hand = target.enemyHand;
+          if (!friendCanAddAttachment(enemy, hand, cardId)) {
+            logs.push("その相手の手には呪縛を置けません。");
+            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+          }
+          enemy = friendAddAttachment(enemy, hand, cardId);
+          logs.push(`相手の${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
+        }
+
+        return null;
+      });
+    }
+
     async function friendUseCardAction(index) {
       await updateFriendGame((data) => {
         const game = data.game;
         if (!friendCanAct(game)) return null;
         const role = state.friendRole;
         const opp = friendRoleOpponent(role);
+        if (state.friendPendingTapAction || state.friendPendingRapidFire || state.friendPendingDiscardAction) {
+          elements.friendLobbyMessage.textContent = "先に現在の対象選択を完了するかキャンセルしてください。";
+          return null;
+        }
         let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
         let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
         if (me.cardPlayed) {
@@ -2009,12 +2444,10 @@ const CARD_LIBRARY = {
             tempGame[role] = drawFriendCard(tempGame, role, 1);
             return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
           }
-          const discarded = me.hand.pop();
-          me.discard.push(discarded);
-          let tempGame = { ...game, [role]: me };
-          tempGame[role] = drawFriendCard(tempGame, role, 2);
-          logs.push(`手札を1枚捨てて2枚引いた。`);
-          return { game: { ...game, [role]: tempGame[role], log: [...(game.log || []), ...logs].slice(-30) } };
+          state.friendPendingDiscardAction = { kind: "calm", cardId, label: "落ち着ける" };
+          logs.push("落ち着ける：捨てるカードを手札からタップしてください。");
+          setTimeout(() => renderFriendHandCards({ ...game, [role]: me, [opp]: enemy }), 0);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (cardId === "strongHit") {
@@ -2052,51 +2485,21 @@ const CARD_LIBRARY = {
         }
 
         if (cardId === "randomDice") {
-          const hand = elements.friendAttackFrom.value;
-          if ((me[hand] || 0) <= 0) {
-            logs.push("選択した手が0なので不発。");
-            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          const before = me[hand];
-          me[hand] = Math.floor(Math.random() * 5);
-          logs.push(`ランダムダイス：自分の${hand === "L" ? "左" : "右"} ${before}→${me[hand]}。`);
-          me = friendClearAttachmentsIfDead(me);
-          const winner = friendIsDead(me) ? opp : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(opp)}の勝ち。`] : [])].slice(-30) };
-          return { game: winner ? nextGame : nextGame };
+          friendSetPendingTapAction({ type: "ownHand", action: { kind: "randomDice", cardId }, label: "ランダムダイス" });
+          logs.push("ランダムダイス：対象にする自分の手をタップしてください。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (cardId === "equalTrade") {
-          const ownHand = elements.friendAttackFrom.value;
-          const enemyHand = elements.friendAttackTo.value;
-          if ((me[ownHand] || 0) <= 0 || (enemy[enemyHand] || 0) < 2) {
-            logs.push("条件を満たさず不発。自分は1以上、相手は2以上の手を選んでください。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          const ownBefore = me[ownHand];
-          const enemyBefore = enemy[enemyHand];
-          me[ownHand] -= 1;
-          enemy[enemyHand] -= 1;
-          logs.push(`等価交換：自分${ownHand === "L" ? "左" : "右"} ${ownBefore}→${me[ownHand]} / 相手${enemyHand === "L" ? "左" : "右"} ${enemyBefore}→${enemy[enemyHand]}。`);
-          me = friendClearAttachmentsIfDead(me);
-          enemy = friendClearAttachmentsIfDead(enemy);
-          const winner = friendIsDead(enemy) ? role : friendIsDead(me) ? opp : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(winner)}の勝ち。`] : [])].slice(-30) };
-          return { game: nextGame };
+          friendSetPendingTapAction({ type: "equalOwn", action: { kind: "equalTrade", cardId }, label: "等価交換" });
+          logs.push("等価交換：まず自分の手をタップしてください。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (cardId === "adjust") {
-          const from = elements.friendAttackFrom.value;
-          const to = from === "L" ? "R" : "L";
-          if ((me[from] || 0) <= 0 || (me[to] || 0) >= 4) {
-            logs.push("移せる形ではないため不発。");
-            return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          const before = `${me.L}-${me.R}`;
-          me[from] -= 1;
-          me[to] += 1;
-          logs.push(`整える：${before} → ${me.L}-${me.R}。`);
-          return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
+          friendSetPendingTapAction({ type: "ownHand", action: { kind: "adjust", cardId }, label: "整える" });
+          logs.push("整える：1本移す元の自分の手をタップしてください。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (cardId === "repair") {
@@ -2109,11 +2512,10 @@ const CARD_LIBRARY = {
             logs.push("追加で捨てる手札がないため不発。");
             return { game: { ...game, [role]: me, log: [...(game.log || []), ...logs].slice(-30) } };
           }
-          const discarded = me.hand.pop();
-          me.discard.push(discarded);
-          me[zeroHand] = 1;
-          logs.push(`追加で手札を1枚捨て、${zeroHand === "L" ? "左" : "右"}手を1で復活。`);
-          return { game: friendEndTurn({ ...game, [role]: me }, role, logs) };
+          state.friendPendingDiscardAction = { kind: "repair", cardId, label: "補修", zeroHand };
+          logs.push(`補修：捨てるカードを手札からタップしてください。対象は${zeroHand === "L" ? "左" : "右"}手。`);
+          setTimeout(() => renderFriendHandCards({ ...game, [role]: me, [opp]: enemy }), 0);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (cardId === "rapidFire") {
@@ -2126,67 +2528,21 @@ const CARD_LIBRARY = {
             logs.push("対象が0なので不発。");
             return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
           }
-
-          const bulletId = me.hand.shift();
-          const bullet = friendCardInfo(bulletId);
-          me.discard.push(bulletId);
-
-          let damage = Number(bullet.cost) || 0;
-          if (bullet.bullet) damage += 1;
-
-          if (bulletId === "logicAtelier") {
-            logs.push("ロジックアトリエ：選択中の相手の手を0にした。");
-            enemy[target] = 0;
-          } else {
-            damage = friendApplyGuard(enemy, target, Math.max(1, damage), logs);
-            const before = enemy[target];
-            const total = before + damage;
-            enemy[target] = friendWrap(total);
-            logs.push(`乱射：弾「${bullet.name}」を捨て、相手の${target === "L" ? "左" : "右"}に${damage}。${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
-          }
-
-          if (bulletId === "accelerationBullet") {
-            me = drawFriendCard({ ...game, [role]: me }, role, 1);
-            logs.push("加速弾：1枚引いた。");
-          }
-
-          if (bulletId === "specialBullet") {
-            const result = friendDiscardRandomHandCard(enemy);
-            enemy = result.side;
-            logs.push(result.discarded ? `特殊弾：相手の手札「${friendCardInfo(result.discarded).name}」を捨てた。` : "特殊弾：相手の手札がなかった。");
-          }
-
-          if (bulletId === "piercingBullet") {
-            const result = friendRemoveOneAttachment(enemy, target);
-            enemy = result.side;
-            logs.push(result.removed ? `貫通弾：相手の設置カード「${friendCardInfo(result.removed).name}」を捨てた。` : "貫通弾：相手の設置カードがなかった。");
-          }
-
-          enemy = friendClearAttachmentsIfDead(enemy);
-          const winner = friendIsDead(enemy) ? role : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
-          return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
+          state.friendPendingRapidFire = { role, target };
+          logs.push("乱射：捨てるカードを手札からタップしてください。");
+          setTimeout(() => renderFriendHandCards({ ...game, [role]: me, [opp]: enemy }), 0);
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (card.type === "blessing") {
-          const hand = elements.friendAttackFrom.value;
-          if (!friendCanAddAttachment(me, hand, cardId)) {
-            logs.push("その手には加護を置けません。手が0、枠が満杯、または封印されています。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          me = friendAddAttachment(me, hand, cardId);
-          logs.push(`${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
+          friendSetPendingTapAction({ type: "ownHand", action: { kind: "blessing", cardId }, label: card.name });
+          logs.push(`${card.name}：置く自分の手をタップしてください。`);
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
         if (card.type === "curse") {
-          const hand = elements.friendAttackTo.value;
-          if (!friendCanAddAttachment(enemy, hand, cardId)) {
-            logs.push("その相手の手には呪縛を置けません。手が0か枠が満杯です。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          enemy = friendAddAttachment(enemy, hand, cardId);
-          logs.push(`相手の${hand === "L" ? "左" : "右"}手に「${card.name}」を置いた。`);
+          friendSetPendingTapAction({ type: "opponentHand", action: { kind: "curse", cardId }, label: card.name });
+          logs.push(`${card.name}：置く相手の手をタップしてください。`);
           return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
@@ -2245,33 +2601,54 @@ const CARD_LIBRARY = {
         }
 
         if (cardId === "snipe") {
-          const target = elements.friendAttackTo.value;
-          if ((enemy[target] || 0) <= 0) {
-            logs.push("対象が0なので不発。");
-            return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
-          }
-          const before = enemy[target];
-          const total = before + 1;
-          enemy[target] = friendWrap(total);
-          logs.push(`狙撃：相手の${target === "L" ? "左" : "右"} ${before}→${total}${total >= 5 ? `→${enemy[target]}` : ""}`);
-          enemy = friendClearAttachmentsIfDead(enemy);
-          const winner = friendIsDead(enemy) ? role : null;
-          const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
-          return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
+          friendSetPendingTapAction({ type: "opponentHand", action: { kind: "snipe", cardId }, label: "狙撃" });
+          logs.push("狙撃：攻撃したい相手の手をタップしてください。");
+          return { game: { ...game, [role]: me, [opp]: enemy, log: [...(game.log || []), ...logs].slice(-30) } };
         }
 
-        return null;
+        if (me.noSplit) {
+          elements.friendLobbyMessage.textContent = "固定の効果で、このターンは分けられません。";
+          return null;
+        }
+
+        const left = Math.max(0, Math.min(4, Number(elements.friendSplitLeft.value) || 0));
+        const right = Math.max(0, Math.min(4, Number(elements.friendSplitRight.value) || 0));
+
+        if (left <= 0 || right <= 0) {
+          elements.friendLobbyMessage.textContent = "通常の分けるでは片手0にできません。";
+          return null;
+        }
+        if (left === me.L && right === me.R) {
+          elements.friendLobbyMessage.textContent = "同じ形には分けられません。";
+          return null;
+        }
+        if (left + right !== me.L + me.R) {
+          elements.friendLobbyMessage.textContent = "左右の合計が変わらないようにしてください。";
+          return null;
+        }
+
+        const nextLog = [...(game.log || []), `${friendRoleLabel(role)}：分ける。${me.L}-${me.R} → ${left}-${right}`].slice(-30);
+        me.L = left;
+        me.R = right;
+        me.noSplit = false;
+        const nextGame = {
+          ...game,
+          [role]: me,
+          log: nextLog
+        };
+        return { game: friendEndTurn(nextGame, role, []) };
       });
     }
 
-    async function friendAttackAction() {
+
+    async function friendAttackAction(fromOverride = null, toOverride = null) {
       await updateFriendGame((data) => {
         const game = data.game;
         if (!friendCanAct(game)) return null;
         const role = state.friendRole;
         const opp = friendRoleOpponent(role);
-        const from = elements.friendAttackFrom.value;
-        const to = elements.friendAttackTo.value;
+        const from = fromOverride || elements.friendAttackFrom.value;
+        const to = toOverride || elements.friendAttackTo.value;
         let me = { ...game[role], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
         let enemy = { ...game[opp], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
         if ((me[from] || 0) <= 0 || (enemy[to] || 0) <= 0) return null;
@@ -2327,7 +2704,6 @@ const CARD_LIBRARY = {
         const game = data.game;
         if (!friendCanAct(game)) return null;
         const role = state.friendRole;
-        const opp = friendRoleOpponent(role);
         let me = { ...game[role], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
 
         if (me.noSplit) {
@@ -2431,9 +2807,35 @@ const CARD_LIBRARY = {
         console.error(error);
         elements.friendLobbyMessage.textContent = `Firebase同期エラー：${error.message || error}`;
       });
+      startFriendRoomPolling(roomId);
     }
 
-    async function createFriendRoom() {
+    
+    function startFriendRoomPolling(roomId) {
+      const fb = firebaseApi();
+      if (!fb || !roomId) return;
+      if (state.friendPollTimer) {
+        window.clearInterval(state.friendPollTimer);
+        state.friendPollTimer = null;
+      }
+      state.friendPollTimer = window.setInterval(async () => {
+        if (!state.friendRoomId || state.friendRoomId !== roomId) return;
+        if (!["friendLobby", "friendBattle"].includes(state.currentScreen)) return;
+        try {
+          const roomRef = fb.doc(fb.db, "rooms", roomId);
+          const snapshot = await fb.getDoc(roomRef);
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            state.friendRoomData = data;
+            updateFriendLobbyView(data);
+          }
+        } catch (error) {
+          console.warn("poll failed", error);
+        }
+      }, 2500);
+    }
+
+async function createFriendRoom() {
       const fb = firebaseApi();
       if (!fb) {
         elements.friendLobbyMessage.textContent = "Firebaseの読み込み中です。数秒待ってからもう一度押してください。";
@@ -5707,10 +6109,10 @@ async function endTurn() {
       console.error(error);
       elements.friendLobbyMessage.textContent = `簡易試合開始エラー：${error.message || error}`;
     }));
-    elements.friendAttackBtn.addEventListener("click", () => friendAttackAction().catch(error => {
-      console.error(error);
-      elements.friendLobbyMessage.textContent = `攻撃同期エラー：${error.message || error}`;
-    }));
+    elements.friendAttackBtn.addEventListener("click", () => {
+      if (!friendCanAct(state.friendRoomData?.game)) return;
+      friendSetPendingTapAction({ type: "attackFrom" });
+    });
     elements.friendSplitBtn.addEventListener("click", () => friendSplitAction().catch(error => {
       console.error(error);
       elements.friendLobbyMessage.textContent = `分ける同期エラー：${error.message || error}`;
@@ -5738,6 +6140,7 @@ async function endTurn() {
         const clickedSide = btn.dataset.side;
         const clickedHand = btn.dataset.hand;
         if (!state.friendRole) return;
+        if (friendHandleTapAction(clickedSide, clickedHand)) return;
         if (clickedSide === "own") {
           state.friendSelectedOwnHand = clickedHand;
           elements.friendAttackFrom.value = clickedHand;

@@ -313,6 +313,12 @@
       background: #fff0ed;
     }
 
+    .friend-hand-big.pending-pick {
+      border-color: #d99024;
+      background: #fff6d8;
+      box-shadow: 0 0 0 4px rgba(217,144,36,.18), inset 0 -3px 0 rgba(80,50,20,.09);
+    }
+
     .friend-hand-big.dead {
       opacity: .42;
       filter: grayscale(.4);
@@ -496,6 +502,37 @@
       color: var(--accent);
     }
 
+
+    @media (max-width: 560px) {
+      .online-deck-row {
+        grid-template-columns: 1fr;
+      }
+
+      .online-deck-controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 56px 1fr 56px;
+      }
+
+      .online-deck-controls button {
+        width: 56px;
+        height: 46px;
+        font-size: 22px;
+        touch-action: manipulation;
+      }
+
+      .online-deck-count {
+        align-self: center;
+        font-size: 18px;
+      }
+
+      .online-deck-list {
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
+      }
+    }
+
     @media (max-width: 560px) {
       .friend-mobile-battle {
         padding: 8px;
@@ -657,6 +694,23 @@
       opacity: .45;
       cursor: not-allowed;
       filter: grayscale(.25);
+    }
+
+    .friend-simple-card.rapid-selectable {
+      border-color: #b85d2f;
+      background: #fff1e8;
+      box-shadow: 0 0 0 3px rgba(184,93,47,.14);
+    }
+
+    .friend-simple-card.rapid-cancel {
+      border-style: dashed;
+      background: #fffaf2;
+    }
+
+    .friend-simple-card.discard-selectable {
+      border-color: #8c5bc5;
+      background: #f6edff;
+      box-shadow: 0 0 0 3px rgba(140,91,197,.14);
     }
 
     .room-join-box input {
