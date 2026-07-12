@@ -319,6 +319,41 @@
       box-shadow: 0 0 0 4px rgba(217,144,36,.18), inset 0 -3px 0 rgba(80,50,20,.09);
     }
 
+    .friend-hand-big.attack-source {
+      animation: friendAttackSource .65s ease;
+      border-color: #315f8f;
+      background: #eaf4ff;
+    }
+
+    .friend-hand-big.attack-target {
+      animation: friendAttackTarget .65s ease;
+      border-color: #b94535;
+      background: #fff0ed;
+    }
+
+    .friend-hand-big.total-preview b {
+      color: #b94535;
+      animation: friendTotalPreview .75s ease;
+    }
+
+    @keyframes friendAttackSource {
+      0% { transform: translateX(0) scale(1); }
+      40% { transform: translateX(10px) scale(1.06); }
+      100% { transform: translateX(0) scale(1); }
+    }
+
+    @keyframes friendAttackTarget {
+      0% { transform: scale(1); }
+      45% { transform: scale(.92); box-shadow: 0 0 0 8px rgba(185,69,53,.18); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes friendTotalPreview {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.22); }
+      100% { transform: scale(1); }
+    }
+
     .friend-hand-big.dead {
       opacity: .42;
       filter: grayscale(.4);
@@ -371,7 +406,7 @@
       color: #7b2b91;
     }
 
-    .friend-center-actions {
+    .friend-bottom-actions {
       background: #fffaf2;
       border: 1px solid var(--line);
       border-radius: 20px;
@@ -379,6 +414,74 @@
       display: grid;
       gap: 8px;
       box-shadow: 0 6px 16px var(--shadow);
+    }
+
+    .friend-main-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .friend-split-editor {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .friend-split-editor input {
+      width: 72px;
+      text-align: center;
+    }
+
+    .friend-hidden-selects {
+      display: none;
+    }
+
+    .friend-card-burst {
+      position: fixed;
+      left: 50%;
+      top: 42%;
+      transform: translate(-50%, -50%) scale(.92);
+      z-index: 60;
+      min-width: min(320px, 84vw);
+      max-width: 90vw;
+      padding: 16px 18px;
+      border-radius: 22px;
+      background: rgba(255,250,242,.97);
+      border: 3px solid #d99024;
+      box-shadow: 0 18px 40px rgba(60,35,10,.26);
+      text-align: center;
+      color: var(--accent);
+      font-weight: 900;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .friend-card-burst.show {
+      animation: friendCardBurstShow 1.35s ease both;
+    }
+
+    .friend-card-burst strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 4px;
+    }
+
+    .friend-card-burst span {
+      display: block;
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    @keyframes friendCardBurstShow {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(.82); }
+      15% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+      75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -54%) scale(.96); }
     }
 
     .friend-hand-dock {

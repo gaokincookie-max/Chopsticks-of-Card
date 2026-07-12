@@ -999,6 +999,7 @@ const CARD_LIBRARY = {
       friendPendingRapidFire: null,
       friendPendingDiscardAction: null,
       friendPendingTapAction: null,
+      friendLastFxId: null,
       onlineDeckCounts: null
     };
 
@@ -1085,6 +1086,7 @@ const CARD_LIBRARY = {
       friendOwnLeftAttach: document.getElementById("friendOwnLeftAttach"),
       friendOwnRightAttach: document.getElementById("friendOwnRightAttach"),
       friendHandCards: document.getElementById("friendHandCards"),
+      friendCardBurst: document.getElementById("friendCardBurst"),
       friendAttackFrom: document.getElementById("friendAttackFrom"),
       friendAttackTo: document.getElementById("friendAttackTo"),
       friendAttackBtn: document.getElementById("friendAttackBtn"),
@@ -1913,6 +1915,7 @@ const CARD_LIBRARY = {
               : `自分:${state.friendSelectedOwnHand === "L" ? "左" : "右"} / 相手:${state.friendSelectedTargetHand === "L" ? "左" : "右"}`;
       }
       renderFriendHandCards(game);
+      handleFriendFx(game);
 
       const hostReady = !!state.friendRoomData?.hostReady;
       const guestReady = !!state.friendRoomData?.guestReady;
@@ -1970,6 +1973,20 @@ const CARD_LIBRARY = {
       const data = snapshot.data();
       const next = updater(data);
       if (!next) return;
+
+      if (next.game && !next.game.fx) {
+        const logs = Array.isArray(next.game.log) ? next.game.log : [];
+        const lastLog = logs[logs.length - 1] || "";
+        const cardMatch = lastLog.match(/(ホスト|ゲスト)：「([^」]+)」/);
+        if (cardMatch) {
+          next.game.fx = makeFriendFx("card", {
+            role: cardMatch[1] === "ホスト" ? "host" : "guest",
+            cardName: cardMatch[2],
+            detail: `${cardMatch[1]}が使用`
+          });
+        }
+      }
+
       await fb.setDoc(roomRef, {
         ...next,
         updatedAt: fb.serverTimestamp()
@@ -2142,12 +2159,87 @@ const CARD_LIBRARY = {
       return false;
     }
 
+
+    function showFriendCardBurst(cardName, detail = "") {
+      const el = elements.friendCardBurst;
+      if (!el) return;
+      el.innerHTML = `<strong>${cardName}</strong>${detail ? `<span>${detail}</span>` : ""}`;
+      el.classList.remove("show");
+      void el.offsetWidth;
+      el.classList.add("show");
+      window.setTimeout(() => el.classList.remove("show"), 1400);
+    }
+
+
+    function makeFriendFx(type, payload = {}) {
+      return { id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, type, ...payload };
+    }
+
+    function visibleFriendHandButton(ownerRole, hand) {
+      if (!state.friendRole || !ownerRole) return null;
+      const isOwn = ownerRole === state.friendRole;
+      if (isOwn) return hand === "L" ? elements.friendOwnLeft : elements.friendOwnRight;
+      return hand === "L" ? elements.friendOpponentLeft : elements.friendOpponentRight;
+    }
+
+    function setFriendButtonDisplay(button, value) {
+      if (!button) return;
+      const label = button.dataset.hand === "L" ? "左" : "右";
+      button.innerHTML = `${label}<br><b>${value ?? 0}</b>`;
+    }
+
+    function animateFriendAttackFx(fx, game) {
+      const source = visibleFriendHandButton(fx.attacker, fx.from);
+      const target = visibleFriendHandButton(fx.defender, fx.to);
+      if (source) {
+        source.classList.remove("attack-source");
+        void source.offsetWidth;
+        source.classList.add("attack-source");
+        window.setTimeout(() => source.classList.remove("attack-source"), 720);
+      }
+      if (target) {
+        target.classList.remove("attack-target", "total-preview");
+        void target.offsetWidth;
+        target.classList.add("attack-target");
+        if (Number(fx.total) >= 5) {
+          window.setTimeout(() => {
+            target.classList.add("total-preview");
+            setFriendButtonDisplay(target, fx.total);
+          }, 180);
+          window.setTimeout(() => {
+            const finalSide = game?.[fx.defender] || {};
+            setFriendButtonDisplay(target, finalSide[fx.to] ?? fx.after);
+            target.classList.remove("total-preview");
+          }, 950);
+        }
+        window.setTimeout(() => target.classList.remove("attack-target"), 720);
+      }
+    }
+
+    function handleFriendFx(game) {
+      const fx = game?.fx;
+      if (!fx || state.friendLastFxId === fx.id) return;
+      state.friendLastFxId = fx.id;
+
+      if (fx.type === "card") {
+        showFriendCardBurst(fx.cardName || "カード", fx.detail || `${friendRoleLabel(fx.role)}が使用`);
+      }
+      if (fx.type === "discardEffect") {
+        showFriendCardBurst(fx.cardName || "追加効果", fx.detail || "");
+      }
+      if (fx.type === "attack") {
+        showFriendCardBurst("攻撃", `${friendRoleLabel(fx.attacker)}：${fx.from === "L" ? "左" : "右"} → ${fx.to === "L" ? "左" : "右"}`);
+        animateFriendAttackFx(fx, game);
+      }
+    }
+
     function applyFriendRapidFire(game, role, bulletIndex, logsPrefix = []) {
       const opp = friendRoleOpponent(role);
       let me = { ...game[role], hand: [...(game[role].hand || [])], deck: [...(game[role].deck || [])], discard: [...(game[role].discard || [])], attachments: { L: [...friendAttachments(game[role] || {}, "L")], R: [...friendAttachments(game[role] || {}, "R")] } };
       let enemy = { ...game[opp], hand: [...(game[opp].hand || [])], deck: [...(game[opp].deck || [])], discard: [...(game[opp].discard || [])], attachments: { L: [...friendAttachments(game[opp] || {}, "L")], R: [...friendAttachments(game[opp] || {}, "R")] } };
       const target = state.friendPendingRapidFire?.target || elements.friendAttackTo.value;
       const logs = [...logsPrefix];
+      let discardFx = null;
 
       if (!me.hand.length) {
         logs.push("捨てる手札がないため乱射は不発。");
@@ -2168,6 +2260,8 @@ const CARD_LIBRARY = {
 
       if (bulletId === "logicAtelier") {
         logs.push("ロジックアトリエ：選択中の相手の手を0にした。");
+        showFriendCardBurst("ロジックアトリエ", "相手の手を0にした");
+        discardFx = makeFriendFx("discardEffect", { role, cardName: "ロジックアトリエ", detail: "相手の手を0にした" });
         enemy[target] = 0;
       } else {
         damage = friendApplyGuard(enemy, target, Math.max(1, damage), logs);
@@ -2180,23 +2274,31 @@ const CARD_LIBRARY = {
       if (bulletId === "accelerationBullet") {
         me = drawFriendCard({ ...game, [role]: me }, role, 1);
         logs.push("加速弾：1枚引いた。");
+        showFriendCardBurst("加速弾", "1枚引いた");
+        discardFx = makeFriendFx("discardEffect", { role, cardName: "加速弾", detail: "1枚引いた" });
       }
 
       if (bulletId === "specialBullet") {
         const result = friendDiscardRandomHandCard(enemy);
         enemy = result.side;
         logs.push(result.discarded ? `特殊弾：相手の手札「${friendCardInfo(result.discarded).name}」を捨てた。` : "特殊弾：相手の手札がなかった。");
+        const detail = result.discarded ? `相手の「${friendCardInfo(result.discarded).name}」を捨てた` : "相手の手札がなかった";
+        showFriendCardBurst("特殊弾", detail);
+        discardFx = makeFriendFx("discardEffect", { role, cardName: "特殊弾", detail });
       }
 
       if (bulletId === "piercingBullet") {
         const result = friendRemoveOneAttachment(enemy, target);
         enemy = result.side;
         logs.push(result.removed ? `貫通弾：相手の設置カード「${friendCardInfo(result.removed).name}」を捨てた。` : "貫通弾：相手の設置カードがなかった。");
+        const detail = result.removed ? `「${friendCardInfo(result.removed).name}」を破壊` : "設置カードなし";
+        showFriendCardBurst("貫通弾", detail);
+        discardFx = makeFriendFx("discardEffect", { role, cardName: "貫通弾", detail });
       }
 
       enemy = friendClearAttachmentsIfDead(enemy);
       const winner = friendIsDead(enemy) ? role : null;
-      const nextGame = { ...game, [role]: me, [opp]: enemy, winner, log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
+      const nextGame = { ...game, [role]: me, [opp]: enemy, winner, fx: discardFx || makeFriendFx("card", { role, cardName: "乱射", detail: `弾「${bullet.name}」を捨てた` }), log: [...(game.log || []), ...logs, ...(winner ? [`${friendRoleLabel(role)}の勝ち。`] : [])].slice(-30) };
       return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
     }
 
@@ -2688,11 +2790,22 @@ const CARD_LIBRARY = {
 
         const nextLog = [...(game.log || []), ...logs, `${friendRoleLabel(role)}：${from === "L" ? "左" : "右"}${basePower}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ""}で相手の${to === "L" ? "左" : "右"}を攻撃。${before}→${total}${total >= 5 ? `→${enemy[to]}` : ""}`].slice(-30);
         const winner = friendIsDead(enemy) ? role : null;
+        const attackFx = makeFriendFx("attack", {
+          attacker: role,
+          defender: opp,
+          from,
+          to,
+          before,
+          total,
+          after: enemy[to],
+          power
+        });
         const nextGame = {
           ...game,
           [role]: me,
           [opp]: enemy,
           winner,
+          fx: attackFx,
           log: winner ? [...nextLog, `${friendRoleLabel(role)}の勝ち。`].slice(-30) : nextLog
         };
         return { game: winner ? nextGame : friendEndTurn(nextGame, role, []) };
