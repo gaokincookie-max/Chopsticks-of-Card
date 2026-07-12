@@ -1961,3 +1961,15 @@
     .popup-user.friend-opponent-user {
       background: var(--danger);
     }
+
+
+/* v60: PVP battle DOM now uses the same hand/trap structure as CPU battle. */
+.friend-board-cpu .friend-hands-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.friend-board-cpu .friend-cpu-hand { width: 100%; min-height: 166px; }
+.friend-board-cpu .friend-cpu-hand.selected-own { border-color: var(--ok); box-shadow: 0 0 0 5px rgba(47,125,80,.17); }
+.friend-board-cpu .friend-cpu-hand.selected-target { border-color: var(--hit); background: #fff0df; box-shadow: 0 0 0 5px rgba(225,122,32,.24); }
+.friend-board-cpu .friend-cpu-hand.pending-pick { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(139,94,52,.13); }
+.friend-board-cpu .friend-cpu-hand.attack-source { animation: friendAttackSource .65s ease; border-color: var(--blue); background: #eef6ff; }
+.friend-board-cpu .friend-cpu-hand.attack-target { animation: friendAttackTarget .65s ease; border-color: var(--hit); background: #fff0df; }
+.friend-board-cpu .friend-cpu-hand.total-preview { border-color: var(--gold); background: #fff8d9; }
+.friend-board-cpu .friend-cpu-hand.total-preview .fingers { color: var(--danger); animation: friendTotalPreview .75s ease; }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード v55</title>
-  <link rel="stylesheet" href="style.css?v=57">
+  <link rel="stylesheet" href="style.css?v=60">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -231,13 +231,19 @@
               </div>
             </div>
             <div class="hands" id="friendOpponentHandsRow">
-              <div class="friend-hand-stack">
-                <button id="friendOpponentLeft" class="friend-hand-big friend-cpu-hand" data-side="opponent" data-hand="L">左手<br><b>1</b></button>
-                <div id="friendOpponentLeftAttach" class="friend-attachments-mini"></div>
+              <div id="friendOpponentLeft" class="hand friend-cpu-hand" data-side="opponent" data-hand="L">
+                <div class="calc-badge"></div>
+                <div class="hand-name">左手</div>
+                <div class="fingers">1</div>
+                <div class="finger-icons"></div>
+                <div id="friendOpponentLeftAttach" class="trap-slots"></div>
               </div>
-              <div class="friend-hand-stack">
-                <button id="friendOpponentRight" class="friend-hand-big friend-cpu-hand" data-side="opponent" data-hand="R">右手<br><b>1</b></button>
-                <div id="friendOpponentRightAttach" class="friend-attachments-mini"></div>
+              <div id="friendOpponentRight" class="hand friend-cpu-hand" data-side="opponent" data-hand="R">
+                <div class="calc-badge"></div>
+                <div class="hand-name">右手</div>
+                <div class="fingers">1</div>
+                <div class="finger-icons"></div>
+                <div id="friendOpponentRightAttach" class="trap-slots"></div>
               </div>
             </div>
           </div>
@@ -250,13 +256,19 @@
               </div>
             </div>
             <div class="hands" id="friendOwnHandsRow">
-              <div class="friend-hand-stack">
-                <button id="friendOwnLeft" class="friend-hand-big friend-cpu-hand" data-side="own" data-hand="L">左手<br><b>1</b></button>
-                <div id="friendOwnLeftAttach" class="friend-attachments-mini"></div>
+              <div id="friendOwnLeft" class="hand friend-cpu-hand" data-side="own" data-hand="L">
+                <div class="calc-badge"></div>
+                <div class="hand-name">左手</div>
+                <div class="fingers">1</div>
+                <div class="finger-icons"></div>
+                <div id="friendOwnLeftAttach" class="trap-slots"></div>
               </div>
-              <div class="friend-hand-stack">
-                <button id="friendOwnRight" class="friend-hand-big friend-cpu-hand" data-side="own" data-hand="R">右手<br><b>1</b></button>
-                <div id="friendOwnRightAttach" class="friend-attachments-mini"></div>
+              <div id="friendOwnRight" class="hand friend-cpu-hand" data-side="own" data-hand="R">
+                <div class="calc-badge"></div>
+                <div class="hand-name">右手</div>
+                <div class="fingers">1</div>
+                <div class="finger-icons"></div>
+                <div id="friendOwnRightAttach" class="trap-slots"></div>
               </div>
             </div>
           </div>
@@ -585,6 +597,6 @@
     }
   </script>
 
-  <script src="game.js?v=57"></script>
+  <script src="game.js?v=60"></script>
 </body>
 </html>

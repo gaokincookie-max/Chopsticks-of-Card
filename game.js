@@ -1631,10 +1631,14 @@ const CARD_LIBRARY = {
       const nextValue = value ?? 0;
       const oldValue = state.friendLastHandValues ? state.friendLastHandValues[key] : undefined;
       animateFriendHandChange(button, oldValue, nextValue);
-      const label = hand === "L" ? "左手" : "右手";
-      const dots = Array.from({ length: Math.max(0, nextValue) }, () => '<span class="friend-finger-dot"></span>').join("");
-      button.innerHTML = `<span class="hand-name">${label}</span><b class="fingers">${nextValue}</b><span class="friend-finger-icons">${dots}</span>`;
+      const num = button.querySelector(".fingers");
+      const icons = button.querySelector(".finger-icons");
+      if (num) num.textContent = String(nextValue);
+      if (icons) icons.textContent = "●".repeat(Math.max(0, nextValue));
       button.classList.toggle(selectedClass, !!isSelected);
+      button.classList.toggle("selected", selectedClass === "selected-own" && !!isSelected);
+      button.classList.toggle("hit-target", selectedClass === "selected-target" && !!isSelected);
+      button.classList.toggle("zero", nextValue <= 0);
       button.classList.toggle("dead", nextValue <= 0);
     }
 
@@ -1670,15 +1674,15 @@ const CARD_LIBRARY = {
       updateFriendHandButton(elements.friendOpponentLeft, enemy.L, "selected-target", targetSelectionVisible && state.friendSelectedTargetHand === "L", opp);
       updateFriendHandButton(elements.friendOpponentRight, enemy.R, "selected-target", targetSelectionVisible && state.friendSelectedTargetHand === "R", opp);
 
-      [elements.friendOwnLeft, elements.friendOwnRight, elements.friendOpponentLeft, elements.friendOpponentRight].forEach(btn => btn?.classList.remove("pending-pick"));
+      [elements.friendOwnLeft, elements.friendOwnRight, elements.friendOpponentLeft, elements.friendOpponentRight].forEach(btn => btn?.classList.remove("pending-pick", "selectable"));
       if (pending) {
         if (["attackFrom", "ownHand", "equalOwn"].includes(pending.type)) {
-          elements.friendOwnLeft?.classList.add("pending-pick");
-          elements.friendOwnRight?.classList.add("pending-pick");
+          elements.friendOwnLeft?.classList.add("pending-pick", "selectable");
+          elements.friendOwnRight?.classList.add("pending-pick", "selectable");
         }
         if (["attackTo", "opponentHand", "equalOpponent"].includes(pending.type)) {
-          elements.friendOpponentLeft?.classList.add("pending-pick");
-          elements.friendOpponentRight?.classList.add("pending-pick");
+          elements.friendOpponentLeft?.classList.add("pending-pick", "selectable");
+          elements.friendOpponentRight?.classList.add("pending-pick", "selectable");
         }
       }
 
@@ -1732,23 +1736,19 @@ const CARD_LIBRARY = {
     function renderFriendAttachments(container, side, hand) {
       if (!container) return;
       const list = friendAttachments(side || {}, hand);
-      if (!list.length) {
-        container.innerHTML = '<span class="friend-attach-chip">空き</span><span class="friend-attach-chip">空き</span>';
-        return;
-      }
       container.innerHTML = "";
       for (let i = 0; i < 2; i++) {
         const cardId = list[i];
-        const chip = document.createElement("span");
+        const slot = document.createElement("div");
         if (cardId) {
           const card = friendCardInfo(cardId);
-          chip.className = `friend-attach-chip ${card.type === "curse" ? "curse" : "blessing"}`;
-          chip.textContent = card.name;
+          slot.className = `trap-slot filled revealed-info${card.type === "curse" ? " curse-slot" : " blessing-slot"}`;
+          slot.textContent = card.name;
         } else {
-          chip.className = "friend-attach-chip";
-          chip.textContent = "空き";
+          slot.className = "trap-slot";
+          slot.textContent = "空き";
         }
-        container.appendChild(chip);
+        container.appendChild(slot);
       }
     }
 
@@ -2029,9 +2029,15 @@ const CARD_LIBRARY = {
       if (!next) return;
 
       if (next.game && !next.game.fx) {
-        const logs = Array.isArray(next.game.log) ? next.game.log : [];
-        const lastLog = logs[logs.length - 1] || "";
-        const cardMatch = lastLog.match(/(ホスト|ゲスト)：「([^」]+)」/);
+        const beforeLogs = Array.isArray(data.game?.log) ? data.game.log : [];
+        const afterLogs = Array.isArray(next.game.log) ? next.game.log : [];
+        const addedLogs = afterLogs.slice(Math.min(beforeLogs.length, afterLogs.length));
+        const candidates = addedLogs.length ? addedLogs : afterLogs.slice(-6);
+        let cardMatch = null;
+        for (let i = candidates.length - 1; i >= 0; i--) {
+          const match = String(candidates[i] || "").match(/(ホスト|ゲスト)：「([^」]+)」を使用/);
+          if (match) { cardMatch = match; break; }
+        }
         if (cardMatch) {
           next.game.fx = makeFriendFx("card", {
             role: cardMatch[1] === "ホスト" ? "host" : "guest",
@@ -2276,8 +2282,12 @@ const CARD_LIBRARY = {
 
     function setFriendButtonDisplay(button, value) {
       if (!button) return;
-      const label = button.dataset.hand === "L" ? "左" : "右";
-      button.innerHTML = `${label}<br><b>${value ?? 0}</b>`;
+      const num = button.querySelector(".fingers");
+      const icons = button.querySelector(".finger-icons");
+      const nextValue = value ?? 0;
+      if (num) num.textContent = String(nextValue);
+      if (icons) icons.textContent = "●".repeat(Math.max(0, nextValue));
+      button.classList.toggle("zero", nextValue <= 0);
     }
 
     function animateFriendAttackFx(fx, game) {
