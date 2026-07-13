@@ -1002,7 +1002,9 @@ const CARD_LIBRARY = {
       friendPublishTimer: null,
       friendInterruptWaiting: null,
       friendInterruptHandling: false,
-      friendHandledInterruptIds: new Set()
+      friendHandledInterruptIds: new Set(),
+      friendHandledFxIds: new Set(),
+      friendFxQueue: Promise.resolve()
     };
 
     const handNames = {
@@ -1403,16 +1405,13 @@ const CARD_LIBRARY = {
       state.friendSyncRevision = nextRevision;
       state.friendLastPublishedSignature = signature;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      const existingMatch = state.friendRoomData?.match || {};
-      await fb.setDoc(roomRef, {
-        match: {
-          ...existingMatch,
-          version: 44,
-          stateRevision: nextRevision,
-          state: snapshot
-        },
+      // match 全体を古いキャッシュで上書きしない。更新するフィールドだけを原子的に書く。
+      await fb.updateDoc(roomRef, {
+        "match.version": 46,
+        "match.stateRevision": nextRevision,
+        "match.state": snapshot,
         updatedAt: fb.serverTimestamp()
-      }, { merge: true });
+      });
     }
 
     function canPublishFriendStateSafely() {
@@ -1441,6 +1440,81 @@ const CARD_LIBRARY = {
     }
 
 
+    function friendSideForLocalPlayer(player) {
+      if (!state.friendRole) return null;
+      return player === "human" ? state.friendRole : otherFriendRole();
+    }
+
+    function localPlayerForFriendSide(side) {
+      if (!state.friendRole || !side) return null;
+      return side === state.friendRole ? "human" : "cpu";
+    }
+
+    async function emitFriendFx(type, payload = {}) {
+      if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || state.friendApplyingRemoteState) return;
+      const fb = firebaseApi();
+      if (!fb) return;
+      const fx = {
+        id: `${state.friendRole}-fx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        sourceSide: state.friendRole,
+        payload: cloneJson(payload),
+        createdAtMs: Date.now()
+      };
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      await fb.updateDoc(roomRef, {
+        "match.version": 46,
+        "match.fx": fx,
+        updatedAt: fb.serverTimestamp()
+      });
+    }
+
+    async function playIncomingFriendFx(fx) {
+      if (!fx?.id || !fx.type || fx.sourceSide === state.friendRole) return;
+      const payload = fx.payload || {};
+      if (fx.type === "card") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        const card = CARD_LIBRARY[payload.cardId];
+        if (player && card) await showCardPopup(player, card, false, 760);
+        return;
+      }
+      if (fx.type === "attack") {
+        const attacker = localPlayerForFriendSide(payload.attackerSide);
+        const defender = localPlayerForFriendSide(payload.defenderSide);
+        if (attacker && defender && payload.attackHand && payload.targetHand) {
+          await animateAttackIntent(attacker, payload.attackHand, defender, payload.targetHand);
+          clearHighlights();
+          render();
+        }
+        return;
+      }
+      if (fx.type === "split") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) await showPopup(player, "分ける", "左右の本数を分け直しました。", "action", 650);
+        return;
+      }
+      if (fx.type === "trapReveal") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        const card = CARD_LIBRARY[payload.cardId];
+        if (player && card) await showCardPopup(player, card, true, 760);
+      }
+    }
+
+    function handleIncomingFriendFx(fx) {
+      if (!fx?.id || fx.sourceSide === state.friendRole || state.friendHandledFxIds.has(fx.id)) return;
+      state.friendHandledFxIds.add(fx.id);
+      if (state.friendHandledFxIds.size > 120) {
+        const first = state.friendHandledFxIds.values().next().value;
+        state.friendHandledFxIds.delete(first);
+      }
+      state.friendFxQueue = state.friendFxQueue
+        .catch(() => {})
+        .then(() => playIncomingFriendFx(fx))
+        .catch(error => {
+          console.error("PVP fx receive failed", error);
+        });
+    }
+
     function makeFriendInterruptId() {
       return `${state.friendRole || "side"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
@@ -1449,11 +1523,12 @@ const CARD_LIBRARY = {
       const fb = firebaseApi();
       if (!fb || !state.friendRoomId) throw new Error("Firebaseに接続されていません。");
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      const existingMatch = state.friendRoomData?.match || {};
-      await fb.setDoc(roomRef, {
-        match: { ...existingMatch, version: 44, interrupt },
+      // 割り込みだけを書き換え、盤面 state / revision を古い値で巻き戻さない。
+      await fb.updateDoc(roomRef, {
+        "match.version": 46,
+        "match.interrupt": interrupt,
         updatedAt: fb.serverTimestamp()
-      }, { merge: true });
+      });
     }
 
     async function requestRemoteFriendDecision(type, payload = {}) {
@@ -1614,6 +1689,8 @@ const CARD_LIBRARY = {
         state.friendRoomData = data;
         elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
         updateFriendLobbyView(data);
+        const fx = data?.match?.fx;
+        if (fx) handleIncomingFriendFx(fx);
         const interrupt = data?.match?.interrupt;
         if (interrupt) {
           if (!consumeResolvedFriendInterrupt(interrupt)) {
@@ -1738,7 +1815,7 @@ const CARD_LIBRARY = {
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
       const match = {
-        version: 44,
+        version: 45,
         createdAtMs: Date.now(),
         turnSide: "host",
         turnNumber: 1,
@@ -2034,6 +2111,26 @@ function wrapFinger(value) {
         setMessage("保存済みデッキを読み込みました。反映するにはリスタートしてください。");
       } catch (error) {
         setMessage("保存データを読み込めませんでした。");
+      }
+    }
+
+    function loadDecksSilentlyOnStartup() {
+      const raw = localStorage.getItem("waribashiDecksV11");
+      if (!raw) return false;
+      try {
+        const data = JSON.parse(raw);
+        if (data.deckCounts?.human && data.deckCounts?.cpu) {
+          state.deckCounts = {
+            human: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.human },
+            cpu: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.cpu }
+          };
+        }
+        if (Number.isFinite(Number(data.costLimit))) state.costLimit = Math.min(40, Number(data.costLimit));
+        if (["easy", "standard", "hard"].includes(data.cpuDifficulty)) state.cpuDifficulty = data.cpuDifficulty;
+        return true;
+      } catch (error) {
+        console.warn("保存済みデッキの自動読込に失敗しました。", error);
+        return false;
       }
     }
 
@@ -3506,8 +3603,14 @@ function renderLastAction() {
 
       const label = attachmentLabel(cardId);
       const faceText = card.trap ? "伏せた" : "表向きで置いた";
-      addLog(`${handNames[player]}は${handNames[owner]}の${handNames[hand]}の下に${label}「${card.name}」を${faceText}。`);
-      setLastAction(player, `${label}を設置`, `${handNames[owner]}の${handNames[hand]}の下に「${card.name}」を${faceText}。`, card.trap ? "trap" : "card");
+      if (card.trap) {
+        // 共有ログは両者に同期されるため、伏せ罠のカード名は絶対に記録しない。
+        addLog(`${handNames[player]}は${handNames[owner]}の${handNames[hand]}の下に罠カードを1枚伏せた。`);
+        setLastAction(player, "罠を設置", `${handNames[owner]}の${handNames[hand]}の下に罠カードを1枚伏せた。`, "trap");
+      } else {
+        addLog(`${handNames[player]}は${handNames[owner]}の${handNames[hand]}の下に${label}「${card.name}」を${faceText}。`);
+        setLastAction(player, `${label}を設置`, `${handNames[owner]}の${handNames[hand]}の下に「${card.name}」を${faceText}。`, "card");
+      }
       if (player === "human") {
         if (setupActive) {
           setMessage(`「${card.name}」を${handNames[hand]}の下に伏せました。続けて罠を伏せるか、「仕込み終了」を押してください。`);
@@ -3516,6 +3619,10 @@ function renderLastAction() {
         }
       }
       render();
+      // 罠・加護・呪縛の設置は相手側の表示に直結するため、オンラインでは即時同期する。
+      if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
+        await publishFriendStateNow();
+      }
       return true;
     }
 
@@ -3545,6 +3652,9 @@ function renderLastAction() {
       addLog(`【カード】${visibleText}`);
       render();
 
+      if (state.battleMode === "friend" && player === "human") {
+        emitFriendFx("card", { playerSide: friendSideForLocalPlayer(player), cardId }).catch(error => console.error("PVP card fx failed", error));
+      }
       if (showPopup) await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
 
       await card.effect(player);
@@ -3731,6 +3841,12 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       setLastAction(defender, `「${card.name}」`, card.text, "trap");
       addLog(`【罠】${handNames[defender]}の「${card.name}」が発動。`);
       render();
+      if (state.battleMode === "friend" && defender === "cpu") {
+        // 守備側の実端末が既に自分の画面で表示するため、攻撃側へ公開演出を送る。
+        emitFriendFx("trapReveal", { playerSide: friendSideForLocalPlayer(defender), cardId }).catch(error => console.error("PVP trap fx failed", error));
+      } else if (state.battleMode === "friend" && defender === "human") {
+        emitFriendFx("trapReveal", { playerSide: friendSideForLocalPlayer(defender), cardId }).catch(error => console.error("PVP trap fx failed", error));
+      }
       await showCardPopup(defender, card, true, 760);
       const result = await card.trigger({ ...context, defender, placedHand }) || {};
       render();
@@ -3820,6 +3936,14 @@ async function attack(attacker, attackHand, defender, targetHand) {
         return true;
       }
 
+      if (state.battleMode === "friend" && attacker === "human") {
+        emitFriendFx("attack", {
+          attackerSide: friendSideForLocalPlayer(attacker),
+          attackHand,
+          defenderSide: friendSideForLocalPlayer(defender),
+          targetHand
+        }).catch(error => console.error("PVP attack fx failed", error));
+      }
       await animateAttackIntent(attacker, attackHand, defender, targetHand);
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
@@ -3850,6 +3974,14 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (trapResult.targetHand) {
         targetHand = trapResult.targetHand;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
+        if (state.battleMode === "friend" && attacker === "human") {
+          emitFriendFx("attack", {
+            attackerSide: friendSideForLocalPlayer(attacker),
+            attackHand,
+            defenderSide: friendSideForLocalPlayer(defender),
+            targetHand
+          }).catch(error => console.error("PVP redirected attack fx failed", error));
+        }
         await animateAttackIntent(attacker, attackHand, defender, targetHand);
       }
 
@@ -3943,6 +4075,9 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const before = `${state[player].L}-${state[player].R}`;
       if (show) {
         setLastAction(player, "分ける", "左右の本数を分け直しました。", "action");
+        if (state.battleMode === "friend" && player === "human") {
+          emitFriendFx("split", { playerSide: friendSideForLocalPlayer(player), left, right }).catch(error => console.error("PVP split fx failed", error));
+        }
         await showPopup(player, "分ける", "左右の本数を分け直しました。", "action", player === "cpu" ? 650 : 500);
       }
       state[player].L = left;
@@ -5159,6 +5294,8 @@ async function endTurn() {
       btn.addEventListener("click", () => renderHelp(btn.dataset.helpTab));
     });
 
+    // 起動時に保存済みデッキを自動読込する。ゲスト側も準備完了時に実際の自分用デッキを提出できる。
+    loadDecksSilentlyOnStartup();
     renderDeckBuilder();
     showScreen("menu");
     loadRoomFromUrl();
