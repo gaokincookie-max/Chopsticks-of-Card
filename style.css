@@ -1324,25 +1324,25 @@
   width: 150vw;
   height: 3px;
   opacity: 0;
-  background: rgba(245, 252, 255, .95);
-  box-shadow: 0 0 14px rgba(190, 235, 255, .95), 0 0 34px rgba(120, 205, 255, .7);
+  background: rgba(235, 248, 255, .72);
+  box-shadow: 0 0 12px rgba(190, 235, 255, .68), 0 0 28px rgba(120, 205, 255, .46);
   transform: rotate(-12deg) translateX(-65vw);
 }
 .special-fx-layer.logic-fx::before { top: 43%; }
 .special-fx-layer.logic-fx::after { top: 56%; transform: rotate(8deg) translateX(-65vw); }
-.special-fx-layer.logic-fx.lock .special-fx-copy { animation: logicLock .18s ease-out both; }
-.special-fx-layer.logic-fx.dash .special-fx-copy { animation: logicCopyVanish .16s linear both; }
-.special-fx-layer.logic-fx.dash::before { animation: logicSlashA .22s cubic-bezier(.1,.8,.2,1) both; }
-.special-fx-layer.logic-fx.dash::after { animation: logicSlashB .2s .035s cubic-bezier(.1,.8,.2,1) both; }
-.special-fx-layer.logic-fx.logic-flash { animation: logicScreenHit .38s ease-out both; }
+.special-fx-layer.logic-fx.lock .special-fx-copy { animation: logicLock .42s ease-out both; }
+.special-fx-layer.logic-fx.dash .special-fx-copy { animation: logicCopyVanish .32s ease-out both; }
+.special-fx-layer.logic-fx.dash::before { animation: logicSlashA .42s cubic-bezier(.16,.72,.22,1) both; }
+.special-fx-layer.logic-fx.dash::after { animation: logicSlashB .4s .07s cubic-bezier(.16,.72,.22,1) both; }
+.special-fx-layer.logic-fx.logic-flash { animation: logicScreenHit .76s ease-out both; }
 .hand.logic-mark {
   box-shadow: 0 0 0 4px rgba(190,235,255,.7), 0 0 28px rgba(120,205,255,.9) !important;
   transform: scale(1.035);
 }
 .hand.logic-shatter {
-  animation: logicShatter .38s cubic-bezier(.15,.85,.2,1) both;
-  box-shadow: 0 0 0 5px rgba(255,255,255,.85), 0 0 42px rgba(160,225,255,1) !important;
-  filter: contrast(1.65) brightness(1.4);
+  animation: logicShatter .76s cubic-bezier(.18,.72,.24,1) both;
+  box-shadow: 0 0 0 4px rgba(235,250,255,.58), 0 0 34px rgba(160,225,255,.72) !important;
+  filter: contrast(1.28) brightness(1.12);
 }
 .hand.logic-shatter::before,
 .hand.logic-shatter::after {
@@ -1351,17 +1351,17 @@
   inset: 10% 12%;
   z-index: 8;
   pointer-events: none;
-  background: repeating-linear-gradient(63deg, transparent 0 13px, rgba(255,255,255,.9) 14px 16px, transparent 17px 29px);
+  background: repeating-linear-gradient(63deg, transparent 0 13px, rgba(235,250,255,.7) 14px 16px, transparent 17px 29px);
   mix-blend-mode: screen;
-  animation: logicCracks .38s ease-out both;
+  animation: logicCracks .76s ease-out both;
 }
 .hand.logic-shatter::after { transform: rotate(82deg) scale(.92); }
-.hand.logic-aftershock { animation: logicAftershock .24s ease-out both; }
+.hand.logic-aftershock { animation: logicAftershock .42s ease-out both; }
 @keyframes logicLock { 0% { opacity: 0; transform: scale(1.16); filter: blur(6px); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
 @keyframes logicCopyVanish { to { opacity: 0; transform: scale(.9); } }
 @keyframes logicSlashA { 0% { opacity: 0; transform: rotate(-12deg) translateX(-65vw); } 18% { opacity: 1; } 100% { opacity: 0; transform: rotate(-12deg) translateX(65vw); } }
 @keyframes logicSlashB { 0% { opacity: 0; transform: rotate(8deg) translateX(-65vw); } 18% { opacity: 1; } 100% { opacity: 0; transform: rotate(8deg) translateX(65vw); } }
-@keyframes logicScreenHit { 0% { background: rgba(4,8,14,.72); } 35% { background: rgba(220,245,255,.92); } 100% { background: rgba(4,8,14,0); } }
-@keyframes logicShatter { 0% { transform: translate(0,0) scale(1); } 18% { transform: translate(4px,-2px) scale(.96); } 35% { transform: translate(-5px,3px) skewX(-5deg) scale(1.04); } 58% { transform: translate(3px,1px) skewX(4deg) scale(.94); } 100% { transform: translate(0,0) scale(.88); opacity: .28; } }
+@keyframes logicScreenHit { 0% { background: rgba(4,8,14,.72); } 38% { background: rgba(180,225,245,.46); } 62% { background: rgba(85,130,155,.22); } 100% { background: rgba(4,8,14,0); } }
+@keyframes logicShatter { 0% { transform: translate(0,0) scale(1); } 22% { transform: translate(2px,-1px) scale(.98); } 44% { transform: translate(-3px,2px) skewX(-2deg) scale(1.02); } 68% { transform: translate(2px,1px) skewX(2deg) scale(.96); } 100% { transform: translate(0,0) scale(.9); opacity: .32; } }
 @keyframes logicCracks { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 35% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; transform: scale(1.35); } }
 @keyframes logicAftershock { 0% { transform: scale(.88); opacity: .35; } 55% { transform: scale(1.045); opacity: .75; } 100% { transform: scale(1); opacity: 1; } }

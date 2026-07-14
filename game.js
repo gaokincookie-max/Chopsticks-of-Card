@@ -1306,21 +1306,21 @@ const CARD_LIBRARY = {
       layer.className = "special-fx-layer logic-fx lock";
       layer.setAttribute("aria-hidden", "false");
       target.classList.add("logic-mark");
-      await delay(180);
+      await delay(420);
 
       layer.classList.remove("lock");
       layer.classList.add("dash");
-      await delay(220);
+      await delay(430);
 
       target.classList.remove("logic-mark");
       target.classList.add("logic-shatter");
       layer.classList.add("logic-flash");
-      await delay(380);
+      await delay(760);
 
       layer.classList.remove("logic-flash");
       target.classList.remove("logic-shatter");
       target.classList.add("logic-aftershock");
-      await delay(240);
+      await delay(420);
       target.classList.remove("logic-aftershock");
       layer.className = "special-fx-layer";
       layer.setAttribute("aria-hidden", "true");
