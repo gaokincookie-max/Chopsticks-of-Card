@@ -2568,8 +2568,22 @@ function wrapFinger(value) {
       localStorage.setItem(DECK_SLOT_STORAGE_KEY, JSON.stringify(slots));
     }
 
+    function refreshDeckSlotOptionLabels() {
+      if (!elements.deckSlotSelect) return;
+      const owner = state.editingDeckOwner;
+      const slots = readDeckSlots();
+      for (const option of elements.deckSlotSelect.options) {
+        const slotId = String(option.value);
+        const slot = slots?.[owner]?.[slotId];
+        option.textContent = slot?.name
+          ? `スロット${slotId}｜${slot.name}`
+          : `スロット${slotId}｜空き`;
+      }
+    }
+
     function updateDeckSlotUi() {
       if (!elements.deckSlotSelect) return;
+      refreshDeckSlotOptionLabels();
       const owner = state.editingDeckOwner;
       const slotId = String(elements.deckSlotSelect.value || "1");
       const slots = readDeckSlots();
@@ -2716,7 +2730,8 @@ function wrapFinger(value) {
 
     function decodeDeckPayload(code) {
       const trimmed = normalizeDeckCodeInput(code);
-      if (trimmed.startsWith(DECK_CODE_PREFIX)) {
+      const upperPrefixView = trimmed.slice(0, Math.max(DECK_CODE_PREFIX.length, DECK_CODE_PREFIX_V1.length)).toUpperCase();
+      if (upperPrefixView.startsWith(DECK_CODE_PREFIX)) {
         const json = base64UrlToUtf8(trimmed.slice(DECK_CODE_PREFIX.length));
         const payload = JSON.parse(json);
         if (!payload || payload.version !== 2) throw new Error("version");
@@ -2729,7 +2744,7 @@ function wrapFinger(value) {
         }
         return payload;
       }
-      if (trimmed.startsWith(DECK_CODE_PREFIX_V1)) {
+      if (upperPrefixView.startsWith(DECK_CODE_PREFIX_V1)) {
         const base64 = trimmed.slice(DECK_CODE_PREFIX_V1.length);
         const json = decodeURIComponent(escape(atob(base64)));
         const payload = JSON.parse(json);
