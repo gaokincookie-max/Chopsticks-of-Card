@@ -1284,14 +1284,44 @@ const CARD_LIBRARY = {
       elements.specialFxSub.textContent = `${handNames[player]}の両手の合計 ${power}`;
       layer.className = "special-fx-layer finale-fx prepare";
       layer.setAttribute("aria-hidden", "false");
-      await delay(380);
+      await delay(760);
       layer.classList.remove("prepare");
       layer.classList.add("reveal");
-      await delay(520);
+      await delay(980);
       layer.classList.add("flash");
-      await delay(360);
+      await delay(620);
       layer.classList.remove("flash");
-      await delay(260);
+      await delay(520);
+      layer.className = "special-fx-layer";
+      layer.setAttribute("aria-hidden", "true");
+    }
+
+    async function showLogicAtelierFx(player, defender, targetHand) {
+      const layer = elements.specialFxLayer;
+      const target = handEl(defender, targetHand);
+      if (!layer || !target) return;
+
+      elements.specialFxTitle.textContent = "LOGIC ATELIER";
+      elements.specialFxSub.textContent = `${handNames[player]} → ${handNames[defender]}の${handNames[targetHand]}`;
+      layer.className = "special-fx-layer logic-fx lock";
+      layer.setAttribute("aria-hidden", "false");
+      target.classList.add("logic-mark");
+      await delay(180);
+
+      layer.classList.remove("lock");
+      layer.classList.add("dash");
+      await delay(220);
+
+      target.classList.remove("logic-mark");
+      target.classList.add("logic-shatter");
+      layer.classList.add("logic-flash");
+      await delay(380);
+
+      layer.classList.remove("logic-flash");
+      target.classList.remove("logic-shatter");
+      target.classList.add("logic-aftershock");
+      await delay(240);
+      target.classList.remove("logic-aftershock");
       layer.className = "special-fx-layer";
       layer.setAttribute("aria-hidden", "true");
     }
@@ -1714,6 +1744,14 @@ const CARD_LIBRARY = {
       if (fx.type === "finale") {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         if (player) await showFinaleFx(player, Number(payload.power || 0));
+        return;
+      }
+      if (fx.type === "logicAtelier") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        const defender = localPlayerForFriendSide(payload.defenderSide);
+        if (player && defender && payload.targetHand) {
+          await showLogicAtelierFx(player, defender, payload.targetHand);
+        }
       }
     }
 
@@ -5178,10 +5216,19 @@ async function endTurn() {
       if (discarded === "logicCrusherBullet") {
         state.animating = true;
         render();
-        await showPopup(player, "乱射：ロジックアトリエ", `罠を発動させず、${handNames[defender]}の${handNames[targetHand]}を0にします。`, "action", 900);
+        if (state.battleMode === "friend" && player === "human") {
+          emitFriendFx("logicAtelier", {
+            playerSide: friendSideForLocalPlayer(player),
+            defenderSide: friendSideForLocalPlayer(defender),
+            targetHand
+          }).catch(error => console.error("PVP logic atelier fx failed", error));
+        }
         const before = state[defender][targetHand];
-        await animateCalculation(defender, targetHand, before, 0);
+        await showLogicAtelierFx(player, defender, targetHand);
         state[defender][targetHand] = 0;
+        document.getElementById(`${defender}${targetHand}Num`).textContent = "0";
+        document.getElementById(`${defender}${targetHand}Icons`).textContent = "";
+        document.getElementById(`${defender}${targetHand}Calc`).textContent = "";
         addLog(`${handNames[player]}は「乱射」で「ロジックアトリエ」を捨て、${handNames[defender]}の${handNames[targetHand]}を${before}→0にした。罠は発動できない。`);
         clearBrokenTraps(defender);
         state.animating = false;

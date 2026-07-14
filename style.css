@@ -1280,14 +1280,14 @@
 .special-fx-layer.prepare,
 .special-fx-layer.reveal { display: grid; }
 .special-fx-layer.finale-fx { background: rgba(8, 7, 16, .88); }
-.special-fx-layer.finale-fx.prepare { animation: finaleDim .38s ease both; }
-.special-fx-layer.finale-fx.reveal { animation: finaleOpen .52s ease both; }
+.special-fx-layer.finale-fx.prepare { animation: finaleDim .76s ease both; }
+.special-fx-layer.finale-fx.reveal { animation: finaleOpen .98s ease both; }
 .special-fx-layer.finale-fx.flash::after {
   content: "";
   position: absolute;
   inset: 0;
   background: white;
-  animation: finaleFlash .36s ease both;
+  animation: finaleFlash .62s ease both;
 }
 .finale-halo {
   position: absolute;
@@ -1299,16 +1299,69 @@
   opacity: 0;
   transform: scale(.35);
 }
-.special-fx-layer.reveal .finale-halo { animation: finaleHalo .95s ease-out both; }
+.special-fx-layer.reveal .finale-halo { animation: finaleHalo 1.7s ease-out both; }
 .special-fx-copy { position: relative; z-index: 2; text-align: center; color: white; text-shadow: 0 3px 20px rgba(0,0,0,.5); }
 .special-fx-title { font-size: clamp(42px, 12vw, 96px); font-weight: 1000; letter-spacing: .12em; }
 .special-fx-sub { margin-top: 10px; font-size: clamp(14px, 4vw, 22px); font-weight: 900; opacity: .9; }
 .special-fx-layer.prepare .special-fx-copy { opacity: 0; }
-.special-fx-layer.reveal .special-fx-copy { animation: finaleTitle .58s cubic-bezier(.2,.9,.2,1) both; }
-.hand.finale-target { animation: finaleTarget .68s ease both; box-shadow: 0 0 0 6px rgba(255,255,255,.55), 0 0 36px rgba(255,225,120,.9) !important; }
+.special-fx-layer.reveal .special-fx-copy { animation: finaleTitle .96s cubic-bezier(.2,.9,.2,1) both; }
+.hand.finale-target { animation: finaleTarget 1.05s ease both; box-shadow: 0 0 0 6px rgba(255,255,255,.55), 0 0 36px rgba(255,225,120,.9) !important; }
 @keyframes finaleDim { from { background: rgba(8,7,16,0); } to { background: rgba(8,7,16,.88); } }
 @keyframes finaleOpen { from { background: rgba(8,7,16,.88); } to { background: rgba(20,16,12,.45); } }
 @keyframes finaleFlash { 0% { opacity: 0; } 22% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes finaleHalo { 0% { opacity: 0; transform: scale(.35); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
 @keyframes finaleTitle { 0% { opacity: 0; transform: scale(.78); filter: blur(7px); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
 @keyframes finaleTarget { 0% { transform: scale(1); } 38% { transform: scale(.93); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+
+/* v53: Logic Atelier cinematic FX */
+.special-fx-layer.logic-fx { display: grid; background: rgba(4, 8, 14, .72); }
+.special-fx-layer.logic-fx::before,
+.special-fx-layer.logic-fx::after {
+  content: "";
+  position: absolute;
+  left: -25vw;
+  width: 150vw;
+  height: 3px;
+  opacity: 0;
+  background: rgba(245, 252, 255, .95);
+  box-shadow: 0 0 14px rgba(190, 235, 255, .95), 0 0 34px rgba(120, 205, 255, .7);
+  transform: rotate(-12deg) translateX(-65vw);
+}
+.special-fx-layer.logic-fx::before { top: 43%; }
+.special-fx-layer.logic-fx::after { top: 56%; transform: rotate(8deg) translateX(-65vw); }
+.special-fx-layer.logic-fx.lock .special-fx-copy { animation: logicLock .18s ease-out both; }
+.special-fx-layer.logic-fx.dash .special-fx-copy { animation: logicCopyVanish .16s linear both; }
+.special-fx-layer.logic-fx.dash::before { animation: logicSlashA .22s cubic-bezier(.1,.8,.2,1) both; }
+.special-fx-layer.logic-fx.dash::after { animation: logicSlashB .2s .035s cubic-bezier(.1,.8,.2,1) both; }
+.special-fx-layer.logic-fx.logic-flash { animation: logicScreenHit .38s ease-out both; }
+.hand.logic-mark {
+  box-shadow: 0 0 0 4px rgba(190,235,255,.7), 0 0 28px rgba(120,205,255,.9) !important;
+  transform: scale(1.035);
+}
+.hand.logic-shatter {
+  animation: logicShatter .38s cubic-bezier(.15,.85,.2,1) both;
+  box-shadow: 0 0 0 5px rgba(255,255,255,.85), 0 0 42px rgba(160,225,255,1) !important;
+  filter: contrast(1.65) brightness(1.4);
+}
+.hand.logic-shatter::before,
+.hand.logic-shatter::after {
+  content: "";
+  position: absolute;
+  inset: 10% 12%;
+  z-index: 8;
+  pointer-events: none;
+  background: repeating-linear-gradient(63deg, transparent 0 13px, rgba(255,255,255,.9) 14px 16px, transparent 17px 29px);
+  mix-blend-mode: screen;
+  animation: logicCracks .38s ease-out both;
+}
+.hand.logic-shatter::after { transform: rotate(82deg) scale(.92); }
+.hand.logic-aftershock { animation: logicAftershock .24s ease-out both; }
+@keyframes logicLock { 0% { opacity: 0; transform: scale(1.16); filter: blur(6px); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
+@keyframes logicCopyVanish { to { opacity: 0; transform: scale(.9); } }
+@keyframes logicSlashA { 0% { opacity: 0; transform: rotate(-12deg) translateX(-65vw); } 18% { opacity: 1; } 100% { opacity: 0; transform: rotate(-12deg) translateX(65vw); } }
+@keyframes logicSlashB { 0% { opacity: 0; transform: rotate(8deg) translateX(-65vw); } 18% { opacity: 1; } 100% { opacity: 0; transform: rotate(8deg) translateX(65vw); } }
+@keyframes logicScreenHit { 0% { background: rgba(4,8,14,.72); } 35% { background: rgba(220,245,255,.92); } 100% { background: rgba(4,8,14,0); } }
+@keyframes logicShatter { 0% { transform: translate(0,0) scale(1); } 18% { transform: translate(4px,-2px) scale(.96); } 35% { transform: translate(-5px,3px) skewX(-5deg) scale(1.04); } 58% { transform: translate(3px,1px) skewX(4deg) scale(.94); } 100% { transform: translate(0,0) scale(.88); opacity: .28; } }
+@keyframes logicCracks { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 35% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes logicAftershock { 0% { transform: scale(.88); opacity: .35; } 55% { transform: scale(1.045); opacity: .75; } 100% { transform: scale(1); opacity: 1; } }
