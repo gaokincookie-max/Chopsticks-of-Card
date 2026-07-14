@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=49">
+  <link rel="stylesheet" href="style.css?v=51">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -353,6 +353,14 @@
         <button id="confirmSplitBtn">決定</button>
         <span class="small" id="splitHint"></span>
       </div>
+
+      <div class="split-box" id="andanteBox">
+        <span id="andanteLabel">アンダンテ：</span>
+        <button id="andanteMinusBtn" class="secondary">−1</button>
+        <button id="andantePlusBtn">＋1</button>
+        <button id="andanteCancelBtn" class="secondary">やめる</button>
+        <span class="small">選んだ手を1だけ微調整します。0にはできません。</span>
+      </div>
     </section>
 
     <section class="card-area battle-screen screen-hidden">
@@ -412,6 +420,6 @@
     }
   </script>
 
-  <script src="game.js?v=49"></script>
+  <script src="game.js?v=51"></script>
 </body>
 </html>

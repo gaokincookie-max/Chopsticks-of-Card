@@ -72,6 +72,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「補修」：捨てる手札を1枚選んでください。補修後、ターンは終了します。");
             return;
           }
@@ -125,6 +126,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「ランダムダイス」：本数を変える自分の0でない手を選んでください。");
             return;
           }
@@ -147,6 +149,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「等価交換」：まず-1する自分の手を選んでください。");
             return;
           }
@@ -188,6 +191,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「狙撃」：+1する相手の手を選んでください。");
             return;
           }
@@ -209,6 +213,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「乱射」：弾薬として捨てる手札を1枚選んでください。");
             return;
           }
@@ -387,6 +392,7 @@ const CARD_LIBRARY = {
             state.selectedAttackHand = null;
             state.selectedTrapCardIndex = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「解除」：捨て札に置く相手の伏せカードをタップしてください。");
             return;
           }
@@ -407,6 +413,7 @@ const CARD_LIBRARY = {
             state.selectedAttackHand = null;
             state.selectedTrapCardIndex = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「看破」：確認する相手の伏せカードをタップしてください。");
             return;
           }
@@ -427,6 +434,7 @@ const CARD_LIBRARY = {
             state.selectedAttackHand = null;
             state.selectedTrapCardIndex = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「手繰り寄せ」：移動させる相手のカードをタップしてください。");
             return;
           }
@@ -447,6 +455,7 @@ const CARD_LIBRARY = {
             state.selectedAttackHand = null;
             state.selectedTrapCardIndex = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「すりかえ」：まず相手の加護・呪縛をタップしてください。");
             render();
             return;
@@ -480,6 +489,7 @@ const CARD_LIBRARY = {
           state.selectedTrapCardIndex = null;
           state.pendingTrapTargetEffect = null;
           elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
           addLog(`${handNames[player]}は「仕込み」を使った。罠を好きなだけ伏せられる。`);
           if (player === "human") {
             setMessage("「仕込み」：このターンは罠カードを好きなだけ伏せられます。終わったら「仕込み終了」を押してください。");
@@ -513,6 +523,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「凶弾」：攻撃に使う自分の手を選んでください。選ばなかった手を攻撃します。");
             return;
           }
@@ -559,6 +570,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「落ち着ける」：捨てる手札を1枚選んでください。その後2枚引きます。");
             return;
           }
@@ -570,6 +582,91 @@ const CARD_LIBRARY = {
           drawCard(player);
           drawCard(player);
           addLog(`${handNames[player]}は「落ち着ける」で「${CARD_LIBRARY[discarded].name}」を捨て、2枚引いた。`);
+        }
+      },
+
+      allegro: {
+        name: "アレグロ",
+        cost: 2,
+        type: "補助",
+        text: "このターン、自分が初めて共鳴を発生させたとき、カードを2枚引く。",
+        canPlay: () => true,
+        effect: (player) => {
+          state.temp[player].allegro = true;
+          state.temp[player].allegroTriggered = false;
+          addLog(`${handNames[player]}は「アレグロ」を使った。このターン最初の共鳴で2枚引く。`);
+        }
+      },
+      resonanceTuning: {
+        name: "共鳴調節",
+        cost: 2,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手の共鳴判定では、攻撃対象の手との本数差が1以下なら共鳴として扱う。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      crescendo: {
+        name: "クレッシェンド",
+        cost: 3,
+        type: "補助",
+        text: "このターン、自分の共鳴攻撃の攻撃力+2。",
+        canPlay: () => true,
+        effect: (player) => {
+          state.temp[player].crescendo = true;
+          addLog(`${handNames[player]}は「クレッシェンド」を使った。このターン、共鳴攻撃の攻撃力+2。`);
+        }
+      },
+      dance: {
+        name: "乱舞",
+        cost: 2,
+        type: "補助",
+        text: "このターン、次の自分の攻撃ではダメージを与えない。代わりに、攻撃対象の手の本数を攻撃した手と同じ本数にする。",
+        canPlay: () => true,
+        effect: (player) => {
+          state.temp[player].dance = true;
+          addLog(`${handNames[player]}は「乱舞」を使った。次の攻撃はダメージの代わりに本数を揃える。`);
+        }
+      },
+      largo: {
+        name: "ラルゴ",
+        cost: 2,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手の攻撃が共鳴する場合、その攻撃の攻撃力+1。さらに、この手で共鳴を発生させたときカードを1枚引く。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      andante: {
+        name: "アンダンテ",
+        cost: 1,
+        type: "補助",
+        text: "自分の0でない手を1つ選ぶ。その手の本数を1増やすか1減らす。この効果で0にはできない。",
+        canPlay: (player) => ["L", "R"].some(h => state[player][h] > 0),
+        effect: (player) => {
+          if (player === "human") {
+            state.mode = "andante";
+            state.pendingAndanteHand = null;
+            state.selectedAttackHand = null;
+            elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
+            elements.andanteBox.classList.remove("active");
+            setMessage("「アンダンテ」：微調整する自分の0でない手を選んでください。");
+            return;
+          }
+          const choices = ["L", "R"].filter(h => state[player][h] > 0);
+          const opponent = player === "human" ? "cpu" : "human";
+          let best = null;
+          for (const hand of choices) {
+            for (const delta of [-1, 1]) {
+              const value = state[player][hand] + delta;
+              if (value <= 0 || value > 4) continue;
+              const distance = Math.min(...["L", "R"].filter(h => state[opponent][h] > 0).map(h => Math.abs(value - state[opponent][h])), 99);
+              if (!best || distance < best.distance) best = { hand, delta, value, distance };
+            }
+          }
+          if (!best) return;
+          const before = state[player][best.hand];
+          state[player][best.hand] = best.value;
+          addLog(`${handNames[player]}は「アンダンテ」で${handNames[best.hand]}を${before}→${best.value}に微調整した。`);
         }
       },
 
@@ -817,6 +914,7 @@ const CARD_LIBRARY = {
             state.selectedTrapCardIndex = null;
             state.pendingTrapTargetEffect = "dispel";
             elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
             setMessage("「解呪」：捨て札にする自分の呪縛をタップしてください。");
             render();
             return;
@@ -974,6 +1072,7 @@ const CARD_LIBRARY = {
       pendingEqualTradeSelf: null,
       pendingRapidFireDiscard: null,
       pendingSwapFirst: null,
+      pendingAndanteHand: null,
       firstTurnStarted: { human: false, cpu: false },
       weaknessWait: {},
       lastAction: null,
@@ -1062,6 +1161,11 @@ const CARD_LIBRARY = {
       splitLeft: document.getElementById("splitLeft"),
       splitRight: document.getElementById("splitRight"),
       splitHint: document.getElementById("splitHint"),
+      andanteBox: document.getElementById("andanteBox"),
+      andanteLabel: document.getElementById("andanteLabel"),
+      andanteMinusBtn: document.getElementById("andanteMinusBtn"),
+      andantePlusBtn: document.getElementById("andantePlusBtn"),
+      andanteCancelBtn: document.getElementById("andanteCancelBtn"),
       attackBtn: document.getElementById("attackBtn"),
       splitBtn: document.getElementById("splitBtn"),
       drawBtn: document.getElementById("drawBtn"),
@@ -1293,7 +1397,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -1353,7 +1457,7 @@ const CARD_LIBRARY = {
       state.decks[player] = [...(side.deck || [])];
       state.hands[player] = [...(side.hand || [])];
       state.discard[player] = [...(side.discard || [])];
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, ...(side.temp || {}) };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, ...(side.temp || {}) };
       state.noSplit[player] = !!side.noSplit;
       state.extraActions[player] = Number(side.extraActions || 0);
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
@@ -1399,6 +1503,7 @@ const CARD_LIBRARY = {
         state.pendingRapidFireDiscard = null;
         state.pendingSwapFirst = null;
         elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
         clearHighlights();
         render();
         if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
@@ -1428,7 +1533,7 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // match 全体を古いキャッシュで上書きしない。更新するフィールドだけを原子的に書く。
       await fb.updateDoc(roomRef, {
-        "match.version": 49,
+        "match.version": 50,
         "match.stateRevision": nextRevision,
         "match.state": snapshot,
         "match.result": state.matchResult ?? null,
@@ -1485,7 +1590,7 @@ const CARD_LIBRARY = {
       };
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       await fb.updateDoc(roomRef, {
-        "match.version": 49,
+        "match.version": 50,
         "match.fx": fx,
         updatedAt: fb.serverTimestamp()
       });
@@ -1547,7 +1652,7 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // 割り込みだけを書き換え、盤面 state / revision を古い値で巻き戻さない。
       await fb.updateDoc(roomRef, {
-        "match.version": 49,
+        "match.version": 50,
         "match.interrupt": interrupt,
         updatedAt: fb.serverTimestamp()
       });
@@ -1722,7 +1827,9 @@ const CARD_LIBRARY = {
           applyResolvedFriendPostMatch(data);
         }
         const remoteResult = data?.match?.result ?? data?.match?.state?.result ?? null;
-        if (data?.status === "playing" && remoteResult && state.friendMatchStarted) {
+        const remoteMatchId = data?.match ? getFriendMatchId(data.match) : null;
+        const sameStartedMatch = state.friendMatchStarted && (!state.friendMatchId || state.friendMatchId === remoteMatchId);
+        if ((data?.status === "playing" || data?.status === "post-match") && remoteResult && sameStartedMatch) {
           applySyncedBattleResult(remoteResult);
         }
         const fx = data?.match?.fx;
@@ -2060,8 +2167,8 @@ const CARD_LIBRARY = {
       state.discard.cpu = [...(other.discard || [])];
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -2084,6 +2191,7 @@ const CARD_LIBRARY = {
       hideBattleResult();
       state.log = ["オンライン共通戦闘画面に入りました。ゲーム状態同期を開始します。"];
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
       clearHighlights();
       showScreen("battle");
       if (match.state) {
@@ -2623,7 +2731,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -2633,6 +2741,7 @@ function wrapFinger(value) {
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
       clearHighlights();
 
       state.pendingTerminalEnd[player] = false;
@@ -2755,6 +2864,9 @@ function wrapFinger(value) {
               card.classList.add("trap-target");
             }
             if (state.mode === "cursedBullet" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "andante" && player === "human" && value > 0) {
               card.classList.add("trap-target");
             }
           }
@@ -3761,6 +3873,7 @@ function renderLastAction() {
       state.selectedAttackHand = null;
       state.selectedTrapCardIndex = index;
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
       const target = card.curse ? "相手の手" : "自分の手";
       setMessage(`「${card.name}」を設置する${target}を選んでください。`);
       render();
@@ -3886,6 +3999,8 @@ function renderLastAction() {
           setMessage("「乱射」：弾薬として捨てる手札を1枚選んでください。");
         } else if (cardId === "calmDown" && state.mode === "calmDownDiscard") {
           setMessage("「落ち着ける」：捨てる手札を1枚選んでください。");
+        } else if (cardId === "andante" && state.mode === "andante") {
+          setMessage("「アンダンテ」：微調整する自分の0でない手を選んでください。");
         } else if (cardId === "setupTrap" && state.temp.human.setupMode) {
           setMessage("「仕込み」：罠を好きなだけ伏せられます。終わったら「仕込み終了」を押してください。");
         } else {
@@ -4075,6 +4190,40 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       return true;
     }
 
+    function resonanceThreshold(attacker, attackHand) {
+      return hasAttachment(attacker, attackHand, "resonanceTuning") ? 1 : 0;
+    }
+
+    function isResonanceAttack(attacker, attackHand, defender, targetHand) {
+      if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
+      return Math.abs(state[attacker][attackHand] - state[defender][targetHand]) <= resonanceThreshold(attacker, attackHand);
+    }
+
+    function resonanceAttackBonus(attacker, attackHand, resonance, immutable = false) {
+      if (!resonance || immutable) return 0;
+      let bonus = 0;
+      if (state.temp[attacker]?.crescendo) bonus += 2;
+      if (hasAttachment(attacker, attackHand, "largo")) bonus += 1;
+      return bonus;
+    }
+
+    async function resolveResonanceRewards(attacker, attackHand, resonance) {
+      if (!resonance) return;
+      addLog(`${handNames[attacker]}の${handNames[attackHand]}が共鳴した。`);
+
+      if (state.temp[attacker]?.allegro && !state.temp[attacker].allegroTriggered) {
+        state.temp[attacker].allegroTriggered = true;
+        drawCard(attacker);
+        drawCard(attacker);
+        addLog(`${handNames[attacker]}の「アレグロ」により、カードを2枚引いた。`);
+      }
+
+      if (hasAttachment(attacker, attackHand, "largo")) {
+        drawCard(attacker);
+        addLog(`${handNames[attacker]}の「ラルゴ」により、カードを1枚引いた。`);
+      }
+    }
+
     async function resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, attackTotal, canceled = false) {
       if (canceled) {
         if (hasAttachment(attacker, attackHand, "recklessBlessing") && state[attacker][attackHand] > 0) {
@@ -4119,13 +4268,18 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const blessingBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0);
       const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + cursePenalty);
+      const danceActive = !!state.temp[attacker]?.dance;
+      let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
+      let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
-      if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing"))) {
+      if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
       }
       if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
       if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
+      if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
+      if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
       if (ignoresOpponentBoardEffects(attacker)) {
         addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
@@ -4182,6 +4336,13 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       if (trapResult.targetHand) {
         targetHand = trapResult.targetHand;
+        const redirectedResonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
+        const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, immutable);
+        if (redirectedBonus !== resonanceBonus) {
+          power = Math.max(1, power + redirectedBonus - resonanceBonus);
+          resonanceBonus = redirectedBonus;
+        }
+        resonance = redirectedResonance;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         if (state.battleMode === "friend" && attacker === "human") {
           emitFriendFx("attack", {
@@ -4205,6 +4366,21 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       if (!isAlive(defender, targetHand)) {
         addLog(`攻撃対象が0になっていたため、攻撃は失敗した。`);
+        state.animating = false;
+        clearHighlights();
+        render();
+        return true;
+      }
+
+      if (state.temp[attacker]?.dance) {
+        state.temp[attacker].dance = false;
+        const before = state[defender][targetHand];
+        const matched = state[attacker][attackHand];
+        state[defender][targetHand] = matched;
+        addLog(`${handNames[attacker]}の「乱舞」により、ダメージは発生せず、${handNames[defender]}の${handNames[targetHand]}を${before}→${matched}に揃えた。`);
+        setLastAction(attacker, "乱舞", `${handNames[attackHand]}と${handNames[defender]}の${handNames[targetHand]}の本数を揃えた。`, "card");
+        clearBrokenTraps(defender);
+        clearBrokenTraps(attacker);
         state.animating = false;
         clearHighlights();
         render();
@@ -4249,11 +4425,12 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       addLog(
         `${handNames[attacker]}の${handNames[attackHand]}${basePower}本` +
-        `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${blessingBonus ? `+${blessingBonus}` : ""}${recklessBonus ? `+${recklessBonus}` : ""}${cursePenalty ? `${cursePenalty}` : ""}${power !== Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + cursePenalty) ? `→${power}` : ""}で、` +
+        `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${blessingBonus ? `+${blessingBonus}` : ""}${recklessBonus ? `+${recklessBonus}` : ""}${resonanceBonus ? `+${resonanceBonus}` : ""}${cursePenalty ? `${cursePenalty}` : ""}${power !== Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + resonanceBonus + cursePenalty) ? `→${power}` : ""}で、` +
         `${handNames[defender]}の${handNames[targetHand]}を攻撃。` +
         `${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`
       );
 
+      await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
 
       clearBrokenTraps(defender);
@@ -4338,6 +4515,7 @@ async function endTurn() {
       state.pendingTrapTargetEffect = null;
       state.pendingSwapFirst = null;
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
 
       await resolveEndTurnCurses(state.turn);
       if (checkWin()) {
@@ -4429,7 +4607,7 @@ async function endTurn() {
         state.friendLastPublishedSignature = JSON.stringify(snapshot);
         const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
         await fb.updateDoc(roomRef, {
-          "match.version": 49,
+          "match.version": 50,
           "match.stateRevision": nextRevision,
           "match.state": snapshot,
           "match.result": result,
@@ -5057,6 +5235,7 @@ async function endTurn() {
         state.selectedAttackHand = null;
         state.mode = "attack";
         elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
         setMessage(`${handNames[state.turn]}は追加行動できます。もう一度、攻撃か分けるを選んでください。`);
         render();
         if (state.turn === "cpu") {
@@ -5126,6 +5305,26 @@ async function endTurn() {
       clearBrokenTraps("cpu");
       clearBrokenTraps("human");
       addLog(`CPUは「等価交換」で、自分の${handNames[selfHand]}とあなたの${handNames[oppHand]}を-1した。`);
+      return true;
+    }
+
+    async function applyAndanteDelta(delta) {
+      const hand = state.pendingAndanteHand;
+      if (!hand || state.mode !== "andante") return false;
+      const before = state.human[hand];
+      const next = before + delta;
+      if (next <= 0 || next > 4) {
+        setMessage("アンダンテでは0以下や5以上にはできません。");
+        return false;
+      }
+      state.human[hand] = next;
+      state.pendingAndanteHand = null;
+      state.mode = "attack";
+      elements.andanteBox.classList.remove("active");
+      addLog(`あなたは「アンダンテ」で${handNames[hand]}を${before}→${next}に微調整した。`);
+      setMessage(`「アンダンテ」：${handNames[hand]}を${before}→${next}にしました。まだ攻撃か分けるができます。`);
+      render();
+      if (state.battleMode === "friend") scheduleFriendStatePublish();
       return true;
     }
 
@@ -5273,6 +5472,25 @@ async function endTurn() {
         return;
       }
 
+      if (state.mode === "andante") {
+        if (owner !== "human") {
+          setMessage("アンダンテでは自分の手を選んでください。");
+          return;
+        }
+        if (state.human[hand] <= 0) {
+          setMessage("0の手は選べません。");
+          return;
+        }
+        state.pendingAndanteHand = hand;
+        elements.andanteLabel.textContent = `アンダンテ：${handNames[hand]} ${state.human[hand]}本`;
+        elements.andanteMinusBtn.disabled = state.human[hand] <= 1;
+        elements.andantePlusBtn.disabled = state.human[hand] >= 4;
+        elements.andanteBox.classList.add("active");
+        setMessage(`「アンダンテ」：${handNames[hand]}を+1するか-1するか選んでください。`);
+        render();
+        return;
+      }
+
       if (state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing" || state.mode === "setCurse") {
         const targetOwner = state.mode === "setCurse" ? "cpu" : "human";
         const label = state.mode === "setCurse" ? "呪縛" : state.mode === "setBlessing" ? "加護" : "罠";
@@ -5342,8 +5560,8 @@ async function endTurn() {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;
@@ -5361,6 +5579,7 @@ async function endTurn() {
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
       state.pendingSwapFirst = null;
+      state.pendingAndanteHand = null;
       state.firstTurnStarted = { human: false, cpu: false };
       state.weaknessWait = {};
       state.highlight = null;
@@ -5376,6 +5595,7 @@ async function endTurn() {
       state.log = [];
       state.turnNumber = 1;
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
       clearHighlights();
 
       addLog("新しい対戦を開始しました。");
@@ -5478,12 +5698,29 @@ async function endTurn() {
       btn.addEventListener("click", () => startBattleWithDifficulty(btn.dataset.difficultyStart));
     });
 
+    elements.andanteMinusBtn.addEventListener("click", async () => {
+      await applyAndanteDelta(-1);
+    });
+
+    elements.andantePlusBtn.addEventListener("click", async () => {
+      await applyAndanteDelta(1);
+    });
+
+    elements.andanteCancelBtn.addEventListener("click", () => {
+      state.pendingAndanteHand = null;
+      state.mode = "attack";
+      elements.andanteBox.classList.remove("active");
+      setMessage("アンダンテの対象選択を解除しました。カードの使用自体は消費されています。");
+      render();
+    });
+
     elements.attackBtn.addEventListener("click", () => {
       if (state.temp.human.setupMode) return;
       state.mode = "attack";
       state.selectedAttackHand = null;
       state.selectedTrapCardIndex = null;
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
       setMessage("自分の攻撃する手を選んでください。");
       render();
     });
@@ -5530,6 +5767,7 @@ async function endTurn() {
         state.pendingRapidFireDiscard = null;
         state.pendingSwapFirst = null;
         elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
         setMessage("仕込みを終了しました。相手にターンを渡します。");
         render();
         await endTurn();
@@ -5540,6 +5778,7 @@ async function endTurn() {
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
       setMessage("選択を解除しました。");
       render();
     });
