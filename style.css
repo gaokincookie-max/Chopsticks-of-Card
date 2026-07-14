@@ -1365,3 +1365,154 @@
 @keyframes logicShatter { 0% { transform: translate(0,0) scale(1); } 22% { transform: translate(2px,-1px) scale(.98); } 44% { transform: translate(-3px,2px) skewX(-2deg) scale(1.02); } 68% { transform: translate(2px,1px) skewX(2deg) scale(.96); } 100% { transform: translate(0,0) scale(.9); opacity: .32; } }
 @keyframes logicCracks { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 35% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; transform: scale(1.35); } }
 @keyframes logicAftershock { 0% { transform: scale(.88); opacity: .35; } 55% { transform: scale(1.045); opacity: .75; } 100% { transform: scale(1); opacity: 1; } }
+
+/* v55 deck editor upgrade */
+.deck-slot-tools {
+  margin: 10px 0 12px;
+  border: 1px solid #b8d4f0;
+  border-radius: 14px;
+  background: #f6fbff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.deck-slot-row {
+  display: grid;
+  grid-template-columns: minmax(130px, .65fr) minmax(180px, 1.35fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.deck-slot-row label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+  text-align: left;
+}
+
+.deck-slot-row select,
+.deck-slot-row input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: white;
+  color: var(--text);
+  font: inherit;
+}
+
+.deck-row.generated-card {
+  border-style: dashed;
+  background: linear-gradient(135deg, #f1f0f7, #fffdf8);
+  opacity: .94;
+}
+
+.generated-badge,
+.generated-card-note {
+  display: inline-block;
+  border-radius: 999px;
+  background: #4d4960;
+  color: white;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.generated-lock {
+  align-self: center;
+  min-width: 112px;
+  text-align: center;
+  border: 1px dashed #8b8799;
+  color: #625d70;
+  background: #eeecf3;
+  border-radius: 12px;
+  padding: 9px 7px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.deck-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.deck-inline-info {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid #b8d4f0;
+  background: #eef7ff;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.deck-info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: none;
+  place-items: center;
+  padding: 16px;
+  background: rgba(30, 24, 18, .58);
+  backdrop-filter: blur(3px);
+}
+
+.deck-info-modal.show { display: grid; }
+
+.deck-info-panel {
+  width: min(620px, 96vw);
+  max-height: min(720px, 90vh);
+  overflow: auto;
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  box-shadow: 0 20px 55px rgba(30, 20, 10, .28);
+  padding: 18px;
+}
+
+.deck-info-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+
+.deck-info-head h2 {
+  margin: 0;
+  color: var(--accent);
+  font-size: clamp(24px, 6vw, 36px);
+}
+
+.deck-info-body {
+  line-height: 1.75;
+  padding-top: 10px;
+}
+
+.deck-info-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.deck-info-example {
+  padding: 12px;
+  border-radius: 14px;
+  background: #eef7ff;
+  border: 1px solid #b8d4f0;
+  color: var(--blue);
+  font-weight: 900;
+}
+
+@media (max-width: 600px) {
+  .deck-slot-row { grid-template-columns: 1fr; }
+  .generated-lock { min-width: 96px; }
+}

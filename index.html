@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=54">
+  <link rel="stylesheet" href="style.css?v=55">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -200,6 +200,19 @@
       </div>
     </section>
 
+    <div class="deck-info-modal" id="deckInfoModal" aria-hidden="true">
+      <div class="deck-info-panel">
+        <div class="deck-info-head">
+          <div>
+            <div class="menu-kicker" id="deckInfoKicker">CARD INFO</div>
+            <h2 id="deckInfoTitle">カード詳細</h2>
+          </div>
+          <button id="deckInfoCloseBtn" class="secondary">閉じる</button>
+        </div>
+        <div class="deck-info-body" id="deckInfoBody"></div>
+      </div>
+    </div>
+
     <section class="deck-builder deck-screen screen-hidden" id="deckEditorScreen">
       <div class="deck-head">
         <div>
@@ -248,10 +261,30 @@
         </div>
         <div class="mode-row">
           <button id="applyDeckBtn">編集内容を確認</button>
-          <button id="saveDeckBtn" class="blue">デッキ保存</button>
-          <button id="loadDeckBtn" class="secondary">保存デッキ読込</button>
           <button id="copyDeckBtn" class="secondary">もう片方へコピー</button>
           <button id="defaultDeckBtn" class="secondary">表示中を初期に戻す</button>
+          <button id="clearDeckBtn" class="danger">表示中を空にする</button>
+        </div>
+        <div class="deck-slot-tools">
+          <div class="deck-code-title">デッキ保存スロット</div>
+          <div class="deck-slot-row">
+            <label>
+              スロット
+              <select id="deckSlotSelect">
+                <option value="1">スロット1</option><option value="2">スロット2</option><option value="3">スロット3</option>
+                <option value="4">スロット4</option><option value="5">スロット5</option><option value="6">スロット6</option>
+              </select>
+            </label>
+            <label class="deck-slot-name-label">
+              デッキ名
+              <input id="deckSlotNameInput" type="text" maxlength="24" placeholder="例：共鳴デッキ" />
+            </label>
+          </div>
+          <div class="deck-code-actions">
+            <button id="saveDeckBtn" class="blue">このスロットに保存</button>
+            <button id="loadDeckBtn" class="secondary">このスロットを読込</button>
+          </div>
+          <div class="small" id="deckSlotStatus">表示中のデッキを6個まで保存できます。</div>
         </div>
         <div class="deck-code-tools">
           <div class="deck-code-title">デッキコード共有</div>
@@ -428,6 +461,6 @@
     }
   </script>
 
-  <script src="game.js?v=54"></script>
+  <script src="game.js?v=55"></script>
 </body>
 </html>

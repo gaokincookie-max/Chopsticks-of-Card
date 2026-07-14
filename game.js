@@ -1225,6 +1225,15 @@ const CARD_LIBRARY = {
       deckValidityText: document.getElementById("deckValidityText"),
       applyDeckBtn: document.getElementById("applyDeckBtn"),
       defaultDeckBtn: document.getElementById("defaultDeckBtn"),
+      clearDeckBtn: document.getElementById("clearDeckBtn"),
+      deckSlotSelect: document.getElementById("deckSlotSelect"),
+      deckSlotNameInput: document.getElementById("deckSlotNameInput"),
+      deckSlotStatus: document.getElementById("deckSlotStatus"),
+      deckInfoModal: document.getElementById("deckInfoModal"),
+      deckInfoKicker: document.getElementById("deckInfoKicker"),
+      deckInfoTitle: document.getElementById("deckInfoTitle"),
+      deckInfoBody: document.getElementById("deckInfoBody"),
+      deckInfoCloseBtn: document.getElementById("deckInfoCloseBtn"),
       costLimitInput: document.getElementById("costLimitInput"),
       deckOwnerSelect: document.getElementById("deckOwnerSelect"),
       cpuDifficultySelect: document.getElementById("cpuDifficultySelect"),
@@ -2511,6 +2520,14 @@ function wrapFinger(value) {
     }
 
     function isDeckValid(owner = state.editingDeckOwner) {
+      elements.deckGrid.querySelectorAll("[data-info]").forEach(btn => {
+        btn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openDeckInfo(btn.dataset.info);
+        });
+      });
+      updateDeckSlotUi();
+
       const stats = getDeckStats(owner);
       return stats.count >= DECK_MIN_COUNT && stats.count <= DECK_MAX_COUNT && stats.cost <= state.costLimit;
     }
@@ -2519,49 +2536,98 @@ function wrapFinger(value) {
       return isDeckValid("human") && isDeckValid("cpu");
     }
 
-    function saveDecks() {
+    const DECK_STORAGE_KEY = "waribashiDecksV11";
+    const DECK_SLOT_STORAGE_KEY = "waribashiDeckSlotsV55";
+    const DECK_SLOT_COUNT = 6;
+
+    function persistCurrentDecks(message = "") {
       const data = {
-        version: 12,
+        version: 13,
         costLimit: state.costLimit,
         cpuDifficulty: state.cpuDifficulty,
         deckCounts: state.deckCounts
       };
-      localStorage.setItem("waribashiDecksV11", JSON.stringify(data));
-      setMessage("あなた用・CPU用デッキを保存しました。");
+      localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(data));
+      if (message) setMessage(message);
+    }
+
+    function readDeckSlots() {
+      const empty = { human: {}, cpu: {} };
+      try {
+        const raw = localStorage.getItem(DECK_SLOT_STORAGE_KEY);
+        if (!raw) return empty;
+        const data = JSON.parse(raw);
+        for (const owner of ["human", "cpu"]) {
+          for (let i = 1; i <= DECK_SLOT_COUNT; i++) {
+            const slot = data?.[owner]?.[String(i)];
+            if (!slot?.counts) continue;
+            empty[owner][String(i)] = {
+              name: String(slot.name || `スロット${i}`).slice(0, 24),
+              counts: cloneValidDeckCounts(slot.counts)
+            };
+          }
+        }
+      } catch (error) {
+        console.warn("デッキスロット読込失敗", error);
+      }
+      return empty;
+    }
+
+    function writeDeckSlots(slots) {
+      localStorage.setItem(DECK_SLOT_STORAGE_KEY, JSON.stringify(slots));
+    }
+
+    function updateDeckSlotUi() {
+      if (!elements.deckSlotSelect) return;
+      const owner = state.editingDeckOwner;
+      const slotId = String(elements.deckSlotSelect.value || "1");
+      const slots = readDeckSlots();
+      const slot = slots?.[owner]?.[slotId];
+      elements.deckSlotNameInput.value = slot?.name || "";
+      elements.deckSlotStatus.textContent = slot
+        ? `${owner === "human" ? "あなた用" : "CPU用"}・スロット${slotId}「${slot.name}」を保存済み。`
+        : `${owner === "human" ? "あなた用" : "CPU用"}・スロット${slotId}は空です。`;
+    }
+
+    function saveDecks() {
+      const owner = state.editingDeckOwner;
+      const slotId = String(elements.deckSlotSelect?.value || "1");
+      const slots = readDeckSlots();
+      const name = String(elements.deckSlotNameInput?.value || "").trim().slice(0, 24) || `スロット${slotId}`;
+      slots[owner][slotId] = {
+        name,
+        counts: cloneValidDeckCounts(currentDeckCounts(owner))
+      };
+      writeDeckSlots(slots);
+      persistCurrentDecks();
+      updateDeckSlotUi();
+      setMessage(`${owner === "human" ? "あなた用" : "CPU用"}デッキをスロット${slotId}「${name}」に保存しました。`);
     }
 
     function loadDecks() {
-      const raw = localStorage.getItem("waribashiDecksV11");
-      if (!raw) {
-        setMessage("保存済みデッキがありません。");
+      const owner = state.editingDeckOwner;
+      const slotId = String(elements.deckSlotSelect?.value || "1");
+      const slots = readDeckSlots();
+      const slot = slots?.[owner]?.[slotId];
+      if (!slot) {
+        setMessage(`スロット${slotId}には保存済みデッキがありません。`);
         return;
       }
-      try {
-        const data = JSON.parse(raw);
-        if (data.deckCounts?.human && data.deckCounts?.cpu) {
-          state.deckCounts = {
-            human: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.human },
-            cpu: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.cpu }
-          };
-        }
-        if (Number.isFinite(Number(data.costLimit))) state.costLimit = Math.min(40, Number(data.costLimit));
-        if (["easy", "standard", "hard"].includes(data.cpuDifficulty)) state.cpuDifficulty = data.cpuDifficulty;
-        renderDeckBuilder();
-        setMessage("保存済みデッキを読み込みました。反映するにはリスタートしてください。");
-      } catch (error) {
-        setMessage("保存データを読み込めませんでした。");
-      }
+      state.deckCounts[owner] = cloneValidDeckCounts(slot.counts);
+      persistCurrentDecks();
+      renderDeckBuilder();
+      setMessage(`${owner === "human" ? "あなた用" : "CPU用"}へ「${slot.name}」を読み込みました。`);
     }
 
     function loadDecksSilentlyOnStartup() {
-      const raw = localStorage.getItem("waribashiDecksV11");
+      const raw = localStorage.getItem(DECK_STORAGE_KEY);
       if (!raw) return false;
       try {
         const data = JSON.parse(raw);
         if (data.deckCounts?.human && data.deckCounts?.cpu) {
           state.deckCounts = {
-            human: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.human },
-            cpu: { ...DEFAULT_DECK_COUNTS, ...data.deckCounts.cpu }
+            human: { ...DEFAULT_DECK_COUNTS, ...cloneValidDeckCounts(data.deckCounts.human) },
+            cpu: { ...DEFAULT_DECK_COUNTS, ...cloneValidDeckCounts(data.deckCounts.cpu) }
           };
         }
         if (Number.isFinite(Number(data.costLimit))) state.costLimit = Math.min(40, Number(data.costLimit));
@@ -2573,7 +2639,9 @@ function wrapFinger(value) {
       }
     }
 
-    const DECK_CODE_PREFIX = "WBDECK1:";
+    const DECK_CODE_PREFIX_V1 = "WBDECK1:";
+    const DECK_CODE_PREFIX = "WBDECK2:";
+
 
     function cloneValidDeckCounts(counts) {
       const fixed = {};
@@ -2611,45 +2679,97 @@ function wrapFinger(value) {
       return { ok: true, counts: fixed, stats };
     }
 
+    function compactDeckCounts(counts) {
+      return Object.entries(cloneValidDeckCounts(counts))
+        .filter(([, qty]) => qty > 0)
+        .map(([cardId, qty]) => [cardId, qty]);
+    }
+
+    function expandCompactDeck(entries) {
+      if (!Array.isArray(entries)) throw new Error("deck_shape");
+      const counts = {};
+      for (const entry of entries) {
+        if (!Array.isArray(entry) || entry.length !== 2) throw new Error("deck_shape");
+        const cardId = String(entry[0] || "");
+        const qty = Number(entry[1]);
+        if (!CARD_LIBRARY[cardId] || CARD_LIBRARY[cardId].token) throw new Error(`unknown_card:${cardId}`);
+        if (!Number.isInteger(qty) || qty < 1 || qty > 3) throw new Error(`bad_qty:${cardId}`);
+        counts[cardId] = qty;
+      }
+      return cloneValidDeckCounts(counts);
+    }
+
+    function utf8ToBase64Url(text) {
+      const bytes = new TextEncoder().encode(text);
+      let binary = "";
+      bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function base64UrlToUtf8(value) {
+      const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
+      const binary = atob(base64);
+      const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+
+    function normalizeDeckCodeInput(code) {
+      let text = String(code || "").trim();
+      text = text.replace(/^[`'\"]+|[`'\"]+$/g, "").trim();
+      try {
+        if (/%[0-9A-Fa-f]{2}/.test(text)) text = decodeURIComponent(text);
+      } catch (_) {}
+      return text.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, "");
+    }
+
     function encodeDeckPayload(payload) {
-      const json = JSON.stringify(payload);
-      const base64 = btoa(unescape(encodeURIComponent(json)));
-      return DECK_CODE_PREFIX + base64;
+      return DECK_CODE_PREFIX + utf8ToBase64Url(JSON.stringify(payload));
     }
 
     function decodeDeckPayload(code) {
-      const trimmed = String(code || "").trim();
-      if (!trimmed.startsWith(DECK_CODE_PREFIX)) {
-        throw new Error("prefix");
+      const trimmed = normalizeDeckCodeInput(code);
+      if (trimmed.startsWith(DECK_CODE_PREFIX)) {
+        const json = base64UrlToUtf8(trimmed.slice(DECK_CODE_PREFIX.length));
+        const payload = JSON.parse(json);
+        if (!payload || payload.version !== 2) throw new Error("version");
+        if (payload.kind === "single") payload.deck = expandCompactDeck(payload.deck);
+        if (payload.kind === "both") {
+          payload.decks = {
+            human: expandCompactDeck(payload.decks?.human),
+            cpu: expandCompactDeck(payload.decks?.cpu)
+          };
+        }
+        return payload;
       }
-      const base64 = trimmed.slice(DECK_CODE_PREFIX.length).replace(/\s+/g, "");
-      const json = decodeURIComponent(escape(atob(base64)));
-      const payload = JSON.parse(json);
-      if (!payload || payload.version !== 1) {
-        throw new Error("version");
+      if (trimmed.startsWith(DECK_CODE_PREFIX_V1)) {
+        const base64 = trimmed.slice(DECK_CODE_PREFIX_V1.length);
+        const json = decodeURIComponent(escape(atob(base64)));
+        const payload = JSON.parse(json);
+        if (!payload || payload.version !== 1) throw new Error("version");
+        return payload;
       }
-      return payload;
+      throw new Error("prefix");
     }
 
     function makeCurrentDeckCode() {
       const owner = state.editingDeckOwner;
       return encodeDeckPayload({
-        version: 1,
+        version: 2,
         kind: "single",
         owner,
         costLimit: state.costLimit,
-        deck: cloneValidDeckCounts(currentDeckCounts(owner))
+        deck: compactDeckCounts(currentDeckCounts(owner))
       });
     }
 
     function makeBothDecksCode() {
       return encodeDeckPayload({
-        version: 1,
+        version: 2,
         kind: "both",
         costLimit: state.costLimit,
         decks: {
-          human: cloneValidDeckCounts(state.deckCounts.human),
-          cpu: cloneValidDeckCounts(state.deckCounts.cpu)
+          human: compactDeckCounts(state.deckCounts.human),
+          cpu: compactDeckCounts(state.deckCounts.cpu)
         }
       });
     }
@@ -2716,8 +2836,9 @@ function wrapFinger(value) {
             ? (payload.owner === "cpu" ? "cpu" : "human")
             : target;
           if (!importSingleDeck(payload.deck, actualTarget)) return;
+          persistCurrentDecks();
           renderDeckBuilder();
-          setMessage("デッキコードを読み込みました。反映するにはリスタートしてください。");
+          setMessage("デッキコードを読み込みました。現在の編集内容に反映済みです。");
           return;
         }
 
@@ -2745,41 +2866,91 @@ function wrapFinger(value) {
             throw new Error("target");
           }
 
+          persistCurrentDecks();
           renderDeckBuilder();
-          setMessage("まとめデッキコードを読み込みました。反映するにはリスタートしてください。");
+          setMessage("まとめデッキコードを読み込みました。現在の編集内容に反映済みです。");
           return;
         }
 
         throw new Error("kind");
       } catch (error) {
-        setMessage("デッキコードを読み込めませんでした。コードが壊れているか、対応していない形式です。");
+        const message = String(error?.message || error || "");
+        let reason = "コードが壊れているか、対応していない形式です。";
+        if (message === "prefix") reason = "先頭の形式が違います。WBDECK1 または WBDECK2 のコードを貼り付けてください。";
+        else if (message === "version") reason = "このデッキコードのバージョンには対応していません。";
+        else if (message.startsWith("unknown_card:")) reason = `未知のカードID「${message.split(":")[1]}」が含まれています。`;
+        else if (message.startsWith("bad_qty:")) reason = `カード枚数が不正です：「${message.split(":")[1]}」。`;
+        else if (message === "deck_shape") reason = "デッキ内容の形式が壊れています。";
+        setMessage(`デッキコード読込失敗：${reason}`);
       }
+    }
+
+    const DECK_INFO = {
+      resonance: {
+        kicker: "KEYWORD",
+        title: "共鳴とは？",
+        html: `<p><strong>共鳴</strong>は、攻撃開始時の「攻撃する手」と「攻撃対象の手」の本数が同じときに発生します。</p>
+          <div class="deck-info-example">例：自分の3本の手 → 相手の3本の手 = 共鳴</div>
+          <p>「共鳴調節」が付いている攻撃手は、本数差が<strong>1以下</strong>でも共鳴します。</p>
+          <p>受け流し・注目などで攻撃対象が変わった場合は、<strong>変更後の対象</strong>との本数で判定します。</p>
+          <p>「乱舞」で本数を揃えた結果は、その攻撃自身の共鳴には数えません。</p>`
+      }
+    };
+
+    function openDeckInfo(infoKey) {
+      const preset = DECK_INFO[infoKey];
+      const card = CARD_LIBRARY[infoKey];
+      if (!preset && !card) return;
+      elements.deckInfoKicker.textContent = preset?.kicker || (card?.token ? "GENERATED CARD" : "CARD INFO");
+      elements.deckInfoTitle.textContent = preset?.title || card.name;
+      elements.deckInfoBody.innerHTML = preset?.html || `
+        <div class="deck-info-card-meta">
+          <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
+          <span class="card-cost">コスト ${card.cost}</span>
+        </div>
+        <p>${escapeHtml(card.text)}</p>
+        ${card.token ? '<div class="generated-card-note">生成カード / デッキ投入不可</div>' : ''}`;
+      elements.deckInfoModal.classList.add("show");
+      elements.deckInfoModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeDeckInfo() {
+      elements.deckInfoModal.classList.remove("show");
+      elements.deckInfoModal.setAttribute("aria-hidden", "true");
     }
 
     function renderDeckBuilder() {
       const owner = state.editingDeckOwner;
       const counts = currentDeckCounts(owner);
       elements.deckGrid.innerHTML = "";
-      Object.keys(CARD_LIBRARY).forEach(cardId => {
+      Object.keys(CARD_LIBRARY)
+        .sort((a, b) => Number(Boolean(CARD_LIBRARY[a].token)) - Number(Boolean(CARD_LIBRARY[b].token)))
+        .forEach(cardId => {
         const card = CARD_LIBRARY[cardId];
-        if (card.token) return;
         const count = counts[cardId] || 0;
         const row = document.createElement("div");
-        row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "");
+        row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "") + (card.token ? " generated-card" : "");
+        const relatedButtons = [];
+        if (cardId === "focusedShot") relatedButtons.push('<button class="deck-inline-info" data-info="logicCrusherBullet">生成カード「ロジックアトリエ」を確認</button>');
+        if (cardId === "lastMelody") relatedButtons.push('<button class="deck-inline-info" data-info="finale">生成カード「フィナーレ」を確認</button>');
+        if (["allegro", "resonanceTuning", "crescendo", "dance", "largo", "andante", "lastMelody"].includes(cardId)) relatedButtons.push('<button class="deck-inline-info" data-info="resonance">共鳴とは？</button>');
+        const relatedButton = relatedButtons.join("");
         row.innerHTML = `
           <div>
             <div class="card-title">
               <span class="deck-card-name">${escapeHtml(card.name)}</span>
               <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
+              ${card.token ? '<span class="generated-badge">生成カード</span>' : ''}
             </div>
             <div class="card-cost">コスト ${card.cost}</div>
             <div class="deck-card-desc">${escapeHtml(card.text)}</div>
+            <div class="deck-inline-actions">${relatedButton}${card.token ? `<button class="deck-inline-info" data-info="${cardId}">詳細を見る</button>` : ""}</div>
           </div>
-          <div class="count-control">
+          ${card.token ? '<div class="generated-lock">デッキ投入不可</div>' : `<div class="count-control">
             <button class="secondary" data-action="minus" data-card="${cardId}">−</button>
             <span class="count-num">${count}</span>
             <button data-action="plus" data-card="${cardId}">＋</button>
-          </div>
+          </div>`}
         `;
         elements.deckGrid.appendChild(row);
       });
@@ -5983,8 +6154,18 @@ async function endTurn() {
 
     elements.defaultDeckBtn.addEventListener("click", () => {
       state.deckCounts[state.editingDeckOwner] = { ...DEFAULT_DECK_COUNTS };
+      persistCurrentDecks();
       renderDeckBuilder();
-      setMessage(`${state.editingDeckOwner === "human" ? "あなた用" : "CPU用"}デッキを初期状態に戻しました。反映するにはリスタートしてください。`);
+      setMessage(`${state.editingDeckOwner === "human" ? "あなた用" : "CPU用"}デッキを初期状態に戻しました。`);
+    });
+
+    elements.clearDeckBtn.addEventListener("click", () => {
+      const label = state.editingDeckOwner === "human" ? "あなた用" : "CPU用";
+      if (!window.confirm(`${label}デッキを空にしますか？ 保存スロットの内容は消えません。`)) return;
+      state.deckCounts[state.editingDeckOwner] = cloneValidDeckCounts({});
+      persistCurrentDecks();
+      renderDeckBuilder();
+      setMessage(`${label}デッキを空にしました。`);
     });
 
 
@@ -6003,10 +6184,16 @@ async function endTurn() {
 
     elements.saveDeckBtn.addEventListener("click", saveDecks);
     elements.loadDeckBtn.addEventListener("click", loadDecks);
+    elements.deckSlotSelect.addEventListener("change", updateDeckSlotUi);
+    elements.deckInfoCloseBtn.addEventListener("click", closeDeckInfo);
+    elements.deckInfoModal.addEventListener("click", (event) => {
+      if (event.target === elements.deckInfoModal) closeDeckInfo();
+    });
     elements.copyDeckBtn.addEventListener("click", () => {
       const from = state.editingDeckOwner;
       const to = from === "human" ? "cpu" : "human";
       state.deckCounts[to] = { ...currentDeckCounts(from) };
+      persistCurrentDecks();
       renderDeckBuilder();
       setMessage(`${from === "human" ? "あなた用" : "CPU用"}デッキを${to === "human" ? "あなた用" : "CPU用"}にコピーしました。`);
     });
