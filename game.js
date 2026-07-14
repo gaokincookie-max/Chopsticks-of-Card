@@ -1037,7 +1037,7 @@ const CARD_LIBRARY = {
       }
     };
 
-        const DECK_MIN_COUNT = 6;
+        const DECK_MIN_COUNT = 20;
     const DECK_MAX_COUNT = 20;
 
     const DEFAULT_DECK_COUNTS = {
@@ -2403,8 +2403,7 @@ const CARD_LIBRARY = {
         const h = getDeckStats("human");
         const c = getDeckStats("cpu");
         showScreen("deck");
-        if (h.count < DECK_MIN_COUNT || c.count < DECK_MIN_COUNT) setMessage(`対戦前に、あなた用・CPU用の両方を最低${DECK_MIN_COUNT}枚以上にしてください。`);
-        else if (h.count > DECK_MAX_COUNT || c.count > DECK_MAX_COUNT) setMessage(`対戦前に、あなた用・CPU用の両方を${DECK_MAX_COUNT}枚以内にしてください。`);
+        if (h.count !== DECK_MAX_COUNT || c.count !== DECK_MAX_COUNT) setMessage(`対戦前に、あなた用・CPU用の両方をちょうど${DECK_MAX_COUNT}枚にしてください。`);
         else setMessage("対戦前に、あなた用・CPU用のどちらかのコストを40以内にしてください。");
         return;
       }
@@ -2529,7 +2528,7 @@ function wrapFinger(value) {
       updateDeckSlotUi();
 
       const stats = getDeckStats(owner);
-      return stats.count >= DECK_MIN_COUNT && stats.count <= DECK_MAX_COUNT && stats.cost <= state.costLimit;
+      return stats.count === DECK_MAX_COUNT && stats.cost <= state.costLimit;
     }
 
     function areBothDecksValid() {
@@ -2667,11 +2666,8 @@ function wrapFinger(value) {
     function validateCountsForImport(counts) {
       const fixed = cloneValidDeckCounts(counts);
       const stats = statsForCounts(fixed);
-      if (stats.count < DECK_MIN_COUNT) {
-        return { ok: false, reason: `デッキは最低${DECK_MIN_COUNT}枚必要です。`, counts: fixed, stats };
-      }
-      if (stats.count > DECK_MAX_COUNT) {
-        return { ok: false, reason: `デッキは${DECK_MAX_COUNT}枚以内にしてください。`, counts: fixed, stats };
+      if (stats.count !== DECK_MAX_COUNT) {
+        return { ok: false, reason: `デッキはちょうど${DECK_MAX_COUNT}枚にしてください。現在${stats.count}枚です。`, counts: fixed, stats };
       }
       if (stats.cost > state.costLimit) {
         return { ok: false, reason: `合計コストが上限を超えています。${stats.cost} / ${state.costLimit}`, counts: fixed, stats };
@@ -2984,7 +2980,7 @@ function wrapFinger(value) {
       const otherStats = getDeckStats(other);
       elements.deckOwnerSelect.value = owner;
       elements.cpuDifficultySelect.value = state.cpuDifficulty;
-      const validText = valid ? "使用可能" : stats.count < DECK_MIN_COUNT ? `最低${DECK_MIN_COUNT}枚必要` : stats.count > DECK_MAX_COUNT ? `${DECK_MAX_COUNT}枚以内` : "コスト超過";
+      const validText = valid ? "使用可能" : stats.count !== DECK_MAX_COUNT ? `ちょうど${DECK_MAX_COUNT}枚必要` : "コスト超過";
       elements.deckCountText.textContent = `${owner === "human" ? "あなた用" : "CPU用"}：${stats.count}枚 / もう片方：${otherStats.count}枚`;
       elements.deckCostText.textContent = `合計コスト：${stats.cost} / ${state.costLimit}`;
       elements.deckValidityText.textContent = validText;
@@ -4021,7 +4017,7 @@ function renderLastAction() {
           <ul>
             <li>あなた用デッキとCPU用デッキを別々に編集できます。</li>
             <li>同名カードは最大3枚までです。</li>
-            <li>デッキは最低6枚必要です。</li>
+            <li>デッキはちょうど20枚必要です。19枚以下・21枚以上では対戦できません。</li>
             <li>合計コストがコスト上限を超えると、そのデッキではリスタートできません。</li>
             <li>デッキ保存を押すと、同じ端末・同じブラウザに保存されます。</li>
           </ul>
@@ -6143,8 +6139,7 @@ async function endTurn() {
       if (!areBothDecksValid()) {
         const h = getDeckStats("human");
         const c = getDeckStats("cpu");
-        if (h.count < DECK_MIN_COUNT || c.count < DECK_MIN_COUNT) setMessage(`あなた用・CPU用の両方を最低${DECK_MIN_COUNT}枚以上にしてください。`);
-        else if (h.count > DECK_MAX_COUNT || c.count > DECK_MAX_COUNT) setMessage(`あなた用・CPU用の両方を${DECK_MAX_COUNT}枚以内にしてください。`);
+        if (h.count !== DECK_MAX_COUNT || c.count !== DECK_MAX_COUNT) setMessage(`あなた用・CPU用の両方をちょうど${DECK_MAX_COUNT}枚にしてください。`);
         else setMessage("あなた用・CPU用のどちらかがコスト上限を超えています。");
         return;
       }
