@@ -1750,6 +1750,12 @@ const CARD_LIBRARY = {
         if (player && card) await showCardPopup(player, card, true, 760);
         return;
       }
+      if (fx.type === "discardEffect") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        const card = CARD_LIBRARY[payload.cardId];
+        if (player && card) await showDiscardEffectPopup(player, payload.cardId, 900);
+        return;
+      }
       if (fx.type === "finale") {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         if (player) await showFinaleFx(player, Number(payload.power || 0));
@@ -3543,22 +3549,43 @@ function wrapFinger(value) {
       return cardId;
     }
 
+       function discardEffectPopupText(cardId, player) {
+      const opponent = player === "human" ? "cpu" : "human";
+      if (cardId === "accelBullet") return "捨てられた時効果：カードを1枚引く。";
+      if (cardId === "specialBullet") return `捨てられた時効果：${handNames[opponent]}の手札をランダムに1枚捨てさせる。`;
+      if (cardId === "pierceBullet") return `捨てられた時効果：${handNames[opponent]}の設置済み罠をランダムに1枚捨てる。`;
+      return "捨てられた時効果が発動しました。";
+    }
+
+    async function showDiscardEffectPopup(player, cardId, ms = 900) {
+      const card = CARD_LIBRARY[cardId];
+      if (!card) return;
+      await showPopup(player, `「${card.name}」`, discardEffectPopupText(cardId, player), "card", ms);
+    }
+
     async function handleCardDiscardEffect(player, cardId) {
       const card = CARD_LIBRARY[cardId];
       if (!card?.bullet) return;
       const opponent = player === "human" ? "cpu" : "human";
+      const hasDiscardEffect = ["accelBullet", "specialBullet", "pierceBullet"].includes(cardId);
+      if (!hasDiscardEffect) return;
+
+      if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+        emitFriendFx("discardEffect", {
+          playerSide: friendSideForLocalPlayer(player),
+          cardId
+        }).catch(error => console.error("PVP discard effect fx failed", error));
+      }
+      await showDiscardEffectPopup(player, cardId, 900);
 
       if (cardId === "accelBullet") {
-        await showPopup(player, "加速弾", "捨てられた時効果：カードを1枚引く。", "card", 760);
         drawCard(player);
         addLog(`${handNames[player]}の「加速弾」効果。1枚引いた。`);
       } else if (cardId === "specialBullet") {
-        await showPopup(player, "特殊弾", `捨てられた時効果：${handNames[opponent]}の手札をランダムに1枚捨てさせる。`, "card", 760);
         const discarded = discardOneCard(opponent);
         addLog(`${handNames[player]}の「特殊弾」効果。${handNames[opponent]}は${discarded ? `「${CARD_LIBRARY[discarded].name}」` : "手札"}を1枚捨てた。`);
         if (discarded) await handleCardDiscardEffect(opponent, discarded);
       } else if (cardId === "pierceBullet") {
-        await showPopup(player, "貫通弾", `捨てられた時効果：${handNames[opponent]}の設置済み罠をランダムに1枚捨てる。`, "card", 760);
         const removed = removeRandomTrap(opponent);
         addLog(`${handNames[player]}の「貫通弾」効果。${removed ? `${handNames[opponent]}の罠「${CARD_LIBRARY[removed].name}」を捨て札にした。` : `${handNames[opponent]}に罠はなかった。`}`);
       }
@@ -3791,11 +3818,17 @@ function wrapFinger(value) {
           div.className =
             "trap-slot filled" +
             (hidden ? " cpu-hidden" : "") +
-            (revealed || exposedByCurse || faceUpAttachment ? " revealed-info" : "") +
+            (isTrap && !hidden ? " revealed-trap-slot" : "") +
             (card?.blessing ? " blessing-slot" : "") +
             (card?.curse ? " curse-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
-          div.textContent = hidden ? `伏せ${i + 1}` : card.name;
+          div.textContent = hidden
+            ? `伏せ${i + 1}`
+            : card?.blessing
+              ? `加護｜${card.name}`
+              : card?.curse
+                ? `呪縛｜${card.name}`
+                : `罠｜${card.name}`;
           if (selectable) {
             div.title = "このカードを選ぶ";
             div.addEventListener("click", (event) => {
@@ -3992,6 +4025,70 @@ function renderLastAction() {
           </ul>
           <div class="help-note">
             例：空振りは攻撃判定前なので「2+3→空振り→2」。囮は攻撃判定後なので、攻撃を受けた後に1枚引きます。
+          </div>
+        `;
+        return;
+      }
+
+      if (tab === "attachments") {
+        const blessings = Object.entries(CARD_LIBRARY)
+          .filter(([, card]) => card.blessing)
+          .map(([, card]) => `
+            <div class="help-card help-attachment-card blessing-help-card">
+              <div class="help-card-title">
+                <span>${escapeHtml(card.name)}</span>
+                <span class="help-badges">
+                  <span class="help-badge blessing">加護</span>
+                  <span class="help-badge cost">コスト${card.cost}</span>
+                </span>
+              </div>
+              <div class="card-text">${escapeHtml(card.text)}</div>
+            </div>
+          `).join("");
+
+        const curses = Object.entries(CARD_LIBRARY)
+          .filter(([, card]) => card.curse)
+          .map(([, card]) => `
+            <div class="help-card help-attachment-card curse-help-card">
+              <div class="help-card-title">
+                <span>${escapeHtml(card.name)}</span>
+                <span class="help-badges">
+                  <span class="help-badge curse">呪縛</span>
+                  <span class="help-badge cost">コスト${card.cost}</span>
+                </span>
+              </div>
+              <div class="card-text">${escapeHtml(card.text)}</div>
+            </div>
+          `).join("");
+
+        elements.helpBody.innerHTML = `
+          <h3>加護とは</h3>
+          <ul>
+            <li>自分の0でない手に<strong>表向き</strong>で設置するカードです。</li>
+            <li>設置された手に継続的な強化や特殊効果を与えます。</li>
+            <li>罠と同じ2枠の設置ゾーンを使います。</li>
+            <li>その手が0になった場合、その手にある加護は捨て札になります。</li>
+          </ul>
+          <div class="help-note attachment-legend blessing-legend">
+            盤面では<strong>緑色</strong>で「加護｜カード名」と表示されます。伏せ情報ではないため、相手にもカード名が見えます。
+          </div>
+          <div class="help-card-list">${blessings}</div>
+
+          <h3 class="help-section-gap">呪縛とは</h3>
+          <ul>
+            <li>相手の0でない手に<strong>表向き</strong>で設置するカードです。</li>
+            <li>設置された手を弱体化したり、行動や計算へ特殊な制限を与えます。</li>
+            <li>罠・加護と同じ2枠の設置ゾーンを使います。</li>
+            <li>その手が0になった場合、その手にある呪縛は捨て札になります。</li>
+          </ul>
+          <div class="help-note attachment-legend curse-legend">
+            盤面では<strong>赤紫色</strong>で「呪縛｜カード名」と表示されます。伏せ情報ではないため、相手にもカード名が見えます。
+          </div>
+          <div class="help-card-list">${curses}</div>
+
+          <h3 class="help-section-gap">罠との違い</h3>
+          <div class="help-note">
+            罠は基本的に伏せて設置し、条件を満たした時に発動します。加護と呪縛は最初から表向きで、設置中ずっと効果や条件を持ちます。看破などで公開された罠は<strong>紫色</strong>で表示され、加護・呪縛とは色で区別できます。
           </div>
         `;
         return;
