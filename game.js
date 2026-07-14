@@ -669,6 +669,30 @@ const CARD_LIBRARY = {
           addLog(`${handNames[player]}は「アンダンテ」で${handNames[best.hand]}を${before}→${best.value}に微調整した。`);
         }
       },
+      lastMelody: {
+        name: "最後の旋律",
+        cost: 3,
+        type: "補助",
+        text: "このターン、自分が次に共鳴を発生させたとき、その共鳴を発生させた手を0にする。実際に0にしたなら、手札に「フィナーレ」を1枚加える。",
+        canPlay: () => true,
+        effect: (player) => {
+          state.temp[player].lastMelody = true;
+          addLog(`${handNames[player]}は「最後の旋律」を使った。次の共鳴で、その手は0になる。`);
+        }
+      },
+      finale: {
+        name: "フィナーレ",
+        cost: 0,
+        type: "終端 / 使用不可デッキ投入",
+        text: "このカードはデッキに入れられない。相手の0でない両手それぞれに、自分の左右の手の合計本数分を加える。このカードを使ったら、ターンを終了する。",
+        token: true,
+        terminal: true,
+        canPlay: () => true,
+        effect: async (player) => {
+          await applyFinale(player);
+          state.pendingTerminalEnd[player] = true;
+        }
+      },
 
       deflect: {
         name: "受け流し",
@@ -1178,6 +1202,9 @@ const CARD_LIBRARY = {
       handInfo: document.getElementById("handInfo"),
       lastCardDisplay: document.getElementById("lastCardDisplay"),
       overlay: document.getElementById("overlay"),
+      specialFxLayer: document.getElementById("specialFxLayer"),
+      specialFxTitle: document.getElementById("specialFxTitle"),
+      specialFxSub: document.getElementById("specialFxSub"),
       popupCard: document.getElementById("popupCard"),
       popupUser: document.getElementById("popupUser"),
       popupName: document.getElementById("popupName"),
@@ -1248,6 +1275,64 @@ const CARD_LIBRARY = {
 
     async function showCardPopup(player, card, isTrap = false, ms = 760) {
       await showPopup(player, `「${card.name}」`, card.text, isTrap ? "trap" : "card", ms);
+    }
+
+    async function showFinaleFx(player, power) {
+      const layer = elements.specialFxLayer;
+      if (!layer) return;
+      elements.specialFxTitle.textContent = "FINALE";
+      elements.specialFxSub.textContent = `${handNames[player]}の両手の合計 ${power}`;
+      layer.className = "special-fx-layer finale-fx prepare";
+      layer.setAttribute("aria-hidden", "false");
+      await delay(380);
+      layer.classList.remove("prepare");
+      layer.classList.add("reveal");
+      await delay(520);
+      layer.classList.add("flash");
+      await delay(360);
+      layer.classList.remove("flash");
+      await delay(260);
+      layer.className = "special-fx-layer";
+      layer.setAttribute("aria-hidden", "true");
+    }
+
+    async function animateFinaleDamage(defender, results) {
+      const active = results.filter(item => item.before > 0);
+      for (const item of active) {
+        const target = handEl(defender, item.hand);
+        target?.classList.add("finale-target");
+        document.getElementById(`${defender}${item.hand}Num`).textContent = item.total;
+        document.getElementById(`${defender}${item.hand}Icons`).textContent = "☝".repeat(Math.min(item.total, 9));
+        document.getElementById(`${defender}${item.hand}Calc`).textContent = item.total >= 5 ? `→ ${item.finalValue}` : "";
+      }
+      await delay(680);
+      active.forEach(item => handEl(defender, item.hand)?.classList.remove("finale-target"));
+      clearHighlights();
+    }
+
+    async function applyFinale(player) {
+      const defender = player === "human" ? "cpu" : "human";
+      const power = Math.max(0, state[player].L + state[player].R);
+      if (state.battleMode === "friend" && player === "human") {
+        emitFriendFx("finale", { playerSide: friendSideForLocalPlayer(player), power }).catch(error => console.error("PVP finale fx failed", error));
+      }
+      await showFinaleFx(player, power);
+
+      const results = ["L", "R"].map(hand => {
+        const before = state[defender][hand];
+        if (before <= 0) return { hand, before, total: before, finalValue: before };
+        const total = before + power;
+        const finalValue = normalize(total, defender, hand);
+        return { hand, before, total, finalValue };
+      });
+      await animateFinaleDamage(defender, results);
+      for (const item of results) {
+        if (item.before > 0) state[defender][item.hand] = item.finalValue;
+      }
+      addLog(`${handNames[player]}の「フィナーレ」。${handNames[defender]}の両手それぞれに${power}本分を加えた。`);
+      setLastAction(player, "フィナーレ", `相手の両手それぞれに${power}本分を加えた。`, "card");
+      clearBrokenTraps(defender);
+      render();
     }
 
     async function showAccelerationPopup(player, draws, remaining) {
@@ -1397,7 +1482,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -1457,7 +1542,7 @@ const CARD_LIBRARY = {
       state.decks[player] = [...(side.deck || [])];
       state.hands[player] = [...(side.hand || [])];
       state.discard[player] = [...(side.discard || [])];
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, ...(side.temp || {}) };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
       state.noSplit[player] = !!side.noSplit;
       state.extraActions[player] = Number(side.extraActions || 0);
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
@@ -1624,6 +1709,11 @@ const CARD_LIBRARY = {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         const card = CARD_LIBRARY[payload.cardId];
         if (player && card) await showCardPopup(player, card, true, 760);
+        return;
+      }
+      if (fx.type === "finale") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) await showFinaleFx(player, Number(payload.power || 0));
       }
     }
 
@@ -2167,8 +2257,8 @@ const CARD_LIBRARY = {
       state.discard.cpu = [...(other.discard || [])];
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -2731,7 +2821,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -3974,10 +4064,10 @@ function renderLastAction() {
       addLog(`【カード】${visibleText}`);
       render();
 
-      if (state.battleMode === "friend" && player === "human") {
+      if (state.battleMode === "friend" && player === "human" && cardId !== "finale") {
         emitFriendFx("card", { playerSide: friendSideForLocalPlayer(player), cardId }).catch(error => console.error("PVP card fx failed", error));
       }
-      if (showPopup) await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
+      if (showPopup && cardId !== "finale") await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
 
       await card.effect(player);
       checkWin();
@@ -4221,6 +4311,20 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       if (hasAttachment(attacker, attackHand, "largo")) {
         drawCard(attacker);
         addLog(`${handNames[attacker]}の「ラルゴ」により、カードを1枚引いた。`);
+      }
+
+      if (state.temp[attacker]?.lastMelody) {
+        state.temp[attacker].lastMelody = false;
+        const before = state[attacker][attackHand];
+        if (before > 0) {
+          state[attacker][attackHand] = 0;
+          clearBrokenTraps(attacker);
+          if (state[attacker][attackHand] === 0) {
+            state.hands[attacker].push("finale");
+            addLog(`${handNames[attacker]}の「最後の旋律」により、共鳴した${handNames[attackHand]}が${before}→0。「フィナーレ」を手札に加えた。`);
+            setLastAction(attacker, "最後の旋律", `${handNames[attackHand]}を0にし、「フィナーレ」を手札に加えた。`, "card");
+          }
+        }
       }
     }
 
@@ -5560,8 +5664,8 @@ async function endTurn() {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;

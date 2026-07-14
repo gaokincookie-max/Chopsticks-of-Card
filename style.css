@@ -1265,3 +1265,50 @@
   line-height: 1.45;
 }
 .battle-result-wait:empty { display: none; }
+
+
+/* v52: special card cinematic FX */
+.special-fx-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+.special-fx-layer.prepare,
+.special-fx-layer.reveal { display: grid; }
+.special-fx-layer.finale-fx { background: rgba(8, 7, 16, .88); }
+.special-fx-layer.finale-fx.prepare { animation: finaleDim .38s ease both; }
+.special-fx-layer.finale-fx.reveal { animation: finaleOpen .52s ease both; }
+.special-fx-layer.finale-fx.flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: white;
+  animation: finaleFlash .36s ease both;
+}
+.finale-halo {
+  position: absolute;
+  width: min(76vw, 620px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.55);
+  box-shadow: 0 0 40px rgba(255,255,255,.35), inset 0 0 70px rgba(255,255,255,.12);
+  opacity: 0;
+  transform: scale(.35);
+}
+.special-fx-layer.reveal .finale-halo { animation: finaleHalo .95s ease-out both; }
+.special-fx-copy { position: relative; z-index: 2; text-align: center; color: white; text-shadow: 0 3px 20px rgba(0,0,0,.5); }
+.special-fx-title { font-size: clamp(42px, 12vw, 96px); font-weight: 1000; letter-spacing: .12em; }
+.special-fx-sub { margin-top: 10px; font-size: clamp(14px, 4vw, 22px); font-weight: 900; opacity: .9; }
+.special-fx-layer.prepare .special-fx-copy { opacity: 0; }
+.special-fx-layer.reveal .special-fx-copy { animation: finaleTitle .58s cubic-bezier(.2,.9,.2,1) both; }
+.hand.finale-target { animation: finaleTarget .68s ease both; box-shadow: 0 0 0 6px rgba(255,255,255,.55), 0 0 36px rgba(255,225,120,.9) !important; }
+@keyframes finaleDim { from { background: rgba(8,7,16,0); } to { background: rgba(8,7,16,.88); } }
+@keyframes finaleOpen { from { background: rgba(8,7,16,.88); } to { background: rgba(20,16,12,.45); } }
+@keyframes finaleFlash { 0% { opacity: 0; } 22% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes finaleHalo { 0% { opacity: 0; transform: scale(.35); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
+@keyframes finaleTitle { 0% { opacity: 0; transform: scale(.78); filter: blur(7px); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
+@keyframes finaleTarget { 0% { transform: scale(1); } 38% { transform: scale(.93); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
