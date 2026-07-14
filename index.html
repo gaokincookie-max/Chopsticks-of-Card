@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=59">
+  <link rel="stylesheet" href="style.css?v=61">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -48,6 +48,20 @@
     </div>
   </div>
 
+
+  <div class="attachment-detail-modal" id="attachmentDetailModal">
+    <div class="attachment-detail-panel">
+      <div class="attachment-detail-head">
+        <div>
+          <div class="attachment-detail-kind" id="attachmentDetailKind"></div>
+          <h2 id="attachmentDetailName"></h2>
+        </div>
+        <button id="attachmentDetailCloseBtn" class="secondary">閉じる</button>
+      </div>
+      <div class="attachment-detail-meta" id="attachmentDetailMeta"></div>
+      <div class="attachment-detail-text" id="attachmentDetailText"></div>
+    </div>
+  </div>
 
   <div class="help-modal" id="helpModal">
     <div class="help-panel">
@@ -462,6 +476,6 @@
     }
   </script>
 
-  <script src="game.js?v=59"></script>
+  <script src="game.js?v=61"></script>
 </body>
 </html>

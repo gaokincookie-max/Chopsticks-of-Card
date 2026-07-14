@@ -963,6 +963,14 @@ const CARD_LIBRARY = {
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
+      bulletproofVest: {
+        name: "防弾チョッキ",
+        cost: 2,
+        type: "加護",
+        text: "自分の手に表向きで置く。この手は「狙撃」「乱射」の効果によって本数を加えられない。「ロジックアトリエ」の効果は防げない。手が0になったら捨て札に置く。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
       growthBlessing: {
         name: "成長",
         cost: 2,
@@ -1015,7 +1023,7 @@ const CARD_LIBRARY = {
         name: "超過の呪縛",
         cost: 3,
         type: "呪縛",
-        text: "相手の手に表向きで置く。この手は5以上になったら、余り計算をせず0になる。",
+        text: "相手の手に表向きで置く。この手は7以上になったら、余り計算をせず0になる。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -1248,6 +1256,12 @@ const CARD_LIBRARY = {
       deckCodeBox: document.getElementById("deckCodeBox"),
       openHelpBtn: document.getElementById("openHelpBtn"),
       openCardsHelpBtn: document.getElementById("openCardsHelpBtn"),
+      attachmentDetailModal: document.getElementById("attachmentDetailModal"),
+      attachmentDetailKind: document.getElementById("attachmentDetailKind"),
+      attachmentDetailName: document.getElementById("attachmentDetailName"),
+      attachmentDetailMeta: document.getElementById("attachmentDetailMeta"),
+      attachmentDetailText: document.getElementById("attachmentDetailText"),
+      attachmentDetailCloseBtn: document.getElementById("attachmentDetailCloseBtn"),
       helpModal: document.getElementById("helpModal"),
       helpCloseBtn: document.getElementById("helpCloseBtn"),
       helpTabs: document.getElementById("helpTabs"),
@@ -1754,6 +1768,11 @@ const CARD_LIBRARY = {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         const card = CARD_LIBRARY[payload.cardId];
         if (player && card) await showDiscardEffectPopup(player, payload.cardId, 900);
+        return;
+      }
+      if (fx.type === "bulletproofBlocked") {
+        const defender = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (defender) await showBulletproofBlockedPopup(defender, payload.sourceName || "遠距離攻撃", 900);
         return;
       }
       if (fx.type === "finale") {
@@ -2429,7 +2448,7 @@ function wrapFinger(value) {
 
     function normalize(value, player = null, hand = null) {
       if (value >= 5) {
-        if (player && hand && hasAttachment(player, hand, "overflowCurse")) {
+        if (value >= 7 && player && hand && hasAttachment(player, hand, "overflowCurse")) {
           return 0;
         }
         if (player && state.temp[player].guard) {
@@ -3637,8 +3656,42 @@ function wrapFinger(value) {
       return choices[0];
     }
 
+    function hasBulletproofVest(player, hand) {
+      return hasAttachment(player, hand, "bulletproofVest");
+    }
+
+    async function showBulletproofBlockedPopup(defender, sourceName, ms = 900) {
+      await showPopup(
+        defender,
+        "「防弾チョッキ」",
+        `${sourceName}による遠距離ダメージを防いだ。`,
+        "card",
+        ms
+      );
+    }
+
+    async function triggerBulletproofBlockedFx(defender, sourceName) {
+      if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+        emitFriendFx("bulletproofBlocked", {
+          playerSide: friendSideForLocalPlayer(defender),
+          sourceName
+        }).catch(error => console.error("PVP bulletproof fx failed", error));
+      }
+      await showBulletproofBlockedPopup(defender, sourceName, 900);
+    }
+
     async function applySnipe(player, defender, targetHand) {
       if (state[defender][targetHand] <= 0) return false;
+      if (hasBulletproofVest(defender, targetHand)) {
+        await triggerBulletproofBlockedFx(defender, "狙撃");
+        addLog(`${handNames[defender]}の${handNames[targetHand]}にある「防弾チョッキ」が「狙撃」を防いだ。`);
+        if (player === "human") {
+          state.mode = "attack";
+          setMessage(`「狙撃」は「防弾チョッキ」に防がれました。まだ攻撃か分けるができます。`);
+        }
+        render();
+        return true;
+      }
       const before = state[defender][targetHand];
       const amount = applyGuardBlessingReduction(defender, targetHand, 1, "狙撃");
       const total = before + amount;
@@ -3791,6 +3844,28 @@ function wrapFinger(value) {
       }
     }
 
+    function attachmentKindInfo(card) {
+      if (card?.blessing) return { label: "加護", symbol: "✦", className: "blessing" };
+      if (card?.curse) return { label: "呪縛", symbol: "◆", className: "curse" };
+      return { label: "公開済み罠", symbol: "⚠", className: "trap" };
+    }
+
+    function openAttachmentDetail(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      if (!card || !elements.attachmentDetailModal) return;
+      const info = attachmentKindInfo(card);
+      elements.attachmentDetailKind.textContent = `${info.symbol} ${info.label}`;
+      elements.attachmentDetailKind.className = `attachment-detail-kind ${info.className}`;
+      elements.attachmentDetailName.textContent = card.name;
+      elements.attachmentDetailMeta.textContent = `コスト${card.cost} / ${card.type}`;
+      elements.attachmentDetailText.textContent = card.text;
+      elements.attachmentDetailModal.classList.add("show");
+    }
+
+    function closeAttachmentDetail() {
+      elements.attachmentDetailModal?.classList.remove("show");
+    }
+
     function renderTrapSlots(player, hand) {
       const box = document.getElementById(`${player}${hand}Traps`);
       const traps = state.traps[player][hand];
@@ -3822,13 +3897,10 @@ function wrapFinger(value) {
             (card?.blessing ? " blessing-slot" : "") +
             (card?.curse ? " curse-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
-          div.textContent = hidden
-            ? `伏せ${i + 1}`
-            : card?.blessing
-              ? `加護｜${card.name}`
-              : card?.curse
-                ? `呪縛｜${card.name}`
-                : `罠｜${card.name}`;
+          const kindInfo = attachmentKindInfo(card);
+          div.textContent = hidden ? `伏せ${i + 1}` : `${kindInfo.symbol} ${card.name}`;
+          div.title = hidden ? "伏せカード" : `${kindInfo.label}「${card.name}」：${card.text}`;
+
           if (selectable) {
             div.title = "このカードを選ぶ";
             div.addEventListener("click", (event) => {
@@ -3836,6 +3908,12 @@ function wrapFinger(value) {
               if (state.mode === "chooseOwnCurse") chooseOwnCurseSlot(player, hand, i);
               else if (state.mode === "swapOpponentAttachment" || state.mode === "swapOwnAttachment") chooseSwapAttachmentSlot(player, hand, i);
               else chooseOpponentTrapSlot(player, hand, i);
+            });
+          } else if (!hidden) {
+            div.classList.add("detail-openable");
+            div.addEventListener("click", (event) => {
+              event.stopPropagation();
+              openAttachmentDetail(cardId);
             });
           }
         } else {
@@ -4810,10 +4888,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       const before = state[defender][targetHand];
       const total = before + power;
-      const overflowWouldApply = total >= 5 && hasAttachment(defender, targetHand, "overflowCurse");
+      const overflowWouldApply = total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
       const guardWouldApply = total >= 5 && !overflowWouldApply && state.temp[defender].guard;
       let resolvedFinal = overflowWouldApply ? 0 : (guardWouldApply ? 4 : wrapFinger(total));
-      if (overflowWouldApply) addLog(`${handNames[defender]}の${handNames[targetHand]}の「超過の呪縛」により、5以上は0になる。`);
+      if (overflowWouldApply) addLog(`${handNames[defender]}の${handNames[targetHand]}の「超過の呪縛」により、7以上は0になる。`);
       await animateCalculation(defender, targetHand, total, resolvedFinal);
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
@@ -5514,6 +5592,17 @@ async function endTurn() {
         clearHighlights();
         state.pendingTerminalEnd[player] = true;
         state.mode = "attack";
+        render();
+        return true;
+      }
+
+      if (hasBulletproofVest(defender, targetHand)) {
+        await triggerBulletproofBlockedFx(defender, "乱射");
+        addLog(`${handNames[defender]}の${handNames[targetHand]}にある「防弾チョッキ」が「乱射」を防いだ。`);
+        await handleCardDiscardEffect(player, discarded);
+        state.pendingTerminalEnd[player] = true;
+        state.mode = "attack";
+        clearHighlights();
         render();
         return true;
       }
@@ -6312,6 +6401,11 @@ async function endTurn() {
 
     elements.openHelpBtn.addEventListener("click", () => openHelp("basic"));
     elements.openCardsHelpBtn.addEventListener("click", () => openHelp("cards"));
+    elements.attachmentDetailCloseBtn?.addEventListener("click", closeAttachmentDetail);
+    elements.attachmentDetailModal?.addEventListener("click", (event) => {
+      if (event.target === elements.attachmentDetailModal) closeAttachmentDetail();
+    });
+
     elements.helpCloseBtn.addEventListener("click", closeHelp);
     elements.helpModal.addEventListener("click", (event) => {
       if (event.target === elements.helpModal) closeHelp();
