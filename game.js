@@ -2519,14 +2519,6 @@ function wrapFinger(value) {
     }
 
     function isDeckValid(owner = state.editingDeckOwner) {
-      elements.deckGrid.querySelectorAll("[data-info]").forEach(btn => {
-        btn.addEventListener("click", (event) => {
-          event.stopPropagation();
-          openDeckInfo(btn.dataset.info);
-        });
-      });
-      updateDeckSlotUi();
-
       const stats = getDeckStats(owner);
       return stats.count === DECK_MAX_COUNT && stats.cost <= state.costLimit;
     }
@@ -2952,27 +2944,35 @@ function wrapFinger(value) {
       });
 
       elements.deckGrid.querySelectorAll("button").forEach(btn => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", (event) => {
+          const infoKey = btn.dataset.info;
+          if (infoKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            openDeckInfo(infoKey);
+            return;
+          }
+
           const cardId = btn.dataset.card;
           const action = btn.dataset.action;
+          if (!cardId || !action) return;
+
           const current = counts[cardId] || 0;
           if (action === "plus") {
             const currentStats = getDeckStats(owner);
-            if (currentStats.count >= DECK_MAX_COUNT && current <= 0) {
-              setMessage(`デッキは${DECK_MAX_COUNT}枚以内です。`);
-              return;
-            }
-            if (currentStats.count >= DECK_MAX_COUNT && current < 3) {
-              setMessage(`デッキは${DECK_MAX_COUNT}枚以内です。`);
+            if (currentStats.count >= DECK_MAX_COUNT) {
+              setMessage(`デッキはちょうど${DECK_MAX_COUNT}枚です。これ以上追加できません。`);
               return;
             }
             counts[cardId] = Math.min(3, current + 1);
-          } else {
+          } else if (action === "minus") {
             counts[cardId] = Math.max(0, current - 1);
           }
           renderDeckBuilder();
         });
       });
+
+      updateDeckSlotUi();
 
       const stats = getDeckStats(owner);
       const valid = isDeckValid(owner);
