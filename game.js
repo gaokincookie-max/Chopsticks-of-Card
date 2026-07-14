@@ -982,6 +982,9 @@ const CARD_LIBRARY = {
       selectedAttackHand: null,
       animating: false,
       gameOver: false,
+      matchResult: null,
+      lastShownResultKey: null,
+      friendResultPublishing: false,
       log: [],
       turnNumber: 0,
       currentScreen: "menu",
@@ -1004,7 +1007,11 @@ const CARD_LIBRARY = {
       friendInterruptHandling: false,
       friendHandledInterruptIds: new Set(),
       friendHandledFxIds: new Set(),
-      friendFxQueue: Promise.resolve()
+      friendFxQueue: Promise.resolve(),
+      friendPostMatchChoice: null,
+      friendPostMatchResolutionId: null,
+      friendPostMatchResolving: false,
+      friendDeckEditReturnToLobby: false
     };
 
     const handNames = {
@@ -1048,6 +1055,7 @@ const CARD_LIBRARY = {
       deckBackMenuBtn: document.getElementById("deckBackMenuBtn"),
       battleBackMenuBtn: document.getElementById("battleBackMenuBtn"),
       battleRestartBtn: document.getElementById("battleRestartBtn"),
+      battleResultReopenBtn: document.getElementById("battleResultReopenBtn"),
       humanState: document.getElementById("humanState"),
       cpuState: document.getElementById("cpuState"),
       splitBox: document.getElementById("splitBox"),
@@ -1103,7 +1111,17 @@ const CARD_LIBRARY = {
       helpModal: document.getElementById("helpModal"),
       helpCloseBtn: document.getElementById("helpCloseBtn"),
       helpTabs: document.getElementById("helpTabs"),
-      helpBody: document.getElementById("helpBody")
+      helpBody: document.getElementById("helpBody"),
+      battleResultModal: document.getElementById("battleResultModal"),
+      battleResultKicker: document.getElementById("battleResultKicker"),
+      battleResultTitle: document.getElementById("battleResultTitle"),
+      battleResultText: document.getElementById("battleResultText"),
+      battleResultPostActions: document.getElementById("battleResultPostActions"),
+      battleResultRematchBtn: document.getElementById("battleResultRematchBtn"),
+      battleResultDeckBtn: document.getElementById("battleResultDeckBtn"),
+      battleResultLobbyBtn: document.getElementById("battleResultLobbyBtn"),
+      battleResultWait: document.getElementById("battleResultWait"),
+      battleResultViewBtn: document.getElementById("battleResultViewBtn")
     };
 
     function delay(ms) {
@@ -1318,6 +1336,7 @@ const CARD_LIBRARY = {
         turnSide: state.turn === "human" ? role : otherRole,
         turnNumber: state.turnNumber,
         gameOver: !!state.gameOver,
+        result: state.matchResult ?? null,
         log: [...state.log],
         lastAction: state.lastAction ? cloneJson(state.lastAction) : null
       };
@@ -1366,6 +1385,7 @@ const CARD_LIBRARY = {
         state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.gameOver = !!snapshot.gameOver;
+        state.matchResult = snapshot.result ?? state.matchResult ?? null;
         state.log = [...(snapshot.log || [])];
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
         state.friendLastAppliedRevision = Math.max(state.friendLastAppliedRevision, Number(revision || 0));
@@ -1381,6 +1401,7 @@ const CARD_LIBRARY = {
         elements.splitBox.classList.remove("active");
         clearHighlights();
         render();
+        if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
       } finally {
         state.friendApplyingRemoteState = false;
       }
@@ -1407,9 +1428,10 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // match 全体を古いキャッシュで上書きしない。更新するフィールドだけを原子的に書く。
       await fb.updateDoc(roomRef, {
-        "match.version": 46,
+        "match.version": 49,
         "match.stateRevision": nextRevision,
         "match.state": snapshot,
+        "match.result": state.matchResult ?? null,
         updatedAt: fb.serverTimestamp()
       });
     }
@@ -1463,7 +1485,7 @@ const CARD_LIBRARY = {
       };
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       await fb.updateDoc(roomRef, {
-        "match.version": 46,
+        "match.version": 49,
         "match.fx": fx,
         updatedAt: fb.serverTimestamp()
       });
@@ -1525,7 +1547,7 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // 割り込みだけを書き換え、盤面 state / revision を古い値で巻き戻さない。
       await fb.updateDoc(roomRef, {
-        "match.version": 46,
+        "match.version": 49,
         "match.interrupt": interrupt,
         updatedAt: fb.serverTimestamp()
       });
@@ -1613,9 +1635,11 @@ const CARD_LIBRARY = {
 
     function setFriendRoomUi(roomId, role = "host") {
       const cleanId = extractRoomId(roomId) || makeRoomId();
+      const roomChanged = state.friendRoomId !== cleanId || state.friendRole !== role;
       state.battleMode = "friend";
       state.friendRoomId = cleanId;
       state.friendRole = role;
+      if (roomChanged) resetFriendMatchEntryState();
       state.friendRoomUrl = buildRoomUrl(cleanId);
       elements.roomUrlText.textContent = state.friendRoomUrl;
       elements.roomIdInput.value = cleanId;
@@ -1689,6 +1713,18 @@ const CARD_LIBRARY = {
         state.friendRoomData = data;
         elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
         updateFriendLobbyView(data);
+        updateBattleResultPostMatchView(data?.postMatch);
+        if (data?.postMatch) {
+          resolveFriendPostMatchAsHost(data).catch(error => {
+            console.error("PVP post-match resolve failed", error);
+            setMessage(`試合後同期エラー：${error.message || error}`);
+          });
+          applyResolvedFriendPostMatch(data);
+        }
+        const remoteResult = data?.match?.result ?? data?.match?.state?.result ?? null;
+        if (data?.status === "playing" && remoteResult && state.friendMatchStarted) {
+          applySyncedBattleResult(remoteResult);
+        }
         const fx = data?.match?.fx;
         if (fx) handleIncomingFriendFx(fx);
         const interrupt = data?.match?.interrupt;
@@ -1700,8 +1736,22 @@ const CARD_LIBRARY = {
             });
           }
         }
-        if (data?.status === "playing" && data?.match && !state.friendMatchStarted) {
-          enterFriendCommonBattle(data.match);
+        const incomingMatchId = data?.match ? getFriendMatchId(data.match) : null;
+        const shouldEnterPlayingMatch = data?.status === "playing" && data?.match && (
+          !state.friendMatchStarted ||
+          state.friendMatchId !== incomingMatchId ||
+          state.currentScreen !== "battle"
+        );
+
+        if (shouldEnterPlayingMatch) {
+          try {
+            enterFriendCommonBattle(data.match);
+          } catch (error) {
+            console.error("PVP battle entry failed", error);
+            state.friendMatchStarted = false;
+            state.friendMatchId = null;
+            elements.friendLobbyMessage.textContent = `試合画面移行エラー：${error.message || error}`;
+          }
         } else if (data?.status === "playing" && data?.match?.state && state.friendMatchStarted) {
           const revision = Number(data.match.stateRevision || 0);
           if (revision > state.friendLastAppliedRevision && revision > state.friendSyncRevision) {
@@ -1786,6 +1836,138 @@ const CARD_LIBRARY = {
       }, { merge: true });
     }
 
+    function friendPostMatchChoiceKey(role = state.friendRole) {
+      return role === "host" ? "hostChoice" : "guestChoice";
+    }
+
+    function updateBattleResultPostMatchView(postMatch = state.friendRoomData?.postMatch) {
+      if (!elements.battleResultPostActions) return;
+      const isFriend = state.battleMode === "friend";
+      elements.battleResultPostActions.classList.toggle("hidden", !isFriend);
+      if (!isFriend) return;
+      const myChoice = postMatch?.[friendPostMatchChoiceKey()] || state.friendPostMatchChoice || null;
+      const otherChoice = postMatch?.[friendPostMatchChoiceKey(otherFriendRole())] || null;
+      const labels = { rematch: "同じデッキで再戦", deck: "デッキ変更", lobby: "ロビーへ戻る" };
+      elements.battleResultRematchBtn.disabled = !!postMatch?.resolvedAction || state.friendPostMatchResolving;
+      elements.battleResultDeckBtn.disabled = !!postMatch?.resolvedAction || state.friendPostMatchResolving;
+      elements.battleResultLobbyBtn.disabled = !!postMatch?.resolvedAction || state.friendPostMatchResolving;
+      if (postMatch?.resolvedAction) {
+        elements.battleResultWait.textContent = "試合後の移動を同期しています…";
+      } else if (myChoice) {
+        elements.battleResultWait.textContent = `あなた：${labels[myChoice]} / 相手：${otherChoice ? labels[otherChoice] : "選択待ち"}`;
+      } else {
+        elements.battleResultWait.textContent = "次の行動を選んでください。";
+      }
+    }
+
+    async function requestFriendPostMatchChoice(choice) {
+      if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || !state.gameOver) return;
+      if (!["rematch", "deck", "lobby"].includes(choice)) return;
+      const fb = firebaseApi();
+      if (!fb) return;
+      state.friendPostMatchChoice = choice;
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      await fb.updateDoc(roomRef, {
+        [`postMatch.matchId`]: state.friendMatchId,
+        [`postMatch.${friendPostMatchChoiceKey()}`]: choice,
+        status: "post-match",
+        updatedAt: fb.serverTimestamp()
+      });
+      updateBattleResultPostMatchView({
+        ...(state.friendRoomData?.postMatch || {}),
+        matchId: state.friendMatchId,
+        [friendPostMatchChoiceKey()]: choice
+      });
+    }
+
+    async function resolveFriendPostMatchAsHost(data) {
+      if (state.friendRole !== "host" || state.friendPostMatchResolving) return;
+      const post = data?.postMatch;
+      if (!post || String(post.matchId || "") !== String(getFriendMatchId(data?.match) || "")) return;
+      if (post.resolvedAction) return;
+      const hostChoice = post.hostChoice || null;
+      const guestChoice = post.guestChoice || null;
+      let action = null;
+      if (hostChoice === "lobby" || guestChoice === "lobby") action = "lobby";
+      else if (hostChoice === "deck" || guestChoice === "deck") action = "deck";
+      else if (hostChoice === "rematch" && guestChoice === "rematch") action = "rematch";
+      if (!action) return;
+
+      state.friendPostMatchResolving = true;
+      try {
+        if (action === "rematch") {
+          await startFriendCommonBattle({ skipReady: true });
+          return;
+        }
+        const fb = firebaseApi();
+        if (!fb) return;
+        const resolutionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+        await fb.updateDoc(roomRef, {
+          "postMatch.resolvedAction": action,
+          "postMatch.resolutionId": resolutionId,
+          status: "waiting",
+          hostReady: false,
+          guestReady: false,
+          updatedAt: fb.serverTimestamp()
+        });
+      } finally {
+        state.friendPostMatchResolving = false;
+      }
+    }
+
+    function applyResolvedFriendPostMatch(data) {
+      const post = data?.postMatch;
+      if (!post?.resolvedAction || !post.resolutionId) return;
+      if (state.friendPostMatchResolutionId === post.resolutionId) return;
+      state.friendPostMatchResolutionId = post.resolutionId;
+      const action = post.resolvedAction;
+      const myChoice = post[friendPostMatchChoiceKey()] || state.friendPostMatchChoice;
+      hideBattleResult();
+      resetFriendMatchEntryState();
+      state.friendPostMatchResolutionId = post.resolutionId;
+      if (action === "deck") {
+        if (myChoice === "deck") {
+          state.friendDeckEditReturnToLobby = true;
+          state.editingDeckOwner = "human";
+          showScreen("deck");
+          setMessage("再戦用のあなたのデッキを編集してください。編集後はロビーへ戻り、準備完了を押してください。");
+        } else {
+          showScreen("friendLobby");
+          elements.friendLobbyMessage.textContent = "相手がデッキを変更しています。変更後、2人とも準備完了してください。";
+        }
+      } else if (action === "lobby") {
+        showScreen("friendLobby");
+        elements.friendLobbyMessage.textContent = "同じ部屋のロビーへ戻りました。再戦する場合は準備完了を押してください。";
+      }
+      updateFriendLobbyView(data);
+    }
+
+    function getFriendMatchId(match) {
+      if (!match) return null;
+      const raw = match.matchId ?? match.createdAtMs ?? null;
+      return raw == null ? null : String(raw);
+    }
+
+    function resetFriendMatchEntryState() {
+      state.friendMatchStarted = false;
+      state.friendMatchId = null;
+      state.friendSyncRevision = 0;
+      state.friendLastAppliedRevision = 0;
+      state.friendLastPublishedSignature = "";
+      state.friendInterruptWaiting = null;
+      state.friendInterruptHandling = false;
+      state.friendHandledInterruptIds = new Set();
+      state.matchResult = null;
+      state.lastShownResultKey = null;
+      state.friendResultPublishing = false;
+      state.friendPostMatchChoice = null;
+      state.friendPostMatchResolutionId = null;
+      state.friendPostMatchResolving = false;
+      state.friendDeckEditReturnToLobby = false;
+      hideBattleResult();
+    }
+
     function buildDeckFromSubmittedCounts(counts) {
       const deck = [];
       const fixed = cloneValidDeckCounts(counts || {});
@@ -1795,10 +1977,11 @@ const CARD_LIBRARY = {
       return deck;
     }
 
-    async function startFriendCommonBattle() {
+    async function startFriendCommonBattle(options = {}) {
       if (state.friendRole !== "host" || !state.friendRoomId) return;
       const data = state.friendRoomData;
-      if (!data?.hostReady || !data?.guestReady || !data?.hostDeckCounts || !data?.guestDeckCounts) {
+      const skipReady = !!options.skipReady;
+      if ((!skipReady && (!data?.hostReady || !data?.guestReady)) || !data?.hostDeckCounts || !data?.guestDeckCounts) {
         elements.friendLobbyMessage.textContent = "2人の準備完了とデッキ提出が必要です。";
         return;
       }
@@ -1814,9 +1997,11 @@ const CARD_LIBRARY = {
         noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
+      const createdAtMs = Date.now();
       const match = {
-        version: 45,
-        createdAtMs: Date.now(),
+        version: 49,
+        matchId: `${state.friendRoomId}-${createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAtMs,
         turnSide: "host",
         turnNumber: 1,
         host: initialHost,
@@ -1829,12 +2014,25 @@ const CARD_LIBRARY = {
           turnSide: "host",
           turnNumber: 1,
           gameOver: false,
+          result: null,
           log: ["オンライン対戦を開始しました。"],
           lastAction: null
-        }
+        },
+        result: null
       };
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      await fb.setDoc(roomRef, { status: "playing", match, updatedAt: fb.serverTimestamp() }, { merge: true });
+      await fb.setDoc(roomRef, {
+        status: "playing",
+        match,
+        postMatch: null,
+        updatedAt: fb.serverTimestamp()
+      }, { merge: true });
+
+      // ホストはonSnapshot待ちだけに依存せず、書き込み成功後に同じmatchへ確実に入る。
+      const startedMatchId = getFriendMatchId(match);
+      if (!state.friendMatchStarted || state.friendMatchId !== startedMatchId || state.currentScreen !== "battle") {
+        enterFriendCommonBattle(match);
+      }
     }
 
     function enterFriendCommonBattle(match) {
@@ -1843,7 +2041,7 @@ const CARD_LIBRARY = {
       state.battleMode = "friend";
       handNames.cpu = "相手";
       state.friendMatchStarted = true;
-      state.friendMatchId = String(match.createdAtMs || Date.now());
+      state.friendMatchId = getFriendMatchId(match) || String(Date.now());
       state.friendSyncRevision = Number(match.stateRevision || 0);
       state.friendLastAppliedRevision = Number(match.stateRevision || 0);
       state.friendLastPublishedSignature = match.state ? JSON.stringify(match.state) : "";
@@ -1881,6 +2079,9 @@ const CARD_LIBRARY = {
       state.selectedAttackHand = null;
       state.animating = false;
       state.gameOver = false;
+      state.matchResult = match.result ?? null;
+      state.lastShownResultKey = null;
+      hideBattleResult();
       state.log = ["オンライン共通戦闘画面に入りました。ゲーム状態同期を開始します。"];
       elements.splitBox.classList.remove("active");
       clearHighlights();
@@ -1893,12 +2094,14 @@ const CARD_LIBRARY = {
         state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.gameOver = !!snapshot.gameOver;
+        state.matchResult = snapshot.result ?? match.result ?? null;
         state.log = [...(snapshot.log || [])];
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
         state.friendApplyingRemoteState = false;
       }
-      setMessage(state.turn === "human" ? "あなたの番です。CPU戦と同じ画面・カード処理を使用します。" : "相手の番です。同期を待っています。");
+      setMessage(state.gameOver ? "試合終了。" : state.turn === "human" ? "あなたの番です。CPU戦と同じ画面・カード処理を使用します。" : "相手の番です。同期を待っています。");
       render();
+      if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
       if (state.turn === "human" && !state.firstTurnStarted.human) {
         startTurn("human");
       }
@@ -2573,6 +2776,12 @@ function wrapFinger(value) {
       elements.cpuState.textContent =
         state.gameOver ? "" : state.turn === "cpu" ? "考え中…" : "待機中";
 
+      if (elements.battleRestartBtn) {
+        elements.battleRestartBtn.classList.toggle("screen-hidden", state.battleMode === "friend");
+      }
+      if (elements.battleResultReopenBtn) {
+        elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
+      }
       const lock = state.animating || state.turn !== "human" || state.gameOver;
       const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive;
@@ -4161,22 +4370,116 @@ async function endTurn() {
       }
     }
 
+    function localResultView(result) {
+      if (result === "draw") return "draw";
+      if (state.battleMode === "friend") return result === state.friendRole ? "win" : "lose";
+      return result === "human" ? "win" : "lose";
+    }
+
+    function hideBattleResult() {
+      if (!elements.battleResultModal) return;
+      elements.battleResultModal.classList.remove("show", "win", "lose", "draw");
+      elements.battleResultModal.setAttribute("aria-hidden", "true");
+    }
+
+    function showBattleResult(result) {
+      if (!result || !elements.battleResultModal) return;
+      const resultKey = `${state.battleMode}:${state.friendMatchId || state.turnNumber}:${result}`;
+      if (state.lastShownResultKey === resultKey && elements.battleResultModal.classList.contains("show")) return;
+      state.lastShownResultKey = resultKey;
+      const view = localResultView(result);
+      elements.battleResultModal.className = `battle-result-modal show ${view}`;
+      elements.battleResultModal.setAttribute("aria-hidden", "false");
+      elements.battleResultKicker.textContent = "MATCH RESULT";
+      if (view === "win") {
+        elements.battleResultTitle.textContent = "勝利！";
+        elements.battleResultText.textContent = "相手の両手を0にしました。";
+      } else if (view === "lose") {
+        elements.battleResultTitle.textContent = "敗北…";
+        elements.battleResultText.textContent = "あなたの両手が0になりました。";
+      } else {
+        elements.battleResultTitle.textContent = "引き分け";
+        elements.battleResultText.textContent = "同じ効果解決中に両者の両手が0になりました。";
+      }
+      updateBattleResultPostMatchView(state.friendRoomData?.postMatch);
+    }
+
+    function applySyncedBattleResult(result) {
+      if (!result) return;
+      state.matchResult = result;
+      state.gameOver = true;
+      const view = localResultView(result);
+      setMessage(view === "win" ? "勝利！ 試合が終了しました。" : view === "lose" ? "敗北…。試合が終了しました。" : "引き分け。試合が終了しました。");
+      render();
+      showBattleResult(result);
+    }
+
+    async function publishFriendResultNow(result) {
+      if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || !result || state.friendResultPublishing) return;
+      const fb = firebaseApi();
+      if (!fb) return;
+      state.friendResultPublishing = true;
+      try {
+        const snapshot = buildFriendCanonicalSnapshot();
+        if (!snapshot) return;
+        snapshot.gameOver = true;
+        snapshot.result = result;
+        const nextRevision = Math.max(state.friendSyncRevision, state.friendLastAppliedRevision) + 1;
+        state.friendSyncRevision = nextRevision;
+        state.friendLastPublishedSignature = JSON.stringify(snapshot);
+        const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+        await fb.updateDoc(roomRef, {
+          "match.version": 49,
+          "match.stateRevision": nextRevision,
+          "match.state": snapshot,
+          "match.result": result,
+          "postMatch.matchId": state.friendMatchId,
+          "postMatch.hostChoice": null,
+          "postMatch.guestChoice": null,
+          "postMatch.resolvedAction": null,
+          "postMatch.resolutionId": null,
+          status: "post-match",
+          updatedAt: fb.serverTimestamp()
+        });
+      } finally {
+        state.friendResultPublishing = false;
+      }
+    }
+
     function checkWin() {
-      if (isDead("cpu")) {
-        state.gameOver = true;
-        setMessage(state.battleMode === "friend" ? "勝利！ 相手の両手を0にしました。" : "勝利！ CPUの両手を0にしました。");
-        addLog("あなたの勝ち！");
-        return true;
-      }
+      const humanDead = isDead("human");
+      const cpuDead = isDead("cpu");
+      if (!humanDead && !cpuDead) return false;
 
-      if (isDead("human")) {
-        state.gameOver = true;
-        setMessage("敗北…。あなたの両手が0になりました。");
-        addLog(state.battleMode === "friend" ? "相手の勝ち。" : "CPUの勝ち。");
-        return true;
-      }
+      let result;
+      if (humanDead && cpuDead) result = "draw";
+      else if (state.battleMode === "friend") result = cpuDead ? state.friendRole : otherFriendRole();
+      else result = cpuDead ? "human" : "cpu";
 
-      return false;
+      const isNewResult = !state.gameOver || state.matchResult !== result;
+      state.gameOver = true;
+      state.matchResult = result;
+      if (isNewResult) {
+        const view = localResultView(result);
+        if (view === "win") {
+          setMessage(state.battleMode === "friend" ? "勝利！ 相手の両手を0にしました。" : "勝利！ CPUの両手を0にしました。");
+          addLog("あなたの勝ち！");
+        } else if (view === "lose") {
+          setMessage("敗北…。あなたの両手が0になりました。");
+          addLog(state.battleMode === "friend" ? "相手の勝ち。" : "CPUの勝ち。");
+        } else {
+          setMessage("引き分け。両者の両手が0になりました。");
+          addLog("引き分け。両者の両手が0になった。");
+        }
+        showBattleResult(result);
+        if (state.battleMode === "friend") {
+          publishFriendResultNow(result).catch(error => {
+            console.error("PVP result publish failed", error);
+            setMessage(`勝敗同期エラー：${error.message || error}`);
+          });
+        }
+      }
+      return true;
     }
 
     const CPU_DIFFICULTY_CONFIG = {
@@ -5067,6 +5370,9 @@ async function endTurn() {
       state.selectedAttackHand = null;
       state.animating = false;
       state.gameOver = false;
+      state.matchResult = null;
+      state.lastShownResultKey = null;
+      hideBattleResult();
       state.log = [];
       state.turnNumber = 1;
       elements.splitBox.classList.remove("active");
@@ -5079,6 +5385,33 @@ async function endTurn() {
       }
       startTurn("human");
       renderDeckBuilder();
+    }
+
+    if (elements.battleResultViewBtn) {
+      elements.battleResultViewBtn.addEventListener("click", hideBattleResult);
+    }
+    if (elements.battleResultReopenBtn) {
+      elements.battleResultReopenBtn.addEventListener("click", () => {
+        if (state.matchResult) showBattleResult(state.matchResult);
+      });
+    }
+    if (elements.battleResultRematchBtn) {
+      elements.battleResultRematchBtn.addEventListener("click", () => requestFriendPostMatchChoice("rematch").catch(error => {
+        console.error(error);
+        setMessage(`再戦同期エラー：${error.message || error}`);
+      }));
+    }
+    if (elements.battleResultDeckBtn) {
+      elements.battleResultDeckBtn.addEventListener("click", () => requestFriendPostMatchChoice("deck").catch(error => {
+        console.error(error);
+        setMessage(`デッキ変更同期エラー：${error.message || error}`);
+      }));
+    }
+    if (elements.battleResultLobbyBtn) {
+      elements.battleResultLobbyBtn.addEventListener("click", () => requestFriendPostMatchChoice("lobby").catch(error => {
+        console.error(error);
+        setMessage(`ロビー復帰同期エラー：${error.message || error}`);
+      }));
     }
 
     document.querySelectorAll(".hand").forEach(card => {
@@ -5128,7 +5461,16 @@ async function endTurn() {
     elements.menuSettingsBtn.addEventListener("click", () => showScreen("settings"));
     elements.difficultyBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.settingsBackBtn.addEventListener("click", () => showScreen("menu"));
-    elements.deckBackMenuBtn.addEventListener("click", () => showScreen("menu"));
+    elements.deckBackMenuBtn.addEventListener("click", () => {
+      if (state.friendDeckEditReturnToLobby && state.friendRoomId) {
+        state.friendDeckEditReturnToLobby = false;
+        showScreen("friendLobby");
+        updateFriendLobbyView(state.friendRoomData);
+        elements.friendLobbyMessage.textContent = "デッキ編集を終了しました。準備完了を押すと新しいデッキを提出します。";
+        return;
+      }
+      showScreen("menu");
+    });
     elements.battleBackMenuBtn.addEventListener("click", () => showScreen("menu"));
     elements.battleRestartBtn.addEventListener("click", () => startBattleWithDifficulty(state.cpuDifficulty));
 

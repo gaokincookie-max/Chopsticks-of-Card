@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=46">
+  <link rel="stylesheet" href="style.css?v=49">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -12,6 +12,22 @@
       <div class="popup-user" id="popupUser"></div>
       <div class="popup-name" id="popupName"></div>
       <div class="popup-text" id="popupText"></div>
+    </div>
+  </div>
+
+
+  <div class="battle-result-modal" id="battleResultModal" aria-hidden="true">
+    <div class="battle-result-panel">
+      <div class="battle-result-kicker" id="battleResultKicker">MATCH RESULT</div>
+      <h2 id="battleResultTitle">勝利！</h2>
+      <p id="battleResultText">試合が終了しました。</p>
+      <div class="battle-result-post-actions" id="battleResultPostActions">
+        <button id="battleResultRematchBtn">同じデッキでもう一戦</button>
+        <button id="battleResultDeckBtn" class="blue">デッキを変更して再戦</button>
+        <button id="battleResultLobbyBtn" class="secondary">ロビーへ戻る</button>
+        <div class="battle-result-wait" id="battleResultWait"></div>
+      </div>
+      <button id="battleResultViewBtn" class="secondary">盤面を見る</button>
     </div>
   </div>
 
@@ -162,6 +178,7 @@
     <section class="battle-top battle-screen screen-hidden">
       <button id="battleBackMenuBtn" class="secondary">メニューへ</button>
       <button id="battleRestartBtn" class="danger">同じ難易度で再戦</button>
+      <button id="battleResultReopenBtn" class="blue screen-hidden">結果を見る</button>
     </section>
 
     <section class="status-strip battle-screen screen-hidden">
@@ -395,6 +412,6 @@
     }
   </script>
 
-  <script src="game.js?v=46"></script>
+  <script src="game.js?v=49"></script>
 </body>
 </html>
