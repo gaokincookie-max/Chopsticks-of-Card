@@ -1401,7 +1401,7 @@ const CARD_LIBRARY = {
       elements.overlay.classList.add("show");
       await delay(ms);
       elements.overlay.classList.remove("show");
-      await delay(80);
+      await delay(120);
       elements.popupText.textContent = "";
     }
 
@@ -3139,11 +3139,13 @@ function wrapFinger(value) {
           <div>
             <div class="card-title">
               <span class="deck-card-name">${escapeHtml(card.name)}</span>
+            </div>
+            <div class="card-label-row">
               <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
               ${card.token ? '<span class="generated-badge">生成カード</span>' : ''}
             </div>
             <div class="card-cost">コスト ${card.cost}</div>
-            <div class="deck-card-desc">${escapeHtml(card.text)}</div>
+            <div class="deck-card-desc">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
             <div class="deck-inline-actions">${relatedButton}${card.token ? `<button class="deck-inline-info" data-info="${cardId}">詳細を見る</button>` : ""}</div>
           </div>
           ${card.token ? '<div class="generated-lock">デッキ投入不可</div>' : `<div class="count-control">
@@ -3225,8 +3227,8 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
-            name: "指令：指定攻撃",
-            text: `${handNames[hand]}で相手を通常攻撃せよ。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
+            name: `指令：指定攻撃［${hand}］`,
+            text: `指定：${hand}手で相手を通常攻撃。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
             directive: true,
             directiveBase: "directiveAttack",
             directiveData: { attackHand: hand },
@@ -3242,8 +3244,8 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveTarget,
-            name: "指令：対象指定",
-            text: `${handNames[attackHand]}で相手の${handNames[targetHand]}を通常攻撃せよ。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
+            name: `指令：対象指定［${attackHand}→${targetHand}］`,
+            text: `指定：${attackHand}手 → 相手${targetHand}手。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
             directive: true,
             directiveBase: "directiveTarget",
             directiveData: { attackHand, targetHand },
@@ -3265,8 +3267,8 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
-            name: "指令：指定攻撃",
-            text: `${handNames[hand]}で相手を通常攻撃せよ。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
+            name: `指令：指定攻撃［${hand}］`,
+            text: `指定：${hand}手で相手を通常攻撃。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
             directive: true,
             directiveBase: "directiveAttack",
             directiveData: { attackHand: hand },
@@ -3280,8 +3282,8 @@ function wrapFinger(value) {
           if (!CARD_LIBRARY[id]) {
             CARD_LIBRARY[id] = {
               ...CARD_LIBRARY.directiveTarget,
-              name: "指令：対象指定",
-              text: `${handNames[attackHand]}で相手の${handNames[targetHand]}を通常攻撃せよ。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
+              name: `指令：対象指定［${attackHand}→${targetHand}］`,
+              text: `指定：${attackHand}手 → 相手${targetHand}手。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
               directive: true,
               directiveBase: "directiveTarget",
               directiveData: { attackHand, targetHand },
@@ -3334,7 +3336,7 @@ function wrapFinger(value) {
       if (!layer) return;
       elements.directiveClearText.textContent = count > 1 ? `CLEAR ×${count}` : "CLEAR";
       layer.classList.add("show");
-      await delay(720);
+      await delay(1350);
       layer.classList.remove("show");
       await delay(80);
     }
@@ -4362,6 +4364,53 @@ function renderLastAction() {
       `;
     }
 
+    function directiveCardTextHtml(cardId, card) {
+      if (!card?.directive) return escapeHtml(card.text);
+      const base = directiveBaseId(cardId);
+      const data = card.directiveData || {};
+
+      if (base === "directiveAttack") {
+        return `<div class="directive-summary">
+          <span class="directive-label">指定</span>
+          <span class="directive-hand">${escapeHtml(data.attackHand || "?")}</span>
+          <span class="directive-action">手で相手を通常攻撃</span>
+        </div>
+        <div class="directive-result"><strong>達成</strong> 1枚引く</div>
+        <div class="directive-result fail"><strong>未達成</strong> ランダム1枚捨てる</div>`;
+      }
+
+      if (base === "directiveTarget") {
+        return `<div class="directive-summary">
+          <span class="directive-label">指定</span>
+          <span class="directive-hand">${escapeHtml(data.attackHand || "?")}</span>
+          <span class="directive-arrow">→</span>
+          <span class="directive-target">相手${escapeHtml(data.targetHand || "?")}</span>
+        </div>
+        <div class="directive-result"><strong>達成</strong> 2枚引く</div>
+        <div class="directive-result fail"><strong>未達成</strong> 指定した自分の手+1</div>`;
+      }
+
+      if (base === "directiveSilence") {
+        return `<div class="directive-summary">
+          <span class="directive-label">条件</span>
+          <span class="directive-keyword">カード使用禁止</span>
+        </div>
+        <div class="directive-result"><strong>達成</strong> 2枚引く</div>
+        <div class="directive-result fail"><strong>未達成</strong> 次ターン通常ドローなし</div>`;
+      }
+
+      if (base === "directiveReform") {
+        return `<div class="directive-summary">
+          <span class="directive-label">条件</span>
+          <span class="directive-keyword">分ける</span>
+        </div>
+        <div class="directive-result"><strong>達成</strong> 次ターン開始時ドロー+1</div>
+        <div class="directive-result fail"><strong>未達成</strong> 多い方の手+1</div>`;
+      }
+
+      return escapeHtml(card.text);
+    }
+
     function renderHumanCards() {
       elements.humanCards.innerHTML = "";
 
@@ -4401,11 +4450,13 @@ function renderLastAction() {
           (selected ? " selected-card" : "");
         div.innerHTML = `
           <div class="card-title">
-            <span>${escapeHtml(card.name)}</span>
+            <span class="card-name">${escapeHtml(card.name)}</span>
+          </div>
+          <div class="card-label-row">
             <span class="card-type${isTrap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
-          <div class="card-text">${escapeHtml(card.text)}</div>
+          <div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
           ${cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed ? '<div class="used">カード関連行動は使用済み</div>' : ''}
         `;
         if (discardPlayable) {
