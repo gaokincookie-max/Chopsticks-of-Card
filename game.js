@@ -497,6 +497,105 @@ const CARD_LIBRARY = {
         }
       },
 
+
+      directiveAttack: {
+        name: "指令：指定攻撃",
+        cost: 1,
+        type: "指令 / 使用不可",
+        text: "このカードは使用できない。引いた時に右手か左手を指定する。ターン終了時、指定された手で相手を通常攻撃していれば達成：1枚引く。未達成：手札をランダムに1枚捨てる。",
+        directive: true,
+        canPlay: () => false
+      },
+      directiveTarget: {
+        name: "指令：対象指定",
+        cost: 2,
+        type: "指令 / 使用不可",
+        text: "このカードは使用できない。引いた時に自分の手と相手の手を指定する。ターン終了時、指定された組み合わせで通常攻撃していれば達成：2枚引く。未達成：指定された自分の手に1本加える。",
+        directive: true,
+        canPlay: () => false
+      },
+      directiveSilence: {
+        name: "指令：沈黙",
+        cost: 1,
+        type: "指令 / 使用不可",
+        text: "このカードは使用できない。ターン終了時、このターンに手札からカードを使用していなければ達成：2枚引く。未達成：次の自分のターン、通常の開始時ドローを行わない。",
+        directive: true,
+        canPlay: () => false
+      },
+      directiveReform: {
+        name: "指令：再編成",
+        cost: 1,
+        type: "指令 / 使用不可",
+        text: "このカードは使用できない。ターン終了時、このターンに「分ける」を行っていれば達成：次の自分のターン、開始時ドロー+1。未達成：本数が多い方の手に1本加える。同数ならランダム。",
+        directive: true,
+        canPlay: () => false
+      },
+      meaningOfDirective: {
+        name: "指令の意味",
+        cost: 2,
+        type: "補助",
+        text: "次の自分のターン開始時、山札から「指令」カードをランダムに最大2枚手札に加える。",
+        canPlay: () => true,
+        effect: (player) => {
+          state.pendingDirectiveDraw[player] = (state.pendingDirectiveDraw[player] || 0) + 2;
+          addLog(`${handNames[player]}は「指令の意味」を使用。次の自分のターン開始時、山札から指令を最大2枚加える。`);
+        }
+      },
+      circulatingCity: {
+        name: "循環する都市",
+        cost: 1,
+        type: "補助",
+        text: "自分の捨て札にある「指令」カードをすべて山札に戻し、山札をシャッフルする。",
+        canPlay: (player) => state.discard[player].some(id => isDirectiveCard(id)),
+        effect: (player) => {
+          const returned = [];
+          state.discard[player] = state.discard[player].filter(id => {
+            if (!isDirectiveCard(id)) return true;
+            returned.push(directiveBaseId(id));
+            return false;
+          });
+          state.decks[player].push(...returned);
+          state.decks[player] = shuffle(state.decks[player]);
+          addLog(`${handNames[player]}は「循環する都市」で指令${returned.length}枚を山札に戻した。`);
+        }
+      },
+      directiveBlessing: {
+        name: "指令の加護",
+        cost: 3,
+        type: "加護",
+        text: "自分のターンに達成した指令の数を記録する。次の相手のターン中、この手に加えられる本数をその数だけ減らす。ただし最低1。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      willBlade: {
+        name: "意志の剣",
+        cost: 3,
+        type: "加護",
+        text: "前の自分のターンに達成した指令の数だけ、この手を使った通常攻撃で相手に加える本数を増やす。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      cityWill: {
+        name: "都市の意志",
+        cost: 2,
+        type: "補助",
+        text: "自分の手札にある「指令」カードを1枚選び、相手の手札に移す。指定内容はそのまま引き継ぐ。",
+        canPlay: (player) => state.hands[player].some(id => isDirectiveCard(id)),
+        effect: async (player) => {
+          if (player === "human") {
+            state.mode = "cityWillChoose";
+            setMessage("「都市の意志」：相手に渡す指令を選んでください。");
+            return;
+          }
+          const choices = state.hands[player]
+            .map((id, index) => ({ id, index }))
+            .filter(x => isDirectiveCard(x.id));
+          if (!choices.length) return;
+          const picked = choices[Math.floor(Math.random() * choices.length)];
+          transferDirective(player, picked.index);
+        }
+      },
+
       passCard: {
         name: "パス",
         cost: 0,
@@ -645,6 +744,10 @@ const CARD_LIBRARY = {
           if (player === "human") {
             state.mode = "andante";
             state.pendingAndanteHand = null;
+      state.pendingDirectiveDraw = { human: 0, cpu: 0 };
+      state.pendingDirectiveNoDraw = { human: 0, cpu: 0 };
+      state.pendingDirectiveBonusDraw = { human: 0, cpu: 0 };
+      state.lastDirectiveClearCount = { human: 0, cpu: 0 };
             state.selectedAttackHand = null;
             elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
@@ -1105,6 +1208,10 @@ const CARD_LIBRARY = {
       pendingRapidFireDiscard: null,
       pendingSwapFirst: null,
       pendingAndanteHand: null,
+      pendingDirectiveDraw: { human: 0, cpu: 0 },
+      pendingDirectiveNoDraw: { human: 0, cpu: 0 },
+      pendingDirectiveBonusDraw: { human: 0, cpu: 0 },
+      lastDirectiveClearCount: { human: 0, cpu: 0 },
       firstTurnStarted: { human: false, cpu: false },
       weaknessWait: {},
       lastAction: null,
@@ -1210,6 +1317,8 @@ const CARD_LIBRARY = {
       handInfo: document.getElementById("handInfo"),
       lastCardDisplay: document.getElementById("lastCardDisplay"),
       overlay: document.getElementById("overlay"),
+      directiveClearFx: document.getElementById("directiveClearFx"),
+      directiveClearText: document.getElementById("directiveClearText"),
       specialFxLayer: document.getElementById("specialFxLayer"),
       specialFxTitle: document.getElementById("specialFxTitle"),
       specialFxSub: document.getElementById("specialFxSub"),
@@ -1487,6 +1596,23 @@ const CARD_LIBRARY = {
       return Math.random().toString(36).slice(2, 8).toUpperCase();
     }
 
+    function getFriendClientId() {
+      const storageKey = "waribashiFriendClientId";
+      try {
+        let clientId = sessionStorage.getItem(storageKey);
+        if (!clientId) {
+          clientId = `client_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+          sessionStorage.setItem(storageKey, clientId);
+        }
+        return clientId;
+      } catch (_) {
+        if (!state.friendFallbackClientId) {
+          state.friendFallbackClientId = `client_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+        }
+        return state.friendFallbackClientId;
+      }
+    }
+
     function buildRoomUrl(roomId) {
       const url = new URL(window.location.href);
       url.searchParams.set("room", roomId);
@@ -1535,7 +1661,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -1773,6 +1899,11 @@ const CARD_LIBRARY = {
       if (fx.type === "bulletproofBlocked") {
         const defender = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         if (defender) await showBulletproofBlockedPopup(defender, payload.sourceName || "遠距離攻撃", 900);
+        return;
+      }
+      if (fx.type === "directiveClear") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) await showDirectiveClearFx(Number(payload.count) || 1, player);
         return;
       }
       if (fx.type === "finale") {
@@ -2053,6 +2184,7 @@ const CARD_LIBRARY = {
         guestJoined: false,
         hostReady: false,
         guestReady: false,
+        hostClientId: getFriendClientId(),
         hostLastSeen: fb.serverTimestamp()
       });
       elements.friendLobbyMessage.textContent = "Firebaseに部屋を作成しました。URLをコピーして友達に送ってください。";
@@ -2073,20 +2205,59 @@ const CARD_LIBRARY = {
       }
 
       const roomRef = fb.doc(fb.db, "rooms", roomId);
-      const snapshot = await fb.getDoc(roomRef);
-      if (!snapshot.exists()) {
-        elements.friendLobbyMessage.textContent = "その部屋IDはまだ存在しません。ホストが部屋を作ってから入ってください。";
-        return;
+      const clientId = getFriendClientId();
+
+      try {
+        await fb.runTransaction(fb.db, async (transaction) => {
+          const snapshot = await transaction.get(roomRef);
+          if (!snapshot.exists()) {
+            const error = new Error("ROOM_NOT_FOUND");
+            error.code = "ROOM_NOT_FOUND";
+            throw error;
+          }
+
+          const data = snapshot.data() || {};
+          const sameGuest = !!data.guestJoined && data.guestClientId === clientId;
+          const roomUnavailable = ["playing", "post-match"].includes(data.status);
+
+          if (roomUnavailable && !sameGuest) {
+            const error = new Error("ROOM_IN_MATCH");
+            error.code = "ROOM_IN_MATCH";
+            throw error;
+          }
+
+          if (data.guestJoined && !sameGuest) {
+            const error = new Error("ROOM_FULL");
+            error.code = "ROOM_FULL";
+            throw error;
+          }
+
+          transaction.set(roomRef, {
+            updatedAt: fb.serverTimestamp(),
+            guestJoined: true,
+            guestClientId: clientId,
+            guestReady: sameGuest ? !!data.guestReady : false,
+            guestLastSeen: fb.serverTimestamp(),
+            status: data.status || "waiting"
+          }, { merge: true });
+        });
+      } catch (error) {
+        if (error?.code === "ROOM_NOT_FOUND" || error?.message === "ROOM_NOT_FOUND") {
+          elements.friendLobbyMessage.textContent = "その部屋IDはまだ存在しません。ホストが部屋を作ってから入ってください。";
+          return;
+        }
+        if (error?.code === "ROOM_FULL" || error?.message === "ROOM_FULL") {
+          elements.friendLobbyMessage.textContent = "このルームはすでに2人参加しています。別のルームを作成してください。";
+          return;
+        }
+        if (error?.code === "ROOM_IN_MATCH" || error?.message === "ROOM_IN_MATCH") {
+          elements.friendLobbyMessage.textContent = "このルームではすでに対戦が進行中です。新しく参加することはできません。";
+          return;
+        }
+        throw error;
       }
 
       setFriendRoomUi(roomId, "guest");
-      await fb.setDoc(roomRef, {
-        updatedAt: fb.serverTimestamp(),
-        guestJoined: true,
-        guestReady: false,
-        guestLastSeen: fb.serverTimestamp(),
-        status: "waiting"
-      }, { merge: true });
       elements.friendLobbyMessage.textContent = "Firebase上の部屋に入室しました。";
       subscribeFriendRoom(roomId);
     }
@@ -2329,8 +2500,8 @@ const CARD_LIBRARY = {
       state.discard.cpu = [...(other.discard || [])];
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -2919,6 +3090,7 @@ function wrapFinger(value) {
         title: "共鳴とは？",
         html: `<p><strong>共鳴</strong>は、攻撃開始時の「攻撃する手」と「攻撃対象の手」の本数が同じときに発生します。</p>
           <div class="deck-info-example">例：自分の3本の手 → 相手の3本の手 = 共鳴</div>
+          <p>攻撃対象が自分の手でも判定されます。「凶弾」で自分のもう片方の手を攻撃した場合も、本数条件を満たせば共鳴します。</p>
           <p>「共鳴調節」が付いている攻撃手は、本数差が<strong>1以下</strong>でも共鳴します。</p>
           <p>受け流し・注目などで攻撃対象が変わった場合は、<strong>変更後の対象</strong>との本数で判定します。</p>
           <p>「乱舞」で本数を揃えた結果は、その攻撃自身の共鳴には数えません。</p>`
@@ -3034,10 +3206,233 @@ function wrapFinger(value) {
       elements.costLimitInput.value = state.costLimit;
     }
 
+
+    const DIRECTIVE_BASE_IDS = ["directiveAttack", "directiveTarget", "directiveSilence", "directiveReform"];
+
+    function isDirectiveCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.directive;
+    }
+
+    function directiveBaseId(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      return card?.directiveBase || cardId;
+    }
+
+    function makeDirectiveVariant(baseId) {
+      if (baseId === "directiveAttack") {
+        const hand = Math.random() < 0.5 ? "L" : "R";
+        const id = `directiveAttack_${hand}`;
+        if (!CARD_LIBRARY[id]) {
+          CARD_LIBRARY[id] = {
+            ...CARD_LIBRARY.directiveAttack,
+            name: "指令：指定攻撃",
+            text: `${handNames[hand]}で相手を通常攻撃せよ。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
+            directive: true,
+            directiveBase: "directiveAttack",
+            directiveData: { attackHand: hand },
+            token: true
+          };
+        }
+        return id;
+      }
+      if (baseId === "directiveTarget") {
+        const attackHand = Math.random() < 0.5 ? "L" : "R";
+        const targetHand = Math.random() < 0.5 ? "L" : "R";
+        const id = `directiveTarget_${attackHand}_${targetHand}`;
+        if (!CARD_LIBRARY[id]) {
+          CARD_LIBRARY[id] = {
+            ...CARD_LIBRARY.directiveTarget,
+            name: "指令：対象指定",
+            text: `${handNames[attackHand]}で相手の${handNames[targetHand]}を通常攻撃せよ。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
+            directive: true,
+            directiveBase: "directiveTarget",
+            directiveData: { attackHand, targetHand },
+            token: true
+          };
+        }
+        return id;
+      }
+      return baseId;
+    }
+
+    function materializeDrawnCard(cardId) {
+      return DIRECTIVE_BASE_IDS.includes(cardId) ? makeDirectiveVariant(cardId) : cardId;
+    }
+
+    function ensureDirectiveVariantDefinitions() {
+      for (const hand of ["L", "R"]) {
+        const id = `directiveAttack_${hand}`;
+        if (!CARD_LIBRARY[id]) {
+          CARD_LIBRARY[id] = {
+            ...CARD_LIBRARY.directiveAttack,
+            name: "指令：指定攻撃",
+            text: `${handNames[hand]}で相手を通常攻撃せよ。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
+            directive: true,
+            directiveBase: "directiveAttack",
+            directiveData: { attackHand: hand },
+            token: true
+          };
+        }
+      }
+      for (const attackHand of ["L", "R"]) {
+        for (const targetHand of ["L", "R"]) {
+          const id = `directiveTarget_${attackHand}_${targetHand}`;
+          if (!CARD_LIBRARY[id]) {
+            CARD_LIBRARY[id] = {
+              ...CARD_LIBRARY.directiveTarget,
+              name: "指令：対象指定",
+              text: `${handNames[attackHand]}で相手の${handNames[targetHand]}を通常攻撃せよ。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
+              directive: true,
+              directiveBase: "directiveTarget",
+              directiveData: { attackHand, targetHand },
+              token: true
+            };
+          }
+        }
+      }
+    }
+
+    ensureDirectiveVariantDefinitions();
+
+    function recordDirectiveAttack(player, attackHand, defender, targetHand) {
+      if (!state.temp[player]?.directiveActions) return;
+      if (defender === player) return;
+      state.temp[player].directiveActions.attacks.push({ attackHand, targetHand });
+    }
+
+    function transferDirective(player, handIndex) {
+      const cardId = state.hands[player][handIndex];
+      if (!isDirectiveCard(cardId)) return false;
+      const opponent = player === "human" ? "cpu" : "human";
+      state.hands[player].splice(handIndex, 1);
+      state.hands[opponent].push(cardId);
+      addLog(`${handNames[player]}は「都市の意志」で「${CARD_LIBRARY[cardId].name}」を${handNames[opponent]}へ渡した。`);
+      state.mode = "attack";
+      render();
+      return true;
+    }
+
+    function directiveWasCleared(player, cardId) {
+      const card = CARD_LIBRARY[cardId];
+      const data = card?.directiveData || {};
+      const actions = state.temp[player]?.directiveActions || { attacks: [], splitUsed: false, cardUsed: false };
+      const base = directiveBaseId(cardId);
+      if (base === "directiveAttack") {
+        return actions.attacks.some(a => a.attackHand === data.attackHand);
+      }
+      if (base === "directiveTarget") {
+        return actions.attacks.some(a => a.attackHand === data.attackHand && a.targetHand === data.targetHand);
+      }
+      if (base === "directiveSilence") return !actions.cardUsed;
+      if (base === "directiveReform") return !!actions.splitUsed;
+      return false;
+    }
+
+    async function showDirectiveClearFx(count, player) {
+      if (!count) return;
+      const layer = elements.directiveClearFx;
+      if (!layer) return;
+      elements.directiveClearText.textContent = count > 1 ? `CLEAR ×${count}` : "CLEAR";
+      layer.classList.add("show");
+      await delay(720);
+      layer.classList.remove("show");
+      await delay(80);
+    }
+
+    async function applyDirectiveFailure(player, cardId) {
+      const base = directiveBaseId(cardId);
+      const card = CARD_LIBRARY[cardId];
+      if (base === "directiveAttack") {
+        const options = state.hands[player]
+          .map((id, index) => ({ id, index }))
+          .filter(x => !isDirectiveCard(x.id));
+        if (options.length) {
+          const picked = options[Math.floor(Math.random() * options.length)];
+          const [discarded] = state.hands[player].splice(picked.index, 1);
+          state.discard[player].push(discarded);
+          await handleCardDiscardEffect(player, discarded);
+        }
+      } else if (base === "directiveTarget") {
+        const hand = card.directiveData?.attackHand;
+        if (hand) await addFingersWithCalculation(player, hand, 1, "指令未達成");
+      } else if (base === "directiveSilence") {
+        state.pendingDirectiveNoDraw[player] = (state.pendingDirectiveNoDraw[player] || 0) + 1;
+      } else if (base === "directiveReform") {
+        let hand;
+        if (state[player].L === state[player].R) hand = Math.random() < 0.5 ? "L" : "R";
+        else hand = state[player].L > state[player].R ? "L" : "R";
+        await addFingersWithCalculation(player, hand, 1, "指令未達成");
+      }
+    }
+
+    async function resolveDirectives(player) {
+      const directives = state.hands[player]
+        .map((id, index) => ({ id, index }))
+        .filter(x => isDirectiveCard(x.id));
+      if (!directives.length) {
+        state.lastDirectiveClearCount[player] = 0;
+        return;
+      }
+
+      const cleared = [];
+      const failed = [];
+      for (const item of directives) {
+        (directiveWasCleared(player, item.id) ? cleared : failed).push(item);
+      }
+
+      const removeIndexes = directives.map(x => x.index).sort((a, b) => b - a);
+      for (const index of removeIndexes) {
+        const [id] = state.hands[player].splice(index, 1);
+        state.discard[player].push(id);
+      }
+
+      for (const item of cleared) {
+        addLog(`【指令】「${CARD_LIBRARY[item.id].name}」達成。`);
+        const base = directiveBaseId(item.id);
+        if (base === "directiveAttack") drawCard(player);
+        else if (base === "directiveTarget") {
+          drawCard(player);
+          drawCard(player);
+        } else if (base === "directiveSilence") {
+          drawCard(player);
+          drawCard(player);
+        } else if (base === "directiveReform") {
+          state.pendingDirectiveBonusDraw[player] = (state.pendingDirectiveBonusDraw[player] || 0) + 1;
+        }
+      }
+
+      for (const item of failed) {
+        addLog(`【指令】「${CARD_LIBRARY[item.id].name}」未達成。`);
+        await applyDirectiveFailure(player, item.id);
+      }
+
+      state.lastDirectiveClearCount[player] = cleared.length;
+      if (cleared.length) {
+        if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+          emitFriendFx("directiveClear", {
+            playerSide: friendSideForLocalPlayer(player),
+            count: cleared.length
+          }).catch(error => console.error("PVP directive clear fx failed", error));
+        }
+        await showDirectiveClearFx(cleared.length, player);
+      }
+    }
+
+    function drawDirectiveFromDeck(player) {
+      const candidates = state.decks[player]
+        .map((id, index) => ({ id, index }))
+        .filter(x => DIRECTIVE_BASE_IDS.includes(directiveBaseId(x.id)));
+      if (!candidates.length) return false;
+      const picked = candidates[Math.floor(Math.random() * candidates.length)];
+      const [baseId] = state.decks[player].splice(picked.index, 1);
+      state.hands[player].push(materializeDrawnCard(directiveBaseId(baseId)));
+      return true;
+    }
+
     function drawCard(player) {
       if (state.decks[player].length > 0) {
         const cardId = state.decks[player].pop();
-        state.hands[player].push(cardId);
+        state.hands[player].push(materializeDrawnCard(cardId));
         return true;
       }
 
@@ -3066,7 +3461,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -3083,11 +3478,30 @@ function wrapFinger(value) {
       state.activeCostLimit[player] = state.costLimitNextTurn[player];
       state.costLimitNextTurn[player] = null;
 
+      const scheduledDirectives = state.pendingDirectiveDraw[player] || 0;
+      state.pendingDirectiveDraw[player] = 0;
+      for (let i = 0; i < scheduledDirectives; i++) {
+        if (!drawDirectiveFromDeck(player)) break;
+      }
+      if (scheduledDirectives > 0) {
+        addLog(`${handNames[player]}は「指令の意味」により山札から指令を最大${scheduledDirectives}枚加えた。`);
+      }
+
       if (state.berserkerTurns[player] > 0) {
         addLog(`${handNames[player]}はバーサーカー状態。攻撃+2、カード使用・罠設置・分ける不可。残り${state.berserkerTurns[player]}ターン。`);
       }
 
       let draws = 1;
+      if ((state.pendingDirectiveNoDraw[player] || 0) > 0) {
+        state.pendingDirectiveNoDraw[player] -= 1;
+        draws = 0;
+        addLog(`${handNames[player]}は未達成の「指令：沈黙」により、このターンの通常ドローを行わない。`);
+      }
+      if ((state.pendingDirectiveBonusDraw[player] || 0) > 0) {
+        draws += state.pendingDirectiveBonusDraw[player];
+        addLog(`${handNames[player]}は達成した「指令：再編成」により追加で${state.pendingDirectiveBonusDraw[player]}枚引く。`);
+        state.pendingDirectiveBonusDraw[player] = 0;
+      }
       let accelerationTriggered = false;
       let noDrawTriggered = false;
       let remainingAcceleration = state.activeAcceleration[player];
@@ -3328,6 +3742,12 @@ function wrapFinger(value) {
 
     function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
       let finalAmount = Math.max(1, amount);
+      const directiveReduction = state.lastDirectiveClearCount?.[defender] || 0;
+      if (directiveReduction > 0 && hasAttachment(defender, targetHand, "directiveBlessing")) {
+        const reduced = Math.max(1, finalAmount - directiveReduction);
+        if (reduced !== finalAmount) addLog(`${handNames[defender]}の「指令の加護」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
+        finalAmount = reduced;
+      }
       if (hasAttachment(defender, targetHand, "guardBlessing")) {
         const reduced = Math.max(1, finalAmount - 1);
         if (reduced !== finalAmount) {
@@ -3958,23 +4378,26 @@ function renderLastAction() {
         const repairDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "repairDiscard";
         const calmDownDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "calmDownDiscard";
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
+        const cityWillMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "cityWillChoose";
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
         const berserkLocked = state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed;
         const canUseCardAction = state.turn === "human" && !state.gameOver && !state.animating && !state.temp.human.cardActionUsed && !berserkLocked;
-        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !restrictedByCost && canUseCardAction && !isZoneCard && card.canPlay("human");
-        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isZoneCard && !setupActive) || (setupActive && isTrap)) && canSetAttachmentTarget("human", cardId);
+        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !restrictedByCost && canUseCardAction && !isZoneCard && card.canPlay("human");
+        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isZoneCard && !setupActive) || (setupActive && isTrap)) && canSetAttachmentTarget("human", cardId);
         const discardPlayable = repairDiscardMode && cardId !== "repair";
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown";
         const rapidDiscardPlayable = rapidFireDiscardMode && cardId !== "rapidFire";
+        const cityWillPlayable = cityWillMode && isDirectiveCard(cardId);
         const selected = state.selectedTrapCardIndex === index;
         const div = document.createElement("div");
         div.className =
           "game-card" +
           (card.blessing ? " blessing-card" : "") +
           (card.curse ? " curse-card" : "") +
+          (card.directive ? " directive-card" : "") +
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
-          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable ? " playable" : "") +
+          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || cityWillPlayable ? " playable" : "") +
           (selected ? " selected-card" : "");
         div.innerHTML = `
           <div class="card-title">
@@ -3983,7 +4406,7 @@ function renderLastAction() {
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
           <div class="card-text">${escapeHtml(card.text)}</div>
-          ${discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed ? '<div class="used">カード関連行動は使用済み</div>' : ''}
+          ${cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed ? '<div class="used">カード関連行動は使用済み</div>' : ''}
         `;
         if (discardPlayable) {
           div.addEventListener("click", () => chooseRepairDiscard(index));
@@ -3993,6 +4416,9 @@ function renderLastAction() {
         }
         if (rapidDiscardPlayable) {
           div.addEventListener("click", () => chooseRapidFireDiscard(index));
+        }
+        if (cityWillPlayable) {
+          div.addEventListener("click", () => transferDirective("human", index));
         }
         if (normalPlayable) {
           div.addEventListener("click", () => playCard("human", index));
@@ -4387,6 +4813,7 @@ function renderLastAction() {
       }
 
       state.hands[player].splice(handIndex, 1);
+      if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
         if (!setupActive) {
           state.temp[player].cardActionUsed = true;
@@ -4452,6 +4879,7 @@ function renderLastAction() {
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(cardId);
       state.temp[player].cardActionUsed = true;
+      if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       setLastAction(player, `「${card.name}」`, card.text, "card");
 
       const visibleText = `${handNames[player]}が「${card.name}」を使用：${card.text}`;
@@ -4754,6 +5182,8 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 async function attack(attacker, attackHand, defender, targetHand) {
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
 
+      recordDirectiveAttack(attacker, attackHand, defender, targetHand);
+
       state.animating = true;
       render();
 
@@ -4765,18 +5195,20 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const bonus = immutable ? negativeCardBonus : rawBonus;
       const berserkerBonus = immutable ? 0 : (state.berserkerTurns[attacker] > 0 ? 2 : 0);
       const blessingBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0);
+      const willBladeBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "willBlade") ? (state.lastDirectiveClearCount?.[attacker] || 0) : 0);
       const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + willBladeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
       }
       if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
       if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
+      if (willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、攻撃力+${willBladeBonus}。`);
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
@@ -4967,6 +5399,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
       state[player].L = left;
       state[player].R = right;
+      if (state.temp[player]?.directiveActions) state.temp[player].directiveActions.splitUsed = true;
       addLog(`${handNames[player]}が分ける。${before} → ${left}-${right}`);
       clearBrokenTraps(player);
       render();
@@ -5015,6 +5448,12 @@ async function endTurn() {
       state.pendingSwapFirst = null;
       elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
+
+      await resolveDirectives(state.turn);
+      if (checkWin()) {
+        render();
+        return;
+      }
 
       await resolveEndTurnCurses(state.turn);
       if (checkWin()) {
@@ -5512,9 +5951,19 @@ async function endTurn() {
       const opponent = player === "human" ? "cpu" : "human";
       const before = state[player][targetHand];
       const rawPower = state[player][attackHand];
-      const power = applyGuardBlessingReduction(player, targetHand, rawPower, "凶弾");
+      const resonance = isResonanceAttack(player, attackHand, player, targetHand);
+      const resonanceBonus = resonanceAttackBonus(player, attackHand, resonance);
+      const powerBeforeGuard = rawPower + resonanceBonus;
+      const power = applyGuardBlessingReduction(player, targetHand, powerBeforeGuard, "凶弾");
       const total = before + power;
       const finalValue = normalize(total, player, targetHand);
+
+      if (resonance && state.temp[player]?.crescendo) {
+        addLog(`${handNames[player]}の「クレッシェンド」により、凶弾の共鳴攻撃力+2。`);
+      }
+      if (resonance && hasAttachment(player, attackHand, "largo")) {
+        addLog(`${handNames[player]}の「ラルゴ」により、凶弾の共鳴攻撃力+1。`);
+      }
 
       state.animating = true;
       render();
@@ -5523,6 +5972,7 @@ async function endTurn() {
 
       state[player][targetHand] = finalValue;
       addLog(`${handNames[player]}は「凶弾」で、自分の${handNames[attackHand]}${rawPower}本を使い、${handNames[targetHand]}に${power}本加えた。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
+      await resolveResonanceRewards(player, attackHand, resonance);
 
       if (total === 5) {
         const targets = ["L", "R"].filter(h => state[opponent][h] > 0);
@@ -6079,8 +6529,8 @@ async function endTurn() {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;

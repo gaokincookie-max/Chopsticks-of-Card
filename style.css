@@ -1684,3 +1684,60 @@
     font-size: 22px;
   }
 }
+
+
+/* v63: 指令テーマ */
+.game-card.directive-card {
+  background: linear-gradient(145deg, #1b1d22, #0e0f12);
+  border-color: #5f6672;
+  color: #f5f7fb;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.game-card.directive-card .card-title span:first-child,
+.game-card.directive-card .card-text,
+.game-card.directive-card .card-cost {
+  color: #f5f7fb;
+}
+.game-card.directive-card .card-type {
+  background: #8e1f2f;
+  color: #fff;
+  border-color: #b94b5b;
+}
+
+.directive-clear-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(3, 8, 15, .16);
+}
+.directive-clear-fx.show {
+  display: flex;
+  animation: directiveClearLayer .72s ease both;
+}
+.directive-clear-text {
+  font-size: clamp(54px, 12vw, 132px);
+  font-weight: 1000;
+  letter-spacing: .08em;
+  color: #eaf7ff;
+  text-shadow:
+    0 0 12px rgba(80, 190, 255, .9),
+    0 0 34px rgba(60, 120, 255, .72);
+  transform: skewX(-8deg);
+  animation: directiveClearText .72s cubic-bezier(.16,.8,.25,1) both;
+}
+@keyframes directiveClearLayer {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes directiveClearText {
+  0% { opacity: 0; transform: scale(.72) skewX(-8deg); filter: blur(8px); }
+  24% { opacity: 1; transform: scale(1.06) skewX(-8deg); filter: blur(0); }
+  58% { transform: scale(1) skewX(-8deg); }
+  100% { opacity: 0; transform: scale(1.05) skewX(-8deg); }
+}

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=61">
+  <link rel="stylesheet" href="style.css?v=63">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -13,6 +13,10 @@
       <div class="popup-name" id="popupName"></div>
       <div class="popup-text" id="popupText"></div>
     </div>
+  </div>
+
+  <div class="directive-clear-fx" id="directiveClearFx" aria-hidden="true">
+    <div class="directive-clear-text" id="directiveClearText">CLEAR</div>
   </div>
 
   <div class="special-fx-layer" id="specialFxLayer" aria-hidden="true">
@@ -267,7 +271,7 @@
           <span id="deckCountText">デッキ枚数：0枚</span>
           <span id="deckCostText">合計コスト：0 / 40</span>
           <span id="deckValidityText" class="valid">使用可能</span>
-          <span class="small">ルール：6〜20枚、コスト40以内。同名は最大3枚まで。</span>
+          <span class="small">ルール：20枚ちょうど、コスト40以内。同名は最大3枚まで。</span>
         </div>
         <div id="deckBottomBar" class="deck-bottom-bar hidden">
           <span id="deckBottomCount">0枚</span>
@@ -443,7 +447,8 @@
       setDoc,
       updateDoc,
       onSnapshot,
-      serverTimestamp
+      serverTimestamp,
+      runTransaction
     } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -466,7 +471,8 @@
         setDoc,
         updateDoc,
         onSnapshot,
-        serverTimestamp
+        serverTimestamp,
+        runTransaction
       };
       window.dispatchEvent(new CustomEvent("waribashi-firebase-ready"));
     } catch (error) {
@@ -476,6 +482,6 @@
     }
   </script>
 
-  <script src="game.js?v=61"></script>
+  <script src="game.js?v=63"></script>
 </body>
 </html>
