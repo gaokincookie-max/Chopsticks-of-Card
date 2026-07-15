@@ -1902,3 +1902,154 @@
     font-size: 11px;
   }
 }
+
+
+/* v65: 意志の奔流 */
+.will-torrent-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  background: rgba(4, 5, 8, .2);
+}
+
+.will-torrent-fx.show {
+  display: block;
+  animation: willTorrentLayer 1.8s ease both;
+}
+
+.will-torrent-murk {
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(70, 78, 94, .18), transparent 32%),
+    linear-gradient(to bottom, rgba(6, 7, 10, .08), rgba(4, 5, 8, .82) 72%, rgba(2, 2, 4, .92));
+  animation: willTorrentMurk 1.8s ease both;
+}
+
+.will-torrent-fall {
+  position: absolute;
+  top: -75%;
+  width: 46%;
+  height: 150%;
+  border-radius: 42% 58% 54% 46% / 58% 38% 62% 42%;
+  background:
+    linear-gradient(180deg, rgba(9, 11, 16, .98), rgba(18, 21, 28, .96) 58%, rgba(2, 3, 6, .98)),
+    radial-gradient(circle at 40% 35%, rgba(74, 83, 104, .18), transparent 34%);
+  filter: blur(7px);
+  opacity: .94;
+  mix-blend-mode: multiply;
+}
+
+.will-torrent-fx.show .fall-a {
+  left: -6%;
+  animation: willTorrentFallA 1.65s cubic-bezier(.32,.02,.17,1) both;
+}
+
+.will-torrent-fx.show .fall-b {
+  left: 29%;
+  width: 52%;
+  animation: willTorrentFallB 1.8s cubic-bezier(.25,.02,.12,1) both;
+}
+
+.will-torrent-fx.show .fall-c {
+  right: -12%;
+  width: 44%;
+  animation: willTorrentFallC 1.58s cubic-bezier(.35,.02,.15,1) both;
+}
+
+.will-torrent-title,
+.will-torrent-count {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  color: #d5d9e3;
+  text-shadow:
+    0 0 12px rgba(113, 124, 153, .42),
+    0 4px 18px rgba(0, 0, 0, .88);
+}
+
+.will-torrent-title {
+  top: 42%;
+  font-size: clamp(34px, 8vw, 86px);
+  font-weight: 1000;
+  letter-spacing: .08em;
+}
+
+.will-torrent-count {
+  top: calc(42% + clamp(54px, 10vw, 105px));
+  font-size: clamp(18px, 4vw, 34px);
+  font-weight: 900;
+  letter-spacing: .12em;
+  color: #98a3b8;
+}
+
+.will-torrent-fx.show .will-torrent-title {
+  animation: willTorrentTitle 1.8s ease both;
+}
+
+.will-torrent-fx.show .will-torrent-count {
+  animation: willTorrentCount 1.8s ease both;
+}
+
+@keyframes willTorrentLayer {
+  0% { opacity: 0; background: rgba(4, 5, 8, 0); }
+  16% { opacity: 1; background: rgba(4, 5, 8, .36); }
+  72% { opacity: 1; background: rgba(1, 2, 4, .72); }
+  100% { opacity: 0; background: rgba(0, 0, 0, .9); }
+}
+
+@keyframes willTorrentMurk {
+  0% { opacity: 0; transform: scaleY(.72) translateY(-12%); }
+  28% { opacity: .78; }
+  72% { opacity: 1; transform: scaleY(1) translateY(0); }
+  100% { opacity: .8; transform: scaleY(1.05) translateY(4%); }
+}
+
+@keyframes willTorrentFallA {
+  0% { transform: translateY(-48%) rotate(-4deg) scaleX(.78); }
+  32% { transform: translateY(18%) rotate(2deg) scaleX(1.08); }
+  72% { transform: translateY(54%) rotate(-2deg) scaleX(.96); }
+  100% { transform: translateY(78%) rotate(1deg) scaleX(1.14); }
+}
+
+@keyframes willTorrentFallB {
+  0% { transform: translateY(-58%) rotate(3deg) scaleX(.74); }
+  25% { transform: translateY(4%) rotate(-2deg) scaleX(1.1); }
+  68% { transform: translateY(49%) rotate(2deg) scaleX(.92); }
+  100% { transform: translateY(82%) rotate(-1deg) scaleX(1.08); }
+}
+
+@keyframes willTorrentFallC {
+  0% { transform: translateY(-46%) rotate(4deg) scaleX(.8); }
+  38% { transform: translateY(22%) rotate(-3deg) scaleX(1.06); }
+  74% { transform: translateY(58%) rotate(2deg) scaleX(.94); }
+  100% { transform: translateY(84%) rotate(-2deg) scaleX(1.12); }
+}
+
+@keyframes willTorrentTitle {
+  0%, 22% { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(.92); filter: blur(8px); }
+  42% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.03); filter: blur(0); }
+  74% { opacity: 1; transform: translateX(-50%) translateY(4px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(18px) scale(1.04); }
+}
+
+@keyframes willTorrentCount {
+  0%, 40% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  56% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  78% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(12px); }
+}
+
+
+/* v66: 指令における凶弾対応メモ */
+.directive-note {
+  margin: -2px 0 5px;
+  font-size: 10px;
+  font-weight: 900;
+  color: #697583;
+}
