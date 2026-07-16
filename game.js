@@ -3762,6 +3762,10 @@ function wrapFinger(value) {
     function consumeCharge(player,amount,allowPartial=false,source="充電消費"){ const before=getChargeLevel(player); const need=Math.max(0,Number(amount)||0); if(!allowPartial&&before<need){ addLog(`${handNames[player]}の「${source}」は充電不足（必要${need}/現在${before}）で不発。`); return false; } const spent=allowPartial?Math.min(before,need):need; setChargeLevel(player,before-spent); addLog(`${handNames[player]}は${source}で充電${spent}を消費（Lv.${before}→Lv.${before-spent}）。`); return true; }
     function isProtectedChargeCard(cardId){ return chargeLevelFromId(cardId)>0; }
     function countDiscardableHand(player){ return state.hands[player].filter(id=>!isProtectedChargeCard(id)).length; }
+    function canUseChargeCardDuringLightSpeed(player, cardId) {
+      const card = CARD_LIBRARY[cardId];
+      return !!state.temp?.[player]?.lightSpeedCircuit && !!card?.chargeCard;
+    }
     function isChargeCardId(cardId){ return !!CARD_LIBRARY[cardId]?.chargeCard; }
     function resolveDimensionalSlash(player, hand) {
       const charge = getChargeLevel(player);
@@ -3772,7 +3776,13 @@ function wrapFinger(value) {
         return false;
       }
 
-      if (hand && state[player][hand] > 0) {
+      if (hand) {
+        if (state[player][hand] <= 0) {
+          addLog(`${handNames[player]}の「空間切断」は、代償にする手がすでに0だったため発動しなかった。`);
+          state.mode = "dimensionalSlashSacrifice";
+          render();
+          return false;
+        }
         state[player][hand] = 0;
         clearHandAttachments(player, hand);
         addLog(`${handNames[player]}は「空間切断」の代償として${handNames[hand]}を0にした。`);
@@ -4984,9 +4994,39 @@ function renderLastAction() {
         const advanceNoticeMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "advanceNoticeChoose";
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
         const berserkLocked = state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed;
-        const canUseCardAction = state.turn === "human" && !state.gameOver && !state.animating && !state.temp.human.cardActionUsed && !berserkLocked;
-        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !advanceNoticeMode && !restrictedByCost && canUseCardAction && !isZoneCard && card.canPlay("human");
-        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !advanceNoticeMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isZoneCard && !setupActive) || (setupActive && isTrap)) && canSetAttachmentTarget("human", cardId);
+        const baseCardActionAvailable =
+          state.turn === "human" &&
+          !state.gameOver &&
+          !state.animating &&
+          !state.temp.human.cardActionUsed &&
+          !berserkLocked;
+        const lightSpeedChargePlayable =
+          state.turn === "human" &&
+          !state.gameOver &&
+          !state.animating &&
+          !berserkLocked &&
+          canUseChargeCardDuringLightSpeed("human", cardId);
+        const canUseCardAction = baseCardActionAvailable || lightSpeedChargePlayable;
+        const normalPlayable =
+          !repairDiscardMode &&
+          !calmDownDiscardMode &&
+          !rapidFireDiscardMode &&
+          !cityWillMode &&
+          !advanceNoticeMode &&
+          !restrictedByCost &&
+          canUseCardAction &&
+          !isZoneCard &&
+          card.canPlay("human");
+        const trapPlayable =
+          !repairDiscardMode &&
+          !calmDownDiscardMode &&
+          !rapidFireDiscardMode &&
+          !cityWillMode &&
+          !advanceNoticeMode &&
+          !restrictedByCost &&
+          !berserkLocked &&
+          (((baseCardActionAvailable || lightSpeedChargePlayable) && isZoneCard && !setupActive) || (setupActive && isTrap)) &&
+          canSetAttachmentTarget("human", cardId);
         const discardPlayable = repairDiscardMode && cardId !== "repair";
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown";
         const rapidDiscardPlayable = rapidFireDiscardMode && cardId !== "rapidFire";
@@ -5012,7 +5052,11 @@ function renderLastAction() {
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
           <div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
-          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed ? '<div class="used">カード関連行動は使用済み</div>' : ''}
+          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed
+            ? (lightSpeedChargePlayable
+                ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
+                : '<div class="used">カード関連行動は使用済み</div>')
+            : ''}
         `;
         if (discardPlayable) {
           div.addEventListener("click", () => chooseRepairDiscard(index));
@@ -5376,7 +5420,12 @@ function renderLastAction() {
     function selectTrapCard(index) {
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
-      if (!card || !isAttachmentCard(cardId) || (state.temp.human.cardActionUsed && !state.temp.human.setupMode)) return;
+      const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed("human", cardId);
+      if (
+        !card ||
+        !isAttachmentCard(cardId) ||
+        (state.temp.human.cardActionUsed && !state.temp.human.setupMode && !lightSpeedChargePlayable)
+      ) return;
       if (state.temp.human.setupMode && !card.trap) {
         setMessage("仕込み中に置けるのは罠カードだけです。");
         return;
@@ -5415,7 +5464,12 @@ function renderLastAction() {
         if (player === "human") setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
         return false;
       }
-      if (state[owner][hand] <= 0 || state.traps[owner][hand].length >= 2 || (state.temp[player].cardActionUsed && !setupActive)) return false;
+      const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
+      if (
+        state[owner][hand] <= 0 ||
+        state.traps[owner][hand].length >= 2 ||
+        (state.temp[player].cardActionUsed && !setupActive && !lightSpeedChargePlayable)
+      ) return false;
       if (card.blessing && hasSealCurse(owner, hand)) {
         if (player === "human") setMessage("封印の呪縛により、その手には新たに加護を置けません。");
         return false;
@@ -5470,10 +5524,12 @@ function renderLastAction() {
     }
 
     async function playCard(player, handIndex, showPopup = true) {
-      if (state.gameOver || state.turn !== player || state.temp[player].cardActionUsed) return false;
+      if (state.gameOver || state.turn !== player) return false;
 
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
+      const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
+      if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable) return false;
       if (!card || isAttachmentCard(cardId) || !card.canPlay(player)) return false;
       if (state.activeCostLimit[player] !== null && card.cost > state.activeCostLimit[player]) {
         if (player === "human") setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
@@ -6386,7 +6442,8 @@ async function endTurn() {
     }
 
     async function chooseCpuCardAction() {
-      if (state.temp.cpu.cardActionUsed) return false;
+      const circuitActive = !!state.temp.cpu.lightSpeedCircuit;
+      if (state.temp.cpu.cardActionUsed && !circuitActive) return false;
       if (state.berserkerTurns.cpu > 0 && !state.temp.cpu.berserkerJustUsed) return false;
 
       const cfg = cpuConfig();
@@ -6400,6 +6457,27 @@ async function endTurn() {
 
       const bestNormal = cpuBestAttackScoreAfterBonus(0);
       const bestStrong = cpuBestAttackScoreAfterBonus(1);
+
+      if (state.temp.cpu.lightSpeedCircuit) {
+        state.hands.cpu.forEach((id, index) => {
+          const card = CARD_LIBRARY[id];
+          if (
+            card?.chargeCard &&
+            !isAttachmentCard(id) &&
+            typeof card.effect === "function" &&
+            id !== "lightSpeedCircuit" &&
+            card.canPlay("cpu")
+          ) {
+            candidates.push({
+              id,
+              index,
+              score: 180 + (card.cost || 0) * 12,
+              note: "光速回路",
+              action: async () => playCard("cpu", index, true)
+            });
+          }
+        });
+      }
 
       if (bestStrong && bestStrong.score > (bestNormal?.score || 0) + 120) addCard("strongHit", bestStrong.score + 60, "攻撃強化");
       if (state.hands.cpu.includes("lightHit")) {
@@ -6932,6 +7010,26 @@ async function endTurn() {
       const hand = card.dataset.hand;
 
       if (state.gameOver || state.animating || state.turn !== "human") return;
+
+      if (state.mode === "dimensionalSlashSacrifice") {
+        if (owner !== "human") {
+          setMessage("「空間切断」：0にする自分の手を選んでください。");
+          return;
+        }
+        if (state.human[hand] <= 0) {
+          setMessage("「空間切断」：すでに0の手は選べません。");
+          return;
+        }
+
+        const before = state.human[hand];
+        const resolved = resolveDimensionalSlash("human", hand);
+        if (resolved) {
+          addLog(`「空間切断」：${handNames[hand]}を${before}→0にし、効果が発動した。`);
+          setMessage(`「空間切断」：${handNames[hand]}を0にしました。攻撃+1、通常攻撃を2回まで行えます。`);
+          if (state.battleMode === "friend") scheduleFriendStatePublish();
+        }
+        return;
+      }
 
       if (state.mode === "chooseOpponentTrap") {
         setMessage(state.pendingTrapTargetEffect === "remove"

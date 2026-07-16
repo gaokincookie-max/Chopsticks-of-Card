@@ -2137,3 +2137,18 @@
 
 /* v72: 充電カード */
 .game-card .card-type { max-width:100%; }
+
+
+/* v74: 光速回路中の使用可能表示 */
+.used.charge-ready {
+  background: linear-gradient(90deg, rgba(40, 107, 145, .16), rgba(71, 166, 188, .22));
+  border-color: rgba(42, 135, 166, .48);
+  color: #17607c;
+  font-weight: 1000;
+}
+
+
+/* v75: 空間切断の代償手選択 */
+.hand.selectable {
+  cursor: pointer;
+}
