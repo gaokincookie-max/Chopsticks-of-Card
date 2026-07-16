@@ -1536,6 +1536,9 @@ const CARD_LIBRARY = {
       },
       deckCounts: { human: { ...DEFAULT_DECK_COUNTS }, cpu: { ...DEFAULT_DECK_COUNTS } },
       editingDeckOwner: "human",
+      deckSortMode: "implementation",
+      deckNameSearch: "",
+      deckKeywordSearch: "",
       cpuDifficulty: "standard",
       costLimit: 40,
       selectedTrapCardIndex: null,
@@ -1610,9 +1613,26 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v87-compact-card-descriptions";
+    const LATEST_NEWS_ID = "v88-deck-editor-upgrade";
 
     const UPDATE_NEWS = [
+      {
+        id: "v88-deck-editor-upgrade",
+        version: "v88",
+        date: "2026-07-16",
+        title: "デッキ編集画面を大幅改善",
+        summary: "増えたカードを探しやすくする並び替え・検索機能と、現在のデッキ内容を確認する詳細画面を追加しました。",
+        featured: false,
+        tags: ["system"],
+        items: [
+          "実装順・名前順・コスト順・種類順の並び替えを追加",
+          "カード名だけを対象にする名前検索を追加",
+          "効果文・種類・属性を対象にするキーワード検索を追加",
+          "生成カードは並び替え後も一覧の最後に表示",
+          "画面下部にデッキの「詳細」ボタンを追加",
+          "カード種類別の枚数・カード一覧・投入枚数・コストを表示"
+        ]
+      },
       {
         id: "v87-compact-card-descriptions",
         version: "v87",
@@ -1833,6 +1853,12 @@ const CARD_LIBRARY = {
       deckBottomValid: document.getElementById("deckBottomValid"),
       deckCountText: document.getElementById("deckCountText"),
       deckCostText: document.getElementById("deckCostText"),
+      deckSortSelect: document.getElementById("deckSortSelect"),
+      deckNameSearchInput: document.getElementById("deckNameSearchInput"),
+      deckKeywordSearchInput: document.getElementById("deckKeywordSearchInput"),
+      deckSearchClearBtn: document.getElementById("deckSearchClearBtn"),
+      deckSearchResultText: document.getElementById("deckSearchResultText"),
+      deckDetailsBtn: document.getElementById("deckDetailsBtn"),
       deckValidityText: document.getElementById("deckValidityText"),
       applyDeckBtn: document.getElementById("applyDeckBtn"),
       defaultDeckBtn: document.getElementById("defaultDeckBtn"),
@@ -3865,13 +3891,116 @@ function wrapFinger(value) {
       elements.deckInfoModal.setAttribute("aria-hidden", "true");
     }
 
+    function normalizeDeckSearchText(value) {
+      return String(value || "").normalize("NFKC").toLocaleLowerCase("ja-JP").replace(/\s+/g, " ").trim();
+    }
+
+    function deckCardSearchText(cardId, card) {
+      return normalizeDeckSearchText([
+        cardId, card.name, card.type, card.text,
+        card.trap ? "罠" : "", card.blessing ? "加護" : "",
+        card.curse ? "呪縛" : "", card.chargeCard ? "充電" : "",
+        card.directive ? "指令" : "", card.token ? "生成カード" : ""
+      ].join(" "));
+    }
+
+    function deckCardTypeSortKey(card) {
+      const primary =
+        card.token ? 90 : card.trap ? 10 : card.blessing ? 20 :
+        card.curse ? 30 : card.directive ? 40 : card.chargeCard ? 50 : 60;
+      return `${String(primary).padStart(2, "0")}:${normalizeDeckSearchText(card.type)}:${normalizeDeckSearchText(card.name)}`;
+    }
+
+    function getVisibleDeckCardIds() {
+      const implementationIds = Object.keys(CARD_LIBRARY);
+      const implementationIndex = new Map(implementationIds.map((id, index) => [id, index]));
+      const nameQuery = normalizeDeckSearchText(state.deckNameSearch);
+      const keywordQuery = normalizeDeckSearchText(state.deckKeywordSearch);
+
+      const visible = implementationIds.filter(cardId => {
+        const card = CARD_LIBRARY[cardId];
+        if (nameQuery && !normalizeDeckSearchText(card.name).includes(nameQuery)) return false;
+        if (keywordQuery && !deckCardSearchText(cardId, card).includes(keywordQuery)) return false;
+        return true;
+      });
+
+      visible.sort((a, b) => {
+        const cardA = CARD_LIBRARY[a];
+        const cardB = CARD_LIBRARY[b];
+        const tokenDiff = Number(Boolean(cardA.token)) - Number(Boolean(cardB.token));
+        if (tokenDiff) return tokenDiff;
+        if (state.deckSortMode === "name") return cardA.name.localeCompare(cardB.name, "ja");
+        if (state.deckSortMode === "cost") return cardA.cost - cardB.cost || cardA.name.localeCompare(cardB.name, "ja");
+        if (state.deckSortMode === "type") return deckCardTypeSortKey(cardA).localeCompare(deckCardTypeSortKey(cardB), "ja");
+        return implementationIndex.get(a) - implementationIndex.get(b);
+      });
+      return visible;
+    }
+
+    function deckDetailGroupLabel(card) {
+      if (card.trap) return "罠";
+      if (card.blessing) return "加護";
+      if (card.curse) return "呪縛";
+      if (card.directive) return "指令";
+      if (card.chargeCard) return "充電";
+      if (String(card.type || "").includes("攻撃")) return "攻撃";
+      if (String(card.type || "").includes("状態")) return "状態";
+      if (String(card.type || "").includes("制限")) return "制限";
+      return "その他";
+    }
+
+    function openCurrentDeckDetails() {
+      const owner = state.editingDeckOwner;
+      const counts = currentDeckCounts(owner);
+      const entries = Object.keys(CARD_LIBRARY)
+        .filter(cardId => !CARD_LIBRARY[cardId].token && (counts[cardId] || 0) > 0)
+        .map(cardId => ({ cardId, card: CARD_LIBRARY[cardId], count: counts[cardId] || 0 }));
+
+      const groups = new Map();
+      for (const entry of entries) {
+        const label = deckDetailGroupLabel(entry.card);
+        if (!groups.has(label)) groups.set(label, []);
+        groups.get(label).push(entry);
+      }
+
+      const groupOrder = ["攻撃", "罠", "加護", "呪縛", "充電", "指令", "状態", "制限", "その他"];
+      const stats = getDeckStats(owner);
+      const sectionHtml = groupOrder.filter(label => groups.has(label)).map(label => {
+        const groupEntries = groups.get(label).sort((a, b) => a.card.name.localeCompare(b.card.name, "ja"));
+        const groupCount = groupEntries.reduce((sum, entry) => sum + entry.count, 0);
+        return `
+          <section class="deck-detail-group">
+            <div class="deck-detail-group-head"><strong>${escapeHtml(label)}</strong><span>${groupCount}枚 / ${groupEntries.length}種類</span></div>
+            <div class="deck-detail-card-list">
+              ${groupEntries.map(entry => `
+                <div class="deck-detail-card-row">
+                  <div>
+                    <div class="deck-detail-card-name">${escapeHtml(entry.card.name)}</div>
+                    <div class="deck-detail-card-meta">${escapeHtml(entry.card.type)} / コスト${entry.card.cost}</div>
+                  </div>
+                  <strong class="deck-detail-card-count">×${entry.count}</strong>
+                </div>`).join("")}
+            </div>
+          </section>`;
+      }).join("");
+
+      elements.deckInfoKicker.textContent = "CURRENT DECK";
+      elements.deckInfoTitle.textContent = `${owner === "human" ? "あなた用" : "CPU用"}デッキ詳細`;
+      elements.deckInfoBody.innerHTML = `
+        <div class="deck-detail-summary">
+          <span>${stats.count}枚</span><span>合計コスト ${stats.cost} / ${state.costLimit}</span><span>${entries.length}種類</span>
+        </div>
+        ${sectionHtml || '<div class="deck-detail-empty">デッキにカードが入っていません。</div>'}`;
+      elements.deckInfoModal.classList.add("show");
+      elements.deckInfoModal.setAttribute("aria-hidden", "false");
+    }
+
     function renderDeckBuilder() {
       const owner = state.editingDeckOwner;
       const counts = currentDeckCounts(owner);
       elements.deckGrid.innerHTML = "";
-      Object.keys(CARD_LIBRARY)
-        .sort((a, b) => Number(Boolean(CARD_LIBRARY[a].token)) - Number(Boolean(CARD_LIBRARY[b].token)))
-        .forEach(cardId => {
+      const visibleCardIds = getVisibleDeckCardIds();
+      visibleCardIds.forEach(cardId => {
         const card = CARD_LIBRARY[cardId];
         const count = counts[cardId] || 0;
         const row = document.createElement("div");
@@ -3940,6 +4069,14 @@ function wrapFinger(value) {
       const otherStats = getDeckStats(other);
       elements.deckOwnerSelect.value = owner;
       elements.cpuDifficultySelect.value = state.cpuDifficulty;
+      if (elements.deckSortSelect) elements.deckSortSelect.value = state.deckSortMode;
+      if (elements.deckNameSearchInput && elements.deckNameSearchInput.value !== state.deckNameSearch) elements.deckNameSearchInput.value = state.deckNameSearch;
+      if (elements.deckKeywordSearchInput && elements.deckKeywordSearchInput.value !== state.deckKeywordSearch) elements.deckKeywordSearchInput.value = state.deckKeywordSearch;
+      if (elements.deckSearchResultText) {
+        const total = Object.keys(CARD_LIBRARY).length;
+        const hasSearch = !!(state.deckNameSearch || state.deckKeywordSearch);
+        elements.deckSearchResultText.textContent = hasSearch ? `${visibleCardIds.length}件 / 全${total}件` : `全${total}件を表示中`;
+      }
       const validText = valid ? "使用可能" : stats.count !== DECK_MAX_COUNT ? `ちょうど${DECK_MAX_COUNT}枚必要` : "コスト超過";
       elements.deckCountText.textContent = `${owner === "human" ? "あなた用" : "CPU用"}：${stats.count}枚 / もう片方：${otherStats.count}枚`;
       elements.deckCostText.textContent = `合計コスト：${stats.cost} / ${state.costLimit}`;
@@ -8543,6 +8680,28 @@ async function endTurn() {
       setMessage(`${label}デッキを空にしました。`);
     });
 
+
+    elements.deckSortSelect?.addEventListener("change", event => {
+      state.deckSortMode = event.target.value || "implementation";
+      renderDeckBuilder();
+    });
+    elements.deckNameSearchInput?.addEventListener("input", event => {
+      state.deckNameSearch = event.target.value || "";
+      renderDeckBuilder();
+      elements.deckNameSearchInput?.focus();
+    });
+    elements.deckKeywordSearchInput?.addEventListener("input", event => {
+      state.deckKeywordSearch = event.target.value || "";
+      renderDeckBuilder();
+      elements.deckKeywordSearchInput?.focus();
+    });
+    elements.deckSearchClearBtn?.addEventListener("click", () => {
+      state.deckNameSearch = "";
+      state.deckKeywordSearch = "";
+      renderDeckBuilder();
+      elements.deckNameSearchInput?.focus();
+    });
+    elements.deckDetailsBtn?.addEventListener("click", openCurrentDeckDetails);
 
     elements.deckOwnerSelect.addEventListener("change", () => {
       state.editingDeckOwner = elements.deckOwnerSelect.value;

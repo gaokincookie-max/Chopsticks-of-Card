@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=87">
+  <link rel="stylesheet" href="style.css?v=88">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -339,10 +339,29 @@
           <span id="deckValidityText" class="valid">使用可能</span>
           <span class="small">ルール：20枚ちょうど、コスト40以内。同名は最大3枚まで。</span>
         </div>
+        <div class="deck-browser-tools">
+          <label>並び順
+            <select id="deckSortSelect">
+              <option value="implementation">実装順</option>
+              <option value="name">名前順</option>
+              <option value="cost">コスト順</option>
+              <option value="type">種類順</option>
+            </select>
+          </label>
+          <label>名前検索
+            <input id="deckNameSearchInput" type="search" placeholder="例：雷撃、発電" autocomplete="off" />
+          </label>
+          <label>キーワード検索
+            <input id="deckKeywordSearchInput" type="search" placeholder="例：充電、加護、ドロー、罠" autocomplete="off" />
+          </label>
+          <button id="deckSearchClearBtn" class="secondary deck-search-clear">検索をクリア</button>
+          <span id="deckSearchResultText" class="deck-search-result">全カードを表示中</span>
+        </div>
         <div id="deckBottomBar" class="deck-bottom-bar hidden">
           <span id="deckBottomCount">0枚</span>
           <span id="deckBottomCost">コスト 0 / 40</span>
           <span id="deckBottomValid">使用可能</span>
+          <button id="deckDetailsBtn" class="deck-bottom-detail-btn">詳細</button>
         </div>
         <div class="mode-row">
           <button id="applyDeckBtn">編集内容を確認</button>
@@ -548,6 +567,6 @@
     }
   </script>
 
-  <script src="game.js?v=87"></script>
+  <script src="game.js?v=88"></script>
 </body>
 </html>

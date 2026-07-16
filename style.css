@@ -2966,3 +2966,66 @@
   line-height: 1.65;
   text-align: left;
 }
+
+
+/* v88: deck editor browser tools */
+.deck-browser-tools {
+  display: grid;
+  grid-template-columns: minmax(125px,.55fr) minmax(160px,1fr) minmax(180px,1.2fr) auto;
+  gap: 9px;
+  align-items: end;
+  margin: 12px 0;
+  padding: 11px;
+  border: 1px solid #d4c4e1;
+  border-radius: 15px;
+  background: linear-gradient(135deg,rgba(250,247,253,.96),rgba(239,232,246,.94));
+}
+.deck-browser-tools label { display:grid; gap:5px; color:#5f4a6d; font-size:11px; font-weight:900; }
+.deck-browser-tools select,.deck-browser-tools input {
+  width:100%; min-width:0; border:1px solid #cbb9d8; border-radius:10px; padding:9px 10px;
+  background:white; color:#3e2e49; font:inherit;
+}
+.deck-search-clear { width:auto; min-width:105px; padding:9px 12px; }
+.deck-search-result { grid-column:1/-1; color:#786486; font-size:11px; font-weight:900; text-align:right; }
+
+.deck-bottom-detail-btn {
+  width:auto; min-width:62px; padding:6px 12px; border-radius:999px;
+  background:linear-gradient(135deg,#67408a,#925eb5); color:white;
+  border:1px solid rgba(92,54,121,.62); font-size:12px; font-weight:1000;
+}
+.deck-detail-summary { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:15px; }
+.deck-detail-summary span {
+  padding:7px 10px; border:1px solid #d4c3e0; border-radius:999px;
+  background:#f6f0fa; color:#654975; font-size:12px; font-weight:1000;
+}
+.deck-detail-group {
+  margin-top:13px; overflow:hidden; border:1px solid #d9cde2;
+  border-radius:14px; background:rgba(255,255,255,.72);
+}
+.deck-detail-group-head {
+  display:flex; justify-content:space-between; gap:10px; padding:10px 12px;
+  background:linear-gradient(90deg,#eee4f5,#f8f4fa); color:#5b3e6d;
+}
+.deck-detail-group-head span { color:#816e8b; font-size:11px; font-weight:900; }
+.deck-detail-card-list { display:grid; }
+.deck-detail-card-row {
+  display:flex; justify-content:space-between; gap:12px; align-items:center;
+  padding:10px 12px; border-top:1px solid #eee6f2;
+}
+.deck-detail-card-row:first-child { border-top:0; }
+.deck-detail-card-name { color:#463351; font-weight:1000; }
+.deck-detail-card-meta { margin-top:3px; color:#83728c; font-size:11px; }
+.deck-detail-card-count {
+  flex:0 0 auto; min-width:38px; padding:5px 8px; border-radius:999px;
+  background:#704493; color:white; text-align:center;
+}
+.deck-detail-empty { padding:24px; text-align:center; color:#7e6c88; }
+
+@media (max-width:760px) {
+  .deck-browser-tools { grid-template-columns:1fr 1fr; }
+  .deck-search-clear { width:100%; }
+}
+@media (max-width:500px) {
+  .deck-browser-tools { grid-template-columns:1fr; }
+  .deck-search-result { text-align:left; }
+}
