@@ -2432,3 +2432,12 @@
   background:rgba(235,225,247,.92);
   color:#70469a;
 }
+
+
+/* v83: 光速回路の試合内使用済み表示 */
+.used.charge-match-used {
+  border-color: rgba(111, 50, 160, .52);
+  background: linear-gradient(90deg, rgba(236, 220, 249, .95), rgba(220, 198, 242, .92));
+  color: #66348d;
+  font-weight: 1000;
+}

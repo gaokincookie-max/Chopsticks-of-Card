@@ -1993,7 +1993,8 @@ const CARD_LIBRARY = {
       if (!role) return null;
       const otherRole = otherFriendRole(role);
       const snapshot = {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        publisherSide: role,
         host: null,
         guest: null,
         turnSide: state.turn === "human" ? role : otherRole,
@@ -2008,15 +2009,28 @@ const CARD_LIBRARY = {
       return snapshot;
     }
 
-    function applyFriendSideToLocal(player, side) {
+    function applyFriendSideToLocal(player, side, options = {}) {
       ensureOnlineStateMaps();
       if (!side) return;
+
+      const preserveOwnerOnlyMeta = !!options.preserveOwnerOnlyMeta;
+      const ownedLightSpeedCircuitUsed = !!state.lightSpeedCircuitUsed?.[player];
+      const ownedPendingChargeStun = !!state.pendingChargeStun?.[player];
+      const ownedPendingChargeStunSource = String(state.pendingChargeStunSource?.[player] || "");
+      const ownedChargeCardsUsed = Array.isArray(state.temp?.[player]?.chargeCardsUsed)
+        ? [...state.temp[player].chargeCardsUsed]
+        : [];
       state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
       state.traps[player] = cloneJson(side.traps || { L: [], R: [] });
       state.decks[player] = [...(side.deck || [])];
       state.hands[player] = [...(side.hand || [])];
       state.discard[player] = [...(side.discard || [])];
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
+      if (preserveOwnerOnlyMeta) {
+        state.temp[player].chargeCardsUsed = ownedChargeCardsUsed;
+      } else if (!Array.isArray(state.temp[player].chargeCardsUsed)) {
+        state.temp[player].chargeCardsUsed = [];
+      }
       state.noSplit[player] = !!side.noSplit;
       state.extraActions[player] = Number(side.extraActions || 0);
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
@@ -2028,9 +2042,15 @@ const CARD_LIBRARY = {
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
-      state.pendingChargeStun[player] = !!side.pendingChargeStun;
-      state.pendingChargeStunSource[player] = String(side.pendingChargeStunSource || "");
-      state.lightSpeedCircuitUsed[player] = !!side.lightSpeedCircuitUsed;
+      if (preserveOwnerOnlyMeta) {
+        state.pendingChargeStun[player] = ownedPendingChargeStun;
+        state.pendingChargeStunSource[player] = ownedPendingChargeStunSource;
+        state.lightSpeedCircuitUsed[player] = ownedLightSpeedCircuitUsed;
+      } else {
+        state.pendingChargeStun[player] = !!side.pendingChargeStun;
+        state.pendingChargeStunSource[player] = String(side.pendingChargeStunSource || "");
+        state.lightSpeedCircuitUsed[player] = !!side.lightSpeedCircuitUsed;
+      }
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
       state.berserkerTurns[player] = Number(side.berserkerTurns || 0);
@@ -2048,8 +2068,16 @@ const CARD_LIBRARY = {
       const previousTurn = state.turn;
       state.friendApplyingRemoteState = true;
       try {
-        applyFriendSideToLocal("human", snapshot[state.friendRole]);
-        applyFriendSideToLocal("cpu", snapshot[otherFriendRole()]);
+        const publisherSide = snapshot.publisherSide || null;
+
+        // 自分専用の使用済み・反動・今ターン使用カードは、
+        // 相手が公開した全体スナップショットから上書きさせない。
+        applyFriendSideToLocal("human", snapshot[state.friendRole], {
+          preserveOwnerOnlyMeta: publisherSide !== state.friendRole
+        });
+        applyFriendSideToLocal("cpu", snapshot[otherFriendRole()], {
+          preserveOwnerOnlyMeta: publisherSide === state.friendRole
+        });
         state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.gameOver = !!snapshot.gameOver;
@@ -2846,7 +2874,10 @@ const CARD_LIBRARY = {
       state.matchResult = match.result ?? null;
       state.lastShownResultKey = null;
       hideBattleResult();
-      state.log = ["オンライン共通戦闘画面に入りました。ゲーム状態同期を開始します。"];
+      state.log = [
+        "オンライン共通戦闘画面に入りました。ゲーム状態同期を開始します。",
+        "光速回路の一試合一度状態は、host・guestそれぞれの所有状態として管理されます。"
+      ];
       elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
       clearHighlights();
@@ -5227,8 +5258,10 @@ function renderLastAction() {
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
           <div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
-          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : hasUsedChargeCardThisTurn("human", cardId)
-            ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
+          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
+            ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
+            : hasUsedChargeCardThisTurn("human", cardId)
+              ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
             : state.temp.human.cardActionUsed
               ? (lightSpeedChargePlayable
                   ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
@@ -5716,7 +5749,17 @@ function renderLastAction() {
       const card = CARD_LIBRARY[cardId];
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
       if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable) return false;
-      if (!card || isAttachmentCard(cardId) || !card.canPlay(player)) return false;
+      if (!card || isAttachmentCard(cardId)) return false;
+      if (!card.canPlay(player)) {
+        if (player === "human" && cardId === "lightSpeedCircuit") {
+          setMessage(
+            state.lightSpeedCircuitUsed[player]
+              ? "「光速回路」はこの試合ですでに正常発動しています。"
+              : "現在は「光速回路」を使用できません。"
+          );
+        }
+        return false;
+      }
       if (!canUseChargeCardThisTurn(player, cardId)) {
         if (player === "human") setMessage(`「${card.name}」はこのターンすでに使用しています。`);
         return false;
