@@ -1479,9 +1479,23 @@ const CARD_LIBRARY = {
     }
 
     async function showPopup(player, title, text, kind = "card", ms = 760, html = false) {
-      elements.popupCard.className = "popup-card" + (kind === "trap" ? " trap" : "") + (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
-      elements.popupUser.className = "popup-user" + (kind === "trap" ? " trap" : kind === "accel" ? ` action ${player === "cpu" ? "cpu-accel-user" : "human-accel-user"}` : kind === "action" ? " action" : "");
-      elements.popupUser.textContent = kind === "trap" ? `${handNames[player]}の罠発動` : kind === "accel" ? `${handNames[player]}の加速` : kind === "action" ? `${handNames[player]}の行動` : `${handNames[player]}が使用`;
+      elements.popupCard.className =
+        "popup-card" +
+        (kind === "trap" ? " trap" : "") +
+        (kind === "notice" ? " advance-notice" : "") +
+        (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
+      elements.popupUser.className =
+        "popup-user" +
+        (kind === "trap" ? " trap" :
+          kind === "notice" ? " advance-notice" :
+          kind === "accel" ? ` action ${player === "cpu" ? "cpu-accel-user" : "human-accel-user"}` :
+          kind === "action" ? " action" : "");
+      elements.popupUser.textContent =
+        kind === "trap" ? `${handNames[player]}の罠発動` :
+        kind === "notice" ? `${handNames[player]}の予告状` :
+        kind === "accel" ? `${handNames[player]}の加速` :
+        kind === "action" ? `${handNames[player]}の行動` :
+        `${handNames[player]}が使用`;
       elements.popupName.textContent = title;
       if (html) elements.popupText.innerHTML = text;
       else elements.popupText.textContent = text;
@@ -1494,6 +1508,13 @@ const CARD_LIBRARY = {
 
     async function showCardPopup(player, card, isTrap = false, ms = 760) {
       await showPopup(player, `「${card.name}」`, card.text, isTrap ? "trap" : "card", ms);
+    }
+
+    async function showAdvanceNoticeRevealPopup(player, card, ms = 1100) {
+      const body =
+        `<div class="advance-notice-popup-label">次の自分のターン開始時に発動</div>` +
+        `<div class="advance-notice-popup-effect">${escapeHtml(card.text)}</div>`;
+      await showPopup(player, `予告「${card.name}」`, body, "notice", ms, true);
     }
 
     async function showFinaleFx(player, power) {
@@ -1960,6 +1981,12 @@ const CARD_LIBRARY = {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         const card = CARD_LIBRARY[payload.cardId];
         if (player && card) await showCardPopup(player, card, false, 760);
+        return;
+      }
+      if (fx.type === "advanceNoticeReveal") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        const card = CARD_LIBRARY[payload.cardId];
+        if (player && card) await showAdvanceNoticeRevealPopup(player, card, 1100);
         return;
       }
       if (fx.type === "attack") {
@@ -3690,6 +3717,15 @@ function wrapFinger(value) {
         return false;
       }
       const card = CARD_LIBRARY[cardId];
+
+      if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+        emitFriendFx("advanceNoticeReveal", {
+          playerSide: friendSideForLocalPlayer(player),
+          cardId
+        }).catch(error => console.error("PVP advance notice reveal fx failed", error));
+      }
+      await showAdvanceNoticeRevealPopup(player, card, 1100);
+
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(cardId);
       state.pendingAdvanceNotice[player] = state.pendingAdvanceNotice[player] || [];
