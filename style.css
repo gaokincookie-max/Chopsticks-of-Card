@@ -2053,3 +2053,24 @@
   font-weight: 900;
   color: #697583;
 }
+
+
+/* v68: 自分の罠と公開済みの相手罠を分離 */
+.trap-slot.filled.own-trap-slot {
+  border-color: #9a7441;
+  background: linear-gradient(135deg, #fff8e9, #f1e4c9);
+  color: #674a25;
+  box-shadow: inset 0 0 0 1px rgba(154, 116, 65, .18);
+}
+
+.attachment-detail-kind.own-trap {
+  color: #674a25;
+  background: #fff4dc;
+  border: 1px solid #c7a66f;
+}
+
+
+/* v69: 変化する加護の詳細表示 */
+#attachmentDetailText {
+  white-space: pre-line;
+}

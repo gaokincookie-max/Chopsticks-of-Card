@@ -89,6 +89,55 @@ const CARD_LIBRARY = {
         }
       },
 
+      brawl: {
+        name: "乱闘",
+        cost: 2,
+        type: "補助",
+        text: "自分の手札から「乱闘」「指令」「ロジックアトリエ」を除く、効果を持つカードをランダムに1枚選ぶ。使用条件とコストを無視して、その効果だけを発動する。選ばれたカードは消費されない。",
+        canPlay: (player) => getBrawlCandidates(player).length > 0,
+        effect: async (player) => {
+          const candidates = getBrawlCandidates(player);
+          if (!candidates.length) {
+            addLog(`${handNames[player]}の「乱闘」は、発動できるカードがなく不発になった。`);
+            return;
+          }
+          const picked = candidates[Math.floor(Math.random() * candidates.length)];
+          const copied = CARD_LIBRARY[picked.cardId];
+          addLog(`${handNames[player]}の「乱闘」により「${copied.name}」の効果が無償で発動する。元のカードは手札に残る。`);
+          await showCardPopup(player, copied, false, player === "cpu" ? 760 : 620);
+          await activateCopiedCardEffect(player, picked.cardId, "乱闘");
+        }
+      },
+      advanceNotice: {
+        name: "予告状",
+        cost: 2,
+        type: "補助",
+        text: "現在使用条件を満たしているカードを手札から1枚選び、相手に公開して捨て札にする。次の自分のターン開始時、そのカードの使用条件とコストを無視して効果だけを発動する。「予告状」「指令」「ロジックアトリエ」は選べない。",
+        canPlay: (player) => getAdvanceNoticeCandidates(player).length > 0,
+        effect: async (player) => {
+          if (player === "human") {
+            state.mode = "advanceNoticeChoose";
+            setMessage("「予告状」：次の自分のターンに発動するカードを選んでください。選んだカードは公開して捨て札になります。");
+            return;
+          }
+          const candidates = getAdvanceNoticeCandidates(player);
+          if (!candidates.length) {
+            addLog(`${handNames[player]}の「予告状」は、宣言できるカードがなく不発になった。`);
+            return;
+          }
+          candidates.sort((a, b) => (CARD_LIBRARY[b.cardId]?.cost || 0) - (CARD_LIBRARY[a.cardId]?.cost || 0));
+          await chooseAdvanceNoticeCard(player, candidates[0].index);
+        }
+      },
+      duelSurge: {
+        name: "決闘高潮",
+        cost: 3,
+        type: "加護",
+        text: "この加護が付いた手で同じ手を連続して通常攻撃するとLvが上がる。別の手を攻撃するとLv1になる。最大Lv5。Lvに応じて与える本数増加・受ける本数軽減を得る。別の自分の手による攻撃では変化しない。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+
       doubleDouble: {
         name: "ダブルダブル",
         cost: 3,
@@ -774,6 +823,7 @@ const CARD_LIBRARY = {
       state.pendingDirectiveBonusDraw = { human: 0, cpu: 0 };
       state.lastDirectiveClearCount = { human: 0, cpu: 0 };
       state.pendingWillTorrent = { human: 0, cpu: 0 };
+      state.pendingAdvanceNotice = { human: [], cpu: [] };
             state.selectedAttackHand = null;
             elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
@@ -908,16 +958,21 @@ const CARD_LIBRARY = {
         name: "置き土産",
         cost: 2,
         type: "罠",
-        text: "【攻撃判定後・自動】この手が攻撃で0になったとき、攻撃した相手は手札を1枚捨てる。",
+        text: "【攻撃判定後・自動】この手が攻撃で0になったとき発動する。攻撃した相手は手札をランダムに1枚捨てる。手札がない場合も発動するが、捨て札効果は発生しない。",
         trap: true,
         manual: false,
         triggerTiming: "after",
-        canTrigger: ({ placedHand, targetHand, resolvedFinal, attacker }) => {
-          return placedHand === targetHand && resolvedFinal === 0 && state.hands[attacker].length > 0;
+        canTrigger: ({ placedHand, targetHand, resolvedFinal }) => {
+          return placedHand === targetHand && resolvedFinal === 0;
         },
-        trigger: ({ attacker }) => {
-          discardOneCard(attacker);
-          addLog(`罠「置き土産」により、${handNames[attacker]}は手札を1枚捨てた。`);
+        trigger: async ({ attacker }) => {
+          const discarded = discardOneCard(attacker);
+          if (discarded) {
+            addLog(`罠「置き土産」により、${handNames[attacker]}は「${CARD_LIBRARY[discarded]?.name || discarded}」を捨てた。`);
+            await handleCardDiscardEffect(attacker, discarded);
+          } else {
+            addLog(`罠「置き土産」が発動したが、${handNames[attacker]}の手札が0枚だったため捨てられなかった。`);
+          }
           return {};
         }
       },
@@ -1239,6 +1294,7 @@ const CARD_LIBRARY = {
       pendingDirectiveBonusDraw: { human: 0, cpu: 0 },
       lastDirectiveClearCount: { human: 0, cpu: 0 },
       pendingWillTorrent: { human: 0, cpu: 0 },
+      pendingAdvanceNotice: { human: [], cpu: [] },
       firstTurnStarted: { human: false, cpu: false },
       weaknessWait: {},
       lastAction: null,
@@ -1684,6 +1740,7 @@ const CARD_LIBRARY = {
       if (!state.berserkerTurns || typeof state.berserkerTurns !== "object") state.berserkerTurns = { ...pairDefaults };
       if (!state.noSplit || typeof state.noSplit !== "object") state.noSplit = { human: false, cpu: false };
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
+      if (!state.pendingAdvanceNotice || typeof state.pendingAdvanceNotice !== "object") state.pendingAdvanceNotice = { human: [], cpu: [] };
       if (!state.costLimitNextTurn || typeof state.costLimitNextTurn !== "object") state.costLimitNextTurn = { human: null, cpu: null };
       if (!state.activeCostLimit || typeof state.activeCostLimit !== "object") state.activeCostLimit = { human: null, cpu: null };
       if (!state.firstTurnStarted || typeof state.firstTurnStarted !== "object") state.firstTurnStarted = { human: false, cpu: false };
@@ -1715,6 +1772,7 @@ const CARD_LIBRARY = {
         pendingNoDraw: Number(state.pendingNoDraw?.[player] || 0),
         activeNoDraw: Number(state.activeNoDraw?.[player] || 0),
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
+        pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
@@ -1760,6 +1818,7 @@ const CARD_LIBRARY = {
       state.pendingNoDraw[player] = Number(side.pendingNoDraw || 0);
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
+      state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
       state.berserkerTurns[player] = Number(side.berserkerTurns || 0);
@@ -3529,6 +3588,91 @@ function wrapFinger(value) {
       render();
     }
 
+    function isEffectCopyExcluded(cardId, source = "") {
+      if (!cardId) return true;
+      if (isDirectiveCard(cardId)) return true;
+      if (cardId === "logicAtelier") return true;
+      if (source === "brawl" && cardId === "brawl") return true;
+      if (source === "advanceNotice" && cardId === "advanceNotice") return true;
+      return false;
+    }
+
+    function getBrawlCandidates(player) {
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => {
+          const card = CARD_LIBRARY[item.cardId];
+          return card && typeof card.effect === "function" && !isEffectCopyExcluded(item.cardId, "brawl");
+        });
+    }
+
+    function getAdvanceNoticeCandidates(player) {
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => {
+          const card = CARD_LIBRARY[item.cardId];
+          if (!card || typeof card.effect !== "function" || isEffectCopyExcluded(item.cardId, "advanceNotice")) return false;
+          try {
+            return !!card.canPlay(player);
+          } catch {
+            return false;
+          }
+        });
+    }
+
+    async function activateCopiedCardEffect(player, cardId, sourceLabel) {
+      const card = CARD_LIBRARY[cardId];
+      if (!card || typeof card.effect !== "function") {
+        addLog(`${sourceLabel}で選ばれたカードには発動できる効果がなかった。`);
+        return false;
+      }
+      const previousCopy = state.copiedEffectContext;
+      state.copiedEffectContext = { sourceLabel, cardId };
+      try {
+        await card.effect(player);
+        if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
+          state.pendingTerminalEnd[player] = true;
+        }
+        return true;
+      } finally {
+        state.copiedEffectContext = previousCopy;
+      }
+    }
+
+    async function chooseAdvanceNoticeCard(player, handIndex) {
+      if (state.mode === "advanceNoticeChoose" && player === "human" && state.turn !== "human") return false;
+      const cardId = state.hands[player][handIndex];
+      const valid = getAdvanceNoticeCandidates(player).some(item => item.index === handIndex && item.cardId === cardId);
+      if (!valid) {
+        if (player === "human") setMessage("そのカードは現在の条件では予告できません。");
+        return false;
+      }
+      const card = CARD_LIBRARY[cardId];
+      state.hands[player].splice(handIndex, 1);
+      state.discard[player].push(cardId);
+      state.pendingAdvanceNotice[player] = state.pendingAdvanceNotice[player] || [];
+      state.pendingAdvanceNotice[player].push(cardId);
+      state.mode = "attack";
+      addLog(`${handNames[player]}は「予告状」で「${card.name}」を公開し、捨て札にした。次の自分のターン開始時に効果が発動する。`);
+      setLastAction(player, "予告状", `「${card.name}」を公開して予告しました。`, "card");
+      if (player === "human") setMessage(`「予告状」：次の自分のターン開始時に「${card.name}」の効果が発動します。`);
+      render();
+      return true;
+    }
+
+    async function resolveAdvanceNotice(player) {
+      const queue = [...(state.pendingAdvanceNotice?.[player] || [])];
+      state.pendingAdvanceNotice[player] = [];
+      for (const cardId of queue) {
+        const card = CARD_LIBRARY[cardId];
+        if (!card) continue;
+        addLog(`【予告状】${handNames[player]}が予告した「${card.name}」の効果が発動する。`);
+        await showCardPopup(player, card, false, player === "cpu" ? 760 : 650);
+        await activateCopiedCardEffect(player, cardId, "予告状");
+        if (state.gameOver || state.pendingTerminalEnd[player] || state.mode !== "attack") break;
+      }
+    }
+
     function drawCard(player) {
       if (state.decks[player].length > 0) {
         const cardId = state.decks[player].pop();
@@ -3657,6 +3801,17 @@ function wrapFinger(value) {
 
       for (let i = 0; i < draws; i++) drawCard(player);
 
+      await resolveAdvanceNotice(player);
+      if (state.pendingTerminalEnd[player]) {
+        state.pendingTerminalEnd[player] = false;
+        await endTurn();
+        return;
+      }
+      if (state.mode !== "attack") {
+        render();
+        return;
+      }
+
       if (player === "human") {
         setMessage(state.noSplit.human
           ? "あなたの番です。固定の効果で、このターンは分けるを選べません。"
@@ -3777,6 +3932,11 @@ function wrapFinger(value) {
         cardId
       };
       if (cardId === "weaknessCurse") instance.waitTurns = 1;
+      if (cardId === "duelSurge") {
+        instance.level = 0;
+        instance.duelTargetOwner = null;
+        instance.duelTargetHand = null;
+      }
       return instance;
     }
 
@@ -3825,6 +3985,37 @@ function wrapFinger(value) {
       return ["L", "R"].some(h => state[owner][h] > 0 && state.traps[owner][h].length < 2 && !(user === owner && hasSealCurse(owner, h)));
     }
 
+    function findAttachmentSlot(owner, hand, cardId) {
+      return state.traps[owner][hand].find(slot => trapCardId(slot) === cardId) || null;
+    }
+
+    function duelSurgeStats(level) {
+      const lv = Math.max(0, Math.min(5, Number(level) || 0));
+      if (lv >= 5) return { attack: 2, defense: 2 };
+      if (lv >= 4) return { attack: 2, defense: 1 };
+      if (lv >= 3) return { attack: 1, defense: 1 };
+      if (lv >= 2) return { attack: 1, defense: 0 };
+      return { attack: 0, defense: 0 };
+    }
+
+    function updateDuelSurge(attacker, attackHand, defender, targetHand) {
+      const slot = findAttachmentSlot(attacker, attackHand, "duelSurge");
+      if (!slot || typeof slot === "string") return { bonus: 0, level: 0 };
+      const sameTarget = slot.duelTargetOwner === defender && slot.duelTargetHand === targetHand;
+      slot.level = sameTarget ? Math.min(5, (Number(slot.level) || 0) + 1) : 1;
+      slot.duelTargetOwner = defender;
+      slot.duelTargetHand = targetHand;
+      const stats = duelSurgeStats(slot.level);
+      addLog(`${handNames[attacker]}の${handNames[attackHand]}の「決闘高潮」がLv.${slot.level}になった。対象：${defender === attacker ? "自分" : handNames[defender]}の${handNames[targetHand]}。`);
+      return { bonus: stats.attack, level: slot.level };
+    }
+
+    function duelSurgeDefense(owner, hand) {
+      const slot = findAttachmentSlot(owner, hand, "duelSurge");
+      if (!slot || typeof slot === "string") return 0;
+      return duelSurgeStats(slot.level).defense;
+    }
+
     function hasAttachment(owner, hand, cardId) {
       return state.traps[owner][hand].some(slot => trapCardId(slot) === cardId);
     }
@@ -3864,6 +4055,12 @@ function wrapFinger(value) {
         } else {
           addLog(`${handNames[defender]}の${handNames[targetHand]}には「守護」があるが、${sourceLabel}は1本未満にならない。`);
         }
+        finalAmount = reduced;
+      }
+      const duelReduction = duelSurgeDefense(defender, targetHand);
+      if (duelReduction > 0) {
+        const reduced = Math.max(1, finalAmount - duelReduction);
+        if (reduced !== finalAmount) addLog(`${handNames[defender]}の${handNames[targetHand]}の「決闘高潮」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
         finalAmount = reduced;
       }
       return finalAmount;
@@ -4373,21 +4570,34 @@ function wrapFinger(value) {
       }
     }
 
-    function attachmentKindInfo(card) {
+    function attachmentKindInfo(card, options = {}) {
       if (card?.blessing) return { label: "加護", symbol: "✦", className: "blessing" };
       if (card?.curse) return { label: "呪縛", symbol: "◆", className: "curse" };
-      return { label: "公開済み罠", symbol: "⚠", className: "trap" };
+      if (options.publiclyRevealed) return { label: "公開済み罠", symbol: "⚠", className: "trap" };
+      return { label: "罠", symbol: "▣", className: "own-trap" };
     }
 
-    function openAttachmentDetail(cardId) {
+    function openAttachmentDetail(cardId, options = {}) {
       const card = CARD_LIBRARY[cardId];
       if (!card || !elements.attachmentDetailModal) return;
-      const info = attachmentKindInfo(card);
+      const info = attachmentKindInfo(card, options);
       elements.attachmentDetailKind.textContent = `${info.symbol} ${info.label}`;
       elements.attachmentDetailKind.className = `attachment-detail-kind ${info.className}`;
       elements.attachmentDetailName.textContent = card.name;
       elements.attachmentDetailMeta.textContent = `コスト${card.cost} / ${card.type}`;
-      elements.attachmentDetailText.textContent = card.text;
+      if (cardId === "duelSurge" && options.slot) {
+        const level = Number(options.slot.level) || 0;
+        const stats = duelSurgeStats(level);
+        const target = options.slot.duelTargetHand
+          ? `${options.slot.duelTargetOwner === options.owner ? "自分" : "相手"}の${handNames[options.slot.duelTargetHand]}`
+          : "未決定";
+        elements.attachmentDetailName.textContent = `${card.name} Lv.${level}`;
+        elements.attachmentDetailText.textContent =
+          `記録対象：${target}\n現在の効果：与える本数+${stats.attack} / 受ける本数-${stats.defense}\n` +
+          `同じ対象を攻撃するとLv.${Math.min(5, level + 1)}。別の対象を攻撃するとLv.1。最大Lv.5。`;
+      } else {
+        elements.attachmentDetailText.textContent = card.text;
+      }
       elements.attachmentDetailModal.classList.add("show");
     }
 
@@ -4419,16 +4629,20 @@ function wrapFinger(value) {
           const selectableSwapOwn = isBlessingOrCurseCard(cardId) && state.turn === "human" && !state.animating && state.mode === "swapOwnAttachment" && player === "human";
           const selectable = selectableOpponentTrap || selectableOwnCurse || selectableSwapOpponent || selectableSwapOwn;
           const hidden = isTrap && player === "cpu" && !revealed && !exposedByCurse;
+          const publiclyRevealed = isTrap && player === "cpu" && !hidden;
+          const ownVisibleTrap = isTrap && player === "human";
           div.className =
             "trap-slot filled" +
             (hidden ? " cpu-hidden" : "") +
-            (isTrap && !hidden ? " revealed-trap-slot" : "") +
+            (publiclyRevealed ? " revealed-trap-slot" : "") +
+            (ownVisibleTrap ? " own-trap-slot" : "") +
             (card?.blessing ? " blessing-slot" : "") +
             (card?.curse ? " curse-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
-          const kindInfo = attachmentKindInfo(card);
-          div.textContent = hidden ? `伏せ${i + 1}` : `${kindInfo.symbol} ${card.name}`;
-          div.title = hidden ? "伏せカード" : `${kindInfo.label}「${card.name}」：${card.text}`;
+          const kindInfo = attachmentKindInfo(card, { publiclyRevealed });
+          const displayName = cardId === "duelSurge" ? `${card.name} Lv.${Number(slot?.level) || 0}` : card.name;
+          div.textContent = hidden ? `伏せ${i + 1}` : `${kindInfo.symbol} ${displayName}`;
+          div.title = hidden ? "伏せカード" : `${kindInfo.label}「${displayName}」：${card.text}`;
 
           if (selectable) {
             div.title = "このカードを選ぶ";
@@ -4442,7 +4656,7 @@ function wrapFinger(value) {
             div.classList.add("detail-openable");
             div.addEventListener("click", (event) => {
               event.stopPropagation();
-              openAttachmentDetail(cardId);
+              openAttachmentDetail(cardId, { publiclyRevealed, slot, owner: player, hand });
             });
           }
         } else {
@@ -4537,15 +4751,17 @@ function renderLastAction() {
         const calmDownDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "calmDownDiscard";
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
         const cityWillMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "cityWillChoose";
+        const advanceNoticeMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "advanceNoticeChoose";
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
         const berserkLocked = state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed;
         const canUseCardAction = state.turn === "human" && !state.gameOver && !state.animating && !state.temp.human.cardActionUsed && !berserkLocked;
-        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !restrictedByCost && canUseCardAction && !isZoneCard && card.canPlay("human");
-        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isZoneCard && !setupActive) || (setupActive && isTrap)) && canSetAttachmentTarget("human", cardId);
+        const normalPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !advanceNoticeMode && !restrictedByCost && canUseCardAction && !isZoneCard && card.canPlay("human");
+        const trapPlayable = !repairDiscardMode && !calmDownDiscardMode && !rapidFireDiscardMode && !cityWillMode && !advanceNoticeMode && !restrictedByCost && !berserkLocked && ((canUseCardAction && isZoneCard && !setupActive) || (setupActive && isTrap)) && canSetAttachmentTarget("human", cardId);
         const discardPlayable = repairDiscardMode && cardId !== "repair";
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown";
         const rapidDiscardPlayable = rapidFireDiscardMode && cardId !== "rapidFire";
         const cityWillPlayable = cityWillMode && isDirectiveCard(cardId);
+        const advanceNoticePlayable = advanceNoticeMode && getAdvanceNoticeCandidates("human").some(item => item.index === index);
         const selected = state.selectedTrapCardIndex === index;
         const div = document.createElement("div");
         div.className =
@@ -4555,7 +4771,7 @@ function renderLastAction() {
           (card.directive ? " directive-card" : "") +
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
-          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || cityWillPlayable ? " playable" : "") +
+          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || cityWillPlayable || advanceNoticePlayable ? " playable" : "") +
           (selected ? " selected-card" : "");
         div.innerHTML = `
           <div class="card-title">
@@ -4566,7 +4782,7 @@ function renderLastAction() {
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
           <div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
-          ${cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed ? '<div class="used">カード関連行動は使用済み</div>' : ''}
+          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed ? '<div class="used">カード関連行動は使用済み</div>' : ''}
         `;
         if (discardPlayable) {
           div.addEventListener("click", () => chooseRepairDiscard(index));
@@ -4579,6 +4795,9 @@ function renderLastAction() {
         }
         if (cityWillPlayable) {
           div.addEventListener("click", () => transferDirective("human", index));
+        }
+        if (advanceNoticePlayable) {
+          div.addEventListener("click", () => chooseAdvanceNoticeCard("human", index));
         }
         if (normalPlayable) {
           div.addEventListener("click", () => playCard("human", index));
@@ -5342,8 +5561,6 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 async function attack(attacker, attackHand, defender, targetHand) {
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
 
-      recordDirectiveAttack(attacker, attackHand, defender, targetHand);
-
       state.animating = true;
       render();
 
@@ -5358,10 +5575,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const willBladeBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "willBlade") ? (state.lastDirectiveClearCount?.[attacker] || 0) : 0);
       const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
+      let duelSurgeBonus = 0;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + willBladeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + willBladeBonus + duelSurgeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
@@ -5444,6 +5662,15 @@ async function attack(attacker, attackHand, defender, targetHand) {
           }).catch(error => console.error("PVP redirected attack fx failed", error));
         }
         await animateAttackIntent(attacker, attackHand, defender, targetHand);
+      }
+
+      recordDirectiveAttack(attacker, attackHand, defender, targetHand);
+      const duelUpdate = updateDuelSurge(attacker, attackHand, defender, targetHand);
+      if (duelUpdate.bonus > 0 && !immutable) {
+        duelSurgeBonus = duelUpdate.bonus;
+        power += duelSurgeBonus;
+        context = { defender, targetHand, attacker, attackHand, incomingPower: power };
+        addLog(`${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}により、攻撃力+${duelSurgeBonus}。`);
       }
 
       if (trapResult.cancelAttack) {
@@ -5638,6 +5865,7 @@ async function endTurn() {
         render();
         await delay(450);
         await startTurn("cpu");
+        if (state.turn !== "cpu" || state.gameOver || state.mode !== "attack") return;
         await delay(550);
         await cpuTurn();
       } else {
