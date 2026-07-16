@@ -2441,3 +2441,35 @@
   color: #66348d;
   font-weight: 1000;
 }
+
+
+/* v84: 充電拡張 */
+.popup-card.emc2 {
+  border-color: rgba(245, 235, 172, .78);
+  background: radial-gradient(circle at 50% 30%, rgba(255,253,223,.99), rgba(80,66,28,.98));
+  box-shadow: 0 0 45px rgba(255,235,120,.52), 0 22px 70px rgba(0,0,0,.5);
+}
+.popup-user.emc2 {
+  background: linear-gradient(90deg, #5d4a10, #c9a62f);
+  color: #fffbe7;
+}
+.popup-card.emc2 .popup-name {
+  color: #fff8b5;
+  text-shadow: 0 0 18px rgba(255,235,100,.7);
+}
+.emc2-main {
+  font-size: clamp(18px, 4vw, 28px);
+  font-weight: 1100;
+  letter-spacing: .08em;
+  color: #fff4a2;
+}
+.emc2-sub {
+  margin-top: 12px;
+  line-height: 1.6;
+  color: #fffbe5;
+}
+.battery-decay-main {
+  font-size: clamp(24px, 5vw, 36px);
+  font-weight: 1100;
+  color: #315e96;
+}

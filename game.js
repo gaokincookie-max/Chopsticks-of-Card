@@ -126,9 +126,10 @@ const CARD_LIBRARY = {
           state.temp[player].lightningBonus =
             (state.temp[player].lightningBonus || 0) + bonus;
           state.temp[player].lightningZeroAtFive = before >= 10;
+          state.temp[player].lightningNoChargeGain = true;
           addLog(
             `${handNames[player]}の「雷撃」：使用前の充電Lv.${before}により、次の攻撃+${bonus}` +
-            `${before >= 10 ? "、超過計算前に5以上なら0" : ""}。`
+            `${before >= 10 ? "、超過計算前に5以上なら0" : ""}。この攻撃ではダメージ由来の充電を獲得できない。`
           );
         }
       },
@@ -189,6 +190,89 @@ const CARD_LIBRARY = {
           await showLightSpeedCircuitFx(player);
         }
       },
+      electric: {
+        name: "エレクトリック", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "現在の充電Lv.を3で割った値（小数点以下切り捨て）だけ、選択した相手の手に本数を加える。その後、充電Lv.を半分（小数点以下切り捨て）にしてターンを終了する。",
+        canPlay: () => true,
+        effect: (player) => beginChargeTargetEffect(player, "electric")
+      },
+      bioticE: {
+        name: "バイオティックE", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
+        text: "この手の通常攻撃によって相手の手を0にした時、その攻撃で与えた本数の2倍だけ充電を得る。",
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      electromagneticWave: {
+        name: "電磁波", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "充電4を消費する。選択した相手の手の本数を半分（小数点以下切り捨て）にする。充電不足なら不発。",
+        canPlay: () => true,
+        effect: (player) => {
+          if (!consumeCharge(player, 4, false, "電磁波")) return;
+          beginChargeTargetEffect(player, "electromagneticWave");
+        }
+      },
+      cheapBattery: {
+        name: "廉価バッテリー", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "充電9を得る。次の自分のターン開始時から2ターンの間、充電が2減る。",
+        canPlay: () => true,
+        effect: (player) => {
+          gainCharge(player, 9, "廉価バッテリー");
+          state.cheapBatteryDecay[player] = 2;
+          addLog(`${handNames[player]}の「廉価バッテリー」：次の自分ターンから2回、ターン開始時に充電2減少。`);
+        }
+      },
+      energyBarrier: {
+        name: "エネルギーバリア", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "充電5を消費する。次の自分のターン開始時まで、受ける本数を2減らす。充電不足なら不発。",
+        canPlay: () => true,
+        effect: (player) => {
+          if (!consumeCharge(player, 5, false, "エネルギーバリア")) return;
+          state.energyBarrier[player] = 2;
+          addLog(`${handNames[player]}は「エネルギーバリア」を展開。次の自分ターン開始時まで受ける本数-2。`);
+        }
+      },
+      laserBeam: {
+        name: "レーザービーム", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "現在の充電をすべて消費し、消費した値だけ選択した相手の手に本数を加える。通常の超過計算を行い、ターンを終了する。",
+        canPlay: () => true,
+        effect: (player) => beginChargeTargetEffect(player, "laserBeam")
+      },
+      electromagneticInduction: {
+        name: "電磁誘導", cost: 1, type: "補助 / 充電", chargeCard: true,
+        text: "自分の手を1つ選び、その手を現在の充電Lv.と同じ値にして通常の超過計算を行う。充電は消費しない。",
+        canPlay: () => true,
+        effect: (player) => beginChargeTargetEffect(player, "electromagneticInduction")
+      },
+      electromagneticAttack: {
+        name: "電磁攻撃", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "充電5を消費する。このターン、自分の通常攻撃は相手の罠カードを発動させない。罠は破壊せず残る。",
+        canPlay: () => true,
+        effect: (player) => {
+          if (!consumeCharge(player, 5, false, "電磁攻撃")) return;
+          state.temp[player].electromagneticAttack = true;
+          addLog(`${handNames[player]}は「電磁攻撃」を使用。このターンの通常攻撃は相手の罠を発動させない。`);
+        }
+      },
+      mechanicalGeneration: {
+        name: "力学発電", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
+        text: "この手で相手を通常攻撃した時、その攻撃で与えた本数と同じ値だけ充電を得る。",
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      chemicalGeneration: {
+        name: "化学発電", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
+        text: "自分が手札からカードを使用するたび、充電1を得る。乱闘・予告状による効果だけの発動は含まない。",
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      solarGeneration: {
+        name: "太陽光発電", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
+        text: "自分のターン開始時、充電2を得る。",
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      emc2: {
+        name: "E=mc²", cost: 2, type: "手札誘発 / 充電", chargeCard: true,
+        text: "自分が敗北する本数追加・カード効果を受けた時、充電6以上なら手札から発動する。充電をすべて消費し、最後の手を4にする。ロジックアトリエは充電10でのみ防げる。",
+        canPlay: () => false
+      },
+
       dimensionalSlash: {
         name: "空間切断", cost: 3, type: "補助 / 充電", chargeCard: true,
         text: "1ターンに1度。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で与える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
@@ -960,7 +1044,13 @@ const CARD_LIBRARY = {
       state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       state.pendingChargeStun = { human: false, cpu: false };
       state.pendingChargeStunSource = { human: "", cpu: "" };
+      state.cheapBatteryDecay = { human: 0, cpu: 0 };
+      state.energyBarrier = { human: 0, cpu: 0 };
+      state.pendingChargeTarget = null;
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
+      state.cheapBatteryDecay = { human: 0, cpu: 0 };
+      state.energyBarrier = { human: 0, cpu: 0 };
+      state.pendingChargeTarget = null;
       state.pendingWillTorrent = { human: 0, cpu: 0 };
       state.pendingAdvanceNotice = { human: [], cpu: [] };
             state.selectedAttackHand = null;
@@ -1435,6 +1525,9 @@ const CARD_LIBRARY = {
       activeDirectiveBlessing: { human: 0, cpu: 0 },
       pendingChargeStun: { human: false, cpu: false },
       pendingChargeStunSource: { human: "", cpu: "" },
+      cheapBatteryDecay: { human: 0, cpu: 0 },
+      energyBarrier: { human: 0, cpu: 0 },
+      pendingChargeTarget: null,
       lightSpeedCircuitUsed: { human: false, cpu: false },
       pendingWillTorrent: { human: 0, cpu: 0 },
       pendingAdvanceNotice: { human: [], cpu: [] },
@@ -1624,7 +1717,9 @@ const CARD_LIBRARY = {
         "popup-card" +
         (kind === "trap" ? " trap" : "") +
         (kind === "notice" ? " advance-notice" : "") +
-        (kind === "charge-recoil" ? " charge-recoil" : "") +
+        (kind === "charge-recoil" ? " charge-recoil" :
+          kind === "emc2" ? " emc2" : "") +
+        (kind === "emc2" ? " emc2" : "") +
         (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
       elements.popupUser.className =
         "popup-user" +
@@ -1637,6 +1732,7 @@ const CARD_LIBRARY = {
         kind === "trap" ? `${handNames[player]}の罠発動` :
         kind === "notice" ? `${handNames[player]}の予告状` :
         kind === "charge-recoil" ? `${handNames[player]}の反動` :
+        kind === "emc2" ? `${handNames[player]}の手札誘発` :
         kind === "accel" ? `${handNames[player]}の加速` :
         kind === "action" ? `${handNames[player]}の行動` :
         `${handNames[player]}が使用`;
@@ -1951,7 +2047,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -1981,6 +2077,8 @@ const CARD_LIBRARY = {
         pendingChargeStun: !!state.pendingChargeStun?.[player],
         pendingChargeStunSource: String(state.pendingChargeStunSource?.[player] || ""),
         lightSpeedCircuitUsed: !!state.lightSpeedCircuitUsed?.[player],
+        cheapBatteryDecay: Number(state.cheapBatteryDecay?.[player]) || 0,
+        energyBarrier: Number(state.energyBarrier?.[player]) || 0,
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
@@ -2020,6 +2118,8 @@ const CARD_LIBRARY = {
       const ownedChargeCardsUsed = Array.isArray(state.temp?.[player]?.chargeCardsUsed)
         ? [...state.temp[player].chargeCardsUsed]
         : [];
+      const ownedCheapBatteryDecay = Number(state.cheapBatteryDecay?.[player]) || 0;
+      const ownedEnergyBarrier = Number(state.energyBarrier?.[player]) || 0;
       state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
       state.traps[player] = cloneJson(side.traps || { L: [], R: [] });
       state.decks[player] = [...(side.deck || [])];
@@ -2046,10 +2146,14 @@ const CARD_LIBRARY = {
         state.pendingChargeStun[player] = ownedPendingChargeStun;
         state.pendingChargeStunSource[player] = ownedPendingChargeStunSource;
         state.lightSpeedCircuitUsed[player] = ownedLightSpeedCircuitUsed;
+        state.cheapBatteryDecay[player] = ownedCheapBatteryDecay;
+        state.energyBarrier[player] = ownedEnergyBarrier;
       } else {
         state.pendingChargeStun[player] = !!side.pendingChargeStun;
         state.pendingChargeStunSource[player] = String(side.pendingChargeStunSource || "");
         state.lightSpeedCircuitUsed[player] = !!side.lightSpeedCircuitUsed;
+        state.cheapBatteryDecay[player] = Number(side.cheapBatteryDecay) || 0;
+        state.energyBarrier[player] = Number(side.energyBarrier) || 0;
       }
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
@@ -2852,8 +2956,8 @@ const CARD_LIBRARY = {
       state.pendingChargeStun = { human: false, cpu: false };
       state.pendingChargeStunSource = { human: "", cpu: "" };
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -3900,6 +4004,134 @@ function wrapFinger(value) {
     function ensureChargeDefinition(level){ const lv=Math.max(1,Math.min(10,Number(level)||1)); const id=`charge_${lv}`; if(!CARD_LIBRARY[id]) CARD_LIBRARY[id]={...CARD_LIBRARY.charge,name:`充電 Lv.${lv}`,cost:lv,text:`現在Lv.${lv}。コスト${lv}。充電効果以外では捨てたり移動できない。`,token:true,chargeResource:true,chargeLevel:lv}; return id; }
     function getChargeEntries(player){ return state.hands[player].map((cardId,index)=>({cardId,index,level:chargeLevelFromId(cardId)})).filter(x=>x.level>0); }
     function getChargeLevel(player){ const e=getChargeEntries(player); return e.length?Math.max(...e.map(x=>x.level)):0; }
+    function countOwnAttachment(player, cardId) {
+      return ["L", "R"].reduce(
+        (sum, hand) => sum + state.traps[player][hand].filter(slot => trapCardId(slot) === cardId).length,
+        0
+      );
+    }
+
+    function beginChargeTargetEffect(player, cardId) {
+      state.pendingChargeTarget = { player, cardId };
+      if (player === "human") {
+        if (cardId === "electromagneticInduction") {
+          state.mode = "chargeTargetOwn";
+          setMessage(`「${CARD_LIBRARY[cardId].name}」：変更する自分の手を選んでください。`);
+        } else {
+          state.mode = "chargeTargetOpponent";
+          setMessage(`「${CARD_LIBRARY[cardId].name}」：対象にする相手の手を選んでください。`);
+        }
+        render();
+        return;
+      }
+
+      const opponent = player === "human" ? "cpu" : "human";
+      if (cardId === "electromagneticInduction") {
+        const choices = ["L", "R"].filter(hand => state[player][hand] > 0);
+        const hand = choices.sort((a, b) => state[player][a] - state[player][b])[0] || "L";
+        resolveChargeTargetEffect(player, player, hand, cardId);
+      } else {
+        const choices = ["L", "R"].filter(hand => state[opponent][hand] > 0);
+        const hand = choices.sort((a, b) => state[opponent][b] - state[opponent][a])[0] || "L";
+        resolveChargeTargetEffect(player, opponent, hand, cardId);
+      }
+    }
+
+    async function maybePreventLethalWithEmc2(player, hand, finalValue, sourceLabel = "攻撃", isLogicAtelier = false) {
+      if (finalValue !== 0 || state[player][otherHand(hand)] > 0) return finalValue;
+
+      const handIndex = state.hands[player].indexOf("emc2");
+      const required = isLogicAtelier ? 10 : 6;
+      const charge = getChargeLevel(player);
+      if (handIndex < 0 || charge < required) return finalValue;
+
+      // 敗北回避は処理の取りこぼしを防ぐため自動発動。
+      state.hands[player].splice(handIndex, 1);
+      state.discard[player].push("emc2");
+      setChargeLevel(player, 0);
+      addLog(`${handNames[player]}は「E=mc²」を発動。${sourceLabel}による敗北を防ぎ、${handNames[hand]}で4に踏みとどまった。`);
+      await showPopup(
+        player,
+        "E = mc²",
+        `<div class="emc2-main">MASS–ENERGY CONVERSION</div><div class="emc2-sub">充電Lv.${charge}を全消費<br>${handNames[hand]}で4に踏みとどまる</div>`,
+        "emc2",
+        1200,
+        true
+      );
+      return 4;
+    }
+
+    async function applyDirectChargeDamage(attacker, defender, targetHand, rawAmount, sourceLabel, isLogicAtelier = false) {
+      if (state[defender][targetHand] <= 0) return false;
+      const amount = applyGuardBlessingReduction(defender, targetHand, Math.max(0, rawAmount), sourceLabel);
+      const before = state[defender][targetHand];
+      const total = before + amount;
+      let finalValue = normalize(total, defender, targetHand);
+      finalValue = await maybePreventLethalWithEmc2(defender, targetHand, finalValue, sourceLabel, isLogicAtelier);
+      await animateCalculation(defender, targetHand, total, finalValue);
+      state[defender][targetHand] = finalValue;
+      addLog(`${handNames[attacker]}の「${sourceLabel}」：${handNames[defender]}の${handNames[targetHand]} ${before}→${total}${total >= 5 ? `→${finalValue}` : ""}。`);
+      clearBrokenTraps(defender);
+      render();
+      checkWin();
+      return true;
+    }
+
+    async function resolveChargeTargetEffect(player, owner, hand, cardId) {
+      const opponent = player === "human" ? "cpu" : "human";
+      state.pendingChargeTarget = null;
+      state.mode = "attack";
+
+      if (cardId === "electric") {
+        const beforeCharge = getChargeLevel(player);
+        const damage = Math.floor(beforeCharge / 3);
+        await applyDirectChargeDamage(player, opponent, hand, damage, "エレクトリック");
+        setChargeLevel(player, Math.floor(beforeCharge / 2));
+        addLog(`${handNames[player]}の充電は「エレクトリック」によりLv.${beforeCharge}→Lv.${Math.floor(beforeCharge / 2)}。`);
+        await endTurn();
+        return;
+      }
+
+      if (cardId === "electromagneticWave") {
+        const before = state[opponent][hand];
+        let finalValue = Math.floor(before / 2);
+        finalValue = await maybePreventLethalWithEmc2(opponent, hand, finalValue, "電磁波");
+        state[opponent][hand] = finalValue;
+        addLog(`${handNames[player]}の「電磁波」：${handNames[opponent]}の${handNames[hand]}を${before}→${finalValue}。`);
+        clearBrokenTraps(opponent);
+        render();
+        checkWin();
+        return;
+      }
+
+      if (cardId === "laserBeam") {
+        const charge = getChargeLevel(player);
+        setChargeLevel(player, 0);
+        await applyDirectChargeDamage(player, opponent, hand, charge, "レーザービーム");
+        await endTurn();
+        return;
+      }
+
+      if (cardId === "electromagneticInduction") {
+        const charge = getChargeLevel(player);
+        const before = state[player][hand];
+        let finalValue = normalize(charge, player, hand);
+        finalValue = await maybePreventLethalWithEmc2(player, hand, finalValue, "電磁誘導");
+        state[player][hand] = finalValue;
+        addLog(`${handNames[player]}の「電磁誘導」：${handNames[hand]}を${before}→${charge}${charge >= 5 ? `→${finalValue}` : ""}。`);
+        clearBrokenTraps(player);
+        render();
+        checkWin();
+      }
+    }
+
+    function triggerChemicalGeneration(player, usedCardId) {
+      if (usedCardId === "charge" || usedCardId?.startsWith("charge_")) return;
+      const count = countOwnAttachment(player, "chemicalGeneration");
+      if (count <= 0) return;
+      gainCharge(player, count, "化学発電");
+    }
+
     function normalizeChargeHand(player){ const e=getChargeEntries(player); if(!e.length)return; const lv=Math.max(...e.map(x=>x.level)); state.hands[player]=state.hands[player].filter(id=>!chargeLevelFromId(id)); state.hands[player].push(ensureChargeDefinition(lv)); }
     function setChargeLevel(player,level){ const lv=Math.max(0,Math.min(10,Number(level)||0)); state.hands[player]=state.hands[player].filter(id=>!chargeLevelFromId(id)); if(lv>0) state.hands[player].push(ensureChargeDefinition(lv)); return lv; }
     function gainCharge(player,amount,source="充電効果"){ normalizeChargeHand(player); const before=getChargeLevel(player); const gain=Math.max(0,Number(amount)||0); if(before>=10||gain<=0){ if(before>=10)addLog(`${handNames[player]}は既に充電Lv.10のため充電を得られない。`); return before; } const after=Math.min(10,before+gain); setChargeLevel(player,after); addLog(`${handNames[player]}は${source}で充電${gain}を得た（Lv.${before}→Lv.${after}）。`); return after; }
@@ -4107,7 +4339,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -4123,6 +4355,29 @@ function wrapFinger(value) {
       state.pendingTerminalEnd[player] = false;
       state.activeCostLimit[player] = state.costLimitNextTurn[player];
       state.costLimitNextTurn[player] = null;
+      if ((state.energyBarrier[player] || 0) > 0) {
+        state.energyBarrier[player] = 0;
+        addLog(`${handNames[player]}の「エネルギーバリア」が終了した。`);
+      }
+
+      if ((state.cheapBatteryDecay[player] || 0) > 0) {
+        const beforeCharge = getChargeLevel(player);
+        setChargeLevel(player, Math.max(0, beforeCharge - 2));
+        state.cheapBatteryDecay[player] -= 1;
+        const remaining = state.cheapBatteryDecay[player];
+        addLog(`${handNames[player]}の「廉価バッテリー」が劣化。充電Lv.${beforeCharge}→Lv.${Math.max(0, beforeCharge - 2)}。残り${remaining}回。`);
+        await showPopup(
+          player,
+          "廉価バッテリー劣化",
+          `<div class="battery-decay-main">充電 -2</div><div>残り劣化回数：${remaining}回</div>`,
+          "charge-recoil",
+          900,
+          true
+        );
+      }
+
+      const solarCount = countOwnAttachment(player, "solarGeneration");
+      if (solarCount > 0) gainCharge(player, solarCount * 2, "太陽光発電");
 
       const pendingTorrent = state.pendingWillTorrent[player] || 0;
       state.pendingWillTorrent[player] = 0;
@@ -4316,6 +4571,12 @@ function wrapFinger(value) {
             if (state.mode === "andante" && player === "human" && value > 0) {
               card.classList.add("trap-target");
             }
+            if (state.mode === "chargeTargetOwn" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "chargeTargetOpponent" && player === "cpu" && value > 0) {
+              card.classList.add("trap-target");
+            }
           }
 
           if (state.highlight && state.highlight.player === player && state.highlight.hand === hand && state.highlight.type === "roulette") {
@@ -4476,7 +4737,13 @@ function wrapFinger(value) {
 
     function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
       const originalIncoming=Math.max(0,Number(amount)||0);
-      let finalAmount = Math.max(1, amount);
+      let finalAmount = Math.max(0, amount);
+      const barrierReduction = state.energyBarrier?.[defender] || 0;
+      if (barrierReduction > 0) {
+        const reduced = Math.max(0, finalAmount - barrierReduction);
+        addLog(`${handNames[defender]}の「エネルギーバリア」により、${sourceLabel}の本数が${finalAmount}→${reduced}。`);
+        finalAmount = reduced;
+      }
       const directiveReduction = state.activeDirectiveBlessing?.[defender] || 0;
       const isOpponentTurn = state.turn !== defender;
       if (directiveReduction > 0 && isOpponentTurn && hasAttachment(defender, targetHand, "directiveBlessing")) {
@@ -5734,6 +6001,7 @@ function renderLastAction() {
           setMessage(`「${card.name}」を${handNames[owner]}の${handNames[hand]}の下に${faceText}。`);
         }
       }
+      triggerChemicalGeneration(player, cardId);
       render();
       // 罠・加護・呪縛の設置は相手側の表示に直結するため、オンラインでは即時同期する。
       if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
@@ -5792,6 +6060,7 @@ function renderLastAction() {
       if (showPopup && cardId !== "finale") await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
 
       await card.effect(player);
+      triggerChemicalGeneration(player, cardId);
       checkWin();
 
       if (player === "human") {
@@ -6144,8 +6413,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
       await animateAttackIntent(attacker, attackHand, defender, targetHand);
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
-      if (state.temp[attacker].breakthrough) {
-        addLog(`${handNames[attacker]}の「強行突破」により、攻撃中の相手側の罠は発動できない。`);
+      if (state.temp[attacker].breakthrough || state.temp[attacker].electromagneticAttack) {
+        addLog(state.temp[attacker].electromagneticAttack
+          ? `${handNames[attacker]}の「電磁攻撃」により、相手の罠は発動しない。`
+          : `${handNames[attacker]}の「強行突破」により、攻撃中の相手側の罠は発動できない。`);
       } else {
         const beforeManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", true);
         const chosenBeforeManual = await maybeChooseManualTrap(defender, beforeManual, context);
@@ -6202,6 +6473,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (trapResult.cancelAttack) {
         if (state.temp[attacker].lightningZeroAtFive) {
           state.temp[attacker].lightningZeroAtFive = false;
+          state.temp[attacker].lightningNoChargeGain = false;
           addLog(`「雷撃」の充電Lv.10効果は、攻撃が無効になったため消費された。`);
         }
         addLog(`${handNames[attacker]}の攻撃は無効になった。`);
@@ -6256,12 +6528,13 @@ async function attack(attacker, attackHand, defender, targetHand) {
       await animateCalculation(defender, targetHand, total, resolvedFinal);
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
+      resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃");
       state[defender][targetHand] = resolvedFinal;
       if (guardWouldApply) state.temp[defender].guard = false;
       render();
 
       // 攻撃判定後：囮、踏み止まりなど。
-      if (!trapUsed && !state.temp[attacker].breakthrough) {
+      if (!trapUsed && !state.temp[attacker].breakthrough && !state.temp[attacker].electromagneticAttack) {
         const afterContext = { ...context, attackTotal: total, resolvedFinal };
         const afterManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "after", true, afterContext);
         const chosenAfterManual = await maybeChooseManualTrap(defender, afterManual, afterContext);
@@ -6292,6 +6565,19 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
+
+      const damageChargeBlocked = !!state.temp[attacker].lightningNoChargeGain;
+      if (!trapResult.cancelAttack && !damageChargeBlocked) {
+        if (hasAttachment(attacker, attackHand, "mechanicalGeneration")) {
+          gainCharge(attacker, power, "力学発電");
+        }
+        if (state[defender][targetHand] === 0 && hasAttachment(attacker, attackHand, "bioticE")) {
+          gainCharge(attacker, power * 2, "バイオティックE");
+        }
+      } else if (damageChargeBlocked) {
+        addLog(`「雷撃」の効果により、この攻撃では力学発電・バイオティックEなどの充電獲得は発生しない。`);
+      }
+      state.temp[attacker].lightningNoChargeGain = false;
 
       clearBrokenTraps(defender);
       clearBrokenTraps(attacker);
@@ -7442,6 +7728,23 @@ async function endTurn() {
         return;
       }
 
+      if (state.mode === "chargeTargetOwn" || state.mode === "chargeTargetOpponent") {
+        const pending = state.pendingChargeTarget;
+        if (!pending || pending.player !== "human") {
+          state.mode = "attack";
+          state.pendingChargeTarget = null;
+          render();
+          return;
+        }
+        const expectedOwner = state.mode === "chargeTargetOwn" ? "human" : "cpu";
+        if (owner !== expectedOwner || state[owner][hand] <= 0) {
+          setMessage(`「${CARD_LIBRARY[pending.cardId].name}」：0でない${expectedOwner === "human" ? "自分" : "相手"}の手を選んでください。`);
+          return;
+        }
+        await resolveChargeTargetEffect("human", owner, hand, pending.cardId);
+        return;
+      }
+
       if (state.mode === "cursedBullet") {
         if (owner !== "human") {
           setMessage("凶弾では自分の手を選んでください。");
@@ -7561,8 +7864,8 @@ async function endTurn() {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;
