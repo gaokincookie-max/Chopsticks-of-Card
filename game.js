@@ -1571,6 +1571,79 @@ const CARD_LIBRARY = {
       friendDeckEditReturnToLobby: false
     };
 
+    const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
+    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
+    const LATEST_NEWS_ID = "v85-charge-theme-release";
+
+    const UPDATE_NEWS = [
+      {
+        id: "v85-charge-theme-release",
+        version: "v85",
+        date: "2026-07-16",
+        title: "新テーマ「光速に灼かれた紫電」",
+        summary: "充電を蓄え、消費し、限界を越えて加速する新テーマを追加しました。",
+        featured: true,
+        tags: ["new", "system"],
+        items: [
+          "充電テーマの新カード12種類を追加",
+          "光速回路に紫電のOVERCLOCK演出を追加",
+          "廉価バッテリーの劣化ポップアップを追加",
+          "E=mc²による敗北回避を追加",
+          "発電・直接攻撃・防御・充電消費の新しい戦術を追加"
+        ]
+      },
+      {
+        id: "v83-online-circuit-fix",
+        version: "v83",
+        date: "2026-07-16",
+        title: "光速回路のオンライン同期を修正",
+        summary: "光速回路の一試合一度状態を、プレイヤーごとの所有状態として管理するよう変更しました。",
+        featured: false,
+        tags: ["fix"],
+        items: [
+          "hostとguestの光速回路使用済み状態を分離",
+          "相手側の古い状態で上書きされる競合を修正",
+          "反動予約と充電カード使用済み状態も所有者管理へ変更"
+        ]
+      },
+      {
+        id: "v82-charge-once-rule",
+        version: "v82",
+        date: "2026-07-16",
+        title: "充電カードの使用制限を整理",
+        summary: "同名の充電カードは1ターンに1度まで使用できるようになりました。",
+        featured: false,
+        tags: ["balance", "fix"],
+        items: [
+          "光速回路中でも同名充電カードの重ね掛けを防止",
+          "乱闘は効果コピーのため使用制限の対象外",
+          "予告状は公開したターンに使用済みとして判定"
+        ]
+      },
+      {
+        id: "v80-overclock",
+        version: "v80",
+        date: "2026-07-16",
+        title: "光速回路専用演出「OVERCLOCK」",
+        summary: "光速回路の正常発動時に、紫の電撃を用いた専用演出を追加しました。",
+        featured: false,
+        tags: ["system"],
+        items: [
+          "オンライン対戦でも両者へ演出を同期",
+          "紫電・画面振動・明滅を中心とした演出へ調整"
+        ]
+      }
+    ];
+
+    function newsTagLabel(tag) {
+      return {
+        new: "NEW CARD",
+        balance: "BALANCE",
+        fix: "FIX",
+        system: "SYSTEM"
+      }[tag] || String(tag || "").toUpperCase();
+    }
+
     const handNames = {
       L: "左手",
       R: "右手",
@@ -1591,6 +1664,16 @@ const CARD_LIBRARY = {
       menuStartBtn: document.getElementById("menuStartBtn"),
       menuDeckBtn: document.getElementById("menuDeckBtn"),
       menuSettingsBtn: document.getElementById("menuSettingsBtn"),
+      menuNewsBtn: document.getElementById("menuNewsBtn"),
+      newsUnreadBadge: document.getElementById("newsUnreadBadge"),
+      newsModal: document.getElementById("newsModal"),
+      newsCloseBtn: document.getElementById("newsCloseBtn"),
+      newsFeaturedBanner: document.getElementById("newsFeaturedBanner"),
+      newsFilterRow: document.getElementById("newsFilterRow"),
+      newsList: document.getElementById("newsList"),
+      majorUpdateModal: document.getElementById("majorUpdateModal"),
+      majorUpdateDetailBtn: document.getElementById("majorUpdateDetailBtn"),
+      majorUpdateCloseBtn: document.getElementById("majorUpdateCloseBtn"),
       plVsCpuBtn: document.getElementById("plVsCpuBtn"),
       plVsPlBtn: document.getElementById("plVsPlBtn"),
       battleSelectBackBtn: document.getElementById("battleSelectBackBtn"),
@@ -3016,6 +3099,114 @@ const CARD_LIBRARY = {
         if (firebaseApi()) joinFriendRoom(roomId);
         else window.addEventListener("waribashi-firebase-ready", () => joinFriendRoom(roomId), { once: true });
       }
+    }
+
+    function hasUnreadNews() {
+      try {
+        return localStorage.getItem(NEWS_STORAGE_KEY) !== LATEST_NEWS_ID;
+      } catch {
+        return true;
+      }
+    }
+
+    function updateNewsUnreadBadge() {
+      if (!elements.newsUnreadBadge) return;
+      elements.newsUnreadBadge.classList.toggle("hidden", !hasUnreadNews());
+    }
+
+    function markNewsAsRead() {
+      try {
+        localStorage.setItem(NEWS_STORAGE_KEY, LATEST_NEWS_ID);
+      } catch {}
+      updateNewsUnreadBadge();
+    }
+
+    function renderFeaturedNews() {
+      const featured = UPDATE_NEWS.find(item => item.featured);
+      if (!featured || !elements.newsFeaturedBanner) return;
+      elements.newsFeaturedBanner.innerHTML = `
+        <div class="news-featured-electric" aria-hidden="true"></div>
+        <div class="news-featured-label">FEATURED UPDATE</div>
+        <div class="news-featured-title">${escapeHtml(featured.title)}</div>
+        <div class="news-featured-summary">${escapeHtml(featured.summary)}</div>
+        <div class="news-featured-meta">${escapeHtml(featured.version)} / ${escapeHtml(featured.date)}</div>
+      `;
+    }
+
+    function renderNewsList(filter = "all") {
+      if (!elements.newsList) return;
+      const entries = UPDATE_NEWS.filter(item => filter === "all" || item.tags.includes(filter));
+      elements.newsList.innerHTML = entries.map((item, index) => `
+        <article class="news-entry ${item.featured ? "featured" : ""}">
+          <button class="news-entry-toggle" data-news-index="${UPDATE_NEWS.indexOf(item)}" aria-expanded="${index === 0 ? "true" : "false"}">
+            <div class="news-entry-topline">
+              <span class="news-version">${escapeHtml(item.version)}</span>
+              <span class="news-date">${escapeHtml(item.date)}</span>
+            </div>
+            <div class="news-entry-title">${escapeHtml(item.title)}</div>
+            <div class="news-tag-row">
+              ${item.tags.map(tag => `<span class="news-tag ${escapeHtml(tag)}">${escapeHtml(newsTagLabel(tag))}</span>`).join("")}
+            </div>
+            <div class="news-entry-summary">${escapeHtml(item.summary)}</div>
+            <span class="news-expand-mark">${index === 0 ? "−" : "+"}</span>
+          </button>
+          <div class="news-entry-detail ${index === 0 ? "open" : ""}">
+            <ul>${item.items.map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul>
+          </div>
+        </article>
+      `).join("");
+
+      elements.newsList.querySelectorAll(".news-entry-toggle").forEach(button => {
+        button.addEventListener("click", () => {
+          const detail = button.nextElementSibling;
+          const open = !detail.classList.contains("open");
+          detail.classList.toggle("open", open);
+          button.setAttribute("aria-expanded", String(open));
+          const mark = button.querySelector(".news-expand-mark");
+          if (mark) mark.textContent = open ? "−" : "+";
+        });
+      });
+    }
+
+    function openNews(filter = "all") {
+      renderFeaturedNews();
+      renderNewsList(filter);
+      elements.newsFilterRow?.querySelectorAll(".news-filter").forEach(button => {
+        button.classList.toggle("active", button.dataset.newsFilter === filter);
+      });
+      elements.newsModal?.classList.add("show");
+      elements.newsModal?.setAttribute("aria-hidden", "false");
+      markNewsAsRead();
+    }
+
+    function closeNews() {
+      elements.newsModal?.classList.remove("show");
+      elements.newsModal?.setAttribute("aria-hidden", "true");
+    }
+
+    function shouldShowMajorUpdate() {
+      try {
+        return localStorage.getItem(MAJOR_UPDATE_STORAGE_KEY) !== "seen";
+      } catch {
+        return true;
+      }
+    }
+
+    function markMajorUpdateSeen() {
+      try {
+        localStorage.setItem(MAJOR_UPDATE_STORAGE_KEY, "seen");
+      } catch {}
+    }
+
+    function openMajorUpdate() {
+      elements.majorUpdateModal?.classList.add("show");
+      elements.majorUpdateModal?.setAttribute("aria-hidden", "false");
+    }
+
+    function closeMajorUpdate() {
+      elements.majorUpdateModal?.classList.remove("show");
+      elements.majorUpdateModal?.setAttribute("aria-hidden", "true");
+      markMajorUpdateSeen();
     }
 
     function showScreen(screen) {
@@ -7986,6 +8177,28 @@ async function endTurn() {
     });
     elements.menuDeckBtn.addEventListener("click", () => showScreen("deck"));
     elements.menuSettingsBtn.addEventListener("click", () => showScreen("settings"));
+    elements.menuNewsBtn?.addEventListener("click", () => openNews("all"));
+    elements.newsCloseBtn?.addEventListener("click", closeNews);
+    elements.newsModal?.addEventListener("click", event => {
+      if (event.target === elements.newsModal) closeNews();
+    });
+    elements.newsFilterRow?.querySelectorAll(".news-filter").forEach(button => {
+      button.addEventListener("click", () => {
+        const filter = button.dataset.newsFilter || "all";
+        elements.newsFilterRow.querySelectorAll(".news-filter").forEach(item => {
+          item.classList.toggle("active", item === button);
+        });
+        renderNewsList(filter);
+      });
+    });
+    elements.majorUpdateCloseBtn?.addEventListener("click", closeMajorUpdate);
+    elements.majorUpdateDetailBtn?.addEventListener("click", () => {
+      closeMajorUpdate();
+      openNews("all");
+    });
+    elements.majorUpdateModal?.addEventListener("click", event => {
+      if (event.target === elements.majorUpdateModal) closeMajorUpdate();
+    });
     elements.difficultyBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.settingsBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.deckBackMenuBtn.addEventListener("click", () => {
@@ -8214,4 +8427,10 @@ async function endTurn() {
     loadDecksSilentlyOnStartup();
     renderDeckBuilder();
     showScreen("menu");
+    updateNewsUnreadBadge();
+    renderFeaturedNews();
+    renderNewsList("all");
+    if (shouldShowMajorUpdate()) {
+      setTimeout(() => openMajorUpdate(), 320);
+    }
     loadRoomFromUrl();

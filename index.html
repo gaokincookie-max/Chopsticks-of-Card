@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=84">
+  <link rel="stylesheet" href="style.css?v=85">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -94,6 +94,45 @@
     </div>
   </div>
 
+  <div class="news-modal" id="newsModal" aria-hidden="true">
+    <div class="news-dialog" role="dialog" aria-modal="true" aria-labelledby="newsDialogTitle">
+      <div class="news-dialog-head">
+        <div>
+          <div class="menu-kicker">UPDATE NEWS</div>
+          <h2 id="newsDialogTitle">お知らせ</h2>
+        </div>
+        <button id="newsCloseBtn" class="secondary news-close-btn">閉じる</button>
+      </div>
+      <div class="news-featured-banner" id="newsFeaturedBanner"></div>
+      <div class="news-filter-row" id="newsFilterRow">
+        <button class="news-filter active" data-news-filter="all">すべて</button>
+        <button class="news-filter" data-news-filter="new">NEW CARD</button>
+        <button class="news-filter" data-news-filter="balance">BALANCE</button>
+        <button class="news-filter" data-news-filter="fix">FIX</button>
+        <button class="news-filter" data-news-filter="system">SYSTEM</button>
+      </div>
+      <div class="news-list" id="newsList"></div>
+    </div>
+  </div>
+
+  <div class="major-update-modal" id="majorUpdateModal" aria-hidden="true">
+    <div class="major-update-card">
+      <div class="major-update-electric" aria-hidden="true"></div>
+      <div class="major-update-kicker">NEW THEME RELEASE</div>
+      <h2>光速に灼かれた紫電</h2>
+      <p class="major-update-lead">紫電を蓄え、限界を越えて加速せよ。<br>ただし、光速の代償からは逃れられない。</p>
+      <div class="major-update-tags">
+        <span>12 NEW CARDS</span>
+        <span>OVERCLOCK</span>
+        <span>CHARGE SYSTEM</span>
+      </div>
+      <div class="major-update-actions">
+        <button id="majorUpdateDetailBtn">更新内容を見る</button>
+        <button id="majorUpdateCloseBtn" class="secondary">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <main class="app">
     <header>
       <h1>割り箸カード</h1>
@@ -111,6 +150,10 @@
           <button id="menuStartBtn">スタート</button>
           <button id="menuDeckBtn" class="blue">デッキ編集</button>
           <button id="menuSettingsBtn" class="secondary">設定</button>
+          <button id="menuNewsBtn" class="news-menu-btn">
+            お知らせ
+            <span class="news-unread-badge" id="newsUnreadBadge">NEW</span>
+          </button>
         </div>
       </div>
     </section>
@@ -491,6 +534,6 @@
     }
   </script>
 
-  <script src="game.js?v=84"></script>
+  <script src="game.js?v=85"></script>
 </body>
 </html>
