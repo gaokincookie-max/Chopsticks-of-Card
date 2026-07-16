@@ -2819,3 +2819,150 @@
   color: #42687e;
   font-weight: 900;
 }
+
+
+/* v87: display settings */
+.settings-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 12px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px;
+  border: 1px solid #d7c8e4;
+  border-radius: 16px;
+  background: rgba(255,255,255,.72);
+  cursor: pointer;
+}
+.setting-copy {
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+.setting-copy strong {
+  color: #3f2850;
+  font-size: 15px;
+}
+.setting-copy span {
+  color: #74657d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.setting-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 50px;
+  height: 28px;
+}
+.setting-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.setting-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #c8becd;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.12);
+  transition: .2s ease;
+}
+.setting-slider::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 7px rgba(0,0,0,.2);
+  transition: .2s ease;
+}
+.setting-switch input:checked + .setting-slider {
+  background: linear-gradient(90deg, #72439a, #9a61c4);
+}
+.setting-switch input:checked + .setting-slider::after {
+  transform: translateX(22px);
+}
+.settings-note {
+  color: #786985;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Compact hand cards */
+.game-card.compact-description-card {
+  min-height: 112px;
+  padding: 10px;
+}
+.game-card.compact-description-card .card-title {
+  margin-bottom: 7px;
+}
+.game-card.compact-description-card .card-name {
+  font-size: clamp(15px, 3.8vw, 20px);
+}
+.game-card.compact-description-card .card-label-row {
+  margin-top: 2px;
+}
+.game-card.compact-description-card .card-cost {
+  margin-top: 6px;
+}
+.card-long-press-hint {
+  margin-top: 8px;
+  padding: 6px 7px;
+  border-radius: 9px;
+  border: 1px dashed rgba(89,70,105,.28);
+  background: rgba(255,255,255,.36);
+  color: #766681;
+  font-size: 10px;
+  font-weight: 850;
+  text-align: center;
+}
+.game-card.compact-description-card.long-press-active {
+  transform: scale(.97);
+  filter: brightness(1.05);
+  box-shadow: 0 0 0 4px rgba(135,85,176,.22), 0 10px 25px rgba(66,38,88,.2);
+}
+
+/* Long-press card detail popup */
+.popup-card.card-detail {
+  border-color: rgba(111,75,142,.58);
+  background: linear-gradient(180deg, rgba(252,248,255,.99), rgba(230,219,239,.98));
+  box-shadow: 0 22px 70px rgba(43,24,61,.4);
+}
+.popup-user.card-detail {
+  background: linear-gradient(90deg, #54326d, #8957a8);
+  color: white;
+}
+.popup-card.card-detail .popup-name {
+  color: #46285a;
+}
+.long-press-card-type {
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(112,67,145,.12);
+  color: #67417e;
+  font-size: 11px;
+  font-weight: 1000;
+}
+.long-press-card-cost {
+  margin-top: 8px;
+  color: #775f84;
+  font-size: 12px;
+  font-weight: 900;
+}
+.long-press-card-effect {
+  margin-top: 12px;
+  padding: 13px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.62);
+  color: #554360;
+  line-height: 1.65;
+  text-align: left;
+}

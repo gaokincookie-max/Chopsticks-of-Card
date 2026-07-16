@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=86">
+  <link rel="stylesheet" href="style.css?v=87">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -239,7 +239,21 @@
       <div class="menu-card">
         <div class="menu-kicker">SETTINGS</div>
         <h2>設定</h2>
-        <p class="small">設定項目はまだありません。今後、演出速度や表示設定などを追加できます。</p>
+
+        <div class="settings-list">
+          <label class="setting-row" for="compactCardDescriptionsToggle">
+            <span class="setting-copy">
+              <strong>カード説明を省略する</strong>
+              <span>手札のカードを名前中心のコンパクト表示にします。カードを長押しすると効果を確認できます。</span>
+            </span>
+            <span class="setting-switch">
+              <input id="compactCardDescriptionsToggle" type="checkbox" />
+              <span class="setting-slider" aria-hidden="true"></span>
+            </span>
+          </label>
+        </div>
+
+        <p class="settings-note">初期設定はOFFです。変更内容はこのブラウザに保存されます。</p>
         <button id="settingsBackBtn" class="secondary wide-btn">メニューに戻る</button>
       </div>
     </section>
@@ -534,6 +548,6 @@
     }
   </script>
 
-  <script src="game.js?v=86"></script>
+  <script src="game.js?v=87"></script>
 </body>
 </html>

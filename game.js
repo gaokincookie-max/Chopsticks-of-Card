@@ -1607,11 +1607,28 @@ const CARD_LIBRARY = {
       friendDeckEditReturnToLobby: false
     };
 
+    const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v86-legacy-card-buffs";
+    const LATEST_NEWS_ID = "v87-compact-card-descriptions";
 
     const UPDATE_NEWS = [
+      {
+        id: "v87-compact-card-descriptions",
+        version: "v87",
+        date: "2026-07-16",
+        title: "手札のコンパクト表示設定を追加",
+        summary: "手札が増えた時にカード説明を省略し、長押しで効果を確認できる表示設定を追加しました。",
+        featured: false,
+        tags: ["system"],
+        items: [
+          "設定に「カード説明を省略する」を追加",
+          "設定ON時は手札カードを名前中心にコンパクト表示",
+          "カードを約0.55秒長押しすると効果・コスト・種類を表示",
+          "長押し直後にカードを誤使用しないクリック抑止を追加",
+          "設定はブラウザに保存され、初期状態はOFF"
+        ]
+      },
       {
         id: "v86-legacy-card-buffs",
         version: "v86",
@@ -1697,6 +1714,25 @@ const CARD_LIBRARY = {
       }[tag] || String(tag || "").toUpperCase();
     }
 
+    const displaySettings = {
+      compactCardDescriptions: false
+    };
+
+    function loadDisplaySettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DISPLAY_SETTINGS_STORAGE_KEY) || "{}");
+        displaySettings.compactCardDescriptions = saved.compactCardDescriptions === true;
+      } catch {
+        displaySettings.compactCardDescriptions = false;
+      }
+    }
+
+    function saveDisplaySettings() {
+      try {
+        localStorage.setItem(DISPLAY_SETTINGS_STORAGE_KEY, JSON.stringify(displaySettings));
+      } catch {}
+    }
+
     const handNames = {
       L: "左手",
       R: "右手",
@@ -1745,6 +1781,7 @@ const CARD_LIBRARY = {
       friendLobbyBackBtn: document.getElementById("friendLobbyBackBtn"),
       difficultyBackBtn: document.getElementById("difficultyBackBtn"),
       settingsBackBtn: document.getElementById("settingsBackBtn"),
+      compactCardDescriptionsToggle: document.getElementById("compactCardDescriptionsToggle"),
       deckBackMenuBtn: document.getElementById("deckBackMenuBtn"),
       battleBackMenuBtn: document.getElementById("battleBackMenuBtn"),
       battleRestartBtn: document.getElementById("battleRestartBtn"),
@@ -1855,9 +1892,11 @@ const CARD_LIBRARY = {
         (kind === "notice" ? " advance-notice" : "") +
         (kind === "charge-recoil" ? " charge-recoil" :
           kind === "emc2" ? " emc2" :
-          kind === "scout" ? " scout" : "") +
+          kind === "scout" ? " scout" :
+          kind === "card-detail" ? " card-detail" : "") +
         (kind === "emc2" ? " emc2" : "") +
         (kind === "scout" ? " scout" : "") +
+        (kind === "card-detail" ? " card-detail" : "") +
         (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
       elements.popupUser.className =
         "popup-user" +
@@ -1872,6 +1911,7 @@ const CARD_LIBRARY = {
         kind === "charge-recoil" ? `${handNames[player]}の反動` :
         kind === "emc2" ? `${handNames[player]}の手札誘発` :
         kind === "scout" ? `${handNames[player]}の偵察` :
+        kind === "card-detail" ? "カード詳細" :
         kind === "accel" ? `${handNames[player]}の加速` :
         kind === "action" ? `${handNames[player]}の行動` :
         `${handNames[player]}が使用`;
@@ -5691,6 +5731,72 @@ function renderLastAction() {
       return escapeHtml(card.text);
     }
 
+    async function showHandCardDetails(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      if (!card) return;
+      const text = card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text);
+      const body =
+        `<div class="long-press-card-type">${escapeHtml(card.type)}</div>` +
+        `<div class="long-press-card-cost">コスト ${card.cost}</div>` +
+        `<div class="long-press-card-effect">${text}</div>`;
+      await showPopup("human", `「${card.name}」`, body, "card-detail", 1800, true);
+    }
+
+    function attachCardLongPress(div, cardId) {
+      let timer = null;
+      let longPressed = false;
+      let startX = 0;
+      let startY = 0;
+
+      const clearTimer = () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      };
+
+      div.addEventListener("pointerdown", event => {
+        if (!displaySettings.compactCardDescriptions) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        startX = event.clientX;
+        startY = event.clientY;
+        longPressed = false;
+        clearTimer();
+        timer = setTimeout(async () => {
+          timer = null;
+          longPressed = true;
+          div.classList.add("long-press-active");
+          try {
+            if (navigator.vibrate) navigator.vibrate(35);
+          } catch {}
+          await showHandCardDetails(cardId);
+          div.classList.remove("long-press-active");
+        }, 550);
+      });
+
+      div.addEventListener("pointermove", event => {
+        if (timer === null) return;
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 12) {
+          clearTimer();
+        }
+      });
+
+      ["pointerup", "pointercancel", "pointerleave"].forEach(type => {
+        div.addEventListener(type, clearTimer);
+      });
+
+      div.addEventListener("contextmenu", event => {
+        if (displaySettings.compactCardDescriptions) event.preventDefault();
+      });
+
+      div.addEventListener("click", event => {
+        if (!longPressed) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        longPressed = false;
+      }, true);
+    }
+
     function renderHumanCards() {
       normalizeDirectiveCardsInHand("human");
       normalizeChargeHand("human");
@@ -5762,7 +5868,8 @@ function renderLastAction() {
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
           (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || cityWillPlayable || advanceNoticePlayable ? " playable" : "") +
-          (selected ? " selected-card" : "");
+          (selected ? " selected-card" : "") +
+          (displaySettings.compactCardDescriptions ? " compact-description-card" : "");
         div.innerHTML = `
           <div class="card-title">
             <span class="card-name">${escapeHtml(card.name)}</span>
@@ -5771,7 +5878,9 @@ function renderLastAction() {
             <span class="card-type${isTrap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
-          <div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
+          ${displaySettings.compactCardDescriptions
+            ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
+            : `<div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
           ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
@@ -5782,6 +5891,7 @@ function renderLastAction() {
                   : '<div class="used">カード関連行動は使用済み</div>')
               : ''}
         `;
+        attachCardLongPress(div, cardId);
         if (discardPlayable) {
           div.addEventListener("click", () => chooseRepairDiscard(index));
         }
@@ -8256,6 +8366,11 @@ async function endTurn() {
     });
     elements.difficultyBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.settingsBackBtn.addEventListener("click", () => showScreen("menu"));
+    elements.compactCardDescriptionsToggle?.addEventListener("change", event => {
+      displaySettings.compactCardDescriptions = event.target.checked;
+      saveDisplaySettings();
+      render();
+    });
     elements.deckBackMenuBtn.addEventListener("click", () => {
       if (state.friendDeckEditReturnToLobby && state.friendRoomId) {
         state.friendDeckEditReturnToLobby = false;
@@ -8481,6 +8596,10 @@ async function endTurn() {
     // 起動時に保存済みデッキを自動読込する。ゲスト側も準備完了時に実際の自分用デッキを提出できる。
     loadDecksSilentlyOnStartup();
     renderDeckBuilder();
+    loadDisplaySettings();
+    if (elements.compactCardDescriptionsToggle) {
+      elements.compactCardDescriptionsToggle.checked = displaySettings.compactCardDescriptions;
+    }
     showScreen("menu");
     updateNewsUnreadBadge();
     renderFeaturedNews();
