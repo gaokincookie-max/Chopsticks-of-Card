@@ -112,9 +112,20 @@ const CARD_LIBRARY = {
       },
       lightningStrike: {
         name: "雷撃", cost: 1, type: "補助 / 充電", chargeCard: true,
-        text: "充電3を消費。使用前の充電3につき次の攻撃+1。使用前がLv.10なら、その攻撃で5以上になった手を超過計算せず0にする。充電不足なら不発。",
+        text: "充電5を消費。使用前の充電4につき、次の攻撃で与える本数+1。使用前がLv.10なら、その攻撃で超過計算前の合計が5以上になった時、あまりを計算せず0にする。充電不足なら不発。",
         canPlay: () => true,
-        effect: (player) => { const before=getChargeLevel(player); if(!consumeCharge(player,3,false,"雷撃")) return; state.temp[player].lightningBonus=(state.temp[player].lightningBonus||0)+Math.floor(before/3); state.temp[player].lightningZeroAtFive=before>=10; }
+        effect: (player) => {
+          const before = getChargeLevel(player);
+          if (!consumeCharge(player, 5, false, "雷撃")) return;
+          const bonus = Math.floor(before / 4);
+          state.temp[player].lightningBonus =
+            (state.temp[player].lightningBonus || 0) + bonus;
+          state.temp[player].lightningZeroAtFive = before >= 10;
+          addLog(
+            `${handNames[player]}の「雷撃」：使用前の充電Lv.${before}により、次の攻撃+${bonus}` +
+            `${before >= 10 ? "、超過計算前に5以上なら0" : ""}。`
+          );
+        }
       },
       kineticConversion: {
         name: "運動エネルギー変換", cost: 2, type: "罠 / 充電", trap: true, manual: false, chargeCard: true,
@@ -138,13 +149,35 @@ const CARD_LIBRARY = {
       },
       lightSpeedCircuit: {
         name: "光速回路", cost: 3, type: "補助 / 充電", chargeCard: true,
-        text: "1試合に1度、充電Lv.10の時のみ。このターン充電カードを何枚でも使用でき、充電カードの終端を無視する。終了時充電0、次の自分ターン行動不能。",
-        canPlay: (player) => getChargeLevel(player)===10 && !state.lightSpeedCircuitUsed[player],
-        effect: (player) => { if(getChargeLevel(player)!==10 || state.lightSpeedCircuitUsed[player]) { addLog(`${handNames[player]}の「光速回路」は条件不足で不発。`); return; } state.lightSpeedCircuitUsed[player]=true; state.temp[player].lightSpeedCircuit=true; state.pendingChargeStun[player]=true; }
+        text: "1試合に1度だけ発動できる。使用時の充電がLv.10未満なら、カードは捨て札になるが効果は不発。Lv.10なら、このターン充電カードを何枚でも使用でき、充電カードの終端を無視する。終了時に充電0、次の自分ターンは行動不能。",
+        canPlay: (player) => !state.lightSpeedCircuitUsed[player],
+        effect: (player) => {
+          const charge = getChargeLevel(player);
+
+          if (state.lightSpeedCircuitUsed[player]) {
+            addLog(`${handNames[player]}の「光速回路」は一試合に一度しか発動できず、不発。`);
+            return;
+          }
+
+          if (charge !== 10) {
+            addLog(
+              `${handNames[player]}の「光速回路」は充電不足（必要10 / 現在${charge}）で不発。`
+            );
+            return;
+          }
+
+          state.lightSpeedCircuitUsed[player] = true;
+          state.temp[player].lightSpeedCircuit = true;
+          state.pendingChargeStun[player] = true;
+          addLog(
+            `${handNames[player]}は「光速回路」を起動。` +
+            `このターンは充電カードを何枚でも使用でき、次の自分ターンは行動不能になる。`
+          );
+        }
       },
       dimensionalSlash: {
         name: "空間切断", cost: 3, type: "補助 / 充電", chargeCard: true,
-        text: "1ターンに1度。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターン与える本数+1、2回まで攻撃できる。",
+        text: "1ターンに1度。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で与える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
         canPlay: (player) => !state.temp[player].dimensionalSlashUsed,
         effect: (player) => {
           if (state.temp[player].dimensionalSlashUsed) {
@@ -1892,6 +1925,8 @@ const CARD_LIBRARY = {
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
         pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
         activeDirectiveBlessing: Number(state.activeDirectiveBlessing?.[player]) || 0,
+        pendingChargeStun: !!state.pendingChargeStun?.[player],
+        lightSpeedCircuitUsed: !!state.lightSpeedCircuitUsed?.[player],
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
@@ -1939,6 +1974,8 @@ const CARD_LIBRARY = {
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
+      state.pendingChargeStun[player] = !!side.pendingChargeStun;
+      state.lightSpeedCircuitUsed[player] = !!side.lightSpeedCircuitUsed;
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
       state.berserkerTurns[player] = Number(side.berserkerTurns || 0);
@@ -4026,10 +4063,27 @@ function wrapFinger(value) {
 
       await resolveAdvanceNotice(player);
       if (state.pendingChargeStun[player]) {
-        state.pendingChargeStun[player]=false;
-        addLog(`${handNames[player]}は充電の反動で行動不能。`);
-        setMessage(`${handNames[player]}は充電の反動で行動不能です。`);
-        render(); await delay(700); await endTurn(); return;
+        state.pendingChargeStun[player] = false;
+        addLog(
+          `${handNames[player]}は「過充電」または「光速回路」の反動により、` +
+          `このターンは行動不能。`
+        );
+        setMessage(
+          `${handNames[player]}は充電の反動で行動不能です。ドロー後、自動的にターンを終了します。`
+        );
+        render();
+
+        if (
+          state.battleMode === "friend" &&
+          player === "human" &&
+          !state.friendApplyingRemoteState
+        ) {
+          await publishFriendStateNow();
+        }
+
+        await delay(900);
+        await endTurn();
+        return;
       }
       if (state.pendingTerminalEnd[player]) {
         state.pendingTerminalEnd[player] = false;
@@ -5877,6 +5931,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
       if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
       if (willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、攻撃力+${willBladeBonus}。`);
+      if (dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、攻撃力+${dimensionalSlashBonus}。`);
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
@@ -5965,6 +6020,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
 
       if (trapResult.cancelAttack) {
+        if (state.temp[attacker].lightningZeroAtFive) {
+          state.temp[attacker].lightningZeroAtFive = false;
+          addLog(`「雷撃」の充電Lv.10効果は、攻撃が無効になったため消費された。`);
+        }
         addLog(`${handNames[attacker]}の攻撃は無効になった。`);
         setLastAction(attacker, "攻撃", "攻撃は無効になりました。", "action");
         state.animating = false;
@@ -6000,8 +6059,20 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const total = before + power;
       const overflowWouldApply = total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
       const guardWouldApply = total >= 5 && !overflowWouldApply && state.temp[defender].guard;
-      let resolvedFinal = overflowWouldApply ? 0 : (guardWouldApply ? 4 : wrapFinger(total));
-      if (overflowWouldApply) addLog(`${handNames[defender]}の${handNames[targetHand]}の「超過の呪縛」により、7以上は0になる。`);
+      const lightningZeroActive = !!state.temp[attacker].lightningZeroAtFive;
+      let resolvedFinal;
+
+      if (lightningZeroActive && total >= 5) {
+        resolvedFinal = 0;
+        addLog(`「雷撃」の充電Lv.10効果により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過計算をせず0になった。`);
+      } else {
+        resolvedFinal = overflowWouldApply ? 0 : (guardWouldApply ? 4 : wrapFinger(total));
+        if (overflowWouldApply) {
+          addLog(`${handNames[defender]}の${handNames[targetHand]}の「超過の呪縛」により、7以上は0になる。`);
+        }
+      }
+
+      state.temp[attacker].lightningZeroAtFive = false;
       await animateCalculation(defender, targetHand, total, resolvedFinal);
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
@@ -6821,8 +6892,17 @@ async function endTurn() {
 
       const before = state[defender][targetHand];
       const total = before + damage;
-      let resolvedFinal = normalize(total, defender, targetHand);
-      if(state.temp[attacker].lightningZeroAtFive){ if(resolvedFinal>=5){ resolvedFinal=0; addLog(`「雷撃」により5以上になった手は超過計算せず0になった。`); } state.temp[attacker].lightningZeroAtFive=false; }
+      const lightningZeroActive = !!state.temp[player].lightningZeroAtFive;
+      let resolvedFinal;
+
+      if (lightningZeroActive && total >= 5) {
+        resolvedFinal = 0;
+        addLog(`「雷撃」の充電Lv.10効果により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過計算をせず0になった。`);
+      } else {
+        resolvedFinal = normalize(total, defender, targetHand);
+      }
+
+      state.temp[player].lightningZeroAtFive = false;
       await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
       render();
@@ -6906,6 +6986,50 @@ async function endTurn() {
     }
 
     async function resolveActionDone() {
+      const player = state.turn;
+      const attackLimit = state.temp[player]?.attackLimit || 1;
+      const attacksUsed = state.temp[player]?.attacksUsed || 0;
+
+      if (
+        attackLimit > 1 &&
+        attacksUsed > 0 &&
+        attacksUsed < attackLimit &&
+        !checkWin()
+      ) {
+        state.selectedAttackHand = null;
+        state.mode = "attack";
+        elements.splitBox.classList.remove("active");
+        elements.andanteBox?.classList.remove("active");
+        setMessage(
+          `${handNames[player]}は「空間切断」により、もう一度攻撃できます。攻撃に使う手を選んでください。`
+        );
+        addLog(
+          `${handNames[player]}の「空間切断」：` +
+          `${attacksUsed}回目の攻撃が終了。残り${attackLimit - attacksUsed}回攻撃できる。`
+        );
+        render();
+
+        if (player === "cpu") {
+          await delay(500);
+          const attacks = [];
+          for (const a of ["L", "R"]) {
+            if (state.cpu[a] <= 0) continue;
+            for (const t of ["L", "R"]) {
+              if (state.human[t] > 0) attacks.push({ a, t });
+            }
+          }
+          if (attacks.length) {
+            const picked = attacks[Math.floor(Math.random() * attacks.length)];
+            await attack("cpu", picked.a, "human", picked.t);
+            await delay(300);
+            await resolveActionDone();
+          } else {
+            await endTurn();
+          }
+        }
+        return;
+      }
+
       if (state.extraActions[state.turn] > 0 && !checkWin()) {
         state.extraActions[state.turn] -= 1;
         state.selectedAttackHand = null;
@@ -7423,6 +7547,14 @@ async function endTurn() {
 
     elements.splitBtn.addEventListener("click", () => {
       if (state.temp.human.setupMode) return;
+      if (
+        (state.temp.human?.attackLimit || 1) > 1 &&
+        (state.temp.human?.attacksUsed || 0) > 0 &&
+        (state.temp.human?.attacksUsed || 0) < (state.temp.human?.attackLimit || 1)
+      ) {
+        setMessage("「空間切断」の追加行動では攻撃だけを選べます。");
+        return;
+      }
       if (state.berserkerTurns.human > 0) {
         setMessage("バーサーカー中は分けるを選べません。");
         return;
