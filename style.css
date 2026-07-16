@@ -2771,3 +2771,51 @@
   .news-featured-banner { padding: 18px; }
   .major-update-actions { grid-template-columns: 1fr; }
 }
+
+
+/* v86: 探り専用ポップアップ */
+.popup-card.scout {
+  border-color: rgba(76, 125, 166, .62);
+  background: linear-gradient(180deg, rgba(240,249,255,.99), rgba(208,226,240,.98));
+  box-shadow: 0 22px 65px rgba(28, 65, 94, .35);
+}
+.popup-user.scout {
+  background: linear-gradient(90deg, #315d7d, #568db1);
+  color: #f5fbff;
+}
+.popup-card.scout .popup-name { color: #254d69; }
+.scout-popup-owner {
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(72,128,168,.13);
+  color: #376987;
+  font-size: 12px;
+  font-weight: 1000;
+}
+.scout-popup-card-name {
+  margin-top: 12px;
+  font-size: clamp(23px, 5vw, 34px);
+  color: #173e58;
+  font-weight: 1100;
+}
+.scout-popup-card-meta {
+  margin-top: 7px;
+  color: #55758a;
+  font-size: 12px;
+  font-weight: 900;
+}
+.scout-popup-card-text {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.62);
+  color: #34576c;
+  line-height: 1.6;
+}
+.scout-popup-empty {
+  margin-top: 15px;
+  font-size: 18px;
+  color: #42687e;
+  font-weight: 900;
+}

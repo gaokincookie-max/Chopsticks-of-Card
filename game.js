@@ -23,7 +23,7 @@ const CARD_LIBRARY = {
       },
       strongHit: {
         name: "強打",
-        cost: 2,
+        cost: 1,
         type: "補助",
         text: "このターン、次の攻撃で攻撃する手の本数を+1して扱う。",
         canPlay: () => true,
@@ -58,10 +58,9 @@ const CARD_LIBRARY = {
       repair: {
         name: "補修",
         cost: 3,
-        type: "終端",
-        text: "手札を1枚捨て、自分の0の手を1にする。このカードを使ったら、ターンを終了する。",
+        type: "補助",
+        text: "手札を1枚捨て、自分の0の手を1にする。",
         canPlay: (player) => ["L", "R"].some(h => state[player][h] === 0) && state.hands[player].length > 1,
-        terminal: true,
         effect: async (player) => {
           const zeroHands = ["L", "R"].filter(h => state[player][h] === 0);
           if (zeroHands.length === 0) return;
@@ -73,7 +72,7 @@ const CARD_LIBRARY = {
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
-            setMessage("「補修」：捨てる手札を1枚選んでください。補修後、ターンは終了します。");
+            setMessage("「補修」：捨てる手札を1枚選んでください。補修後も攻撃か分けるができます。");
             return;
           }
 
@@ -84,8 +83,7 @@ const CARD_LIBRARY = {
           state.discard[player].push(discarded);
           await handleCardDiscardEffect(player, discarded);
           state[player][hand] = 1;
-          addLog(`${handNames[player]}は「補修」で「${CARD_LIBRARY[discarded].name}」を捨て、${handNames[hand]}を0→1に戻した。ターン終了。`);
-          state.pendingTerminalEnd[player] = true;
+          addLog(`${handNames[player]}は「補修」で「${CARD_LIBRARY[discarded].name}」を捨て、${handNames[hand]}を0→1に戻した。`);
         }
       },
 
@@ -370,14 +368,14 @@ const CARD_LIBRARY = {
       },
       acceleration: {
         name: "過加速",
-        cost: 3,
+        cost: 2,
         type: "補助",
-        text: "次の自分のターンから2ターンの間、ターン開始時に追加で1枚引く。その後2ターンの間、ターン開始時にカードを引けない。",
+        text: "次の自分のターンから3ターンの間、ターン開始時に追加で1枚引く。その後2ターンの間、ターン開始時にカードを引けない。",
         canPlay: () => true,
         effect: (player) => {
-          state.pendingAcceleration[player] += 2;
+          state.pendingAcceleration[player] += 3;
           state.pendingNoDraw[player] += 2;
-          addLog(`${handNames[player]}は「過加速」を使った。次の自分のターンから2ターン追加で1枚引き、その後2ターンはドローできない。`);
+          addLog(`${handNames[player]}は「過加速」を使った。次の自分のターンから3ターン追加で1枚引き、その後2ターンはドローできない。`);
         }
       },
 
@@ -628,11 +626,49 @@ const CARD_LIBRARY = {
         name: "探り",
         cost: 1,
         type: "補助",
-        text: "相手の手札枚数を確認する。",
+        text: "自分か相手の山札を選び、その山札の一番上のカードを確認する。",
         canPlay: () => true,
-        effect: (player) => {
+        effect: async (player) => {
           const opponent = player === "human" ? "cpu" : "human";
-          addLog(`${handNames[player]}は「探り」を使った。${handNames[opponent]}の手札は${state.hands[opponent].length}枚。`);
+          let target = opponent;
+
+          if (player === "human") {
+            const inspectOwn = window.confirm(
+              "「探り」\n\n自分の山札を確認しますか？\n\nOK：自分の山札\nキャンセル：相手の山札"
+            );
+            target = inspectOwn ? player : opponent;
+          } else {
+            target = opponent;
+          }
+
+          const topCardId = state.decks[target][0];
+          if (!topCardId) {
+            await showPopup(
+              player,
+              "探り",
+              `<div class="scout-popup-owner">${handNames[target]}の山札</div>` +
+              `<div class="scout-popup-empty">山札にカードがありません。</div>`,
+              "scout",
+              1000,
+              true
+            );
+            addLog(`${handNames[player]}は「探り」を使ったが、${handNames[target]}の山札は空だった。`);
+            return;
+          }
+
+          const topCard = CARD_LIBRARY[topCardId];
+          await showPopup(
+            player,
+            "山札の一番上",
+            `<div class="scout-popup-owner">${handNames[target]}の山札</div>` +
+            `<div class="scout-popup-card-name">「${escapeHtml(topCard.name)}」</div>` +
+            `<div class="scout-popup-card-meta">コスト${topCard.cost} / ${escapeHtml(topCard.type)}</div>` +
+            `<div class="scout-popup-card-text">${escapeHtml(topCard.text)}</div>`,
+            "scout",
+            1500,
+            true
+          );
+          addLog(`${handNames[player]}は「探り」で${handNames[target]}の山札の一番上を確認した。`);
         }
       },
       guard: {
@@ -927,7 +963,7 @@ const CARD_LIBRARY = {
 
       thriftLaw: {
         name: "倹約令",
-        cost: 3,
+        cost: 2,
         type: "補助",
         text: "次の相手ターン、相手はコスト2以下のカードしか使用できない。罠の発動はこの制限を受けない。",
         canPlay: () => true,
@@ -1229,7 +1265,7 @@ const CARD_LIBRARY = {
       },
       counterTrap: {
         name: "反撃",
-        cost: 3,
+        cost: 2,
         type: "罠",
         text: "【攻撃判定後・手動】この手が攻撃された後、この手が0でなければ発動できる。攻撃してきた相手の手に、この手の本数を加える。",
         trap: true,
@@ -1573,9 +1609,26 @@ const CARD_LIBRARY = {
 
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v85-charge-theme-release";
+    const LATEST_NEWS_ID = "v86-legacy-card-buffs";
 
     const UPDATE_NEWS = [
+      {
+        id: "v86-legacy-card-buffs",
+        version: "v86",
+        date: "2026-07-16",
+        title: "旧カード6種を強化",
+        summary: "初期から存在するカードを、現在の環境に合わせて強化・刷新しました。",
+        featured: false,
+        tags: ["balance", "system"],
+        items: [
+          "強打のコストを2から1へ変更",
+          "過加速をコスト2、追加ドロー3ターンへ強化",
+          "補修の終端効果を削除",
+          "探りを山札の一番上を確認する効果へ刷新",
+          "倹約令のコストを3から2へ変更",
+          "反撃のコストを3から2へ変更"
+        ]
+      },
       {
         id: "v85-charge-theme-release",
         version: "v85",
@@ -1801,8 +1854,10 @@ const CARD_LIBRARY = {
         (kind === "trap" ? " trap" : "") +
         (kind === "notice" ? " advance-notice" : "") +
         (kind === "charge-recoil" ? " charge-recoil" :
-          kind === "emc2" ? " emc2" : "") +
+          kind === "emc2" ? " emc2" :
+          kind === "scout" ? " scout" : "") +
         (kind === "emc2" ? " emc2" : "") +
+        (kind === "scout" ? " scout" : "") +
         (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
       elements.popupUser.className =
         "popup-user" +
@@ -1816,6 +1871,7 @@ const CARD_LIBRARY = {
         kind === "notice" ? `${handNames[player]}の予告状` :
         kind === "charge-recoil" ? `${handNames[player]}の反動` :
         kind === "emc2" ? `${handNames[player]}の手札誘発` :
+        kind === "scout" ? `${handNames[player]}の偵察` :
         kind === "accel" ? `${handNames[player]}の加速` :
         kind === "action" ? `${handNames[player]}の行動` :
         `${handNames[player]}が使用`;
@@ -7835,10 +7891,9 @@ async function endTurn() {
         state.mode = "attack";
         const discarded = state.pendingRepairDiscard;
         state.pendingRepairDiscard = null;
-        addLog(`あなたは「補修」で${discarded ? `「${CARD_LIBRARY[discarded].name}」を捨て、` : ""}${handNames[hand]}を0→1に戻した。ターン終了。`);
-        setMessage(`「補修」：${handNames[hand]}を1に戻しました。ターンを終了します。`);
+        addLog(`あなたは「補修」で${discarded ? `「${CARD_LIBRARY[discarded].name}」を捨て、` : ""}${handNames[hand]}を0→1に戻した。`);
+        setMessage(`「補修」：${handNames[hand]}を1に戻しました。まだ攻撃か分けるができます。`);
         render();
-        await endTurn();
         return;
       }
 
