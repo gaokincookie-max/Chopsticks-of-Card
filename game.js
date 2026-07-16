@@ -89,6 +89,94 @@ const CARD_LIBRARY = {
         }
       },
 
+      charge: {
+        name: "充電", cost: 1, type: "使用不可 / 生成カード / 充電",
+        text: "Lv.1～10。コストはレベルと同じ。充電効果以外では捨てたり移動できない。充電を得る時はレベルが上がり、Lv.10ではそれ以上得られない。",
+        token: true, chargeResource: true, canPlay: () => false
+      },
+      overcharge: {
+        name: "過充電", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "充電をLv.10にする。次の自分のターンは行動不能になる。",
+        canPlay: () => true,
+        effect: (player) => { setChargeLevel(player,10); state.pendingChargeStun[player]=true; addLog(`${handNames[player]}は「過充電」で充電をLv.10にした。`); }
+      },
+      electricConnection: {
+        name: "電気接続", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "充電を3得て、カードを1枚引く。", canPlay: () => true,
+        effect: (player) => { gainCharge(player,3,"電気接続"); drawCard(player); }
+      },
+      electrolyte: {
+        name: "電解質", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "自分の手の合計値だけ充電を得る。", canPlay: () => true,
+        effect: (player) => gainCharge(player,(state[player].L||0)+(state[player].R||0),"電解質")
+      },
+      lightningStrike: {
+        name: "雷撃", cost: 1, type: "補助 / 充電", chargeCard: true,
+        text: "充電3を消費。使用前の充電3につき次の攻撃+1。使用前がLv.10なら、その攻撃で5以上になった手を超過計算せず0にする。充電不足なら不発。",
+        canPlay: () => true,
+        effect: (player) => { const before=getChargeLevel(player); if(!consumeCharge(player,3,false,"雷撃")) return; state.temp[player].lightningBonus=(state.temp[player].lightningBonus||0)+Math.floor(before/3); state.temp[player].lightningZeroAtFive=before>=10; }
+      },
+      kineticConversion: {
+        name: "運動エネルギー変換", cost: 2, type: "罠 / 充電", trap: true, manual: false, chargeCard: true,
+        text: "【自動】この手に加えられる本数-1。軽減前の本数だけ充電を得る。あらゆる本数追加に作用する。",
+        triggerTiming: "after", canTrigger: () => false
+      },
+      leap: {
+        name: "跳躍", cost: 1, type: "補助 / 充電", chargeCard: true,
+        text: "充電3を消費し、カードを2枚引く。充電不足なら不発。", canPlay: () => true,
+        effect: (player) => { if(!consumeCharge(player,3,false,"跳躍")) return; drawCard(player); drawCard(player); }
+      },
+      dischargeBlessing: {
+        name: "放電の加護", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
+        text: "自分の充電5につき受ける本数-1。充電Lv.10なら、この手が与える本数+1。",
+        canPlay: (player) => canPlaceAttachment(player,player)
+      },
+      synapseMotion: {
+        name: "シナプス運動", cost: 2, type: "補助 / 充電", chargeCard: true,
+        text: "次の攻撃で与える本数+1。充電を4得る。", canPlay: () => true,
+        effect: (player) => { state.temp[player].synapseBonus=(state.temp[player].synapseBonus||0)+1; gainCharge(player,4,"シナプス運動"); }
+      },
+      lightSpeedCircuit: {
+        name: "光速回路", cost: 3, type: "補助 / 充電", chargeCard: true,
+        text: "1試合に1度、充電Lv.10の時のみ。このターン充電カードを何枚でも使用でき、充電カードの終端を無視する。終了時充電0、次の自分ターン行動不能。",
+        canPlay: (player) => getChargeLevel(player)===10 && !state.lightSpeedCircuitUsed[player],
+        effect: (player) => { if(getChargeLevel(player)!==10 || state.lightSpeedCircuitUsed[player]) { addLog(`${handNames[player]}の「光速回路」は条件不足で不発。`); return; } state.lightSpeedCircuitUsed[player]=true; state.temp[player].lightSpeedCircuit=true; state.pendingChargeStun[player]=true; }
+      },
+      dimensionalSlash: {
+        name: "空間切断", cost: 3, type: "補助 / 充電", chargeCard: true,
+        text: "1ターンに1度。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターン与える本数+1、2回まで攻撃できる。",
+        canPlay: (player) => !state.temp[player].dimensionalSlashUsed,
+        effect: (player) => {
+          if (state.temp[player].dimensionalSlashUsed) {
+            addLog(`${handNames[player]}の「空間切断」はこのターン既に使用されているため不発。`);
+            return;
+          }
+
+          state.temp[player].dimensionalSlashUsed = true;
+          const charge = getChargeLevel(player);
+
+          if (charge < 5) {
+            addLog(`${handNames[player]}の「空間切断」は充電不足（必要5 / 現在${charge}）で不発。`);
+            return;
+          }
+
+          if (charge < 10) {
+            if (player === "human") {
+              state.mode = "dimensionalSlashSacrifice";
+              setMessage("「空間切断」：0にする自分の手を選んでください。");
+              render();
+              return;
+            }
+            const choices = ["L", "R"].filter(hand => state[player][hand] > 0);
+            const chosen = choices.sort((a, b) => state[player][a] - state[player][b])[0] || "L";
+            resolveDimensionalSlash(player, chosen);
+            return;
+          }
+
+          resolveDimensionalSlash(player, null);
+        }
+      },
+
       brawl: {
         name: "乱闘",
         cost: 2,
@@ -823,6 +911,8 @@ const CARD_LIBRARY = {
       state.pendingDirectiveBonusDraw = { human: 0, cpu: 0 };
       state.lastDirectiveClearCount = { human: 0, cpu: 0 };
       state.activeDirectiveBlessing = { human: 0, cpu: 0 };
+      state.pendingChargeStun = { human: false, cpu: false };
+      state.lightSpeedCircuitUsed = { human: false, cpu: false };
       state.pendingWillTorrent = { human: 0, cpu: 0 };
       state.pendingAdvanceNotice = { human: [], cpu: [] };
             state.selectedAttackHand = null;
@@ -1295,6 +1385,8 @@ const CARD_LIBRARY = {
       pendingDirectiveBonusDraw: { human: 0, cpu: 0 },
       lastDirectiveClearCount: { human: 0, cpu: 0 },
       activeDirectiveBlessing: { human: 0, cpu: 0 },
+      pendingChargeStun: { human: false, cpu: false },
+      lightSpeedCircuitUsed: { human: false, cpu: false },
       pendingWillTorrent: { human: 0, cpu: 0 },
       pendingAdvanceNotice: { human: [], cpu: [] },
       firstTurnStarted: { human: false, cpu: false },
@@ -1765,13 +1857,15 @@ const CARD_LIBRARY = {
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
       if (!state.pendingAdvanceNotice || typeof state.pendingAdvanceNotice !== "object") state.pendingAdvanceNotice = { human: [], cpu: [] };
       if (!state.activeDirectiveBlessing || typeof state.activeDirectiveBlessing !== "object") state.activeDirectiveBlessing = { human: 0, cpu: 0 };
+      if (!state.pendingChargeStun || typeof state.pendingChargeStun !== "object") state.pendingChargeStun = { human: false, cpu: false };
+      if (!state.lightSpeedCircuitUsed || typeof state.lightSpeedCircuitUsed !== "object") state.lightSpeedCircuitUsed = { human: false, cpu: false };
       if (!state.costLimitNextTurn || typeof state.costLimitNextTurn !== "object") state.costLimitNextTurn = { human: null, cpu: null };
       if (!state.activeCostLimit || typeof state.activeCostLimit !== "object") state.activeCostLimit = { human: null, cpu: null };
       if (!state.firstTurnStarted || typeof state.firstTurnStarted !== "object") state.firstTurnStarted = { human: false, cpu: false };
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -2625,8 +2719,8 @@ const CARD_LIBRARY = {
       state.discard.cpu = [...(other.discard || [])];
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -3446,6 +3540,7 @@ function wrapFinger(value) {
     }
 
     ensureDirectiveVariantDefinitions();
+    for(let lv=1;lv<=10;lv++) ensureChargeDefinition(lv);
 
     function recordDirectiveAttack(player, attackHand, defender, targetHand) {
       if (!state.temp[player]?.directiveActions) return;
@@ -3657,9 +3752,47 @@ function wrapFinger(value) {
       render();
     }
 
+    function chargeLevelFromId(cardId){ const m=/^charge_(\d+)$/.exec(cardId||""); return m?Math.max(1,Math.min(10,Number(m[1])||1)):(cardId==="charge"?1:0); }
+    function ensureChargeDefinition(level){ const lv=Math.max(1,Math.min(10,Number(level)||1)); const id=`charge_${lv}`; if(!CARD_LIBRARY[id]) CARD_LIBRARY[id]={...CARD_LIBRARY.charge,name:`充電 Lv.${lv}`,cost:lv,text:`現在Lv.${lv}。コスト${lv}。充電効果以外では捨てたり移動できない。`,token:true,chargeResource:true,chargeLevel:lv}; return id; }
+    function getChargeEntries(player){ return state.hands[player].map((cardId,index)=>({cardId,index,level:chargeLevelFromId(cardId)})).filter(x=>x.level>0); }
+    function getChargeLevel(player){ const e=getChargeEntries(player); return e.length?Math.max(...e.map(x=>x.level)):0; }
+    function normalizeChargeHand(player){ const e=getChargeEntries(player); if(!e.length)return; const lv=Math.max(...e.map(x=>x.level)); state.hands[player]=state.hands[player].filter(id=>!chargeLevelFromId(id)); state.hands[player].push(ensureChargeDefinition(lv)); }
+    function setChargeLevel(player,level){ const lv=Math.max(0,Math.min(10,Number(level)||0)); state.hands[player]=state.hands[player].filter(id=>!chargeLevelFromId(id)); if(lv>0) state.hands[player].push(ensureChargeDefinition(lv)); return lv; }
+    function gainCharge(player,amount,source="充電効果"){ normalizeChargeHand(player); const before=getChargeLevel(player); const gain=Math.max(0,Number(amount)||0); if(before>=10||gain<=0){ if(before>=10)addLog(`${handNames[player]}は既に充電Lv.10のため充電を得られない。`); return before; } const after=Math.min(10,before+gain); setChargeLevel(player,after); addLog(`${handNames[player]}は${source}で充電${gain}を得た（Lv.${before}→Lv.${after}）。`); return after; }
+    function consumeCharge(player,amount,allowPartial=false,source="充電消費"){ const before=getChargeLevel(player); const need=Math.max(0,Number(amount)||0); if(!allowPartial&&before<need){ addLog(`${handNames[player]}の「${source}」は充電不足（必要${need}/現在${before}）で不発。`); return false; } const spent=allowPartial?Math.min(before,need):need; setChargeLevel(player,before-spent); addLog(`${handNames[player]}は${source}で充電${spent}を消費（Lv.${before}→Lv.${before-spent}）。`); return true; }
+    function isProtectedChargeCard(cardId){ return chargeLevelFromId(cardId)>0; }
+    function countDiscardableHand(player){ return state.hands[player].filter(id=>!isProtectedChargeCard(id)).length; }
+    function isChargeCardId(cardId){ return !!CARD_LIBRARY[cardId]?.chargeCard; }
+    function resolveDimensionalSlash(player, hand) {
+      const charge = getChargeLevel(player);
+      if (charge < 5) {
+        addLog(`${handNames[player]}の「空間切断」は充電不足で不発。`);
+        state.mode = "attack";
+        render();
+        return false;
+      }
+
+      if (hand && state[player][hand] > 0) {
+        state[player][hand] = 0;
+        clearHandAttachments(player, hand);
+        addLog(`${handNames[player]}は「空間切断」の代償として${handNames[hand]}を0にした。`);
+      }
+
+      consumeCharge(player, 5, false, "空間切断");
+      state.temp[player].dimensionalSlashBonus =
+        (state.temp[player].dimensionalSlashBonus || 0) + 1;
+      state.temp[player].attackLimit =
+        Math.max(2, state.temp[player].attackLimit || 1);
+      state.mode = "attack";
+      setMessage("「空間切断」：このターン、通常攻撃を2回まで行えます。");
+      render();
+      return true;
+    }
+
     function isEffectCopyExcluded(cardId, source = "") {
       if (!cardId) return true;
       if (isDirectiveCard(cardId)) return true;
+      if (isProtectedChargeCard(cardId)) return true;
       if (cardId === "logicAtelier") return true;
       if (source === "brawl" && cardId === "brawl") return true;
       if (source === "advanceNotice" && cardId === "advanceNotice") return true;
@@ -3785,7 +3918,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -3882,6 +4015,12 @@ function wrapFinger(value) {
       for (let i = 0; i < draws; i++) drawCard(player);
 
       await resolveAdvanceNotice(player);
+      if (state.pendingChargeStun[player]) {
+        state.pendingChargeStun[player]=false;
+        addLog(`${handNames[player]}は充電の反動で行動不能。`);
+        setMessage(`${handNames[player]}は充電の反動で行動不能です。`);
+        render(); await delay(700); await endTurn(); return;
+      }
       if (state.pendingTerminalEnd[player]) {
         state.pendingTerminalEnd[player] = false;
         await endTurn();
@@ -4121,6 +4260,7 @@ function wrapFinger(value) {
     }
 
     function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
+      const originalIncoming=Math.max(0,Number(amount)||0);
       let finalAmount = Math.max(1, amount);
       const directiveReduction = state.activeDirectiveBlessing?.[defender] || 0;
       const isOpponentTurn = state.turn !== defender;
@@ -4142,12 +4282,16 @@ function wrapFinger(value) {
         }
         finalAmount = reduced;
       }
+      const dischargeReduction=hasAttachment(defender,targetHand,"dischargeBlessing")?Math.floor(getChargeLevel(defender)/5):0;
+      if(dischargeReduction>0){ const reduced=Math.max(1,finalAmount-dischargeReduction); if(reduced!==finalAmount)addLog(`${handNames[defender]}の「放電の加護」により${sourceLabel}が${finalAmount}→${reduced}。`); finalAmount=reduced; }
       const duelReduction = duelSurgeDefense(defender, targetHand);
       if (duelReduction > 0) {
         const reduced = Math.max(1, finalAmount - duelReduction);
         if (reduced !== finalAmount) addLog(`${handNames[defender]}の${handNames[targetHand]}の「決闘高潮」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
         finalAmount = reduced;
       }
+      const kinetic=findAttachmentSlot(defender,targetHand,"kineticConversion");
+      if(kinetic&&originalIncoming>0){ gainCharge(defender,originalIncoming,"運動エネルギー変換"); const reduced=Math.max(0,finalAmount-1); addLog(`${handNames[defender]}の「運動エネルギー変換」により${sourceLabel}が${finalAmount}→${reduced}。`); finalAmount=reduced; const slots=state.traps[defender][targetHand]; const idx=slots.indexOf(kinetic); if(idx>=0)slots.splice(idx,1); }
       return finalAmount;
     }
 
@@ -4372,11 +4516,10 @@ function wrapFinger(value) {
     }
 
     function discardOneCard(player) {
-      if (state.hands[player].length === 0) return null;
-      const index = Math.floor(Math.random() * state.hands[player].length);
-      const [cardId] = state.hands[player].splice(index, 1);
-      state.discard[player].push(cardId);
-      return cardId;
+      const candidates=state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>!isProtectedChargeCard(x.cardId));
+      if(!candidates.length) return null;
+      const picked=candidates[Math.floor(Math.random()*candidates.length)];
+      const [cardId]=state.hands[player].splice(picked.index,1); state.discard[player].push(cardId); return cardId;
     }
 
        function discardEffectPopupText(cardId, player) {
@@ -4821,6 +4964,7 @@ function renderLastAction() {
 
     function renderHumanCards() {
       normalizeDirectiveCardsInHand("human");
+      normalizeChargeHand("human");
       elements.humanCards.innerHTML = "";
 
       if (state.hands.human.length === 0) {
@@ -5662,10 +5806,14 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
       let duelSurgeBonus = 0;
+      const lightningBonus=state.temp[attacker].lightningBonus||0;
+      const synapseBonus=state.temp[attacker].synapseBonus||0;
+      const dimensionalSlashBonus=state.temp[attacker].dimensionalSlashBonus||0;
+      const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + willBladeBonus + duelSurgeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + dischargeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
@@ -5751,6 +5899,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
 
       recordDirectiveAttack(attacker, attackHand, defender, targetHand);
+      state.temp[attacker].lightningBonus=0; state.temp[attacker].synapseBonus=0;
       const duelUpdate = updateDuelSurge(attacker, attackHand, defender, targetHand);
       if (duelUpdate.bonus > 0 && !immutable) {
         duelSurgeBonus = duelUpdate.bonus;
@@ -5839,9 +5988,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       clearBrokenTraps(defender);
       clearBrokenTraps(attacker);
+      state.temp[attacker].attacksUsed=(state.temp[attacker].attacksUsed||0)+1;
       state.animating = false;
       clearHighlights();
       render();
+      if(state.temp[attacker].attacksUsed>=(state.temp[attacker].attackLimit||1)) state.pendingTerminalEnd[attacker]=true;
       return true;
     }
 
@@ -5910,6 +6061,8 @@ async function attack(attacker, attackHand, defender, targetHand) {
     }
 
 async function endTurn() {
+  const endingPlayer=state.turn;
+  if(state.temp[endingPlayer]?.lightSpeedCircuit){ setChargeLevel(endingPlayer,0); state.temp[endingPlayer].lightSpeedCircuit=false; addLog(`${handNames[endingPlayer]}の「光速回路」が終了し、充電が0になった。`); }
       if (checkWin()) {
         render();
         return;
@@ -6590,7 +6743,8 @@ async function endTurn() {
 
       const before = state[defender][targetHand];
       const total = before + damage;
-      const resolvedFinal = normalize(total, defender, targetHand);
+      let resolvedFinal = normalize(total, defender, targetHand);
+      if(state.temp[attacker].lightningZeroAtFive){ if(resolvedFinal>=5){ resolvedFinal=0; addLog(`「雷撃」により5以上になった手は超過計算せず0になった。`); } state.temp[attacker].lightningZeroAtFive=false; }
       await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
       render();
@@ -7004,8 +7158,8 @@ async function endTurn() {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;

@@ -2134,3 +2134,6 @@
     transform: translateY(0) rotate(0) scale(1);
   }
 }
+
+/* v72: 充電カード */
+.game-card .card-type { max-width:100%; }
