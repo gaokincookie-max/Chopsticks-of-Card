@@ -612,7 +612,7 @@ const CARD_LIBRARY = {
         name: "指令の加護",
         cost: 3,
         type: "加護",
-        text: "自分のターンに達成した指令の数を記録する。次の相手のターン中、この手に加えられる本数をその数だけ減らす。ただし最低1。",
+        text: "自分のターン終了時、達成した指令の数を記録する。次の相手ターン中、この手が攻撃・カード効果で加えられる本数をその数だけ減らす。ただし最低1。1本の効果には見た目上の減少が起きない。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -822,6 +822,7 @@ const CARD_LIBRARY = {
       state.pendingDirectiveNoDraw = { human: 0, cpu: 0 };
       state.pendingDirectiveBonusDraw = { human: 0, cpu: 0 };
       state.lastDirectiveClearCount = { human: 0, cpu: 0 };
+      state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       state.pendingWillTorrent = { human: 0, cpu: 0 };
       state.pendingAdvanceNotice = { human: [], cpu: [] };
             state.selectedAttackHand = null;
@@ -1293,6 +1294,7 @@ const CARD_LIBRARY = {
       pendingDirectiveNoDraw: { human: 0, cpu: 0 },
       pendingDirectiveBonusDraw: { human: 0, cpu: 0 },
       lastDirectiveClearCount: { human: 0, cpu: 0 },
+      activeDirectiveBlessing: { human: 0, cpu: 0 },
       pendingWillTorrent: { human: 0, cpu: 0 },
       pendingAdvanceNotice: { human: [], cpu: [] },
       firstTurnStarted: { human: false, cpu: false },
@@ -1741,6 +1743,7 @@ const CARD_LIBRARY = {
       if (!state.noSplit || typeof state.noSplit !== "object") state.noSplit = { human: false, cpu: false };
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
       if (!state.pendingAdvanceNotice || typeof state.pendingAdvanceNotice !== "object") state.pendingAdvanceNotice = { human: [], cpu: [] };
+      if (!state.activeDirectiveBlessing || typeof state.activeDirectiveBlessing !== "object") state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       if (!state.costLimitNextTurn || typeof state.costLimitNextTurn !== "object") state.costLimitNextTurn = { human: null, cpu: null };
       if (!state.activeCostLimit || typeof state.activeCostLimit !== "object") state.activeCostLimit = { human: null, cpu: null };
       if (!state.firstTurnStarted || typeof state.firstTurnStarted !== "object") state.firstTurnStarted = { human: false, cpu: false };
@@ -1773,6 +1776,7 @@ const CARD_LIBRARY = {
         activeNoDraw: Number(state.activeNoDraw?.[player] || 0),
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
         pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
+        activeDirectiveBlessing: Number(state.activeDirectiveBlessing?.[player]) || 0,
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
@@ -1819,6 +1823,7 @@ const CARD_LIBRARY = {
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
+      state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
       state.berserkerTurns[player] = Number(side.berserkerTurns || 0);
@@ -3313,6 +3318,10 @@ function wrapFinger(value) {
       return card?.directiveBase || cardId;
     }
 
+    function directiveHandLabel(hand) {
+      return hand === "R" ? "右" : hand === "L" ? "左" : "未指定";
+    }
+
     function makeDirectiveVariant(baseId) {
       if (baseId === "directiveAttack") {
         const hand = Math.random() < 0.5 ? "L" : "R";
@@ -3320,8 +3329,8 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
-            name: `指令：指定攻撃［${hand}］`,
-            text: `指定：${hand}手で攻撃。凶弾も可。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
+            name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
+            text: `指定：${directiveHandLabel(hand)}手で攻撃。凶弾も可。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
             directive: true,
             directiveBase: "directiveAttack",
             directiveData: { attackHand: hand },
@@ -3337,8 +3346,8 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveTarget,
-            name: `指令：対象指定［${attackHand}→${targetHand}］`,
-            text: `指定：${attackHand}手 → ${targetHand}手を攻撃。凶弾も可。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
+            name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
+            text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を攻撃。凶弾も可。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
             directive: true,
             directiveBase: "directiveTarget",
             directiveData: { attackHand, targetHand },
@@ -3351,7 +3360,29 @@ function wrapFinger(value) {
     }
 
     function materializeDrawnCard(cardId) {
-      return DIRECTIVE_BASE_IDS.includes(cardId) ? makeDirectiveVariant(cardId) : cardId;
+      const base = directiveBaseId(cardId);
+      if (DIRECTIVE_BASE_IDS.includes(cardId)) return makeDirectiveVariant(cardId);
+      if (base === "directiveAttack") {
+        const data = CARD_LIBRARY[cardId]?.directiveData;
+        if (!data || !["L", "R"].includes(data.attackHand)) return makeDirectiveVariant(base);
+      }
+      if (base === "directiveTarget") {
+        const data = CARD_LIBRARY[cardId]?.directiveData;
+        if (!data || !["L", "R"].includes(data.attackHand) || !["L", "R"].includes(data.targetHand)) {
+          return makeDirectiveVariant(base);
+        }
+      }
+      return cardId;
+    }
+
+    function normalizeDirectiveCardsInHand(player) {
+      let changed = false;
+      state.hands[player] = state.hands[player].map(cardId => {
+        const normalized = materializeDrawnCard(cardId);
+        if (normalized !== cardId) changed = true;
+        return normalized;
+      });
+      return changed;
     }
 
     function ensureDirectiveVariantDefinitions() {
@@ -3360,8 +3391,8 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
-            name: `指令：指定攻撃［${hand}］`,
-            text: `指定：${hand}手で攻撃。凶弾も可。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
+            name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
+            text: `指定：${directiveHandLabel(hand)}手で攻撃。凶弾も可。達成：1枚引く。未達成：手札をランダムに1枚捨てる。`,
             directive: true,
             directiveBase: "directiveAttack",
             directiveData: { attackHand: hand },
@@ -3375,8 +3406,8 @@ function wrapFinger(value) {
           if (!CARD_LIBRARY[id]) {
             CARD_LIBRARY[id] = {
               ...CARD_LIBRARY.directiveTarget,
-              name: `指令：対象指定［${attackHand}→${targetHand}］`,
-              text: `指定：${attackHand}手 → ${targetHand}手を攻撃。凶弾も可。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
+              name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
+              text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を攻撃。凶弾も可。達成：2枚引く。未達成：指定された自分の手に1本加える。`,
               directive: true,
               directiveBase: "directiveTarget",
               directiveData: { attackHand, targetHand },
@@ -3404,7 +3435,7 @@ function wrapFinger(value) {
       if (!isDirectiveCard(cardId)) return false;
       const opponent = player === "human" ? "cpu" : "human";
       state.hands[player].splice(handIndex, 1);
-      state.hands[opponent].push(cardId);
+      state.hands[opponent].push(materializeDrawnCard(cardId));
       addLog(`${handNames[player]}は「都市の意志」で「${CARD_LIBRARY[cardId].name}」を${handNames[opponent]}へ渡した。`);
       state.mode = "attack";
       render();
@@ -3468,11 +3499,13 @@ function wrapFinger(value) {
     }
 
     async function resolveDirectives(player) {
+      normalizeDirectiveCardsInHand(player);
       const directives = state.hands[player]
         .map((id, index) => ({ id, index }))
         .filter(x => isDirectiveCard(x.id));
       if (!directives.length) {
         state.lastDirectiveClearCount[player] = 0;
+        state.activeDirectiveBlessing[player] = 0;
         return;
       }
 
@@ -3509,6 +3542,14 @@ function wrapFinger(value) {
       }
 
       state.lastDirectiveClearCount[player] = cleared.length;
+      state.activeDirectiveBlessing[player] = cleared.length;
+      if (hasAttachment(player, "L", "directiveBlessing") || hasAttachment(player, "R", "directiveBlessing")) {
+        if (cleared.length > 0) {
+          addLog(`${handNames[player]}の「指令の加護」に、次の相手ターン用の軽減${cleared.length}が記録された。`);
+        } else {
+          addLog(`${handNames[player]}の「指令の加護」は、達成した指令がないため軽減0。`);
+        }
+      }
 
       if (state.temp[player]?.ominousPower) {
         if (cleared.length >= 3) {
@@ -3572,7 +3613,8 @@ function wrapFinger(value) {
         else keep.push(id);
       }
       state.hands[player] = keep;
-      state.hands[opponent].push(...transferred);
+      state.hands[opponent].push(...transferred.map(materializeDrawnCard));
+      normalizeDirectiveCardsInHand(opponent);
 
       addLog(`${handNames[player]}は「意志の奔流」を使用。山札から指令${collected.length}枚を集め、手札の指令${transferred.length}枚を${handNames[opponent]}へ渡した。`);
 
@@ -3700,6 +3742,8 @@ function wrapFinger(value) {
     }
 
     async function startTurn(player) {
+      // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
+      if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
       ensureOnlineStateMaps();
       if (!state.firstTurnStarted) state.firstTurnStarted = { human: false, cpu: false };
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
@@ -4042,10 +4086,15 @@ function wrapFinger(value) {
 
     function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
       let finalAmount = Math.max(1, amount);
-      const directiveReduction = state.lastDirectiveClearCount?.[defender] || 0;
-      if (directiveReduction > 0 && hasAttachment(defender, targetHand, "directiveBlessing")) {
+      const directiveReduction = state.activeDirectiveBlessing?.[defender] || 0;
+      const isOpponentTurn = state.turn !== defender;
+      if (directiveReduction > 0 && isOpponentTurn && hasAttachment(defender, targetHand, "directiveBlessing")) {
         const reduced = Math.max(1, finalAmount - directiveReduction);
-        if (reduced !== finalAmount) addLog(`${handNames[defender]}の「指令の加護」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
+        if (reduced !== finalAmount) {
+          addLog(`${handNames[defender]}の「指令の加護」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
+        } else {
+          addLog(`${handNames[defender]}の「指令の加護」が働いたが、最低1本のため${sourceLabel}は${finalAmount}本のまま。`);
+        }
         finalAmount = reduced;
       }
       if (hasAttachment(defender, targetHand, "guardBlessing")) {
@@ -4693,7 +4742,7 @@ function renderLastAction() {
       if (base === "directiveAttack") {
         return `<div class="directive-summary">
           <span class="directive-label">指定</span>
-          <span class="directive-hand">${escapeHtml(data.attackHand || "?")}</span>
+          <span class="directive-hand">${escapeHtml(directiveHandLabel(data.attackHand))}</span>
           <span class="directive-action">手で攻撃</span>
         </div>
         <div class="directive-note">通常攻撃 / 凶弾で達成可能</div>
@@ -4704,9 +4753,9 @@ function renderLastAction() {
       if (base === "directiveTarget") {
         return `<div class="directive-summary">
           <span class="directive-label">指定</span>
-          <span class="directive-hand">${escapeHtml(data.attackHand || "?")}</span>
+          <span class="directive-hand">${escapeHtml(directiveHandLabel(data.attackHand))}</span>
           <span class="directive-arrow">→</span>
-          <span class="directive-target">${escapeHtml(data.targetHand || "?")}手</span>
+          <span class="directive-target">${escapeHtml(directiveHandLabel(data.targetHand))}手</span>
         </div>
         <div class="directive-note">通常攻撃 / 凶弾で達成可能</div>
         <div class="directive-result"><strong>達成</strong> 2枚引く</div>
@@ -4735,6 +4784,7 @@ function renderLastAction() {
     }
 
     function renderHumanCards() {
+      normalizeDirectiveCardsInHand("human");
       elements.humanCards.innerHTML = "";
 
       if (state.hands.human.length === 0) {
