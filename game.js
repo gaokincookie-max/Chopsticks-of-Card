@@ -98,7 +98,12 @@ const CARD_LIBRARY = {
         name: "過充電", cost: 2, type: "補助 / 充電", chargeCard: true,
         text: "充電をLv.10にする。次の自分のターンは行動不能になる。",
         canPlay: () => true,
-        effect: (player) => { setChargeLevel(player,10); state.pendingChargeStun[player]=true; addLog(`${handNames[player]}は「過充電」で充電をLv.10にした。`); }
+        effect: (player) => {
+          setChargeLevel(player, 10);
+          state.pendingChargeStun[player] = true;
+          state.pendingChargeStunSource[player] = "過充電";
+          addLog(`${handNames[player]}は「過充電」で充電をLv.10にした。反動は次の自分ターンに発生する。`);
+        }
       },
       electricConnection: {
         name: "電気接続", cost: 2, type: "補助 / 充電", chargeCard: true,
@@ -151,7 +156,7 @@ const CARD_LIBRARY = {
         name: "光速回路", cost: 3, type: "補助 / 充電", chargeCard: true,
         text: "1試合に1度だけ発動できる。使用時の充電がLv.10未満なら、カードは捨て札になるが効果は不発。Lv.10なら、このターン充電カードを何枚でも使用でき、充電カードの終端を無視する。終了時に充電0、次の自分ターンは行動不能。",
         canPlay: (player) => !state.lightSpeedCircuitUsed[player],
-        effect: (player) => {
+        effect: async (player) => {
           const charge = getChargeLevel(player);
 
           if (state.lightSpeedCircuitUsed[player]) {
@@ -169,10 +174,19 @@ const CARD_LIBRARY = {
           state.lightSpeedCircuitUsed[player] = true;
           state.temp[player].lightSpeedCircuit = true;
           state.pendingChargeStun[player] = true;
+          state.pendingChargeStunSource[player] = "光速回路";
           addLog(
             `${handNames[player]}は「光速回路」を起動。` +
-            `このターンは充電カードを何枚でも使用でき、次の自分ターンは行動不能になる。`
+            `このターンは充電カードを何枚でも使用でき、反動は次の自分ターンに発生する。`
           );
+
+          if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
+            emitFriendFx("lightSpeedCircuit", {
+              playerSide: friendSideForLocalPlayer(player)
+            }).catch(error => console.error("PVP light speed circuit fx failed", error));
+          }
+
+          await showLightSpeedCircuitFx(player);
         }
       },
       dimensionalSlash: {
@@ -945,6 +959,7 @@ const CARD_LIBRARY = {
       state.lastDirectiveClearCount = { human: 0, cpu: 0 };
       state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       state.pendingChargeStun = { human: false, cpu: false };
+      state.pendingChargeStunSource = { human: "", cpu: "" };
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
       state.pendingWillTorrent = { human: 0, cpu: 0 };
       state.pendingAdvanceNotice = { human: [], cpu: [] };
@@ -1419,6 +1434,7 @@ const CARD_LIBRARY = {
       lastDirectiveClearCount: { human: 0, cpu: 0 },
       activeDirectiveBlessing: { human: 0, cpu: 0 },
       pendingChargeStun: { human: false, cpu: false },
+      pendingChargeStunSource: { human: "", cpu: "" },
       lightSpeedCircuitUsed: { human: false, cpu: false },
       pendingWillTorrent: { human: 0, cpu: 0 },
       pendingAdvanceNotice: { human: [], cpu: [] },
@@ -1608,16 +1624,19 @@ const CARD_LIBRARY = {
         "popup-card" +
         (kind === "trap" ? " trap" : "") +
         (kind === "notice" ? " advance-notice" : "") +
+        (kind === "charge-recoil" ? " charge-recoil" : "") +
         (kind === "accel" ? ` accel-flash ${player === "cpu" ? "cpu-accel" : "human-accel"}` : "");
       elements.popupUser.className =
         "popup-user" +
         (kind === "trap" ? " trap" :
           kind === "notice" ? " advance-notice" :
+          kind === "charge-recoil" ? " charge-recoil" :
           kind === "accel" ? ` action ${player === "cpu" ? "cpu-accel-user" : "human-accel-user"}` :
           kind === "action" ? " action" : "");
       elements.popupUser.textContent =
         kind === "trap" ? `${handNames[player]}の罠発動` :
         kind === "notice" ? `${handNames[player]}の予告状` :
+        kind === "charge-recoil" ? `${handNames[player]}の反動` :
         kind === "accel" ? `${handNames[player]}の加速` :
         kind === "action" ? `${handNames[player]}の行動` :
         `${handNames[player]}が使用`;
@@ -1640,6 +1659,15 @@ const CARD_LIBRARY = {
         `<div class="advance-notice-popup-label">次の自分のターン開始時に発動</div>` +
         `<div class="advance-notice-popup-effect">${escapeHtml(card.text)}</div>`;
       await showPopup(player, `予告「${card.name}」`, body, "notice", ms, true);
+    }
+
+    async function showChargeRecoilPopup(player, source, ms = 1250) {
+      const safeSource = source || "充電効果";
+      const body =
+        `<div class="charge-recoil-popup-label">${escapeHtml(safeSource)}の反動</div>` +
+        `<div class="charge-recoil-popup-main">このターンは行動不能</div>` +
+        `<div class="charge-recoil-popup-sub">カード使用・攻撃・分けるを行わず、自動的にターンを終了します。</div>`;
+      await showPopup(player, "⚡ 反動発生", body, "charge-recoil", ms, true);
     }
 
     async function showFinaleFx(player, power) {
@@ -1687,6 +1715,30 @@ const CARD_LIBRARY = {
       target.classList.add("logic-aftershock");
       await delay(420);
       target.classList.remove("logic-aftershock");
+      layer.className = "special-fx-layer";
+      layer.setAttribute("aria-hidden", "true");
+    }
+
+    async function showLightSpeedCircuitFx(player) {
+      const layer = elements.specialFxLayer;
+      if (!layer) return;
+
+      elements.specialFxTitle.textContent = "OVERCLOCK";
+      elements.specialFxSub.textContent = `${handNames[player]}の光速回路起動 / 充電カード使用制限解除`;
+      layer.className = "special-fx-layer overclock-fx charge";
+      layer.setAttribute("aria-hidden", "false");
+
+      await delay(520);
+      layer.classList.remove("charge");
+      layer.classList.add("ignite");
+
+      await delay(920);
+      layer.classList.add("burst");
+
+      await delay(620);
+      layer.classList.remove("burst");
+      await delay(360);
+
       layer.className = "special-fx-layer";
       layer.setAttribute("aria-hidden", "true");
     }
@@ -1891,6 +1943,7 @@ const CARD_LIBRARY = {
       if (!state.pendingAdvanceNotice || typeof state.pendingAdvanceNotice !== "object") state.pendingAdvanceNotice = { human: [], cpu: [] };
       if (!state.activeDirectiveBlessing || typeof state.activeDirectiveBlessing !== "object") state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       if (!state.pendingChargeStun || typeof state.pendingChargeStun !== "object") state.pendingChargeStun = { human: false, cpu: false };
+      if (!state.pendingChargeStunSource || typeof state.pendingChargeStunSource !== "object") state.pendingChargeStunSource = { human: "", cpu: "" };
       if (!state.lightSpeedCircuitUsed || typeof state.lightSpeedCircuitUsed !== "object") state.lightSpeedCircuitUsed = { human: false, cpu: false };
       if (!state.costLimitNextTurn || typeof state.costLimitNextTurn !== "object") state.costLimitNextTurn = { human: null, cpu: null };
       if (!state.activeCostLimit || typeof state.activeCostLimit !== "object") state.activeCostLimit = { human: null, cpu: null };
@@ -1926,6 +1979,7 @@ const CARD_LIBRARY = {
         pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
         activeDirectiveBlessing: Number(state.activeDirectiveBlessing?.[player]) || 0,
         pendingChargeStun: !!state.pendingChargeStun?.[player],
+        pendingChargeStunSource: String(state.pendingChargeStunSource?.[player] || ""),
         lightSpeedCircuitUsed: !!state.lightSpeedCircuitUsed?.[player],
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
@@ -1975,6 +2029,7 @@ const CARD_LIBRARY = {
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
       state.pendingChargeStun[player] = !!side.pendingChargeStun;
+      state.pendingChargeStunSource[player] = String(side.pendingChargeStunSource || "");
       state.lightSpeedCircuitUsed[player] = !!side.lightSpeedCircuitUsed;
       state.costLimitNextTurn[player] = side.costLimitNextTurn ?? null;
       state.activeCostLimit[player] = side.activeCostLimit ?? null;
@@ -2120,6 +2175,11 @@ const CARD_LIBRARY = {
         if (player && card) await showAdvanceNoticeRevealPopup(player, card, 1100);
         return;
       }
+      if (fx.type === "chargeRecoil") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) await showChargeRecoilPopup(player, payload.source || "充電効果", 1250);
+        return;
+      }
       if (fx.type === "attack") {
         const attacker = localPlayerForFriendSide(payload.attackerSide);
         const defender = localPlayerForFriendSide(payload.defenderSide);
@@ -2173,6 +2233,11 @@ const CARD_LIBRARY = {
         if (player && defender && payload.targetHand) {
           await showLogicAtelierFx(player, defender, payload.targetHand);
         }
+      }
+      if (fx.type === "lightSpeedCircuit") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) await showLightSpeedCircuitFx(player);
+        return;
       }
     }
 
@@ -4063,15 +4128,24 @@ function wrapFinger(value) {
 
       await resolveAdvanceNotice(player);
       if (state.pendingChargeStun[player]) {
+        const recoilSource = state.pendingChargeStunSource?.[player] || "充電効果";
+
+        // 予約された反動は、次の自分ターン開始時にだけ消費する。
         state.pendingChargeStun[player] = false;
-        addLog(
-          `${handNames[player]}は「過充電」または「光速回路」の反動により、` +
-          `このターンは行動不能。`
-        );
-        setMessage(
-          `${handNames[player]}は充電の反動で行動不能です。ドロー後、自動的にターンを終了します。`
-        );
+        state.pendingChargeStunSource[player] = "";
+
+        addLog(`${handNames[player]}は「${recoilSource}」の反動により、このターンは行動不能。`);
+        setMessage(`${handNames[player]}は「${recoilSource}」の反動で行動不能です。`);
         render();
+
+        if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+          emitFriendFx("chargeRecoil", {
+            playerSide: friendSideForLocalPlayer(player),
+            source: recoilSource
+          }).catch(error => console.error("PVP charge recoil fx failed", error));
+        }
+
+        await showChargeRecoilPopup(player, recoilSource, 1250);
 
         if (
           state.battleMode === "friend" &&
@@ -4081,7 +4155,7 @@ function wrapFinger(value) {
           await publishFriendStateNow();
         }
 
-        await delay(900);
+        await delay(250);
         await endTurn();
         return;
       }

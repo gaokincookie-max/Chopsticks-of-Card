@@ -2152,3 +2152,192 @@
 .hand.selectable {
   cursor: pointer;
 }
+
+
+/* v79: 充電反動ポップアップ */
+.popup-card.charge-recoil {
+  border-color: #538ec7;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(221, 245, 255, .98), rgba(213, 224, 246, .98) 54%, rgba(188, 201, 229, .98));
+  box-shadow:
+    0 20px 65px rgba(29, 53, 92, .42),
+    inset 0 0 0 1px rgba(87, 145, 200, .35);
+}
+
+.popup-user.charge-recoil {
+  background: linear-gradient(90deg, #284f86, #4e91c8);
+  color: #f3fbff;
+}
+
+.popup-card.charge-recoil .popup-name {
+  color: #183d6b;
+  font-size: clamp(26px, 5vw, 40px);
+}
+
+.charge-recoil-popup-label {
+  display: inline-block;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(54, 111, 166, .42);
+  background: rgba(236, 249, 255, .9);
+  color: #2c659c;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.charge-recoil-popup-main {
+  margin-top: 12px;
+  color: #173a64;
+  font-size: clamp(22px, 4.5vw, 34px);
+  font-weight: 1100;
+  letter-spacing: .05em;
+}
+
+.charge-recoil-popup-sub {
+  margin-top: 10px;
+  color: #344f70;
+  line-height: 1.55;
+}
+
+.overlay.show .popup-card.charge-recoil {
+  animation: chargeRecoilShock .52s cubic-bezier(.2,.82,.23,1.08) both;
+}
+
+@keyframes chargeRecoilShock {
+  0% {
+    opacity: 0;
+    transform: scale(.82) translateY(-18px);
+    filter: brightness(1.7) blur(6px);
+  }
+  42% {
+    opacity: 1;
+    transform: scale(1.045) translateY(2px);
+    filter: brightness(1.2) blur(0);
+  }
+  58% { transform: translateX(-5px) scale(1.02); }
+  72% { transform: translateX(5px) scale(1.01); }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: brightness(1);
+  }
+}
+
+
+/* v80: 光速回路 special FX */
+.special-fx-layer.overclock-fx {
+  display: grid;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(128, 78, 255, .20), rgba(18, 10, 44, .86) 54%, rgba(5, 5, 16, .94));
+}
+
+.special-fx-layer.overclock-fx::before,
+.special-fx-layer.overclock-fx::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.special-fx-layer.overclock-fx::before {
+  background:
+    repeating-linear-gradient(115deg,
+      transparent 0 20px,
+      rgba(192, 148, 255, .08) 20px 24px,
+      transparent 24px 46px);
+  filter: blur(1px);
+}
+
+.special-fx-layer.overclock-fx::after {
+  background:
+    radial-gradient(circle at 18% 28%, rgba(214, 166, 255, .92) 0 2px, transparent 3px),
+    radial-gradient(circle at 84% 24%, rgba(214, 166, 255, .88) 0 2px, transparent 3px),
+    radial-gradient(circle at 28% 80%, rgba(181, 120, 255, .84) 0 2px, transparent 3px),
+    linear-gradient(120deg, transparent 12%, rgba(225, 205, 255, .82) 14%, transparent 16%),
+    linear-gradient(58deg, transparent 32%, rgba(182, 124, 255, .78) 34%, transparent 36%),
+    linear-gradient(148deg, transparent 64%, rgba(235, 225, 255, .76) 66%, transparent 68%);
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 14px rgba(184, 126, 255, .58));
+}
+
+.special-fx-layer.overclock-fx .special-fx-title {
+  color: #f1e8ff;
+  text-shadow:
+    0 0 10px rgba(220, 185, 255, .88),
+    0 0 24px rgba(160, 112, 255, .72),
+    0 6px 24px rgba(0, 0, 0, .45);
+}
+
+.special-fx-layer.overclock-fx .special-fx-sub {
+  color: rgba(240, 232, 255, .92);
+  text-shadow: 0 3px 18px rgba(68, 22, 120, .42);
+}
+
+.special-fx-layer.overclock-fx.charge .special-fx-copy {
+  animation: overclockIntro .52s cubic-bezier(.19,.82,.24,1.04) both;
+}
+.special-fx-layer.overclock-fx.charge::before {
+  animation: overclockGrid .58s ease both;
+}
+.special-fx-layer.overclock-fx.charge::after {
+  animation: overclockSpark .58s ease both;
+}
+
+.special-fx-layer.overclock-fx.ignite .special-fx-copy {
+  animation: overclockGlow .92s ease-out both;
+}
+.special-fx-layer.overclock-fx.ignite::before {
+  opacity: 1;
+  animation: overclockGridPulse 1s ease-out both;
+}
+.special-fx-layer.overclock-fx.ignite::after {
+  opacity: 1;
+  animation: overclockSparkWave 1.05s cubic-bezier(.19,.8,.24,1) both;
+}
+
+.special-fx-layer.overclock-fx.burst {
+  animation: overclockScreenBurst .62s ease-out both;
+}
+.special-fx-layer.overclock-fx.burst::after {
+  opacity: 1;
+  animation: overclockFinalSpark .62s ease-out both;
+}
+
+@keyframes overclockIntro {
+  0% { opacity: 0; transform: scale(.78); filter: blur(9px) brightness(1.7); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0) brightness(1); }
+}
+@keyframes overclockGlow {
+  0% { transform: scale(.98); }
+  22% { transform: scale(1.04); text-shadow: 0 0 22px rgba(228, 204, 255, .95), 0 0 42px rgba(163, 108, 255, .84), 0 6px 24px rgba(0,0,0,.45); }
+  100% { transform: scale(1); }
+}
+@keyframes overclockGrid {
+  0% { opacity: 0; transform: scale(1.08); }
+  100% { opacity: .48; transform: scale(1); }
+}
+@keyframes overclockGridPulse {
+  0% { opacity: .12; transform: scale(1.12); }
+  45% { opacity: .56; }
+  100% { opacity: 0; transform: scale(.96); }
+}
+@keyframes overclockSpark {
+  0% { opacity: 0; transform: scale(.9); }
+  100% { opacity: .4; transform: scale(1); }
+}
+@keyframes overclockSparkWave {
+  0% { opacity: 0; transform: scale(.82) rotate(0deg); }
+  28% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.18) rotate(5deg); }
+}
+@keyframes overclockScreenBurst {
+  0% { background: radial-gradient(circle at 50% 45%, rgba(128, 78, 255, .20), rgba(18, 10, 44, .86) 54%, rgba(5, 5, 16, .94)); }
+  34% { background: radial-gradient(circle at 50% 42%, rgba(212, 170, 255, .46), rgba(77, 34, 148, .88) 50%, rgba(16, 8, 34, .96)); }
+  100% { background: rgba(5, 5, 16, 0); }
+}
+@keyframes overclockFinalSpark {
+  0% { opacity: 0; transform: scale(.88); filter: brightness(1.2); }
+  26% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.22); filter: brightness(1.6); }
+}
