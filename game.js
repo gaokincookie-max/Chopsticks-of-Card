@@ -1951,7 +1951,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -2754,7 +2754,7 @@ const CARD_LIBRARY = {
       const initialGuest = { L: 1, R: 1, deckCounts: data.guestDeckCounts, deck: guestDeck.slice(3), hand: guestDeck.slice(0, 3), discard: [] };
       const emptySideState = (side) => ({
         L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
-        temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false },
+        temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, chargeCardsUsed: [] },
         noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
@@ -2821,8 +2821,11 @@ const CARD_LIBRARY = {
       state.discard.cpu = [...(other.discard || [])];
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.pendingChargeStun = { human: false, cpu: false };
+      state.pendingChargeStunSource = { human: "", cpu: "" };
+      state.lightSpeedCircuitUsed = { human: false, cpu: false };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -3643,6 +3646,14 @@ function wrapFinger(value) {
 
     ensureDirectiveVariantDefinitions();
     for(let lv=1;lv<=10;lv++) ensureChargeDefinition(lv);
+    for (const card of Object.values(CARD_LIBRARY)) {
+      if (card?.chargeCard && !card.chargeResource) {
+        card.oncePerTurn = true;
+        if (!card.text.includes("このカードは1ターンに1度")) {
+          card.text += " このカードは1ターンに1度しか使用できない。";
+        }
+      }
+    }
 
     function recordDirectiveAttack(player, attackHand, defender, targetHand) {
       if (!state.temp[player]?.directiveActions) return;
@@ -3868,6 +3879,27 @@ function wrapFinger(value) {
       const card = CARD_LIBRARY[cardId];
       return !!state.temp?.[player]?.lightSpeedCircuit && !!card?.chargeCard;
     }
+    function chargeCardUsageKey(cardId) {
+      return cardId;
+    }
+
+    function hasUsedChargeCardThisTurn(player, cardId) {
+      if (!CARD_LIBRARY[cardId]?.chargeCard) return false;
+      const used = state.temp?.[player]?.chargeCardsUsed;
+      return Array.isArray(used) && used.includes(chargeCardUsageKey(cardId));
+    }
+
+    function canUseChargeCardThisTurn(player, cardId) {
+      return !CARD_LIBRARY[cardId]?.chargeCard || !hasUsedChargeCardThisTurn(player, cardId);
+    }
+
+    function markChargeCardUsedThisTurn(player, cardId) {
+      if (!CARD_LIBRARY[cardId]?.chargeCard) return;
+      if (!Array.isArray(state.temp[player].chargeCardsUsed)) state.temp[player].chargeCardsUsed = [];
+      const key = chargeCardUsageKey(cardId);
+      if (!state.temp[player].chargeCardsUsed.includes(key)) state.temp[player].chargeCardsUsed.push(key);
+    }
+
     function isChargeCardId(cardId){ return !!CARD_LIBRARY[cardId]?.chargeCard; }
     function resolveDimensionalSlash(player, hand) {
       const charge = getChargeLevel(player);
@@ -3926,6 +3958,7 @@ function wrapFinger(value) {
         .filter(item => {
           const card = CARD_LIBRARY[item.cardId];
           if (!card || typeof card.effect !== "function" || isEffectCopyExcluded(item.cardId, "advanceNotice")) return false;
+          if (!canUseChargeCardThisTurn(player, item.cardId)) return false;
           try {
             return !!card.canPlay(player);
           } catch {
@@ -3940,6 +3973,9 @@ function wrapFinger(value) {
         addLog(`${sourceLabel}で選ばれたカードには発動できる効果がなかった。`);
         return false;
       }
+
+      // 乱闘・予告状の発動は「カードの効果だけを使う」ため、
+      // 充電カードの1ターン1回制限を確認せず、使用済みにも記録しない。
       const previousCopy = state.copiedEffectContext;
       state.copiedEffectContext = { sourceLabel, cardId };
       try {
@@ -3958,7 +3994,15 @@ function wrapFinger(value) {
       const cardId = state.hands[player][handIndex];
       const valid = getAdvanceNoticeCandidates(player).some(item => item.index === handIndex && item.cardId === cardId);
       if (!valid) {
-        if (player === "human") setMessage("そのカードは現在の条件では予告できません。");
+        if (player === "human") {
+          const attemptedId = state.hands[player][handIndex];
+          const attemptedCard = CARD_LIBRARY[attemptedId];
+          if (attemptedCard?.chargeCard && hasUsedChargeCardThisTurn(player, attemptedId)) {
+            setMessage(`「${attemptedCard.name}」はこのターンすでに使用しているため予告できません。`);
+          } else {
+            setMessage("そのカードは現在の条件では予告できません。");
+          }
+        }
         return false;
       }
       const card = CARD_LIBRARY[cardId];
@@ -3971,6 +4015,8 @@ function wrapFinger(value) {
       }
       await showAdvanceNoticeRevealPopup(player, card, 1100);
 
+      // 予告状は発動時ではなく、公開した宣言ターンにカードを使った扱いにする。
+      markChargeCardUsedThisTurn(player, cardId);
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(cardId);
       state.pendingAdvanceNotice[player] = state.pendingAdvanceNotice[player] || [];
@@ -4030,7 +4076,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -5134,7 +5180,8 @@ function renderLastAction() {
           !state.animating &&
           !berserkLocked &&
           canUseChargeCardDuringLightSpeed("human", cardId);
-        const canUseCardAction = baseCardActionAvailable || lightSpeedChargePlayable;
+        const chargeCardAvailableThisTurn = canUseChargeCardThisTurn("human", cardId);
+        const canUseCardAction = (baseCardActionAvailable || lightSpeedChargePlayable) && chargeCardAvailableThisTurn;
         const normalPlayable =
           !repairDiscardMode &&
           !calmDownDiscardMode &&
@@ -5180,11 +5227,13 @@ function renderLastAction() {
           </div>
           <div class="card-cost">コスト ${card.cost}</div>
           <div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
-          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : state.temp.human.cardActionUsed
-            ? (lightSpeedChargePlayable
-                ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
-                : '<div class="used">カード関連行動は使用済み</div>')
-            : ''}
+          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : hasUsedChargeCardThisTurn("human", cardId)
+            ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
+            : state.temp.human.cardActionUsed
+              ? (lightSpeedChargePlayable
+                  ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
+                  : '<div class="used">カード関連行動は使用済み</div>')
+              : ''}
         `;
         if (discardPlayable) {
           div.addEventListener("click", () => chooseRepairDiscard(index));
@@ -5549,6 +5598,10 @@ function renderLastAction() {
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed("human", cardId);
+      if (!canUseChargeCardThisTurn("human", cardId)) {
+        setMessage(`「${card?.name || "このカード"}」はこのターンすでに使用しています。`);
+        return;
+      }
       if (
         !card ||
         !isAttachmentCard(cardId) ||
@@ -5593,6 +5646,10 @@ function renderLastAction() {
         return false;
       }
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
+      if (!canUseChargeCardThisTurn(player, cardId)) {
+        if (player === "human") setMessage(`「${card.name}」はこのターンすでに使用しています。`);
+        return false;
+      }
       if (
         state[owner][hand] <= 0 ||
         state.traps[owner][hand].length >= 2 ||
@@ -5604,6 +5661,7 @@ function renderLastAction() {
       }
 
       state.hands[player].splice(handIndex, 1);
+      markChargeCardUsedThisTurn(player, cardId);
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
         if (!setupActive) {
@@ -5659,6 +5717,10 @@ function renderLastAction() {
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
       if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable) return false;
       if (!card || isAttachmentCard(cardId) || !card.canPlay(player)) return false;
+      if (!canUseChargeCardThisTurn(player, cardId)) {
+        if (player === "human") setMessage(`「${card.name}」はこのターンすでに使用しています。`);
+        return false;
+      }
       if (state.activeCostLimit[player] !== null && card.cost > state.activeCostLimit[player]) {
         if (player === "human") setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
         return false;
@@ -5671,6 +5733,7 @@ function renderLastAction() {
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(cardId);
+      markChargeCardUsedThisTurn(player, cardId);
       state.temp[player].cardActionUsed = true;
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       setLastAction(player, `「${card.name}」`, card.text, "card");
@@ -6611,6 +6674,7 @@ async function endTurn() {
             !isAttachmentCard(id) &&
             typeof card.effect === "function" &&
             id !== "lightSpeedCircuit" &&
+            canUseChargeCardThisTurn("cpu", id) &&
             card.canPlay("cpu")
           ) {
             candidates.push({
@@ -7454,8 +7518,8 @@ async function endTurn() {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, synapseBonus: 0, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;
@@ -7473,6 +7537,9 @@ async function endTurn() {
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
       state.pendingSwapFirst = null;
+      state.pendingChargeStun = { human: false, cpu: false };
+      state.pendingChargeStunSource = { human: "", cpu: "" };
+      state.lightSpeedCircuitUsed = { human: false, cpu: false };
       state.pendingAndanteHand = null;
       state.firstTurnStarted = { human: false, cpu: false };
       state.weaknessWait = {};

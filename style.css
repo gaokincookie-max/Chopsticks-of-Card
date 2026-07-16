@@ -2341,3 +2341,94 @@
   26% { opacity: 1; }
   100% { opacity: 0; transform: scale(1.22); filter: brightness(1.6); }
 }
+
+
+/* v81: OVERCLOCK electricity-focused revision */
+.special-fx-layer.overclock-fx .special-fx-copy {
+  transform: none !important;
+}
+.special-fx-layer.overclock-fx.charge,
+.special-fx-layer.overclock-fx.ignite {
+  animation: overclockVoltageShake .16s steps(2, end) infinite;
+}
+.special-fx-layer.overclock-fx.charge .special-fx-copy {
+  animation: overclockTextZapIn .5s steps(5, end) both;
+}
+.special-fx-layer.overclock-fx.ignite .special-fx-copy {
+  animation: overclockTextFlicker .92s steps(2, end) both;
+}
+.special-fx-layer.overclock-fx::before {
+  background:
+    linear-gradient(101deg, transparent 0 16%, rgba(220,185,255,.96) 16.2% 16.55%, transparent 16.8% 34%),
+    linear-gradient(76deg, transparent 0 42%, rgba(170,104,255,.95) 42.2% 42.7%, transparent 43% 61%),
+    linear-gradient(122deg, transparent 0 70%, rgba(235,217,255,.94) 70.2% 70.55%, transparent 70.8%);
+  filter: drop-shadow(0 0 6px rgba(225,190,255,.98)) drop-shadow(0 0 18px rgba(145,70,255,.92));
+}
+.special-fx-layer.overclock-fx::after {
+  background:
+    linear-gradient(14deg, transparent 0 24%, rgba(220,185,255,.96) 24.2% 24.5%, transparent 24.8% 54%),
+    linear-gradient(164deg, transparent 0 47%, rgba(158,82,255,.98) 47.2% 47.75%, transparent 48% 78%),
+    linear-gradient(51deg, transparent 0 63%, rgba(242,226,255,.96) 63.2% 63.5%, transparent 63.8%);
+  filter: drop-shadow(0 0 7px rgba(225,190,255,.98)) drop-shadow(0 0 20px rgba(143,62,255,.94));
+}
+.special-fx-layer.overclock-fx.charge::before { animation: overclockLightningA .52s steps(4,end) both; }
+.special-fx-layer.overclock-fx.charge::after { animation: overclockLightningB .52s .04s steps(4,end) both; }
+.special-fx-layer.overclock-fx.ignite::before { animation: overclockLightningLoopA .18s steps(2,end) 5; }
+.special-fx-layer.overclock-fx.ignite::after { animation: overclockLightningLoopB .14s steps(2,end) 7; }
+.special-fx-layer.overclock-fx.burst { animation: overclockElectricFlash .62s steps(4,end) both; }
+
+@keyframes overclockVoltageShake {
+  0% { transform: translate(0,0); }
+  25% { transform: translate(-2px,1px); }
+  50% { transform: translate(2px,-1px); }
+  75% { transform: translate(-1px,-2px); }
+  100% { transform: translate(1px,2px); }
+}
+@keyframes overclockTextZapIn {
+  0% { opacity:0; filter:blur(5px) brightness(2); transform:translateX(-8px); }
+  22% { opacity:1; transform:translateX(7px); }
+  42% { opacity:.25; transform:translateX(-4px); }
+  61% { opacity:1; transform:translateX(3px); }
+  100% { opacity:1; filter:blur(0) brightness(1); transform:translateX(0); }
+}
+@keyframes overclockTextFlicker {
+  0%,10%,22%,35%,48%,64%,81%,100% { opacity:1; }
+  6%,18%,29%,43%,57%,73%,91% { opacity:.25; }
+}
+@keyframes overclockLightningA {
+  0% { opacity:0; clip-path:inset(0 100% 0 0); }
+  25% { opacity:1; clip-path:inset(0 52% 0 0); }
+  50% { opacity:.2; clip-path:inset(0 22% 0 0); }
+  75% { opacity:1; clip-path:inset(0 0 0 0); }
+  100% { opacity:0; }
+}
+@keyframes overclockLightningB {
+  0% { opacity:0; clip-path:inset(0 0 0 100%); }
+  25% { opacity:.95; clip-path:inset(0 0 0 48%); }
+  50% { opacity:.15; }
+  75% { opacity:1; clip-path:inset(0 0 0 0); }
+  100% { opacity:0; }
+}
+@keyframes overclockLightningLoopA {
+  0% { opacity:.1; transform:translateX(-4px); }
+  50% { opacity:1; transform:translateX(4px); }
+  100% { opacity:.2; transform:translateX(-2px); }
+}
+@keyframes overclockLightningLoopB {
+  0% { opacity:1; transform:translateY(-3px); }
+  50% { opacity:.12; transform:translateY(4px); }
+  100% { opacity:.9; transform:translateY(-1px); }
+}
+@keyframes overclockElectricFlash {
+  0% { background-color:rgba(15,7,35,.95); filter:brightness(1); }
+  18% { background-color:rgba(142,75,230,.72); filter:brightness(1.7); }
+  34% { background-color:rgba(26,10,55,.92); filter:brightness(.9); }
+  52% { background-color:rgba(224,194,255,.84); filter:brightness(2); }
+  68% { background-color:rgba(74,29,135,.66); filter:brightness(1.25); }
+  100% { background-color:rgba(5,5,16,0); filter:brightness(1); }
+}
+.used.charge-once-used {
+  border-color:rgba(124,83,171,.44);
+  background:rgba(235,225,247,.92);
+  color:#70469a;
+}
