@@ -1573,6 +1573,20 @@ const CARD_LIBRARY = {
         canPlay: (player) => state.hands[player].length > 1,
         effect: async (player) => { await useFullHeart(player); }
       },
+      magicalChant: {
+        name: "魔法少女の詠唱", cost: 2, type: "補助 / 魔法少女・詠唱",
+        text: "詠唱を1進める。進捗は自分のすべての同名カードで共有する。未完成なら使用後にこのカードを山札へ戻してシャッフルする。詠唱が3に達すると、この試合中すべての同名カードが「アルカナ・スレイブ！！」へ変化する。愛・正義・幸福・勇気のいずれかがあれば、進捗に関係なく変化後として使用できる。",
+        magicalChant: true,
+        canPlay: () => true,
+        effect: async (player) => { await useMagicalChant(player); }
+      },
+      arcanaSlave: {
+        name: "アルカナ・スレイブ！！", cost: 2, type: "終端 / 魔法少女・詠唱完成",
+        text: "終端。相手の0ではない手を1つ選び、0にする。",
+        token: true, magicalEvolution: true, terminal: true,
+        canPlay: (player) => ["L","R"].some(h => state[otherPlayer(player)][h] > 0),
+        effect: async (player) => { await beginArcanaSlave(player); }
+      },
       magicalVoid: {
         name: "虚無", cost: 2, type: "魔法少女",
         text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させる。",
@@ -1650,6 +1664,7 @@ const CARD_LIBRARY = {
       magicalGreed: 1,
       magicalWrath: 1,
       magicalVoid: 1,
+      magicalChant: 1,
       wornHope: 1,
       hysteria: 1,
       fadedCreed: 1,
@@ -1698,6 +1713,8 @@ const CARD_LIBRARY = {
       pendingAcceleration: { human: 0, cpu: 0 },
       activeAcceleration: { human: 0, cpu: 0 },
       pendingTerminalEnd: { human: false, cpu: false },
+      magicalChantProgress: { human: 0, cpu: 0 },
+      magicalChantCompleted: { human: false, cpu: false },
       costLimitNextTurn: { human: null, cpu: null },
       activeCostLimit: { human: null, cpu: null },
       berserkerTurns: { human: 0, cpu: 0 },
@@ -2635,6 +2652,8 @@ const CARD_LIBRARY = {
       if (!state.noSplit || typeof state.noSplit !== "object") state.noSplit = { human: false, cpu: false };
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
       if (!state.pendingMagicalHeartDraw || typeof state.pendingMagicalHeartDraw !== "object") state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
+      if (!state.magicalChantProgress || typeof state.magicalChantProgress !== "object") state.magicalChantProgress = { human: 0, cpu: 0 };
+      if (!state.magicalChantCompleted || typeof state.magicalChantCompleted !== "object") state.magicalChantCompleted = { human: false, cpu: false };
       if (!state.pendingAdvanceNotice || typeof state.pendingAdvanceNotice !== "object") state.pendingAdvanceNotice = { human: [], cpu: [] };
       if (!state.activeDirectiveBlessing || typeof state.activeDirectiveBlessing !== "object") state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       if (!state.pendingChargeStun || typeof state.pendingChargeStun !== "object") state.pendingChargeStun = { human: false, cpu: false };
@@ -2672,6 +2691,8 @@ const CARD_LIBRARY = {
         activeNoDraw: Number(state.activeNoDraw?.[player] || 0),
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
         pendingMagicalHeartDraw: Number(state.pendingMagicalHeartDraw?.[player] || 0),
+        magicalChantProgress: Number(state.magicalChantProgress?.[player] || 0),
+        magicalChantCompleted: !!state.magicalChantCompleted?.[player],
         pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
         activeDirectiveBlessing: Number(state.activeDirectiveBlessing?.[player]) || 0,
         pendingChargeStun: !!state.pendingChargeStun?.[player],
@@ -2741,6 +2762,9 @@ const CARD_LIBRARY = {
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingMagicalHeartDraw[player] = Number(side.pendingMagicalHeartDraw || 0);
+      state.magicalChantProgress[player] = Math.max(0, Math.min(3, Number(side.magicalChantProgress || 0)));
+      state.magicalChantCompleted[player] = !!side.magicalChantCompleted;
+      if (state.magicalChantCompleted[player]) transformMagicalChantCards(player);
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
       if (preserveOwnerOnlyMeta) {
@@ -6347,6 +6371,75 @@ function wrapFinger(value) {
     }
     function countOwnBlessings(player){let n=0;for(const h of ["L","R"])n+=state.traps[player][h].filter(s=>CARD_LIBRARY[trapCardId(s)]?.blessing).length;return n;}
     function randomIndex(n){return n>0?Math.floor(Math.random()*n):-1;}
+    const MAGICAL_CHANT_LINES = [
+      "正義よりも蒼き者よ、愛よりも紅き者よ",
+      "運命の中に埋もれしそなたの名に懸けて　我、ここで光に誓う",
+      "我が前に立ちはだかる憎らしき存在たちへ　我とそなたの力を合わせ、偉大なる愛の力を示さんことを"
+    ];
+
+    function hasCompletedMagicalBlessing(player) {
+      return ["magicalLove","magicalJustice","magicalHappiness","magicalCourage"].some(id =>
+        ["L","R"].some(hand => hasAttachment(player, hand, id))
+      );
+    }
+
+    function effectiveCardIdForPlayer(player, cardId) {
+      if (cardId === "magicalChant" && (state.magicalChantCompleted?.[player] || hasCompletedMagicalBlessing(player))) return "arcanaSlave";
+      return cardId;
+    }
+
+    function transformMagicalChantCards(player) {
+      for (const zone of [state.hands[player], state.decks[player], state.discard[player]]) {
+        for (let i = 0; i < zone.length; i++) if (zone[i] === "magicalChant") zone[i] = "arcanaSlave";
+      }
+    }
+
+    function returnOneCardFromDiscardToDeck(player, cardId) {
+      const index = state.discard[player].lastIndexOf(cardId);
+      if (index < 0) return false;
+      state.discard[player].splice(index, 1);
+      state.decks[player].push(cardId);
+      shuffle(state.decks[player]);
+      return true;
+    }
+
+    async function useMagicalChant(player) {
+      state.magicalChantProgress = state.magicalChantProgress || { human: 0, cpu: 0 };
+      state.magicalChantCompleted = state.magicalChantCompleted || { human: false, cpu: false };
+      const next = Math.min(3, Number(state.magicalChantProgress[player] || 0) + 1);
+      state.magicalChantProgress[player] = next;
+      await showPopup(player, `詠唱・第${next}段階`, MAGICAL_CHANT_LINES[next - 1], "action", next === 3 ? 1900 : 1450);
+      addLog(`${handNames[player]}の「魔法少女の詠唱」が${next}/3まで進んだ。`);
+      returnOneCardFromDiscardToDeck(player, "magicalChant");
+      if (next >= 3) {
+        state.magicalChantCompleted[player] = true;
+        transformMagicalChantCards(player);
+        await showPopup(player, "詠唱完了", "すべての「魔法少女の詠唱」が「アルカナ・スレイブ！！」へ変化した。", "action", 1500);
+        addLog(`${handNames[player]}は詠唱を完成させた。以後、同名カードは「アルカナ・スレイブ！！」になる。`);
+      } else {
+        addLog(`使用した「魔法少女の詠唱」は山札へ戻り、山札をシャッフルした。`);
+      }
+    }
+
+    async function beginArcanaSlave(player) {
+      const opponent = otherPlayer(player);
+      const alive = ["L","R"].filter(h => state[opponent][h] > 0);
+      if (!alive.length) return false;
+      if (player === "human") {
+        state.mode = "arcanaSlaveTarget";
+        setMessage("「アルカナ・スレイブ！！」：0にする相手の手を選んでください。");
+        return true;
+      }
+      const target = alive.sort((a,b) => state[opponent][b] - state[opponent][a])[0];
+      const before = state[opponent][target];
+      state[opponent][target] = 0;
+      clearBrokenTraps(opponent);
+      state.pendingTerminalEnd[player] = true;
+      await showPopup(player, "アルカナ・スレイブ！！", `${handNames[opponent]}の${handNames[target]}を${before}→0`, "action", 1500);
+      addLog(`${handNames[player]}の「アルカナ・スレイブ！！」が${handNames[opponent]}の${handNames[target]}を0にした。`);
+      return true;
+    }
+
     async function useWornHope(player){
       const ok=["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"];
       const c=state.discard[player].map((id,index)=>({id,index})).filter(x=>ok.includes(x.id)); if(!c.length)return false;
@@ -7353,7 +7446,8 @@ function renderLastAction() {
       }
 
       state.hands.human.forEach((cardId, index) => {
-        const card = CARD_LIBRARY[cardId];
+        const effectiveCardId = effectiveCardIdForPlayer("human", cardId);
+        const card = CARD_LIBRARY[effectiveCardId];
         const isTrap = !!card.trap;
         const isZoneCard = !!(card.trap || card.blessing || card.curse);
         const setupActive = state.turn === "human" && !state.gameOver && !state.animating && state.temp.human.setupMode;
@@ -7426,7 +7520,7 @@ function renderLastAction() {
           <div class="card-cost">コスト ${card.cost}</div>
           ${displaySettings.compactCardDescriptions
             ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
-            : `<div class="card-text">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
+            : `<div class="card-text">${cardId === "magicalChant" && effectiveCardId === "magicalChant" ? `<strong>詠唱進捗：${Number(state.magicalChantProgress?.human || 0)}/3</strong><br>${escapeHtml(card.text)}` : card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
           ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
@@ -7439,7 +7533,7 @@ function renderLastAction() {
                     : '<div class="used">カード関連行動は使用済み</div>')
               : ''}
         `;
-        attachCardLongPress(div, cardId);
+        attachCardLongPress(div, effectiveCardId);
         if (discardPlayable) {
           div.addEventListener("click", () => chooseRepairDiscard(index));
         }
@@ -7946,7 +8040,8 @@ function renderLastAction() {
     async function playCard(player, handIndex, showPopup = true) {
       if (state.gameOver || state.turn !== player) return false;
 
-      const cardId = state.hands[player][handIndex];
+      const rawCardId = state.hands[player][handIndex];
+      const cardId = effectiveCardIdForPlayer(player, rawCardId);
       const card = CARD_LIBRARY[cardId];
 
       if (isTutorialBattle() && player === "human" && tutorial.expected !== `card:${cardId}`) {
@@ -7982,7 +8077,7 @@ function renderLastAction() {
 
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
-      state.discard[player].push(cardId);
+      state.discard[player].push(rawCardId);
       markChargeCardUsedThisTurn(player, cardId);
       consumeCardActionAllowance(player, { lightSpeedChargePlayable });
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
@@ -8025,6 +8120,8 @@ function renderLastAction() {
           setMessage("「落ち着ける」：捨てる手札を1枚選んでください。");
         } else if (cardId === "andante" && state.mode === "andante") {
           setMessage("「アンダンテ」：微調整する自分の0でない手を選んでください。");
+        } else if (cardId === "arcanaSlave" && state.mode === "arcanaSlaveTarget") {
+          setMessage("「アルカナ・スレイブ！！」：0にする相手の手を選んでください。");
         } else if (cardId === "withLove" && state.mode === "magicalWithLove") {
           setMessage("「愛で！」：2にする自分の手を選んでください。0の手も選べます。");
         } else if (cardId === "betrayedHeart" && state.mode === "magicalBetrayedHeart") {
@@ -9688,6 +9785,30 @@ async function endTurn() {
 
       if (state.gameOver || state.animating || state.turn !== "human") return;
 
+      if (state.mode === "arcanaSlaveTarget") {
+        if (owner !== "cpu" || state.cpu[hand] <= 0) {
+          setMessage("「アルカナ・スレイブ！！」：相手の0ではない手を選んでください。");
+          return;
+        }
+        const before = state.cpu[hand];
+        state.cpu[hand] = 0;
+        clearBrokenTraps("cpu");
+        state.mode = "attack";
+        state.pendingTerminalEnd.human = true;
+        await showPopup("human", "アルカナ・スレイブ！！", `${handNames[hand]}を${before}→0`, "action", 1500);
+        addLog(`あなたの「アルカナ・スレイブ！！」が相手の${handNames[hand]}を0にした。`);
+        setMessage(`「アルカナ・スレイブ！！」：相手の${handNames[hand]}を0にしました。`);
+        checkWin();
+        render();
+        if (!state.gameOver && state.turn === "human") {
+          state.pendingTerminalEnd.human = false;
+          await endTurn();
+        } else if (state.battleMode === "friend") {
+          scheduleFriendStatePublish();
+        }
+        return;
+      }
+
       if (state.mode === "magicalWithLove") {
         if (owner !== "human") {
           setMessage("自分の手を選んでください。");
@@ -9990,6 +10111,8 @@ async function endTurn() {
       state.activeNoDraw = { human: 0, cpu: 0 };
       state.pendingTerminalEnd = { human: false, cpu: false };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
+      state.magicalChantProgress = { human: 0, cpu: 0 };
+      state.magicalChantCompleted = { human: false, cpu: false };
       state.costLimitNextTurn = { human: null, cpu: null };
       state.activeCostLimit = { human: null, cpu: null };
       state.berserkerTurns = { human: 0, cpu: 0 };
