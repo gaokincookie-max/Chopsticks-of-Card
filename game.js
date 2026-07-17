@@ -1615,9 +1615,27 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v93-isolated-tutorial-battle";
+    const LATEST_NEWS_ID = "v94-tutorial-action-lock-fix";
 
     const UPDATE_NEWS = [
+      {
+        id: "v94-tutorial-action-lock-fix",
+        version: "v94",
+        date: "2026-07-17",
+        title: "チュートリアルの操作制限と進行を修正",
+        summary: "意図しない攻撃、分ける章での攻撃、ひらめき使用後に進まない問題を修正しました。",
+        featured: false,
+        tags: ["fix"],
+        items: [
+          "第1章を自分1・1／相手1・1から始まる指定進行へ変更",
+          "右手で相手左を攻撃後、練習CPUが左手で自分右を攻撃",
+          "自分1・3／相手2・1から右手で相手左を5にして0化",
+          "指定された手以外と、手を使わない課題中の全手入力を無効化",
+          "分ける章では攻撃を完全に禁止",
+          "ひらめきなど通常カードの効果解決後に章を進めるよう修正",
+          "罠・加護・呪縛は実際に設置完了した後で進行"
+        ]
+      },
       {
         id: "v93-isolated-tutorial-battle",
         version: "v93",
@@ -3918,6 +3936,10 @@ const CARD_LIBRARY = {
 
     function setRealTutorialGuide(text, expected, progress, total) {
       tutorial.expected = expected;
+      document.body.classList.toggle(
+        "tutorial-split-only",
+        isTutorialBattle() && (expected === "split" || expected === "confirmSplit")
+      );
       elements.realTutorialText.innerHTML = text;
       elements.realTutorialProgressFill.style.width = `${Math.max(0, Math.min(100, progress / total * 100))}%`;
       setMessage(text.replace(/<[^>]*>/g, ""));
@@ -4031,13 +4053,21 @@ const CARD_LIBRARY = {
     function renderRealTutorialStep() {
       const ch=tutorial.chapter, st=tutorial.step;
       if(ch===1){
-        const total=8;
-        if(st===0){ realTutorialHands(1,1,1,1); realTutorialCards([]); setRealTutorialGuide("通常試合と同じ操作です。まず自分の右手を選んでください。","humanR",1,total); }
-        else if(st===1){ setRealTutorialGuide("次に相手の左手を選びます。1＋1で相手の手は2になります。","cpuL",2,total); }
-        else if(st===2){ realTutorialHands(1,1,4,1); setRealTutorialGuide("5になった手は0になります。自分の右手を選んでください。","humanR",3,total); }
-        else if(st===3){ setRealTutorialGuide("相手の左手4を選び、4＋1＝5→0を確認しましょう。","cpuL",4,total); }
-        else if(st===4){ realTutorialHands(3,1,4,1); setRealTutorialGuide("6以上は5を引いた余りになります。自分の左手3を選んでください。","humanL",5,total); }
-        else if(st===5){ setRealTutorialGuide("相手の左手4を選びます。4＋3＝7→2になります。","cpuL",6,total); }
+        const total=5;
+        if(st===0){
+          realTutorialHands(1,1,1,1);
+          realTutorialCards([]);
+          setRealTutorialGuide("自分も相手も1・1で始まります。まず自分の右手を選んでください。","humanR",1,total);
+        }
+        else if(st===1){
+          setRealTutorialGuide("相手の左手を選んで攻撃します。相手の左手は1＋1＝2になります。","cpuL",2,total);
+        }
+        else if(st===2){
+          setRealTutorialGuide("練習CPUが左手2で、あなたの右手1を攻撃しました。盤面は自分1・3、相手2・1です。自分の右手3を選んでください。","humanR",3,total);
+        }
+        else if(st===3){
+          setRealTutorialGuide("相手の左手2を選びます。2＋3＝5なので、その手は0になります。","cpuL",4,total);
+        }
         else finishRealTutorialChapter();
       } else if(ch===2){
         const total=4;
@@ -4107,33 +4137,71 @@ const CARD_LIBRARY = {
     }
 
     function tutorialExpectedHand(owner, hand) {
-      if(!tutorial.usingRealBattle || state.battleMode!=="tutorial") return true;
+      if(!tutorial.usingRealBattle || !isTutorialBattle()) return true;
       const map={humanL:["human","L"],humanR:["human","R"],cpuL:["cpu","L"],cpuR:["cpu","R"]};
       const exp=map[tutorial.expected];
-      if(!exp) return true;
+
+      if(!exp){
+        setMessage(
+          tutorial.expected === "split" || tutorial.expected === "confirmSplit"
+            ? "この課題では攻撃できません。黄色く光っている「分ける」の操作をしてください。"
+            : tutorial.expected?.startsWith("card:")
+              ? "今は黄色く光っているカードを使ってください。"
+              : "今は説明に従ってください。"
+        );
+        return false;
+      }
+
       if(exp[0]===owner && exp[1]===hand) return true;
-      setMessage("今は黄色く光っている場所を選んでください。");
+      setMessage("今は黄色く光っている手だけを選んでください。");
       return false;
     }
 
     function tutorialAfterHandClick(owner,hand) {
-      if(!tutorial.usingRealBattle || state.battleMode!=="tutorial") return;
+      if(!tutorial.usingRealBattle || !isTutorialBattle()) return;
       const expected=tutorial.expected;
       const expectedMap={humanL:["human","L"],humanR:["human","R"],cpuL:["cpu","L"],cpuR:["cpu","R"]};
       const exp=expectedMap[expected];
       if(!exp || exp[0]!==owner || exp[1]!==hand) return;
+
+      if(tutorial.chapter===1 && tutorial.step===1 && owner==="cpu" && hand==="L"){
+        setTimeout(async()=>{
+          if(!isTutorialBattle()) return;
+          state.tutorialScriptedCpuAction=true;
+          state.turn="cpu";
+          render();
+          await attack("cpu","L","human","R");
+          state.tutorialScriptedCpuAction=false;
+          freezeTutorialBattleToHumanTurn();
+
+          state.human.L=1;
+          state.human.R=3;
+          state.cpu.L=2;
+          state.cpu.R=1;
+          render();
+
+          tutorial.step=2;
+          renderRealTutorialStep();
+        },900);
+        return;
+      }
+
       setTimeout(()=>{
-        if(tutorial.chapter===4 && [1,4].includes(tutorial.step)) tutorial.step++;
-        else if(tutorial.chapter===5 && [1,3].includes(tutorial.step)) tutorial.step++;
-        else tutorial.step++;
+        if(!isTutorialBattle()) return;
+        tutorial.step++;
         renderRealTutorialStep();
       },700);
     }
 
     function tutorialAfterCard(cardId) {
-      if(!tutorial.usingRealBattle || state.battleMode!=="tutorial") return;
+      if(!tutorial.usingRealBattle || !isTutorialBattle()) return;
       if(tutorial.expected!==`card:${cardId}`) return;
-      setTimeout(()=>{ tutorial.step++; renderRealTutorialStep(); },650);
+      const expectedStep=tutorial.step;
+      setTimeout(()=>{
+        if(!isTutorialBattle() || tutorial.step!==expectedStep) return;
+        tutorial.step++;
+        renderRealTutorialStep();
+      },650);
     }
 
     function showScreen(screen) {
@@ -7216,6 +7284,11 @@ function renderLastAction() {
     function selectTrapCard(index) {
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
+
+      if (isTutorialBattle() && tutorial.expected !== `card:${cardId}`) {
+        setMessage("今は黄色く光っているカードだけを使ってください。");
+        return;
+      }
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed("human", cardId);
       if (!canUseChargeCardThisTurn("human", cardId)) {
         setMessage(`「${card?.name || "このカード"}」はこのターンすでに使用しています。`);
@@ -7251,13 +7324,6 @@ function renderLastAction() {
     async function setTrap(player, hand, handIndex, owner = player) {
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
-      if (tutorial.usingRealBattle && state.battleMode === "tutorial" && player === "human") {
-        if (tutorial.expected !== `card:${cardId}`) {
-          setMessage("今は黄色く光っているカードを使ってください。");
-          return false;
-        }
-        tutorialAfterCard(cardId);
-      }
       if (!card || !isAttachmentCard(cardId)) return false;
       const setupActive = !!state.temp[player].setupMode;
       if (setupActive && !card.trap) return false;
@@ -7329,6 +7395,11 @@ function renderLastAction() {
       }
       triggerChemicalGeneration(player, cardId);
       render();
+
+      if (isTutorialBattle() && player === "human") {
+        tutorialAfterCard(cardId);
+      }
+
       // 罠・加護・呪縛の設置は相手側の表示に直結するため、オンラインでは即時同期する。
       if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
         await publishFriendStateNow();
@@ -7341,6 +7412,11 @@ function renderLastAction() {
 
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
+
+      if (isTutorialBattle() && player === "human" && tutorial.expected !== `card:${cardId}`) {
+        setMessage("今は黄色く光っているカードだけを使ってください。");
+        return false;
+      }
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
       if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable) return false;
       if (!card || isAttachmentCard(cardId)) return false;
@@ -7388,6 +7464,10 @@ function renderLastAction() {
       await card.effect(player);
       triggerChemicalGeneration(player, cardId);
       checkWin();
+
+      if (isTutorialBattle() && player === "human") {
+        tutorialAfterCard(cardId);
+      }
 
       if (player === "human") {
         if (cardId === "calm" && state.mode === "moveOne") {
@@ -9516,7 +9596,7 @@ async function endTurn() {
     });
 
     elements.splitBtn.addEventListener("click", () => {
-      if (tutorial.usingRealBattle && state.battleMode === "tutorial") {
+      if (isTutorialBattle()) {
         if (tutorial.expected !== "split") {
           setMessage("今は指定された操作を行ってください。");
           return;

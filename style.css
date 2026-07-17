@@ -3220,3 +3220,20 @@
   .real-tutorial-overlay-actions { width:100%; }
   .real-tutorial-overlay-actions button { flex:1; }
 }
+
+
+/* v94: tutorial action locks */
+body.tutorial-split-only #humanL,
+body.tutorial-split-only #humanR,
+body.tutorial-split-only #cpuL,
+body.tutorial-split-only #cpuR,
+body.tutorial-split-only #humanCards {
+  opacity: .42;
+  filter: grayscale(.35);
+}
+body.tutorial-split-only #humanL,
+body.tutorial-split-only #humanR,
+body.tutorial-split-only #cpuL,
+body.tutorial-split-only #cpuR {
+  cursor: not-allowed;
+}
