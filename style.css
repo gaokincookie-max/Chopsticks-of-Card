@@ -3480,3 +3480,21 @@ body.tutorial-split-only #cpuR {
   35%{transform:rotate(135deg) scale(1.7);opacity:1}
   100%{transform:translateY(-80px) rotate(315deg) scale(.2);opacity:0}
 }
+
+/* v103: magical evolution cards */
+.game-card.magical-evolution-card,
+.deck-row.magical-evolution-card {
+  border: 3px solid transparent !important;
+  background:
+    linear-gradient(var(--panel,#171624),var(--panel,#171624)) padding-box,
+    conic-gradient(#ff5fa2,#6da9ff,#ffe35c,#63e59c,#c77dff,#ff5fa2) border-box !important;
+  box-shadow: 0 0 12px rgba(255,255,255,.65), 0 0 24px rgba(193,119,255,.45) !important;
+}
+.game-card.magical-evolution-card .card-name,
+.deck-row.magical-evolution-card .deck-card-name {
+  background: linear-gradient(90deg,#ff79b7,#79b8ff,#ffe36b,#6ee6a0,#d18aff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 1000;
+}

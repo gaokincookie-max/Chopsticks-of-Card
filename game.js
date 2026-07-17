@@ -1492,17 +1492,93 @@ const CARD_LIBRARY = {
         blessing: true, token: true, magicalTransformed: true, magicalColor: "courage",
         canPlay: () => false
       },
+      wornHope: {
+        name: "すり減る希望", cost: 2, type: "補助 / 魔法少女・感情変化",
+        text: "捨て札の「憎悪」「絶望」「貪欲」「憤怒」「虚無」から1枚を選び、山札へ戻してシャッフルする。その後、手札を1枚捨てる。",
+        magicalEvolutionBase: true,
+        canPlay: (player) => state.discard[player].some(id => ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id)),
+        effect: async (player) => { await useWornHope(player); }
+      },
+      togetherWithFriends: {
+        name: "仲間と共に", cost: 2, type: "補助 / 魔法少女・変身後",
+        text: "捨て札からランダムに3枚を山札へ戻してシャッフルし、カードを3枚引く。",
+        token: true, magicalEvolution: true,
+        canPlay: (player) => state.discard[player].length > 0,
+        effect: (player) => useTogetherWithFriends(player)
+      },
+      hysteria: {
+        name: "ヒステリー", cost: 2, type: "補助 / 魔法少女・感情変化",
+        text: "自分の場の加護をランダムに1枚捨て、山札のデッキ投入可能な加護をランダムに1枚手札へ加える。",
+        magicalEvolutionBase: true,
+        canPlay: (player) => countOwnBlessings(player) > 0 && state.decks[player].some(id => CARD_LIBRARY[id]?.blessing && !CARD_LIBRARY[id]?.token),
+        effect: (player) => useHysteria(player)
+      },
+      withLove: {
+        name: "愛で！", cost: 2, type: "補助 / 魔法少女・変身後",
+        text: "自分の手を1つ選んで2にする。0の手も選べる。その後、カードを1枚引く。",
+        token: true, magicalEvolution: true, canPlay: () => true,
+        effect: (player) => beginWithLove(player)
+      },
+      fadedCreed: {
+        name: "色褪せた信条", cost: 2, type: "補助 / 魔法少女・感情変化",
+        text: "生存している自分の手をランダムに1つ選び、1本加える。次の相手ターン終了時まで、攻撃で受ける本数を-1する（最低1）。",
+        magicalEvolutionBase: true,
+        canPlay: (player) => ["L","R"].some(h => state[player][h] > 0),
+        effect: async (player) => { await useFadedCreed(player); }
+      },
+      knightCreed: {
+        name: "騎士の信条", cost: 2, type: "補助 / 魔法少女・変身後",
+        text: "次の相手ターン終了時まで、相手の通常攻撃によって自分の手の本数が変化しない。",
+        token: true, magicalEvolution: true, canPlay: () => true,
+        effect: (player) => { state.temp[player].knightCreed = true; addLog(`${handNames[player]}は「騎士の信条」を掲げた。`); }
+      },
+      intemperance: {
+        name: "無節制", cost: 3, type: "終端 / 魔法少女・感情変化",
+        text: "終端。自分の生存している両手に1本ずつ加え、カードを3枚引く。",
+        terminal: true, magicalEvolutionBase: true,
+        canPlay: (player) => ["L","R"].some(h => state[player][h] > 0),
+        effect: async (player) => { for (const h of ["L","R"]) if (state[player][h] > 0) await addFingersWithCalculation(player,h,1,"無節制"); drawCard(player); drawCard(player); drawCard(player); state.pendingTerminalEnd[player] = true; }
+      },
+      goldMadness: {
+        name: "黄金狂", cost: 3, type: "補助 / 魔法少女・変身後",
+        text: "このカードの使用後、このターン中にさらにカードを2枚使用できる。このカードは1ターンに1枚しか使用できない。",
+        token: true, magicalEvolution: true,
+        canPlay: (player) => !state.temp[player].goldMadnessUsed,
+        effect: (player) => { state.temp[player].goldMadnessUsed = true; state.temp[player].cardExtraUses = (state.temp[player].cardExtraUses || 0) + 2; addLog(`${handNames[player]}は「黄金狂」により、このターンさらにカードを2枚使用できる。`); }
+      },
+      betrayedHeart: {
+        name: "裏切られた心", cost: 2, type: "補助 / 魔法少女・感情変化",
+        text: "自分の手を1つ選び、1本加える。このターン、自分の攻撃で相手へ加える本数を-1する（最低1）。",
+        magicalEvolutionBase: true,
+        canPlay: (player) => ["L","R"].some(h => state[player][h] > 0),
+        effect: (player) => beginBetrayedHeart(player)
+      },
+      friendship: {
+        name: "友情", cost: 2, type: "補助 / 魔法少女・変身後",
+        text: "このターン、通常攻撃可能回数を2回にする。このカードは1ターンに1枚しか使用できない。",
+        token: true, magicalEvolution: true,
+        canPlay: (player) => !state.temp[player].friendshipUsed,
+        effect: (player) => { state.temp[player].friendshipUsed = true; state.temp[player].attackLimit = Math.max(2, state.temp[player].attackLimit || 1); addLog(`${handNames[player]}は「友情」により、このターン通常攻撃を2回まで行える。`); }
+      },
+      emptyHeart: {
+        name: "空虚な心", cost: 2, type: "補助 / 魔法少女・感情変化",
+        text: "このカード以外の自分の手札をすべて捨てる。次の自分のターン開始時、捨てた枚数分カードを引く。",
+        magicalEvolutionBase: true, canPlay: () => true,
+        effect: async (player) => { await useEmptyHeart(player); }
+      },
+      fullHeart: {
+        name: "満ちる心", cost: 2, type: "補助 / 魔法少女・変身後",
+        text: "手札から1枚以上、好きな枚数を選んで捨てる。相手は同じ枚数だけ手札をランダムに捨てる。",
+        token: true, magicalEvolution: true,
+        canPlay: (player) => state.hands[player].length > 0,
+        effect: async (player) => { await useFullHeart(player); }
+      },
       magicalVoid: {
-        name: "虚無", cost: 2, type: "終端 / 魔法少女",
-        text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させ、ターンを終了する。",
-        terminal: true,
+        name: "虚無", cost: 2, type: "魔法少女",
+        text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させる。",
         canPlay: (player) => canActivateMagicalVoid(player),
         effect: async (player) => {
-          const transformed = await activateMagicalVoid(player);
-          if (!transformed) {
-            state.pendingTerminalEnd[player] = false;
-          }
-          return transformed;
+          return await activateMagicalVoid(player);
         }
       },
       slowCurse: {
@@ -1574,6 +1650,12 @@ const CARD_LIBRARY = {
       magicalGreed: 1,
       magicalWrath: 1,
       magicalVoid: 1,
+      wornHope: 1,
+      hysteria: 1,
+      fadedCreed: 1,
+      intemperance: 1,
+      betrayedHeart: 1,
+      emptyHeart: 1,
       guardBlessing: 1,
       growthBlessing: 1,
       recklessBlessing: 1,
@@ -5081,10 +5163,14 @@ function wrapFinger(value) {
         const card = CARD_LIBRARY[cardId];
         const count = counts[cardId] || 0;
         const row = document.createElement("div");
-        row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "") + (card.token ? " generated-card" : "");
+        row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "") + (card.token ? " generated-card" : "") + (card.magicalEvolution ? " magical-evolution-card" : "");
         const relatedButtons = [];
         if (cardId === "focusedShot") relatedButtons.push('<button class="deck-inline-info" data-info="logicCrusherBullet">生成カード「ロジックアトリエ」を確認</button>');
         if (cardId === "lastMelody") relatedButtons.push('<button class="deck-inline-info" data-info="finale">生成カード「フィナーレ」を確認</button>');
+        if (MAGICAL_EVOLUTION_MAP[cardId]) {
+          const transformedId = MAGICAL_EVOLUTION_MAP[cardId];
+          relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">変身後「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
+        }
         if (["allegro", "resonanceTuning", "crescendo", "dance", "largo", "andante", "lastMelody"].includes(cardId)) relatedButtons.push('<button class="deck-inline-info" data-info="resonance">共鳴とは？</button>');
         const relatedButton = relatedButtons.join("");
         row.innerHTML = `
@@ -5935,6 +6021,13 @@ function wrapFinger(value) {
 
       // 魔法少女のターン開始効果。ここで例外が出るとターン移行全体が止まるため、
       // 必ず共通のdrawCard()を使い、実行内容をログへ残す。
+      state.pendingMagicalHeartDraw = state.pendingMagicalHeartDraw || { human: 0, cpu: 0 };
+      const magicalHeartDraw = Number(state.pendingMagicalHeartDraw[player] || 0);
+      if (magicalHeartDraw > 0) {
+        state.pendingMagicalHeartDraw[player] = 0;
+        for (let i=0;i<magicalHeartDraw;i++) drawCard(player);
+      }
+
       const greedCount = countOwnAttachment(player, "magicalGreed");
       if (greedCount > 0) {
         let greedDrawn = 0;
@@ -6237,6 +6330,34 @@ function wrapFinger(value) {
       return !!(card?.trap || card?.blessing || card?.curse);
     }
 
+    const MAGICAL_EVOLUTION_MAP = {
+      wornHope: "togetherWithFriends", hysteria: "withLove",
+      fadedCreed: "knightCreed", intemperance: "goldMadness",
+      betrayedHeart: "friendship", emptyHeart: "fullHeart"
+    };
+    function transformMagicalEvolutionCards(player) {
+      const f=id=>MAGICAL_EVOLUTION_MAP[id]||id;
+      state.hands[player]=state.hands[player].map(f);
+      state.decks[player]=state.decks[player].map(f);
+      state.discard[player]=state.discard[player].map(f);
+    }
+    function countOwnBlessings(player){let n=0;for(const h of ["L","R"])n+=state.traps[player][h].filter(s=>CARD_LIBRARY[trapCardId(s)]?.blessing).length;return n;}
+    function randomIndex(n){return n>0?Math.floor(Math.random()*n):-1;}
+    async function useWornHope(player){
+      const ok=["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"];
+      const c=state.discard[player].map((id,index)=>({id,index})).filter(x=>ok.includes(x.id)); if(!c.length)return false;
+      let p=c[player==="human"?Math.max(0,Math.min(c.length-1,(Number(prompt(c.map((x,i)=>`${i+1}. ${CARD_LIBRARY[x.id].name}`).join("\n")))-1)||0)):randomIndex(c.length)];
+      state.decks[player].push(state.discard[player].splice(p.index,1)[0]); shuffle(state.decks[player]);
+      if(state.hands[player].length){let i=player==="human"?Math.max(0,Math.min(state.hands[player].length-1,(Number(prompt(state.hands[player].map((id,j)=>`${j+1}. ${CARD_LIBRARY[id]?.name||id}`).join("\n")))-1)||0)):randomIndex(state.hands[player].length);const [id]=state.hands[player].splice(i,1);state.discard[player].push(id);await handleCardDiscardEffect(player,id);}
+      return true;
+    }
+    function useTogetherWithFriends(player){const n=Math.min(3,state.discard[player].length);for(let i=0;i<n;i++)state.decks[player].push(state.discard[player].splice(randomIndex(state.discard[player].length),1)[0]);shuffle(state.decks[player]);drawCard(player);drawCard(player);drawCard(player);}
+    function useHysteria(player){const b=[];for(const h of ["L","R"])state.traps[player][h].forEach((s,i)=>{const id=trapCardId(s);if(CARD_LIBRARY[id]?.blessing)b.push({h,i,id});});const d=state.decks[player].map((id,i)=>({id,i})).filter(x=>CARD_LIBRARY[x.id]?.blessing&&!CARD_LIBRARY[x.id]?.token);if(!b.length||!d.length)return false;const lost=b[randomIndex(b.length)],gain=d[randomIndex(d.length)];state.traps[player][lost.h].splice(lost.i,1);state.discard[player].push(lost.id);state.decks[player].splice(gain.i,1);state.hands[player].push(gain.id);render();return true;}
+    function beginWithLove(player){if(player==="human"){state.mode="magicalWithLove";setMessage("「愛で！」：2にする自分の手を選んでください。0の手も選べます。");}else{const h=state[player].L===0?"L":state[player].R===0?"R":"L";state[player][h]=2;clearBrokenTraps(player);drawCard(player);}}
+    async function useFadedCreed(player){const c=["L","R"].filter(h=>state[player][h]>0);if(!c.length)return false;await addFingersWithCalculation(player,c[randomIndex(c.length)],1,"色褪せた信条");state.temp[player].fadedCreedGuard=true;}
+    function beginBetrayedHeart(player){state.temp[player].betrayedHeartPenalty=true;if(player==="human"){state.mode="magicalBetrayedHeart";setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");}else{const c=["L","R"].filter(h=>state[player][h]>0);if(c.length)addFingersWithCalculation(player,c[randomIndex(c.length)],1,"裏切られた心");}}
+    async function useEmptyHeart(player){const n=state.hands[player].length;while(state.hands[player].length){const id=state.hands[player].shift();state.discard[player].push(id);await handleCardDiscardEffect(player,id);}state.pendingMagicalHeartDraw=state.pendingMagicalHeartDraw||{human:0,cpu:0};state.pendingMagicalHeartDraw[player]=(state.pendingMagicalHeartDraw[player]||0)+n;}
+    async function useFullHeart(player){if(!state.hands[player].length)return false;let idx=[];if(player==="human"){const raw=prompt(state.hands[player].map((id,i)=>`${i+1}. ${CARD_LIBRARY[id]?.name||id}`).join("\n"),"1");idx=[...new Set(String(raw||"").split(",").map(x=>Number(x.trim())-1).filter(i=>i>=0&&i<state.hands[player].length))];}else idx=state.hands[player].map((_,i)=>i).slice(0,Math.max(1,Math.ceil(state.hands[player].length/2)));if(!idx.length)return false;idx.sort((a,b)=>b-a);for(const i of idx){const [id]=state.hands[player].splice(i,1);state.discard[player].push(id);await handleCardDiscardEffect(player,id);}discardRandomCards(otherPlayer(player),idx.length,"「満ちる心」");return true;}
     const MAGICAL_CORE_MAP = {
       magicalHatred: "magicalLove",
       magicalDespair: "magicalJustice",
@@ -6312,6 +6433,8 @@ function wrapFinger(value) {
         if (player === "human" || state.battleMode !== "friend") {
           await showMagicalTransformationFx();
         }
+
+        transformMagicalEvolutionCards(player);
 
         for (const [beforeId, afterId] of Object.entries(MAGICAL_CORE_MAP)) {
           const loc = found[beforeId];
@@ -7241,7 +7364,7 @@ function renderLastAction() {
           state.turn === "human" &&
           !state.gameOver &&
           !state.animating &&
-          !state.temp.human.cardActionUsed &&
+          (!state.temp.human.cardActionUsed || Number(state.temp.human.cardExtraUses || 0) > 0) &&
           !berserkLocked;
         const lightSpeedChargePlayable =
           state.turn === "human" &&
@@ -7283,6 +7406,7 @@ function renderLastAction() {
           (card.blessing ? " blessing-card" : "") +
           (card.curse ? " curse-card" : "") +
           (card.directive ? " directive-card" : "") +
+          (card.magicalEvolution ? " magical-evolution-card" : "") +
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
           (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || cityWillPlayable || advanceNoticePlayable ? " playable" : "") +
@@ -7752,7 +7876,8 @@ function renderLastAction() {
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
         if (!setupActive) {
-          state.temp[player].cardActionUsed = true;
+          if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable && Number(state.temp[player].cardExtraUses || 0) > 0) state.temp[player].cardExtraUses -= 1;
+      else state.temp[player].cardActionUsed = true;
           state.mode = "attack";
         } else {
           state.mode = "setupTrap";
@@ -7812,7 +7937,8 @@ function renderLastAction() {
         return false;
       }
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
-      if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable) return false;
+      const magicalExtraCardPlayable = Number(state.temp[player].cardExtraUses || 0) > 0;
+      if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable && !magicalExtraCardPlayable) return false;
       if (!card || isAttachmentCard(cardId)) return false;
       if (!card.canPlay(player)) {
         if (player === "human" && cardId === "lightSpeedCircuit") {
@@ -7882,6 +8008,10 @@ function renderLastAction() {
           setMessage("「落ち着ける」：捨てる手札を1枚選んでください。");
         } else if (cardId === "andante" && state.mode === "andante") {
           setMessage("「アンダンテ」：微調整する自分の0でない手を選んでください。");
+        } else if (cardId === "withLove" && state.mode === "magicalWithLove") {
+          setMessage("「愛で！」：2にする自分の手を選んでください。0の手も選べます。");
+        } else if (cardId === "betrayedHeart" && state.mode === "magicalBetrayedHeart") {
+          setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");
         } else if (cardId === "dimensionalSlash" && state.mode === "dimensionalSlashSacrifice") {
           setMessage("「空間切断」：代償として0にする自分の手を選んでください。");
         } else if (cardId === "setupTrap" && state.temp.human.setupMode) {
@@ -8232,7 +8362,19 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (ignoresOpponentBoardEffects(attacker)) {
         addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
       } else {
-        power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
+        if (state.temp[attacker]?.betrayedHeartPenalty) {
+          power = Math.max(1, power - 1);
+          addLog(`${handNames[attacker]}の「裏切られた心」により、与える本数-1。`);
+        }
+        if (state.temp[defender]?.knightCreed) {
+          power = 0;
+        } else {
+          if (state.temp[defender]?.fadedCreedGuard) {
+            power = Math.max(1, power - 1);
+            addLog(`${handNames[defender]}の「色褪せた信条」により、受ける本数-1。`);
+          }
+          power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
+        }
         if (hasAttachment(defender,targetHand,"magicalDespair")) {
           power=Math.max(1,power-1);
           addLog(`${handNames[defender]}の「絶望」により、受ける本数-1。`);
@@ -8360,6 +8502,13 @@ async function attack(attacker, attackHand, defender, targetHand) {
         return true;
       }
 
+      if (power <= 0) {
+        addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
+        state.animating = false;
+        state.temp[attacker].attacksUsed = (state.temp[attacker].attacksUsed || 0) + 1;
+        render();
+        return true;
+      }
       const before = state[defender][targetHand];
       const total = before + power;
       const overflowWouldApply = total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
@@ -9520,6 +9669,34 @@ async function endTurn() {
       if (tutorial.usingRealBattle && state.battleMode === "tutorial") tutorialAfterHandClick(owner, hand);
 
       if (state.gameOver || state.animating || state.turn !== "human") return;
+
+      if (state.mode === "magicalWithLove") {
+        if (owner !== "human") {
+          setMessage("自分の手を選んでください。");
+          return;
+        }
+        const before = state.human[hand];
+        state.human[hand] = 2;
+        clearBrokenTraps("human");
+        drawCard("human");
+        state.mode = "attack";
+        addLog(`あなたは「愛で！」で${handNames[hand]}を${before}→2にし、1枚引いた。`);
+        setMessage(`「愛で！」：${handNames[hand]}を2にして1枚引きました。`);
+        render();
+        return;
+      }
+
+      if (state.mode === "magicalBetrayedHeart") {
+        if (owner !== "human" || state.human[hand] <= 0) {
+          setMessage("自分の0でない手を選んでください。");
+          return;
+        }
+        await addFingersWithCalculation("human", hand, 1, "裏切られた心");
+        state.mode = "attack";
+        setMessage("「裏切られた心」：手を1本増やしました。このターン、与える本数-1。");
+        render();
+        return;
+      }
 
       if (state.mode === "dimensionalSlashSacrifice") {
         if (owner !== "human") {
