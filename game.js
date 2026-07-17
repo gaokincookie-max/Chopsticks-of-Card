@@ -1471,25 +1471,25 @@ const CARD_LIBRARY = {
       magicalLove: {
         name: "愛", cost: 2, type: "加護 / 魔法少女・変身後",
         text: "この手で攻撃するとき攻撃力+1。攻撃時、自分のもう片方が4なら-1、1か2なら+1する。疲弊による本数変化を受けない。",
-        blessing: true, magicalTransformed: true, magicalColor: "love",
+        blessing: true, token: true, magicalTransformed: true, magicalColor: "love",
         canPlay: () => false
       },
       magicalJustice: {
         name: "正義", cost: 2, type: "加護 / 魔法少女・変身後",
         text: "自分の両手が受ける攻撃の本数-2（最低1）。相手の罠を常に公開する。疲弊による本数変化を受けない。",
-        blessing: true, magicalTransformed: true, magicalColor: "justice",
+        blessing: true, token: true, magicalTransformed: true, magicalColor: "justice",
         canPlay: () => false
       },
       magicalHappiness: {
         name: "幸福", cost: 2, type: "加護 / 魔法少女・変身後",
         text: "この手で攻撃した後、カードを2枚引き、相手は手札をランダムに1枚捨てる。疲弊による本数変化を受けない。",
-        blessing: true, magicalTransformed: true, magicalColor: "happiness",
+        blessing: true, token: true, magicalTransformed: true, magicalColor: "happiness",
         canPlay: () => false
       },
       magicalCourage: {
         name: "勇気", cost: 2, type: "加護 / 魔法少女・変身後",
         text: "この手で攻撃するとき攻撃力+1。相手の手が7以上になった場合、超過計算をせず0にする。疲弊による本数変化を受けない。",
-        blessing: true, magicalTransformed: true, magicalColor: "courage",
+        blessing: true, token: true, magicalTransformed: true, magicalColor: "courage",
         canPlay: () => false
       },
       magicalVoid: {
@@ -1677,27 +1677,9 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v98-magical-girl-core";
+    const LATEST_NEWS_ID = "v97-dimensional-slash-self-sacrifice-fix";
 
     const UPDATE_NEWS = [
-      {
-        id: "v98-magical-girl-core",
-        version: "v98",
-        date: "2026-07-17",
-        title: "魔法少女「愛と憎しみの名の下に」先行実装",
-        summary: "憎悪・絶望・貪欲・憤怒と、4つを変身させる終端カード「虚無」を追加しました。",
-        featured: true,
-        tags: ["new-card", "system"],
-        items: [
-          "憎悪・絶望・貪欲・憤怒の4加護を追加",
-          "4種が揃った時だけ使用できる終端カード「虚無」を追加",
-          "愛・正義・幸福・勇気へ場のカードを直接変化",
-          "ジョーカーが溶け、4スートが交わる変身演出",
-          "変身後加護に虹色の枠を追加",
-          "愛はピンク、正義は青、幸福は黄色、勇気は緑で表示",
-          "CPU戦・オンライン同期・デッキ編集に対応"
-        ]
-      },
       {
         id: "v97-dimensional-slash-self-sacrifice-fix",
         version: "v97",
@@ -4990,7 +4972,8 @@ function wrapFinger(value) {
         cardId, card.name, card.type, card.text,
         card.trap ? "罠" : "", card.blessing ? "加護" : "",
         card.curse ? "呪縛" : "", card.chargeCard ? "充電" : "",
-        card.directive ? "指令" : "", card.token ? "生成カード" : ""
+        card.directive ? "指令" : "", card.token ? "生成カード" : "",
+        card.magicalTransformed ? "変身後 デッキ投入不可" : ""
       ].join(" "));
     }
 
