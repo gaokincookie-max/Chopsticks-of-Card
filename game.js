@@ -1585,6 +1585,8 @@ const CARD_LIBRARY = {
       turnNumber: 0,
       currentScreen: "menu",
       battleMode: "cpu",
+      tutorialBattleActive: false,
+      tutorialScriptedCpuAction: false,
       friendRoomId: null,
       friendRoomUrl: null,
       friendRole: null,
@@ -1613,9 +1615,26 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v92-tutorial-real-battle-ui";
+    const LATEST_NEWS_ID = "v93-isolated-tutorial-battle";
 
     const UPDATE_NEWS = [
+      {
+        id: "v93-isolated-tutorial-battle",
+        version: "v93",
+        date: "2026-07-17",
+        title: "チュートリアル対戦を通常CPU戦から分離",
+        summary: "通常対戦と同じ見た目・操作を保ちつつ、CPU思考や通常ターン進行が入り込まない専用対戦セッションへ変更しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "チュートリアル専用の試合状態を追加",
+          "通常のCPU思考・カード選択・追加行動を完全停止",
+          "ターン終了後にCPUへ自動で渡る処理を停止",
+          "通常の勝敗画面とゲーム終了処理を停止",
+          "罠の説明で必要なCPU攻撃だけを台本から実行",
+          "章終了・通常対戦開始時にチュートリアル状態を確実に解除"
+        ]
+      },
       {
         id: "v92-tutorial-real-battle-ui",
         version: "v92",
@@ -2849,6 +2868,8 @@ const CARD_LIBRARY = {
       const cleanId = extractRoomId(roomId) || makeRoomId();
       const roomChanged = state.friendRoomId !== cleanId || state.friendRole !== role;
       state.battleMode = "friend";
+      state.tutorialBattleActive = false;
+      state.tutorialScriptedCpuAction = false;
       state.friendRoomId = cleanId;
       state.friendRole = role;
       if (roomChanged) resetFriendMatchEntryState();
@@ -3293,6 +3314,8 @@ const CARD_LIBRARY = {
       const mine = state.friendRole === "host" ? match.host : match.guest;
       const other = state.friendRole === "host" ? match.guest : match.host;
       state.battleMode = "friend";
+      state.tutorialBattleActive = false;
+      state.tutorialScriptedCpuAction = false;
       handNames.cpu = "相手";
       state.friendMatchStarted = true;
       state.friendMatchId = getFriendMatchId(match) || String(Date.now());
@@ -3913,6 +3936,26 @@ const CARD_LIBRARY = {
       }
     }
 
+    function isTutorialBattle() {
+      return state.battleMode === "tutorial" && state.tutorialBattleActive === true;
+    }
+
+    function freezeTutorialBattleToHumanTurn() {
+      state.turn = "human";
+      state.mode = "attack";
+      state.selectedAttackHand = null;
+      state.selectedTrapCardIndex = null;
+      state.pendingTrapTargetEffect = null;
+      state.pendingSwapFirst = null;
+      state.pendingTerminalEnd.human = false;
+      state.pendingTerminalEnd.cpu = false;
+      state.gameOver = false;
+      state.matchResult = null;
+      elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
+      render();
+    }
+
     function setupRealTutorialBase(chapter) {
       tutorial.usingRealBattle = true;
       tutorial.chapter = chapter;
@@ -3922,10 +3965,14 @@ const CARD_LIBRARY = {
       tutorial.cardUsed = null;
 
       state.battleMode = "tutorial";
+      state.tutorialBattleActive = true;
+      state.tutorialScriptedCpuAction = false;
       handNames.cpu = "練習CPU";
       showScreen("battle");
       resetGame();
       state.battleMode = "tutorial";
+      state.tutorialBattleActive = true;
+      state.tutorialScriptedCpuAction = false;
       state.turn = "human";
       state.gameOver = false;
       state.animating = false;
@@ -4019,13 +4066,31 @@ const CARD_LIBRARY = {
         else if(st===1){ setRealTutorialGuide("空振りを自分の左手に置いてください。","humanL",2,total); }
         else if(st===2){
           setRealTutorialGuide("練習CPUが左手を攻撃します。実際の手動罠確認で「発動する」を選んでください。",null,3,total);
-          setTimeout(async()=>{ state.turn="cpu"; render(); await attack("cpu","L","human","L"); state.turn="human"; render(); },350);
+          setTimeout(async()=>{
+            if (!isTutorialBattle()) return;
+            state.tutorialScriptedCpuAction = true;
+            state.turn="cpu";
+            render();
+            await attack("cpu","L","human","L");
+            state.tutorialScriptedCpuAction = false;
+            freezeTutorialBattleToHumanTurn();
+          },350);
         }
         else if(st===3){ realTutorialHands(1,1,2,1); realTutorialCards(["thornTrap"]); setRealTutorialGuide("次は「茨」を押してください。","card:thornTrap",4,total); }
         else if(st===4){ setRealTutorialGuide("茨を自分の右手に置いてください。","humanR",5,total); }
         else if(st===5){
           setRealTutorialGuide("練習CPUが右手を攻撃します。茨は確認なしで自動発動します。",null,6,total);
-          setTimeout(async()=>{ state.turn="cpu"; render(); await attack("cpu","L","human","R"); state.turn="human"; render(); tutorial.step++; renderRealTutorialStep(); },350);
+          setTimeout(async()=>{
+            if (!isTutorialBattle()) return;
+            state.tutorialScriptedCpuAction = true;
+            state.turn="cpu";
+            render();
+            await attack("cpu","L","human","R");
+            state.tutorialScriptedCpuAction = false;
+            freezeTutorialBattleToHumanTurn();
+            tutorial.step++;
+            renderRealTutorialStep();
+          },350);
         }
         else finishRealTutorialChapter();
       } else if(ch===5){
@@ -4120,6 +4185,10 @@ const CARD_LIBRARY = {
         return;
       }
       state.battleMode = "cpu";
+      state.tutorialBattleActive = false;
+      state.tutorialScriptedCpuAction = false;
+      tutorial.usingRealBattle = false;
+      elements.realTutorialOverlay?.classList.add("hidden");
       handNames.cpu = "CPU";
       state.cpuDifficulty = difficulty;
       elements.cpuDifficultySelect.value = difficulty;
@@ -5500,6 +5569,18 @@ function wrapFinger(value) {
     }
 
     async function startTurn(player) {
+      if (isTutorialBattle()) {
+        if (player === "cpu") {
+          freezeTutorialBattleToHumanTurn();
+          return;
+        }
+        state.turn = "human";
+        state.mode = "attack";
+        state.selectedAttackHand = null;
+        state.gameOver = false;
+        render();
+        return;
+      }
       // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
       if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
       ensureOnlineStateMaps();
@@ -7593,6 +7674,11 @@ async function maybeChooseManualTrap(defender, candidates, context) {
     }
 
 async function attack(attacker, attackHand, defender, targetHand) {
+      if (isTutorialBattle() && attacker === "cpu" && !state.tutorialScriptedCpuAction) {
+        console.warn("Blocked unscripted CPU action during tutorial.");
+        freezeTutorialBattleToHumanTurn();
+        return false;
+      }
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
 
       state.animating = true;
@@ -7923,6 +8009,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
     }
 
 async function endTurn() {
+  if (isTutorialBattle()) {
+    freezeTutorialBattleToHumanTurn();
+    return;
+  }
   const endingPlayer=state.turn;
   if(state.temp[endingPlayer]?.lightSpeedCircuit){ setChargeLevel(endingPlayer,0); state.temp[endingPlayer].lightSpeedCircuit=false; addLog(`${handNames[endingPlayer]}の「光速回路」が終了し、充電が0になった。`); }
       if (checkWin()) {
@@ -8052,6 +8142,9 @@ async function endTurn() {
     }
 
     function checkWin() {
+      if (isTutorialBattle()) {
+        return false;
+      }
       const humanDead = isDead("human");
       const cpuDead = isDead("cpu");
       if (!humanDead && !cpuDead) return false;
@@ -8248,6 +8341,7 @@ async function endTurn() {
     }
 
     async function chooseCpuCardAction() {
+      if (isTutorialBattle()) return false;
       const circuitActive = !!state.temp.cpu.lightSpeedCircuit;
       if (state.temp.cpu.cardActionUsed && !circuitActive) return false;
       if (state.berserkerTurns.cpu > 0 && !state.temp.cpu.berserkerJustUsed) return false;
@@ -8399,6 +8493,7 @@ async function endTurn() {
     }
 
     async function cpuExtraAction() {
+      if (isTutorialBattle()) return;
       if (state.gameOver || state.turn !== "cpu") return;
       const move = chooseCpuMove();
       if (!move) {
@@ -8415,6 +8510,7 @@ async function endTurn() {
     }
 
     async function cpuTurn() {
+      if (isTutorialBattle()) return;
       if (state.gameOver) return;
 
       const usedAction = await chooseCpuCardAction();
@@ -8722,6 +8818,10 @@ async function endTurn() {
     }
 
     async function resolveActionDone() {
+      if (isTutorialBattle()) {
+        freezeTutorialBattleToHumanTurn();
+        return;
+      }
       const player = state.turn;
       const attackLimit = state.temp[player]?.attackLimit || 1;
       const attacksUsed = state.temp[player]?.attacksUsed || 0;
@@ -9220,10 +9320,18 @@ async function endTurn() {
     elements.realTutorialRetryBtn?.addEventListener("click", () => startTutorialChapter(tutorial.chapter));
     elements.realTutorialChaptersBtn?.addEventListener("click", () => {
       tutorial.usingRealBattle = false;
+      state.tutorialBattleActive = false;
+      state.tutorialScriptedCpuAction = false;
       elements.realTutorialOverlay.classList.add("hidden");
       openTutorialMenu();
     });
-    elements.tutorialExitBtn?.addEventListener("click", () => showScreen("menu"));
+    elements.tutorialExitBtn?.addEventListener("click", () => {
+      tutorial.usingRealBattle = false;
+      state.tutorialBattleActive = false;
+      state.tutorialScriptedCpuAction = false;
+      elements.realTutorialOverlay?.classList.add("hidden");
+      showScreen("menu");
+    });
     elements.tutorialBackToChaptersBtn?.addEventListener("click", openTutorialMenu);
     elements.tutorialRestartChapterBtn?.addEventListener("click", () => startTutorialChapter(tutorial.chapter));
 
@@ -9287,7 +9395,13 @@ async function endTurn() {
       showMajorUpdateAfterTutorialWelcome();
     });
 
-    elements.menuStartBtn.addEventListener("click", () => showScreen("battleSelect"));
+    elements.menuStartBtn.addEventListener("click", () => {
+      tutorial.usingRealBattle = false;
+      state.tutorialBattleActive = false;
+      state.tutorialScriptedCpuAction = false;
+      elements.realTutorialOverlay?.classList.add("hidden");
+      showScreen("battleSelect");
+    });
     elements.plVsCpuBtn.addEventListener("click", () => showScreen("difficulty"));
     elements.plVsPlBtn.addEventListener("click", () => {
       showScreen("friendLobby");
