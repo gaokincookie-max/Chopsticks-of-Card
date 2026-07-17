@@ -1444,6 +1444,63 @@ const CARD_LIBRARY = {
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
+      magicalHatred: {
+        name: "憎悪", cost: 2, type: "加護 / 魔法少女",
+        text: "自分の手に表向きで置く。この手で攻撃するとき攻撃力+1。攻撃するたび手札をランダムに1枚捨てる。虚無で「愛」へ変化する。",
+        blessing: true, magicalCore: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      magicalDespair: {
+        name: "絶望", cost: 2, type: "加護 / 魔法少女",
+        text: "この手が攻撃を受けるとき本数-1（最低1）。攻撃後、自分のもう片方の手に1本加える。虚無で「正義」へ変化する。",
+        blessing: true, magicalCore: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      magicalGreed: {
+        name: "貪欲", cost: 2, type: "加護 / 魔法少女",
+        text: "自分のターン開始時、カードを2枚引いた後、手札をランダムに2枚捨てる。虚無で「幸福」へ変化する。",
+        blessing: true, magicalCore: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      magicalWrath: {
+        name: "憤怒", cost: 2, type: "加護 / 魔法少女",
+        text: "自分のターン開始時、追加でカードを1枚引く。この手で攻撃すると、攻撃対象が攻撃した手以外の生存している手からランダムに決まる。虚無で「勇気」へ変化する。",
+        blessing: true, magicalCore: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      magicalLove: {
+        name: "愛", cost: 2, type: "加護 / 魔法少女・変身後",
+        text: "この手で攻撃するとき攻撃力+1。攻撃時、自分のもう片方が4なら-1、1か2なら+1する。疲弊による本数変化を受けない。",
+        blessing: true, magicalTransformed: true, magicalColor: "love",
+        canPlay: () => false
+      },
+      magicalJustice: {
+        name: "正義", cost: 2, type: "加護 / 魔法少女・変身後",
+        text: "自分の両手が受ける攻撃の本数-2（最低1）。相手の罠を常に公開する。疲弊による本数変化を受けない。",
+        blessing: true, magicalTransformed: true, magicalColor: "justice",
+        canPlay: () => false
+      },
+      magicalHappiness: {
+        name: "幸福", cost: 2, type: "加護 / 魔法少女・変身後",
+        text: "この手で攻撃した後、カードを2枚引き、相手は手札をランダムに1枚捨てる。疲弊による本数変化を受けない。",
+        blessing: true, magicalTransformed: true, magicalColor: "happiness",
+        canPlay: () => false
+      },
+      magicalCourage: {
+        name: "勇気", cost: 2, type: "加護 / 魔法少女・変身後",
+        text: "この手で攻撃するとき攻撃力+1。相手の手が7以上になった場合、超過計算をせず0にする。疲弊による本数変化を受けない。",
+        blessing: true, magicalTransformed: true, magicalColor: "courage",
+        canPlay: () => false
+      },
+      magicalVoid: {
+        name: "虚無", cost: 2, type: "終端 / 魔法少女",
+        text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させ、ターンを終了する。",
+        terminal: true,
+        canPlay: (player) => canActivateMagicalVoid(player),
+        effect: async (player) => {
+          await activateMagicalVoid(player);
+        }
+      },
       slowCurse: {
         name: "鈍重の呪縛",
         cost: 2,
@@ -1508,6 +1565,11 @@ const CARD_LIBRARY = {
       escapeDevice: 1,
       magicMirror: 1,
       powerBlessing: 1,
+      magicalHatred: 1,
+      magicalDespair: 1,
+      magicalGreed: 1,
+      magicalWrath: 1,
+      magicalVoid: 1,
       guardBlessing: 1,
       growthBlessing: 1,
       recklessBlessing: 1,
@@ -1615,9 +1677,27 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v97-dimensional-slash-self-sacrifice-fix";
+    const LATEST_NEWS_ID = "v98-magical-girl-core";
 
     const UPDATE_NEWS = [
+      {
+        id: "v98-magical-girl-core",
+        version: "v98",
+        date: "2026-07-17",
+        title: "魔法少女「愛と憎しみの名の下に」先行実装",
+        summary: "憎悪・絶望・貪欲・憤怒と、4つを変身させる終端カード「虚無」を追加しました。",
+        featured: true,
+        tags: ["new-card", "system"],
+        items: [
+          "憎悪・絶望・貪欲・憤怒の4加護を追加",
+          "4種が揃った時だけ使用できる終端カード「虚無」を追加",
+          "愛・正義・幸福・勇気へ場のカードを直接変化",
+          "ジョーカーが溶け、4スートが交わる変身演出",
+          "変身後加護に虹色の枠を追加",
+          "愛はピンク、正義は青、幸福は黄色、勇気は緑で表示",
+          "CPU戦・オンライン同期・デッキ編集に対応"
+        ]
+      },
       {
         id: "v97-dimensional-slash-self-sacrifice-fix",
         version: "v97",
@@ -5793,7 +5873,11 @@ function wrapFinger(value) {
         state.discard[player].push(discarded);
         addLog(`${handNames[player]}は山札切れ。代わりに手札から「${CARD_LIBRARY[discarded].name}」を捨てた。`);
       } else {
-        const candidates = ["L", "R"].filter(h => isAlive(player, h));
+        const candidates = ["L", "R"].filter(h => isAlive(player, h) && !hasAnyMagicalTransformed(player,h));
+        if (!candidates.length && ["L","R"].some(h => isAlive(player,h))) {
+          addLog(`${handNames[player]}の変身後加護により、疲弊による本数変化を受けなかった。`);
+          return;
+        }
         const target = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : "L";
         const before = state[player][target];
         state[player][target] = normalize(before + 1, player, target);
@@ -5861,6 +5945,16 @@ function wrapFinger(value) {
 
       const solarCount = countOwnAttachment(player, "solarGeneration");
       if (solarCount > 0) gainCharge(player, solarCount * 2, "太陽光発電");
+
+      const greedCount = countOwnAttachment(player, "magicalGreed");
+      for (let i=0;i<greedCount*2;i++) drawOne(player);
+      if (greedCount>0) {
+        discardRandomCards(player, greedCount*2, "「貪欲」");
+        addLog(`${handNames[player]}の「貪欲」により2枚引き、ランダムに2枚捨てた。`);
+      }
+      const wrathCount = countOwnAttachment(player, "magicalWrath");
+      for (let i=0;i<wrathCount;i++) drawOne(player);
+      if (wrathCount>0) addLog(`${handNames[player]}の「憤怒」により追加で${wrathCount}枚引いた。`);
 
       const pendingTorrent = state.pendingWillTorrent[player] || 0;
       state.pendingWillTorrent[player] = 0;
@@ -6141,6 +6235,88 @@ function wrapFinger(value) {
     function isAttachmentCard(cardId) {
       const card = CARD_LIBRARY[cardId];
       return !!(card?.trap || card?.blessing || card?.curse);
+    }
+
+    const MAGICAL_CORE_MAP = {
+      magicalHatred: "magicalLove",
+      magicalDespair: "magicalJustice",
+      magicalGreed: "magicalHappiness",
+      magicalWrath: "magicalCourage"
+    };
+
+    function magicalCoreLocations(player) {
+      const found = {};
+      for (const hand of ["L","R"]) {
+        state.traps[player][hand].forEach((slot,index) => {
+          const id = trapCardId(slot);
+          if (MAGICAL_CORE_MAP[id] && !found[id]) found[id] = { hand, index, slot };
+        });
+      }
+      return found;
+    }
+
+    function canActivateMagicalVoid(player) {
+      const found = magicalCoreLocations(player);
+      return Object.keys(MAGICAL_CORE_MAP).every(id => !!found[id]);
+    }
+
+    function hasAnyMagicalTransformed(player, hand=null) {
+      const hands = hand ? [hand] : ["L","R"];
+      return hands.some(h => state.traps[player][h].some(slot => CARD_LIBRARY[trapCardId(slot)]?.magicalTransformed));
+    }
+
+    function hasMagicalJustice(player) {
+      return hasAttachment(player,"L","magicalJustice") || hasAttachment(player,"R","magicalJustice");
+    }
+
+    function hasMagicalCourage(player) {
+      return hasAttachment(player,"L","magicalCourage") || hasAttachment(player,"R","magicalCourage");
+    }
+
+    async function showMagicalTransformationFx() {
+      const fx = document.getElementById("magicalTransformFx");
+      if (!fx) return;
+      fx.classList.add("show");
+      fx.setAttribute("aria-hidden","false");
+      await sleep(3100);
+      fx.classList.remove("show");
+      fx.setAttribute("aria-hidden","true");
+    }
+
+    async function activateMagicalVoid(player) {
+      if (!canActivateMagicalVoid(player)) {
+        addLog(`${handNames[player]}の「虚無」は4つの感情が揃っていないため不発。`);
+        return false;
+      }
+      if (player === "human" || state.battleMode !== "friend") await showMagicalTransformationFx();
+      const found = magicalCoreLocations(player);
+      for (const [beforeId, afterId] of Object.entries(MAGICAL_CORE_MAP)) {
+        const loc = found[beforeId];
+        if (!loc) continue;
+        const oldSlot = state.traps[player][loc.hand][loc.index];
+        if (typeof oldSlot === "string") state.traps[player][loc.hand][loc.index] = afterId;
+        else state.traps[player][loc.hand][loc.index] = { ...oldSlot, cardId: afterId };
+      }
+      addLog(`${handNames[player]}の「虚無」により、憎悪・絶望・貪欲・憤怒が愛・正義・幸福・勇気へ変化した。`);
+      setMessage("虚無が溶け、4つの感情が魔法少女の力へ変化した。");
+      render();
+      if (state.battleMode === "friend" && player === "human") {
+        state.friendLastPublishedSignature = "";
+        await publishFriendStateNow().catch(() => scheduleFriendStatePublish());
+      }
+      return true;
+    }
+
+    function discardRandomCards(player,count,reason) {
+      let discarded=0;
+      while(discarded<count && state.hands[player].length){
+        const i=Math.floor(Math.random()*state.hands[player].length);
+        const id=state.hands[player].splice(i,1)[0];
+        state.discard[player].push(id);
+        addLog(`${reason}：${handNames[player]}は「${CARD_LIBRARY[id]?.name||id}」を捨てた。`);
+        discarded++;
+      }
+      return discarded;
     }
 
     function attachmentKind(cardId) {
@@ -6821,7 +6997,11 @@ function wrapFinger(value) {
           const selectableSwapOpponent = isBlessingOrCurseCard(cardId) && state.turn === "human" && !state.animating && state.mode === "swapOpponentAttachment" && player === "cpu";
           const selectableSwapOwn = isBlessingOrCurseCard(cardId) && state.turn === "human" && !state.animating && state.mode === "swapOwnAttachment" && player === "human";
           const selectable = selectableOpponentTrap || selectableOwnCurse || selectableSwapOpponent || selectableSwapOwn;
-          const hidden = isTrap && player === "cpu" && !revealed && !exposedByCurse;
+          const justiceReveal = isTrap && (
+            (player === "cpu" && hasMagicalJustice("human")) ||
+            (player === "human" && hasMagicalJustice("cpu"))
+          );
+          const hidden = isTrap && player === "cpu" && !revealed && !exposedByCurse && !justiceReveal;
           const publiclyRevealed = isTrap && player === "cpu" && !hidden;
           const ownVisibleTrap = isTrap && player === "human";
           div.className =
@@ -6830,6 +7010,7 @@ function wrapFinger(value) {
             (publiclyRevealed ? " revealed-trap-slot" : "") +
             (ownVisibleTrap ? " own-trap-slot" : "") +
             (card?.blessing ? " blessing-slot" : "") +
+            (card?.magicalTransformed ? ` magical-transformed-slot magical-${card.magicalColor}` : "") +
             (card?.curse ? " curse-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
           const kindInfo = attachmentKindInfo(card, { publiclyRevealed });
@@ -7953,6 +8134,20 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
 
+      if (hasAttachment(attacker, attackHand, "magicalWrath")) {
+        const candidates = [
+          {owner:attacker, hand:otherHand(attackHand)},
+          {owner:defender, hand:"L"},
+          {owner:defender, hand:"R"}
+        ].filter(x => isAlive(x.owner,x.hand));
+        if (candidates.length) {
+          const chosen=candidates[Math.floor(Math.random()*candidates.length)];
+          defender=chosen.owner;
+          targetHand=chosen.hand;
+          addLog(`「憤怒」により攻撃対象がランダムに${handNames[defender]}の${handNames[targetHand]}へ変更された。`);
+        }
+      }
+
       state.animating = true;
       render();
 
@@ -7963,6 +8158,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const negativeCardBonus = Math.min(0, rawBonus);
       const bonus = immutable ? negativeCardBonus : rawBonus;
       const berserkerBonus = immutable ? 0 : (state.berserkerTurns[attacker] > 0 ? 2 : 0);
+      const magicalAttackBonus = immutable ? 0 : (
+        hasAttachment(attacker, attackHand, "magicalHatred") ||
+        hasAttachment(attacker, attackHand, "magicalLove") ||
+        hasAttachment(attacker, attackHand, "magicalCourage") ? 1 : 0
+      );
       const blessingBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0);
       const willBladeBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "willBlade") ? (state.lastDirectiveClearCount?.[attacker] || 0) : 0);
       const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
@@ -7975,12 +8175,13 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + dischargeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + dischargeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
       }
       if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
+      if (magicalAttackBonus) addLog(`${handNames[attacker]}の魔法少女加護により、攻撃力+1。`);
       if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
       if (willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、攻撃力+${willBladeBonus}。`);
       if (dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、攻撃力+${dimensionalSlashBonus}。`);
@@ -7991,6 +8192,14 @@ async function attack(attacker, attackHand, defender, targetHand) {
         addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
       } else {
         power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
+        if (hasAttachment(defender,targetHand,"magicalDespair")) {
+          power=Math.max(1,power-1);
+          addLog(`${handNames[defender]}の「絶望」により、受ける本数-1。`);
+        }
+        if (hasMagicalJustice(defender)) {
+          power=Math.max(1,power-2);
+          addLog(`${handNames[defender]}の「正義」により、受ける本数-2。`);
+        }
       }
 
       let context = { defender, targetHand, attacker, attackHand, incomingPower: power };
@@ -8117,7 +8326,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const lightningZeroActive = !!state.temp[attacker].lightningZeroAtFive;
       let resolvedFinal;
 
-      if (lightningZeroActive && total >= 5) {
+      if (hasMagicalCourage(attacker) && total >= 7) {
+        resolvedFinal = 0;
+        addLog(`「勇気」により、相手の手が7以上になったため超過計算をせず0になった。`);
+      } else if (lightningZeroActive && total >= 5) {
         resolvedFinal = 0;
         addLog(`「雷撃」の充電Lv.10効果により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過計算をせず0になった。`);
       } else {
@@ -8165,6 +8377,28 @@ async function attack(attacker, attackHand, defender, targetHand) {
         `${handNames[defender]}の${handNames[targetHand]}を攻撃。` +
         `${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`
       );
+
+      if (hasAttachment(attacker,attackHand,"magicalHatred")) {
+        discardRandomCards(attacker,1,"「憎悪」");
+      }
+      if (hasAttachment(defender,targetHand,"magicalDespair")) {
+        const other=otherHand(targetHand);
+        if (isAlive(defender,other)) await addFingersWithCalculation(defender,other,1,"絶望");
+      }
+      if (hasAttachment(attacker,attackHand,"magicalLove")) {
+        const other=otherHand(attackHand);
+        if (state[attacker][other]===4) {
+          state[attacker][other]=3;
+          addLog(`「愛」により${handNames[attacker]}の${handNames[other]}が4→3。`);
+        } else if (state[attacker][other]===1 || state[attacker][other]===2) {
+          await addFingersWithCalculation(attacker,other,1,"愛");
+        }
+      }
+      if (hasAttachment(attacker,attackHand,"magicalHappiness")) {
+        drawOne(attacker); drawOne(attacker);
+        discardRandomCards(defender,1,"「幸福」");
+        addLog(`「幸福」により${handNames[attacker]}は2枚引き、${handNames[defender]}はランダムに1枚捨てた。`);
+      }
 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);

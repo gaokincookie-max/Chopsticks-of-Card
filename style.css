@@ -3292,3 +3292,22 @@ body.tutorial-split-only #cpuR {
 @keyframes realTutorialOkPulse {
   50% { transform: scale(1.06); }
 }
+
+/* v98 magical girl */
+.magical-transform-fx{position:fixed;inset:0;z-index:260;display:none;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(circle,rgba(70,20,85,.82),rgba(4,3,12,.97));}
+.magical-transform-fx.show{display:flex;animation:magicFade 3.1s both;}
+.magical-joker{position:absolute;width:180px;height:260px;border-radius:18px;border:5px solid #eee;background:linear-gradient(145deg,#16121c,#eee 48%,#9b1b42 49%,#1d1723);display:grid;place-items:center;color:white;box-shadow:0 0 45px #fff;animation:jokerMelt 2s forwards;}
+.joker-crown,.joker-face{font-size:52px}.magical-joker strong{font-size:25px;letter-spacing:5px}
+.magical-suits{position:absolute;width:420px;height:420px;animation:suitCross 2.7s ease-in-out forwards;}
+.suit{position:absolute;font-size:92px;text-shadow:0 0 24px currentColor;}
+.suit.heart{color:#ff5fa2;left:0;top:160px}.suit.spade{color:#5f9dff;right:0;top:160px}.suit.diamond{color:#ffd84b;left:165px;top:0}.suit.club{color:#5cdb8b;left:165px;bottom:0}
+.magical-transform-title{position:absolute;bottom:14%;font-size:clamp(28px,6vw,72px);font-weight:1000;color:white;text-shadow:0 0 12px #fff,0 0 30px #bf60ff;opacity:0;animation:titleAppear 3.1s forwards;}
+@keyframes jokerMelt{0%,30%{transform:scale(1);filter:none}70%{transform:scale(.8) skewX(15deg);filter:blur(4px);border-radius:45% 45% 60% 30%}100%{transform:translateY(230px) scale(.15,1.8);opacity:0;filter:blur(18px)}}
+@keyframes suitCross{0%{transform:rotate(0) scale(1)}55%{transform:rotate(180deg) scale(.45)}80%{transform:rotate(405deg) scale(.12);filter:brightness(3)}100%{transform:rotate(540deg) scale(1.4);opacity:0}}
+@keyframes titleAppear{0%,65%{opacity:0;transform:scale(.5)}80%{opacity:1;transform:scale(1.12)}100%{opacity:0;transform:scale(1)}}
+@keyframes magicFade{0%{opacity:0}10%,85%{opacity:1}100%{opacity:0}}
+.magical-transformed-slot{border:3px solid transparent!important;background:linear-gradient(var(--magic-bg,#fff),var(--magic-bg,#fff)) padding-box,conic-gradient(#ff5fa2,#5f9dff,#ffd84b,#5cdb8b,#ff5fa2) border-box!important;box-shadow:0 0 12px rgba(255,255,255,.75),0 0 18px var(--magic-glow,#fff)!important;font-weight:1000;}
+.magical-love{--magic-bg:#ffd6e8;--magic-glow:#ff5fa2;color:#8b2250!important}
+.magical-justice{--magic-bg:#d9e9ff;--magic-glow:#5f9dff;color:#214f8d!important}
+.magical-happiness{--magic-bg:#fff0a8;--magic-glow:#ffd84b;color:#785d00!important}
+.magical-courage{--magic-bg:#d7f5df;--magic-glow:#5cdb8b;color:#21683c!important}
