@@ -5929,15 +5929,28 @@ function wrapFinger(value) {
       const solarCount = countOwnAttachment(player, "solarGeneration");
       if (solarCount > 0) gainCharge(player, solarCount * 2, "太陽光発電");
 
+      // 魔法少女のターン開始効果。ここで例外が出るとターン移行全体が止まるため、
+      // 必ず共通のdrawCard()を使い、実行内容をログへ残す。
       const greedCount = countOwnAttachment(player, "magicalGreed");
-      for (let i=0;i<greedCount*2;i++) drawOne(player);
-      if (greedCount>0) {
-        discardRandomCards(player, greedCount*2, "「貪欲」");
-        addLog(`${handNames[player]}の「貪欲」により2枚引き、ランダムに2枚捨てた。`);
+      if (greedCount > 0) {
+        let greedDrawn = 0;
+        for (let i = 0; i < greedCount * 2; i++) {
+          if (drawCard(player)) greedDrawn += 1;
+        }
+        const greedDiscarded = discardRandomCards(player, greedCount * 2, "「貪欲」");
+        addLog(
+          `${handNames[player]}の「貪欲」が発動。` +
+          `${greedDrawn}枚引き、手札からランダムに${greedDiscarded}枚捨てた。`
+        );
       }
       const wrathCount = countOwnAttachment(player, "magicalWrath");
-      for (let i=0;i<wrathCount;i++) drawOne(player);
-      if (wrathCount>0) addLog(`${handNames[player]}の「憤怒」により追加で${wrathCount}枚引いた。`);
+      if (wrathCount > 0) {
+        let wrathDrawn = 0;
+        for (let i = 0; i < wrathCount; i++) {
+          if (drawCard(player)) wrathDrawn += 1;
+        }
+        addLog(`${handNames[player]}の「憤怒」が発動。追加で${wrathDrawn}枚引いた。`);
+      }
 
       const pendingTorrent = state.pendingWillTorrent[player] || 0;
       state.pendingWillTorrent[player] = 0;
@@ -8378,7 +8391,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
         }
       }
       if (hasAttachment(attacker,attackHand,"magicalHappiness")) {
-        drawOne(attacker); drawOne(attacker);
+        drawCard(attacker); drawCard(attacker);
         discardRandomCards(defender,1,"「幸福」");
         addLog(`「幸福」により${handNames[attacker]}は2枚引き、${handNames[defender]}はランダムに1枚捨てた。`);
       }
