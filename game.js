@@ -1558,7 +1558,7 @@ const CARD_LIBRARY = {
         text: "このターン、通常攻撃可能回数を2回にする。このカードは1ターンに1枚しか使用できない。",
         token: true, magicalEvolution: true,
         canPlay: (player) => !state.temp[player].friendshipUsed,
-        effect: (player) => { state.temp[player].friendshipUsed = true; state.temp[player].attackLimit = Math.max(2, state.temp[player].attackLimit || 1); addLog(`${handNames[player]}は「友情」により、このターン通常攻撃を2回まで行える。`); }
+        effect: (player) => { state.temp[player].friendshipUsed = true; state.temp[player].attackLimit = Math.max(2, state.temp[player].attackLimit || 1); state.temp[player].multiAttackSource = "友情"; addLog(`${handNames[player]}は「友情」により、このターン通常攻撃を2回まで行える。`); }
       },
       emptyHeart: {
         name: "空虚な心", cost: 2, type: "補助 / 魔法少女・感情変化",
@@ -1570,7 +1570,7 @@ const CARD_LIBRARY = {
         name: "満ちる心", cost: 2, type: "補助 / 魔法少女・変身後",
         text: "手札から1枚以上、好きな枚数を選んで捨てる。相手は同じ枚数だけ手札をランダムに捨てる。",
         token: true, magicalEvolution: true,
-        canPlay: (player) => state.hands[player].length > 0,
+        canPlay: (player) => state.hands[player].length > 1,
         effect: async (player) => { await useFullHeart(player); }
       },
       magicalVoid: {
@@ -2634,6 +2634,7 @@ const CARD_LIBRARY = {
       if (!state.berserkerTurns || typeof state.berserkerTurns !== "object") state.berserkerTurns = { ...pairDefaults };
       if (!state.noSplit || typeof state.noSplit !== "object") state.noSplit = { human: false, cpu: false };
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
+      if (!state.pendingMagicalHeartDraw || typeof state.pendingMagicalHeartDraw !== "object") state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       if (!state.pendingAdvanceNotice || typeof state.pendingAdvanceNotice !== "object") state.pendingAdvanceNotice = { human: [], cpu: [] };
       if (!state.activeDirectiveBlessing || typeof state.activeDirectiveBlessing !== "object") state.activeDirectiveBlessing = { human: 0, cpu: 0 };
       if (!state.pendingChargeStun || typeof state.pendingChargeStun !== "object") state.pendingChargeStun = { human: false, cpu: false };
@@ -2670,6 +2671,7 @@ const CARD_LIBRARY = {
         pendingNoDraw: Number(state.pendingNoDraw?.[player] || 0),
         activeNoDraw: Number(state.activeNoDraw?.[player] || 0),
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
+        pendingMagicalHeartDraw: Number(state.pendingMagicalHeartDraw?.[player] || 0),
         pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
         activeDirectiveBlessing: Number(state.activeDirectiveBlessing?.[player]) || 0,
         pendingChargeStun: !!state.pendingChargeStun?.[player],
@@ -2738,6 +2740,7 @@ const CARD_LIBRARY = {
       state.pendingNoDraw[player] = Number(side.pendingNoDraw || 0);
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
+      state.pendingMagicalHeartDraw[player] = Number(side.pendingMagicalHeartDraw || 0);
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
       if (preserveOwnerOnlyMeta) {
@@ -5806,6 +5809,7 @@ function wrapFinger(value) {
         (state.temp[player].dimensionalSlashBonus || 0) + 1;
       state.temp[player].attackLimit =
         Math.max(2, state.temp[player].attackLimit || 1);
+      state.temp[player].multiAttackSource = "空間切断";
       state.mode = "attack";
       setMessage("「空間切断」：このターン、通常攻撃で与える本数+1。通常攻撃を2回まで行えます。");
       render();
@@ -7430,7 +7434,9 @@ function renderLastAction() {
             : state.temp.human.cardActionUsed
               ? (lightSpeedChargePlayable
                   ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
-                  : '<div class="used">カード関連行動は使用済み</div>')
+                  : Number(state.temp.human.cardExtraUses || 0) > 0
+                    ? `<div class="used charge-ready">黄金狂：追加使用 残り${Number(state.temp.human.cardExtraUses || 0)}回</div>`
+                    : '<div class="used">カード関連行動は使用済み</div>')
               : ''}
         `;
         attachCardLongPress(div, cardId);
@@ -7793,6 +7799,18 @@ function renderLastAction() {
       return ["L", "R"].some(h => state[player][h] > 0 && state.traps[player][h].length < 2);
     }
 
+    function consumeCardActionAllowance(player, { setupActive = false, lightSpeedChargePlayable = false } = {}) {
+      if (setupActive) return;
+      const temp = state.temp[player];
+      if (!temp.cardActionUsed) {
+        temp.cardActionUsed = true;
+        return;
+      }
+      if (!lightSpeedChargePlayable && Number(temp.cardExtraUses || 0) > 0) {
+        temp.cardExtraUses = Math.max(0, Number(temp.cardExtraUses || 0) - 1);
+      }
+    }
+
     function selectTrapCard(index) {
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
@@ -7876,8 +7894,7 @@ function renderLastAction() {
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
         if (!setupActive) {
-          if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable && Number(state.temp[player].cardExtraUses || 0) > 0) state.temp[player].cardExtraUses -= 1;
-      else state.temp[player].cardActionUsed = true;
+          consumeCardActionAllowance(player, { lightSpeedChargePlayable });
           state.mode = "attack";
         } else {
           state.mode = "setupTrap";
@@ -7889,7 +7906,7 @@ function renderLastAction() {
 
       state.traps[owner][hand].push(makeTrapInstance(cardId));
       if (!setupActive) {
-        state.temp[player].cardActionUsed = true;
+        consumeCardActionAllowance(player, { lightSpeedChargePlayable });
         state.mode = "attack";
       } else {
         state.mode = "setupTrap";
@@ -7967,7 +7984,7 @@ function renderLastAction() {
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(cardId);
       markChargeCardUsedThisTurn(player, cardId);
-      state.temp[player].cardActionUsed = true;
+      consumeCardActionAllowance(player, { lightSpeedChargePlayable });
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       setLastAction(player, `「${card.name}」`, card.text, "card");
 
@@ -9532,11 +9549,12 @@ async function endTurn() {
         state.mode = "attack";
         elements.splitBox.classList.remove("active");
         elements.andanteBox?.classList.remove("active");
+        const multiAttackSource = state.temp[player]?.multiAttackSource || "追加攻撃";
         setMessage(
-          `${handNames[player]}は「空間切断」により、もう一度攻撃できます。攻撃に使う手を選んでください。`
+          `${handNames[player]}は「${multiAttackSource}」により、もう一度攻撃できます。攻撃に使う手を選んでください。`
         );
         addLog(
-          `${handNames[player]}の「空間切断」：` +
+          `${handNames[player]}の「${multiAttackSource}」：` +
           `${attacksUsed}回目の攻撃が終了。残り${attackLimit - attacksUsed}回攻撃できる。`
         );
         render();
@@ -9971,6 +9989,7 @@ async function endTurn() {
       state.pendingNoDraw = { human: 0, cpu: 0 };
       state.activeNoDraw = { human: 0, cpu: 0 };
       state.pendingTerminalEnd = { human: false, cpu: false };
+      state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.costLimitNextTurn = { human: null, cpu: null };
       state.activeCostLimit = { human: null, cpu: null };
       state.berserkerTurns = { human: 0, cpu: 0 };
