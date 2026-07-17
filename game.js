@@ -1498,7 +1498,11 @@ const CARD_LIBRARY = {
         terminal: true,
         canPlay: (player) => canActivateMagicalVoid(player),
         effect: async (player) => {
-          await activateMagicalVoid(player);
+          const transformed = await activateMagicalVoid(player);
+          if (!transformed) {
+            state.pendingTerminalEnd[player] = false;
+          }
+          return transformed;
         }
       },
       slowCurse: {
@@ -6272,11 +6276,20 @@ function wrapFinger(value) {
     async function showMagicalTransformationFx() {
       const fx = document.getElementById("magicalTransformFx");
       if (!fx) return;
-      fx.classList.add("show");
-      fx.setAttribute("aria-hidden","false");
-      await sleep(3100);
+
       fx.classList.remove("show");
-      fx.setAttribute("aria-hidden","true");
+      // 再使用時にもCSSアニメーションを最初から再生する。
+      void fx.offsetWidth;
+      fx.classList.add("show");
+      fx.setAttribute("aria-hidden", "false");
+
+      try {
+        await delay(3600);
+      } finally {
+        // 演出中に別処理で例外が起きても、操作不能な全画面レイヤーを必ず解除する。
+        fx.classList.remove("show");
+        fx.setAttribute("aria-hidden", "true");
+      }
     }
 
     async function activateMagicalVoid(player) {
@@ -6284,23 +6297,55 @@ function wrapFinger(value) {
         addLog(`${handNames[player]}の「虚無」は4つの感情が揃っていないため不発。`);
         return false;
       }
-      if (player === "human" || state.battleMode !== "friend") await showMagicalTransformationFx();
+
       const found = magicalCoreLocations(player);
-      for (const [beforeId, afterId] of Object.entries(MAGICAL_CORE_MAP)) {
-        const loc = found[beforeId];
-        if (!loc) continue;
-        const oldSlot = state.traps[player][loc.hand][loc.index];
-        if (typeof oldSlot === "string") state.traps[player][loc.hand][loc.index] = afterId;
-        else state.traps[player][loc.hand][loc.index] = { ...oldSlot, cardId: afterId };
+      const completeSet = Object.keys(MAGICAL_CORE_MAP).every(id => !!found[id]);
+      if (!completeSet) {
+        addLog(`${handNames[player]}の「虚無」は変身対象を確認できず不発。`);
+        return false;
       }
-      addLog(`${handNames[player]}の「虚無」により、憎悪・絶望・貪欲・憤怒が愛・正義・幸福・勇気へ変化した。`);
-      setMessage("虚無が溶け、4つの感情が魔法少女の力へ変化した。");
+
+      state.animating = true;
       render();
-      if (state.battleMode === "friend" && player === "human") {
-        state.friendLastPublishedSignature = "";
-        await publishFriendStateNow().catch(() => scheduleFriendStatePublish());
+
+      try {
+        if (player === "human" || state.battleMode !== "friend") {
+          await showMagicalTransformationFx();
+        }
+
+        for (const [beforeId, afterId] of Object.entries(MAGICAL_CORE_MAP)) {
+          const loc = found[beforeId];
+          const currentSlot = state.traps[player][loc.hand][loc.index];
+          if (typeof currentSlot === "string") {
+            state.traps[player][loc.hand][loc.index] = afterId;
+          } else {
+            state.traps[player][loc.hand][loc.index] = { ...currentSlot, cardId: afterId };
+          }
+        }
+
+        addLog(`${handNames[player]}の「虚無」により、憎悪・絶望・貪欲・憤怒が愛・正義・幸福・勇気へ変化した。`);
+        setMessage("ジョーカーが光へ溶け、4つのスートが新たな加護へ結ばれた。");
+
+        if (state.battleMode === "friend" && player === "human") {
+          state.friendLastPublishedSignature = "";
+          await publishFriendStateNow().catch(error => {
+            console.error("PVP magical transformation sync failed", error);
+            scheduleFriendStatePublish();
+          });
+        }
+        return true;
+      } catch (error) {
+        console.error("Magical Void activation failed", error);
+        addLog(`「虚無」の変身処理中にエラーが発生した。`);
+        setMessage(`「虚無」の変身処理エラー：${error?.message || error}`);
+        return false;
+      } finally {
+        state.animating = false;
+        const fx = document.getElementById("magicalTransformFx");
+        fx?.classList.remove("show");
+        fx?.setAttribute("aria-hidden", "true");
+        render();
       }
-      return true;
     }
 
     function discardRandomCards(player,count,reason) {
