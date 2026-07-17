@@ -275,7 +275,7 @@ const CARD_LIBRARY = {
         name: "空間切断", cost: 3, type: "補助 / 充電", chargeCard: true,
         text: "1ターンに1度。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で与える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
         canPlay: (player) => !state.temp[player].dimensionalSlashUsed,
-        effect: (player) => {
+        effect: async (player) => {
           if (state.temp[player].dimensionalSlashUsed) {
             addLog(`${handNames[player]}の「空間切断」はこのターン既に使用されているため不発。`);
             return;
@@ -298,11 +298,11 @@ const CARD_LIBRARY = {
             }
             const choices = ["L", "R"].filter(hand => state[player][hand] > 0);
             const chosen = choices.sort((a, b) => state[player][a] - state[player][b])[0] || "L";
-            resolveDimensionalSlash(player, chosen);
+            await resolveDimensionalSlash(player, chosen);
             return;
           }
 
-          resolveDimensionalSlash(player, null);
+          await resolveDimensionalSlash(player, null);
         }
       },
 
@@ -1615,9 +1615,26 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v96-tutorial-explanation-ok-trap-fix";
+    const LATEST_NEWS_ID = "v97-dimensional-slash-self-sacrifice-fix";
 
     const UPDATE_NEWS = [
+      {
+        id: "v97-dimensional-slash-self-sacrifice-fix",
+        version: "v97",
+        date: "2026-07-17",
+        title: "空間切断の自傷処理を修正",
+        summary: "充電5～9で発動する空間切断の代償処理と、オンラインへの反映を修正しました。",
+        featured: false,
+        tags: ["fix", "balance"],
+        items: [
+          "選択した自分の手を代償として確実に0へ変更",
+          "0になった手の罠・加護・呪縛を正しく消去",
+          "最後の手を代償にした場合はその場で敗北",
+          "敗北した場合は攻撃+1と2回攻撃を付与しない",
+          "自傷結果を攻撃選択前にオンライン相手へ明示同期",
+          "手を選ぶ前に案内文が上書きされる問題を修正"
+        ]
+      },
       {
         id: "v96-tutorial-explanation-ok-trap-fix",
         version: "v96",
@@ -5581,7 +5598,7 @@ function wrapFinger(value) {
     }
 
     function isChargeCardId(cardId){ return !!CARD_LIBRARY[cardId]?.chargeCard; }
-    function resolveDimensionalSlash(player, hand) {
+    async function resolveDimensionalSlash(player, hand) {
       const charge = getChargeLevel(player);
       if (charge < 5) {
         addLog(`${handNames[player]}の「空間切断」は充電不足で不発。`);
@@ -5597,19 +5614,56 @@ function wrapFinger(value) {
           render();
           return false;
         }
+
+        const before = state[player][hand];
+
+        // 自傷はダメージではなく発動前の代償。選択した手を確実に0にする。
         state[player][hand] = 0;
         clearHandAttachments(player, hand);
-        addLog(`${handNames[player]}は「空間切断」の代償として${handNames[hand]}を0にした。`);
+        clearBrokenTraps(player);
+        addLog(`${handNames[player]}は「空間切断」の代償として${handNames[hand]}を${before}→0にした。`);
+        render();
+
+        if (state.battleMode === "friend" && player === "human") {
+          try {
+            state.friendLastPublishedSignature = "";
+            await publishFriendStateNow();
+          } catch (error) {
+            console.error("PVP dimensional slash sacrifice sync failed", error);
+            scheduleFriendStatePublish();
+          }
+        }
+
+        // 最後の手を代償にした場合は、その場で敗北。強化は付与しない。
+        if (checkWin()) {
+          state.mode = "attack";
+          setMessage("「空間切断」の代償で両手が0になったため敗北しました。");
+          render();
+          return false;
+        }
       }
 
-      consumeCharge(player, 5, false, "空間切断");
+      if (!consumeCharge(player, 5, false, "空間切断")) {
+        state.mode = "attack";
+        render();
+        return false;
+      }
+
       state.temp[player].dimensionalSlashBonus =
         (state.temp[player].dimensionalSlashBonus || 0) + 1;
       state.temp[player].attackLimit =
         Math.max(2, state.temp[player].attackLimit || 1);
       state.mode = "attack";
-      setMessage("「空間切断」：このターン、通常攻撃を2回まで行えます。");
+      setMessage("「空間切断」：このターン、通常攻撃で与える本数+1。通常攻撃を2回まで行えます。");
       render();
+
+      if (state.battleMode === "friend" && player === "human") {
+        state.friendLastPublishedSignature = "";
+        await publishFriendStateNow().catch(error => {
+          console.error("PVP dimensional slash activation sync failed", error);
+          scheduleFriendStatePublish();
+        });
+      }
       return true;
     }
 
@@ -7606,6 +7660,8 @@ function renderLastAction() {
           setMessage("「落ち着ける」：捨てる手札を1枚選んでください。");
         } else if (cardId === "andante" && state.mode === "andante") {
           setMessage("「アンダンテ」：微調整する自分の0でない手を選んでください。");
+        } else if (cardId === "dimensionalSlash" && state.mode === "dimensionalSlashSacrifice") {
+          setMessage("「空間切断」：代償として0にする自分の手を選んでください。");
         } else if (cardId === "setupTrap" && state.temp.human.setupMode) {
           setMessage("「仕込み」：罠を好きなだけ伏せられます。終わったら「仕込み終了」を押してください。");
         } else {
@@ -9201,11 +9257,10 @@ async function endTurn() {
         }
 
         const before = state.human[hand];
-        const resolved = resolveDimensionalSlash("human", hand);
+        const resolved = await resolveDimensionalSlash("human", hand);
         if (resolved) {
-          addLog(`「空間切断」：${handNames[hand]}を${before}→0にし、効果が発動した。`);
-          setMessage(`「空間切断」：${handNames[hand]}を0にしました。攻撃+1、通常攻撃を2回まで行えます。`);
-          if (state.battleMode === "friend") scheduleFriendStatePublish();
+          addLog(`「空間切断」：代償処理が完了し、攻撃強化と2回攻撃が有効になった。`);
+          setMessage(`「空間切断」：${handNames[hand]}を${before}→0。攻撃+1、通常攻撃を2回まで行えます。`);
         }
         return;
       }
