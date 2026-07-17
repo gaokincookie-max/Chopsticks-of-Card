@@ -1613,9 +1613,24 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v90-beginner-tutorial";
+    const LATEST_NEWS_ID = "v91-tutorial-screen-fix";
 
     const UPDATE_NEWS = [
+      {
+        id: "v91-tutorial-screen-fix",
+        version: "v91",
+        date: "2026-07-17",
+        title: "チュートリアル画面が開かない問題を修正",
+        summary: "ホームや初回案内からチュートリアルを開始しても画面が表示されない問題を修正しました。",
+        featured: false,
+        tags: ["fix"],
+        items: [
+          "画面切り替え処理へチュートリアル画面を正式に追加",
+          "ホームのチュートリアルボタンから章一覧を表示",
+          "初回案内の『チュートリアルを始める』から正常に開始",
+          "第1章の5で0・超過計算を、攻撃手と対象手を選ぶ2段階操作へ修正"
+        ]
+      },
       {
         id: "v90-beginner-tutorial",
         version: "v90",
@@ -3610,24 +3625,30 @@ const CARD_LIBRARY = {
       elements.tutorialSplitBtn.classList.add("hidden");
 
       if (tutorial.chapter === 1) {
-        tutorialProgress(5);
+        tutorialProgress(7);
         if (tutorial.step === 0) {
           tutorialSetHands(1, 1, 1, 1); tutorialCards([]);
           tutorialMessage("攻撃する手を選ぶ", "まず、自分の右手を選んでください。");
           tutorialHighlight(elements.tutorialHumanR);
         } else if (tutorial.step === 1) {
-          tutorialMessage("攻撃する相手を選ぶ", "次に、相手の左手を選びます。<br>自分の手の本数を相手へ足します。", "1 ＋ 1");
+          tutorialMessage("攻撃する相手を選ぶ", "次に、相手の左手を選びます。<br>自分の手の本数を相手へ足します。", "1 ＋ 1 ＝ 2");
           tutorialHighlight(elements.tutorialCpuL);
         } else if (tutorial.step === 2) {
           tutorialSetHands(1, 1, 4, 1);
-          tutorialMessage("5になった手は0", "相手の左手は4です。自分の右手1で攻撃して、ちょうど5にしましょう。", "4 ＋ 1 ＝ 5 → 0");
+          tutorialMessage("5になった手は0", "相手の左手は4です。まず自分の右手を選んでください。", "4 ＋ 1 ＝ 5 → 0");
           tutorial.selectedAttackHand = null;
           tutorialHighlight(elements.tutorialHumanR);
         } else if (tutorial.step === 3) {
+          tutorialMessage("ちょうど5を作る", "相手の左手を選んで攻撃してください。<br>合計が5になった手は0になります。", "4 ＋ 1 ＝ 5 → 0");
+          tutorialHighlight(elements.tutorialCpuL);
+        } else if (tutorial.step === 4) {
           tutorialSetHands(3, 1, 4, 1);
-          tutorialMessage("超過した分が残る", "今度は3で4を攻撃します。合計7なので、5を引いた余りの2になります。", "4 ＋ 3 ＝ 7 → 2");
+          tutorialMessage("超過した分が残る", "次は自分の左手3を選んでください。", "4 ＋ 3 ＝ 7 → 2");
           tutorial.selectedAttackHand = null;
           tutorialHighlight(elements.tutorialHumanL);
+        } else if (tutorial.step === 5) {
+          tutorialMessage("7は2になる", "相手の左手を選んで攻撃してください。<br>合計7から5を引いた余りの2が残ります。", "4 ＋ 3 ＝ 7 → 2");
+          tutorialHighlight(elements.tutorialCpuL);
         } else {
           tutorialCompleteChapter();
         }
@@ -3750,17 +3771,18 @@ const CARD_LIBRARY = {
 
     function tutorialHandleHand(owner, hand, element) {
       if (tutorial.chapter === 1) {
-        if ([0,2,3].includes(tutorial.step)) {
-          const expected = tutorial.step === 3 ? "L" : "R";
+        if ([0, 2, 4].includes(tutorial.step)) {
+          const expected = tutorial.step === 4 ? "L" : "R";
           if (owner !== "human" || hand !== expected) return;
           tutorial.selectedAttackHand = hand;
           tutorialAdvance();
           return;
         }
-        if ([1,4].includes(tutorial.step)) {
+        if ([1, 3, 5].includes(tutorial.step)) {
           if (owner !== "cpu" || hand !== "L") return;
-          if (tutorial.step === 1) tutorialSetHands(1,1,2,1);
-          else if (tutorial.step === 4) tutorialSetHands(3,1,2,1);
+          if (tutorial.step === 1) tutorialSetHands(1, 1, 2, 1);
+          if (tutorial.step === 3) tutorialSetHands(1, 1, 0, 1);
+          if (tutorial.step === 5) tutorialSetHands(3, 1, 2, 1);
           tutorialAdvance();
           return;
         }
@@ -3839,6 +3861,7 @@ const CARD_LIBRARY = {
       const showFriendLobby = screen === "friendLobby";
       const showDifficulty = screen === "difficulty";
       const showSettings = screen === "settings";
+      const showTutorial = screen === "tutorial";
       const showDeck = screen === "deck";
       const showBattle = screen === "battle";
 
@@ -3847,6 +3870,7 @@ const CARD_LIBRARY = {
       elements.friendLobbyScreen.classList.toggle("screen-hidden", !showFriendLobby);
       elements.difficultyScreen.classList.toggle("screen-hidden", !showDifficulty);
       elements.settingsScreen.classList.toggle("screen-hidden", !showSettings);
+      elements.tutorialScreen.classList.toggle("screen-hidden", !showTutorial);
       elements.deckEditorScreen.classList.toggle("screen-hidden", !showDeck);
       document.querySelectorAll(".battle-screen").forEach(el => {
         el.classList.toggle("screen-hidden", !showBattle);
@@ -3854,6 +3878,7 @@ const CARD_LIBRARY = {
 
       document.body.classList.toggle("deck-mode", showDeck);
       document.body.classList.toggle("battle-mode", showBattle);
+      document.body.classList.toggle("tutorial-mode", showTutorial);
 
       if (showDeck) {
         elements.deckPanel.classList.add("show");
