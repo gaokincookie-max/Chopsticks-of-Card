@@ -1613,9 +1613,42 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v88-deck-editor-upgrade";
+    const LATEST_NEWS_ID = "v90-beginner-tutorial";
 
     const UPDATE_NEWS = [
+      {
+        id: "v90-beginner-tutorial",
+        version: "v90",
+        date: "2026-07-17",
+        title: "全5章の初心者チュートリアルを追加",
+        summary: "新規プレイヤー向けに、基本攻撃から加護・呪縛まで実際に操作して学べるチュートリアルを追加しました。",
+        featured: false,
+        tags: ["system"],
+        items: [
+          "第1章「攻撃を使おう」：攻撃、5で0、超過計算",
+          "第2章「分けるを使おう」：2・0を1・1に分けて敗北回避",
+          "第3章「カードの使い方」：ひらめき、強打、軽打、終端",
+          "第4章「罠を使おう」：空振りの手動発動と茨の自動発動",
+          "第5章「加護と呪縛」：力の加護と鈍重の呪縛",
+          "初回案内を大型アップデート告知より先に表示",
+          "章クリア状況と続きからの位置をブラウザに保存"
+        ]
+      },
+      {
+        id: "v89-dimensional-slash-mid-sync",
+        version: "v89",
+        date: "2026-07-17",
+        title: "空間切断のオンライン途中同期を修正",
+        summary: "空間切断の1回目と2回目の攻撃結果が、相手側でまとめて反映される問題を修正しました。",
+        featured: false,
+        tags: ["fix"],
+        items: [
+          "1回目の攻撃解決直後に盤面を明示的に同期",
+          "相手側で1回目の演出後すぐに本数が更新されるよう変更",
+          "1回目の同期完了後に2回目の攻撃選択へ進行",
+          "通常攻撃やCPU戦の進行には影響しない"
+        ]
+      },
       {
         id: "v88-deck-editor-upgrade",
         version: "v88",
@@ -1753,6 +1786,54 @@ const CARD_LIBRARY = {
       } catch {}
     }
 
+    const TUTORIAL_STORAGE_KEY = "waribashi_card_tutorial_progress_v1";
+    const TUTORIAL_WELCOME_KEY = "waribashi_card_tutorial_welcome_v1";
+
+    const TUTORIAL_CHAPTERS = [
+      { id: 1, title: "攻撃を使おう", subtitle: "手を選んで攻撃し、5と超過計算を覚えます。" },
+      { id: 2, title: "分けるを使おう", subtitle: "2・0を1・1に分けて、敗北を回避します。" },
+      { id: 3, title: "カードの使い方", subtitle: "ひらめき、強打、軽打、終端カードを体験します。" },
+      { id: 4, title: "罠を使おう", subtitle: "空振りの手動発動と、茨の自動発動を体験します。" },
+      { id: 5, title: "加護と呪縛", subtitle: "力の加護と鈍重の呪縛を設置して違いを学びます。" }
+    ];
+
+    const TUTORIAL_CARD_INFO = {
+      inspiration: { name: "ひらめき", type: "補助", text: "カードを1枚引く。" },
+      strongHit: { name: "強打", type: "攻撃補助", text: "このターン、次の攻撃で与える本数を＋1する。" },
+      lightHit: { name: "軽打", type: "攻撃補助", text: "このターン、次の攻撃で与える本数を1減らす。" },
+      pass: { name: "パス", type: "終端", text: "このカードを使うと、ただちにターンを終了する。" },
+      miss: { name: "空振り", type: "罠・手動", text: "攻撃された時、発動するか選び、その攻撃を無効にする。" },
+      thorns: { name: "茨", type: "罠・自動", text: "攻撃された時に自動発動し、攻撃した相手の手に＋1する。" },
+      powerBlessing: { name: "力の加護", type: "加護", text: "この手で与える本数を＋1する。発動後も場に残る。" },
+      sluggishCurse: { name: "鈍重の呪縛", type: "呪縛", text: "この手で攻撃する時、与える本数を1減らす。相手の手に付ける。" }
+    };
+
+    let tutorial = {
+      chapter: 0,
+      step: 0,
+      selectedAttackHand: null,
+      chapterComplete: false
+    };
+
+    function loadTutorialProgress() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(TUTORIAL_STORAGE_KEY) || "{}");
+        return {
+          completed: Array.isArray(saved.completed) ? saved.completed : [],
+          lastChapter: Number(saved.lastChapter) || 1
+        };
+      } catch {
+        return { completed: [], lastChapter: 1 };
+      }
+    }
+
+    function saveTutorialProgress(chapter, complete = false) {
+      const progress = loadTutorialProgress();
+      progress.lastChapter = chapter;
+      if (complete && !progress.completed.includes(chapter)) progress.completed.push(chapter);
+      try { localStorage.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(progress)); } catch {}
+    }
+
     const handNames = {
       L: "左手",
       R: "右手",
@@ -1771,6 +1852,38 @@ const CARD_LIBRARY = {
       settingsScreen: document.getElementById("settingsScreen"),
       deckEditorScreen: document.getElementById("deckEditorScreen"),
       menuStartBtn: document.getElementById("menuStartBtn"),
+      menuTutorialBtn: document.getElementById("menuTutorialBtn"),
+      tutorialWelcomeModal: document.getElementById("tutorialWelcomeModal"),
+      tutorialWelcomeStartBtn: document.getElementById("tutorialWelcomeStartBtn"),
+      tutorialWelcomeLaterBtn: document.getElementById("tutorialWelcomeLaterBtn"),
+      tutorialWelcomeSkipBtn: document.getElementById("tutorialWelcomeSkipBtn"),
+      tutorialScreen: document.getElementById("tutorialScreen"),
+      tutorialExitBtn: document.getElementById("tutorialExitBtn"),
+      tutorialChapterTitle: document.getElementById("tutorialChapterTitle"),
+      tutorialChapterSubtitle: document.getElementById("tutorialChapterSubtitle"),
+      tutorialChapterList: document.getElementById("tutorialChapterList"),
+      tutorialStage: document.getElementById("tutorialStage"),
+      tutorialProgressText: document.getElementById("tutorialProgressText"),
+      tutorialProgressFill: document.getElementById("tutorialProgressFill"),
+      tutorialMessageTitle: document.getElementById("tutorialMessageTitle"),
+      tutorialMessageText: document.getElementById("tutorialMessageText"),
+      tutorialCalculation: document.getElementById("tutorialCalculation"),
+      tutorialSplitBtn: document.getElementById("tutorialSplitBtn"),
+      tutorialNextBtn: document.getElementById("tutorialNextBtn"),
+      tutorialSplitPanel: document.getElementById("tutorialSplitPanel"),
+      tutorialHandCards: document.getElementById("tutorialHandCards"),
+      tutorialChoicePanel: document.getElementById("tutorialChoicePanel"),
+      tutorialChoiceTitle: document.getElementById("tutorialChoiceTitle"),
+      tutorialChoiceYesBtn: document.getElementById("tutorialChoiceYesBtn"),
+      tutorialChoiceNoBtn: document.getElementById("tutorialChoiceNoBtn"),
+      tutorialRestartChapterBtn: document.getElementById("tutorialRestartChapterBtn"),
+      tutorialBackToChaptersBtn: document.getElementById("tutorialBackToChaptersBtn"),
+      tutorialHumanL: document.getElementById("tutorialHumanL"),
+      tutorialHumanR: document.getElementById("tutorialHumanR"),
+      tutorialCpuL: document.getElementById("tutorialCpuL"),
+      tutorialCpuR: document.getElementById("tutorialCpuR"),
+      tutorialHumanAttachments: document.getElementById("tutorialHumanAttachments"),
+      tutorialCpuAttachments: document.getElementById("tutorialCpuAttachments"),
       menuDeckBtn: document.getElementById("menuDeckBtn"),
       menuSettingsBtn: document.getElementById("menuSettingsBtn"),
       menuNewsBtn: document.getElementById("menuNewsBtn"),
@@ -3329,6 +3442,394 @@ const CARD_LIBRARY = {
       elements.majorUpdateModal?.classList.remove("show");
       elements.majorUpdateModal?.setAttribute("aria-hidden", "true");
       markMajorUpdateSeen();
+    }
+
+    function tutorialSetWelcomeSeen(value = "seen") {
+      try { localStorage.setItem(TUTORIAL_WELCOME_KEY, value); } catch {}
+    }
+
+    function shouldShowTutorialWelcome() {
+      try { return localStorage.getItem(TUTORIAL_WELCOME_KEY) !== "seen"; } catch { return true; }
+    }
+
+    function showTutorialWelcome() {
+      elements.tutorialWelcomeModal?.classList.add("show");
+      elements.tutorialWelcomeModal?.setAttribute("aria-hidden", "false");
+    }
+
+    function closeTutorialWelcome() {
+      elements.tutorialWelcomeModal?.classList.remove("show");
+      elements.tutorialWelcomeModal?.setAttribute("aria-hidden", "true");
+    }
+
+    function showMajorUpdateAfterTutorialWelcome() {
+      if (shouldShowMajorUpdate()) setTimeout(() => openMajorUpdate(), 220);
+    }
+
+    function renderTutorialChapterList() {
+      const progress = loadTutorialProgress();
+      elements.tutorialChapterList.innerHTML = TUTORIAL_CHAPTERS.map(chapter => `
+        <button class="tutorial-chapter-card ${progress.completed.includes(chapter.id) ? "complete" : ""}" data-tutorial-chapter="${chapter.id}">
+          <span class="tutorial-chapter-number">第${chapter.id}章</span>
+          <strong>${escapeHtml(chapter.title)}</strong>
+          <span>${escapeHtml(chapter.subtitle)}</span>
+          <em>${progress.completed.includes(chapter.id) ? "クリア済み" : chapter.id === progress.lastChapter ? "続きから" : "開始"}</em>
+        </button>
+      `).join("");
+      elements.tutorialChapterList.querySelectorAll("[data-tutorial-chapter]").forEach(button => {
+        button.addEventListener("click", () => startTutorialChapter(Number(button.dataset.tutorialChapter)));
+      });
+    }
+
+    function openTutorialMenu() {
+      showScreen("tutorial");
+      elements.tutorialStage.classList.add("hidden");
+      elements.tutorialChapterList.classList.remove("hidden");
+      elements.tutorialChapterTitle.textContent = "チュートリアル";
+      elements.tutorialChapterSubtitle.textContent = "全5章です。クリア済みの章も何度でも遊べます。";
+      renderTutorialChapterList();
+    }
+
+    function tutorialSetHands(hL, hR, cL, cR) {
+      const values = { humanL: hL, humanR: hR, cpuL: cL, cpuR: cR };
+      for (const [key, value] of Object.entries(values)) {
+        const element = {
+          humanL: elements.tutorialHumanL, humanR: elements.tutorialHumanR,
+          cpuL: elements.tutorialCpuL, cpuR: elements.tutorialCpuR
+        }[key];
+        element.querySelector("strong").textContent = value;
+        element.dataset.value = value;
+        element.classList.toggle("zero", value === 0);
+      }
+    }
+
+    function tutorialClearHighlights() {
+      [
+        elements.tutorialHumanL, elements.tutorialHumanR,
+        elements.tutorialCpuL, elements.tutorialCpuR,
+        elements.tutorialSplitBtn, elements.tutorialNextBtn
+      ].forEach(element => element?.classList.remove("tutorial-target"));
+      elements.tutorialHandCards.querySelectorAll(".tutorial-card").forEach(card => card.classList.remove("tutorial-target"));
+      elements.tutorialHumanAttachments.querySelectorAll("*").forEach(el => el.classList.remove("tutorial-target"));
+      elements.tutorialCpuAttachments.querySelectorAll("*").forEach(el => el.classList.remove("tutorial-target"));
+    }
+
+    function tutorialHighlight(target) {
+      tutorialClearHighlights();
+      target?.classList.add("tutorial-target");
+    }
+
+    function tutorialMessage(title, text, calculation = "") {
+      elements.tutorialMessageTitle.textContent = title;
+      elements.tutorialMessageText.innerHTML = text;
+      elements.tutorialCalculation.textContent = calculation || "操作してください";
+    }
+
+    function tutorialCards(cardIds) {
+      elements.tutorialHandCards.innerHTML = cardIds.map(cardId => {
+        const card = TUTORIAL_CARD_INFO[cardId];
+        return `<button class="tutorial-card" data-tutorial-card="${cardId}">
+          <strong>${escapeHtml(card.name)}</strong>
+          <span>${escapeHtml(card.type)}</span>
+          <small>${escapeHtml(card.text)}</small>
+        </button>`;
+      }).join("");
+      elements.tutorialHandCards.querySelectorAll("[data-tutorial-card]").forEach(card => {
+        card.addEventListener("click", () => tutorialHandleCard(card.dataset.tutorialCard, card));
+      });
+    }
+
+    function tutorialAttachment(owner, hand, name, kind, hidden = false) {
+      const container = owner === "human" ? elements.tutorialHumanAttachments : elements.tutorialCpuAttachments;
+      const chip = document.createElement("div");
+      chip.className = `tutorial-attachment ${kind}`;
+      chip.dataset.hand = hand;
+      chip.textContent = hidden ? "裏向きの罠" : `${hand === "L" ? "左手" : "右手"}：${name}`;
+      container.appendChild(chip);
+      return chip;
+    }
+
+    function tutorialResetStage() {
+      tutorial.selectedAttackHand = null;
+      tutorial.chapterComplete = false;
+      elements.tutorialHumanAttachments.innerHTML = "";
+      elements.tutorialCpuAttachments.innerHTML = "";
+      elements.tutorialHandCards.innerHTML = "";
+      elements.tutorialSplitPanel.classList.add("hidden");
+      elements.tutorialChoicePanel.classList.add("hidden");
+      elements.tutorialNextBtn.classList.add("hidden");
+      elements.tutorialSplitBtn.classList.remove("hidden");
+      tutorialClearHighlights();
+    }
+
+    function startTutorialChapter(chapter) {
+      tutorial.chapter = chapter;
+      tutorial.step = 0;
+      saveTutorialProgress(chapter, false);
+      elements.tutorialChapterList.classList.add("hidden");
+      elements.tutorialStage.classList.remove("hidden");
+      const info = TUTORIAL_CHAPTERS.find(item => item.id === chapter);
+      elements.tutorialChapterTitle.textContent = `第${chapter}章　${info.title}`;
+      elements.tutorialChapterSubtitle.textContent = info.subtitle;
+      tutorialResetStage();
+      renderTutorialStep();
+    }
+
+    function tutorialProgress(total) {
+      elements.tutorialProgressText.textContent = `${tutorial.step + 1} / ${total}`;
+      elements.tutorialProgressFill.style.width = `${Math.min(100, ((tutorial.step + 1) / total) * 100)}%`;
+    }
+
+    function tutorialAdvance() {
+      tutorial.step += 1;
+      renderTutorialStep();
+    }
+
+    function tutorialCompleteChapter() {
+      tutorial.chapterComplete = true;
+      saveTutorialProgress(tutorial.chapter, true);
+      const nextChapter = tutorial.chapter + 1;
+      tutorialMessage(
+        `第${tutorial.chapter}章クリア！`,
+        nextChapter <= 5
+          ? `基本を一つ覚えました。<br>「次へ」を押すと第${nextChapter}章へ進みます。`
+          : `全5章をクリアしました！<br>これで通常対戦を始めるための基本はばっちりです。`,
+        "CLEAR"
+      );
+      elements.tutorialNextBtn.textContent = nextChapter <= 5 ? "次の章へ" : "章一覧へ";
+      elements.tutorialNextBtn.classList.remove("hidden");
+      tutorialHighlight(elements.tutorialNextBtn);
+      renderTutorialChapterList();
+    }
+
+    function renderTutorialStep() {
+      tutorialClearHighlights();
+      elements.tutorialChoicePanel.classList.add("hidden");
+      elements.tutorialSplitPanel.classList.add("hidden");
+      elements.tutorialNextBtn.classList.add("hidden");
+      elements.tutorialSplitBtn.classList.add("hidden");
+
+      if (tutorial.chapter === 1) {
+        tutorialProgress(5);
+        if (tutorial.step === 0) {
+          tutorialSetHands(1, 1, 1, 1); tutorialCards([]);
+          tutorialMessage("攻撃する手を選ぶ", "まず、自分の右手を選んでください。");
+          tutorialHighlight(elements.tutorialHumanR);
+        } else if (tutorial.step === 1) {
+          tutorialMessage("攻撃する相手を選ぶ", "次に、相手の左手を選びます。<br>自分の手の本数を相手へ足します。", "1 ＋ 1");
+          tutorialHighlight(elements.tutorialCpuL);
+        } else if (tutorial.step === 2) {
+          tutorialSetHands(1, 1, 4, 1);
+          tutorialMessage("5になった手は0", "相手の左手は4です。自分の右手1で攻撃して、ちょうど5にしましょう。", "4 ＋ 1 ＝ 5 → 0");
+          tutorial.selectedAttackHand = null;
+          tutorialHighlight(elements.tutorialHumanR);
+        } else if (tutorial.step === 3) {
+          tutorialSetHands(3, 1, 4, 1);
+          tutorialMessage("超過した分が残る", "今度は3で4を攻撃します。合計7なので、5を引いた余りの2になります。", "4 ＋ 3 ＝ 7 → 2");
+          tutorial.selectedAttackHand = null;
+          tutorialHighlight(elements.tutorialHumanL);
+        } else {
+          tutorialCompleteChapter();
+        }
+        return;
+      }
+
+      if (tutorial.chapter === 2) {
+        tutorialProgress(3);
+        if (tutorial.step === 0) {
+          tutorialSetHands(2, 0, 3, 2); tutorialCards([]);
+          elements.tutorialSplitBtn.classList.remove("hidden");
+          tutorialMessage("このままでは負ける", "相手の3で自分の2を攻撃されると、2＋3＝5で両手が0になります。<br>「分ける」を押してください。", "2 ＋ 3 ＝ 5 → 敗北");
+          tutorialHighlight(elements.tutorialSplitBtn);
+        } else if (tutorial.step === 1) {
+          elements.tutorialSplitPanel.classList.remove("hidden");
+          tutorialMessage("2・0を1・1にする", "合計本数を変えず、左右へ1本ずつ分けます。<br>「1・1に分ける」を選んでください。");
+        } else {
+          tutorialSetHands(1, 1, 3, 2);
+          tutorialMessage("分けたターンは攻撃できない", "分けるとそのターンは攻撃できません。<br>攻撃をあきらめる代わりに、片方を倒されてももう片方が残る形にできます。", "分ける または 攻撃");
+          elements.tutorialNextBtn.textContent = "理解した";
+          elements.tutorialNextBtn.classList.remove("hidden");
+          tutorialHighlight(elements.tutorialNextBtn);
+        }
+        return;
+      }
+
+      if (tutorial.chapter === 3) {
+        tutorialProgress(8);
+        if (tutorial.step === 0) {
+          tutorialSetHands(1,1,1,1); tutorialCards(["inspiration"]);
+          tutorialMessage("カードを使ってみる", "「ひらめき」はカードを1枚引く、シンプルなカードです。押して使ってください。");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="inspiration"]'));
+        } else if (tutorial.step === 1) {
+          tutorialCards(["strongHit"]);
+          tutorialSetHands(1,0,3,0);
+          tutorialMessage("そのままでは倒せない", "1で3を攻撃すると相手は4になり、倒せません。<br>先に「強打」を使って攻撃する本数を＋1してください。", "3 ＋ 1 ＝ 4");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="strongHit"]'));
+        } else if (tutorial.step === 2) {
+          tutorialMessage("強打して攻撃", "強打で1本増え、攻撃は2本になります。<br>自分の左手を選んでください。", "3 ＋ (1＋1) ＝ 5 → 0");
+          tutorialHighlight(elements.tutorialHumanL);
+        } else if (tutorial.step === 3) {
+          tutorialMessage("相手を倒す", "相手の左手を選んで、ちょうど5にしてください。", "3 ＋ 2 ＝ 5 → 0");
+          tutorialHighlight(elements.tutorialCpuL);
+        } else if (tutorial.step === 4) {
+          tutorialCards(["lightHit"]); tutorialSetHands(3,0,3,0);
+          tutorialMessage("強すぎる攻撃は超過する", "3で3を攻撃すると6→1になり、倒せません。<br>「軽打」で攻撃する本数を1減らしてください。", "3 ＋ 3 ＝ 6 → 1");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="lightHit"]'));
+        } else if (tutorial.step === 5) {
+          tutorialMessage("軽打して攻撃", "攻撃する本数は2になりました。自分の左手を選んでください。", "3 ＋ (3－1) ＝ 5 → 0");
+          tutorialHighlight(elements.tutorialHumanL);
+        } else if (tutorial.step === 6) {
+          tutorialMessage("ちょうど5を作る", "相手の左手を選んで倒しましょう。", "3 ＋ 2 ＝ 5 → 0");
+          tutorialHighlight(elements.tutorialCpuL);
+        } else if (tutorial.step === 7) {
+          tutorialCards(["pass"]); tutorialSetHands(1,1,1,1);
+          tutorialMessage("終端カード", "一部のカードには「終端」と書かれています。<br>使うと、その時点でターンが終了します。「パス」を使ってみましょう。");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="pass"]'));
+        } else {
+          tutorialCompleteChapter();
+        }
+        return;
+      }
+
+      if (tutorial.chapter === 4) {
+        tutorialProgress(7);
+        if (tutorial.step === 0) {
+          tutorialSetHands(1,1,2,1); tutorialCards(["miss"]);
+          tutorialMessage("手動罠を置く", "「空振り」を自分の左手に設置します。まずカードを押してください。");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="miss"]'));
+        } else if (tutorial.step === 1) {
+          tutorialMessage("設置する手を選ぶ", "罠を置く自分の左手を選んでください。");
+          tutorialHighlight(elements.tutorialHumanL);
+        } else if (tutorial.step === 2) {
+          elements.tutorialChoicePanel.classList.remove("hidden");
+          tutorialMessage("手動で発動を選ぶ", "相手が左手を攻撃してきました。<br>空振りは手動罠なので、発動するか選べます。");
+        } else if (tutorial.step === 3) {
+          tutorialCards(["thorns"]); tutorialSetHands(1,1,2,1);
+          tutorialMessage("自動罠を置く", "次は「茨」を自分の右手に設置します。カードを押してください。");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="thorns"]'));
+        } else if (tutorial.step === 4) {
+          tutorialMessage("設置する手を選ぶ", "茨を置く自分の右手を選んでください。");
+          tutorialHighlight(elements.tutorialHumanR);
+        } else if (tutorial.step === 5) {
+          tutorialMessage("茨は自動発動", "相手が右手を攻撃すると、茨は確認なしで自動発動します。<br>攻撃した相手の手に＋1しました。", "相手の手 2 → 3");
+          elements.tutorialNextBtn.textContent = "次へ";
+          elements.tutorialNextBtn.classList.remove("hidden");
+          tutorialHighlight(elements.tutorialNextBtn);
+        } else {
+          tutorialCompleteChapter();
+        }
+        return;
+      }
+
+      if (tutorial.chapter === 5) {
+        tutorialProgress(6);
+        if (tutorial.step === 0) {
+          tutorialSetHands(1,1,2,2); tutorialCards(["powerBlessing"]);
+          tutorialMessage("加護を置く", "加護は自分の手に付けて、良い効果を継続させます。<br>「力の加護」を押してください。");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="powerBlessing"]'));
+        } else if (tutorial.step === 1) {
+          tutorialMessage("自分の手に設置", "力の加護を自分の左手に付けてください。");
+          tutorialHighlight(elements.tutorialHumanL);
+        } else if (tutorial.step === 2) {
+          tutorialCards(["sluggishCurse"]);
+          tutorialMessage("呪縛を置く", "呪縛は相手の手に付けて、不利な効果を継続させます。<br>「鈍重の呪縛」を押してください。");
+          tutorialHighlight(elements.tutorialHandCards.querySelector('[data-tutorial-card="sluggishCurse"]'));
+        } else if (tutorial.step === 3) {
+          tutorialMessage("相手の手に設置", "鈍重の呪縛を相手の左手に付けてください。");
+          tutorialHighlight(elements.tutorialCpuL);
+        } else if (tutorial.step === 4) {
+          tutorialMessage("罠との違い", "罠は条件を満たすと発動し、多くは一度で捨て札へ行きます。<br>加護と呪縛は場に残り、継続して効果を与えます。<br><strong>ただし、付いている手が0になると消えます。</strong>", "加護＝自分　呪縛＝相手");
+          elements.tutorialNextBtn.textContent = "理解した";
+          elements.tutorialNextBtn.classList.remove("hidden");
+          tutorialHighlight(elements.tutorialNextBtn);
+        } else {
+          tutorialCompleteChapter();
+        }
+      }
+    }
+
+    function tutorialHandleHand(owner, hand, element) {
+      if (tutorial.chapter === 1) {
+        if ([0,2,3].includes(tutorial.step)) {
+          const expected = tutorial.step === 3 ? "L" : "R";
+          if (owner !== "human" || hand !== expected) return;
+          tutorial.selectedAttackHand = hand;
+          tutorialAdvance();
+          return;
+        }
+        if ([1,4].includes(tutorial.step)) {
+          if (owner !== "cpu" || hand !== "L") return;
+          if (tutorial.step === 1) tutorialSetHands(1,1,2,1);
+          else if (tutorial.step === 4) tutorialSetHands(3,1,2,1);
+          tutorialAdvance();
+          return;
+        }
+      }
+
+      if (tutorial.chapter === 3) {
+        if ([2,5].includes(tutorial.step) && owner === "human" && hand === "L") {
+          tutorial.selectedAttackHand = hand; tutorialAdvance(); return;
+        }
+        if ([3,6].includes(tutorial.step) && owner === "cpu" && hand === "L") {
+          tutorialSetHands(
+            tutorial.step === 3 ? 1 : 3, 0, 0, 0
+          );
+          tutorialAdvance(); return;
+        }
+      }
+
+      if (tutorial.chapter === 4) {
+        if (tutorial.step === 1 && owner === "human" && hand === "L") {
+          tutorialAttachment("human", "L", "空振り", "trap", false);
+          tutorialAdvance(); return;
+        }
+        if (tutorial.step === 4 && owner === "human" && hand === "R") {
+          tutorialAttachment("human", "R", "茨", "trap", false);
+          tutorialAdvance(); return;
+        }
+      }
+
+      if (tutorial.chapter === 5) {
+        if (tutorial.step === 1 && owner === "human" && hand === "L") {
+          tutorialAttachment("human", "L", "力の加護", "blessing", false);
+          tutorialAdvance(); return;
+        }
+        if (tutorial.step === 3 && owner === "cpu" && hand === "L") {
+          tutorialAttachment("cpu", "L", "鈍重の呪縛", "curse", false);
+          tutorialAdvance(); return;
+        }
+      }
+    }
+
+    function tutorialHandleCard(cardId, element) {
+      const expectedByStep = {
+        "3:0": "inspiration", "3:1": "strongHit", "3:4": "lightHit", "3:7": "pass",
+        "4:0": "miss", "4:3": "thorns",
+        "5:0": "powerBlessing", "5:2": "sluggishCurse"
+      };
+      const expected = expectedByStep[`${tutorial.chapter}:${tutorial.step}`];
+      if (cardId !== expected) return;
+
+      if (cardId === "inspiration") {
+        tutorialCards(["strongHit"]);
+        tutorialMessage("カードを引けた", "ひらめきで新しいカードを1枚引きました。<br>カードを使うと、多くの場合は捨て札へ送られます。", "手札 ＋1");
+        elements.tutorialNextBtn.textContent = "次へ";
+        elements.tutorialNextBtn.classList.remove("hidden");
+        tutorialHighlight(elements.tutorialNextBtn);
+        return;
+      }
+
+      if (["strongHit","lightHit","miss","thorns","powerBlessing","sluggishCurse"].includes(cardId)) {
+        tutorialAdvance();
+        return;
+      }
+
+      if (cardId === "pass") {
+        tutorialMessage("ターン終了", "終端カードを使ったため、このターンはもう攻撃や分けるができません。", "TURN END");
+        elements.tutorialNextBtn.textContent = "章を終える";
+        elements.tutorialNextBtn.classList.remove("hidden");
+        tutorialHighlight(elements.tutorialNextBtn);
+      }
     }
 
     function showScreen(screen) {
@@ -7079,7 +7580,31 @@ async function attack(attacker, attackHand, defender, targetHand) {
       state.animating = false;
       clearHighlights();
       render();
-      if(state.temp[attacker].attacksUsed>=(state.temp[attacker].attackLimit||1)) state.pendingTerminalEnd[attacker]=true;
+
+      const completedAttacks = state.temp[attacker].attacksUsed || 0;
+      const currentAttackLimit = state.temp[attacker].attackLimit || 1;
+
+      // 空間切断の1回目は、2回目の入力へ進む前に盤面を明示同期する。
+      // 通常の遅延自動同期だけに任せると、相手側では2回分の結果がまとめて反映されてしまう。
+      if (
+        state.battleMode === "friend" &&
+        attacker === "human" &&
+        currentAttackLimit > 1 &&
+        completedAttacks < currentAttackLimit &&
+        !state.gameOver
+      ) {
+        try {
+          // 直前の予約同期と署名が競合しても、途中結果を必ず新しいrevisionで送る。
+          state.friendLastPublishedSignature = "";
+          await publishFriendStateNow();
+          addLog(`「空間切断」：${completedAttacks}回目の攻撃結果をオンライン対戦相手へ同期した。`);
+        } catch (error) {
+          console.error("PVP dimensional slash intermediate sync failed", error);
+          setMessage(`空間切断の途中同期エラー：${error.message || error}`);
+        }
+      }
+
+      if(completedAttacks>=currentAttackLimit) state.pendingTerminalEnd[attacker]=true;
       return true;
     }
 
@@ -8438,6 +8963,71 @@ async function endTurn() {
       card.addEventListener("click", onHandClick);
     });
 
+    elements.menuTutorialBtn?.addEventListener("click", openTutorialMenu);
+    elements.tutorialExitBtn?.addEventListener("click", () => showScreen("menu"));
+    elements.tutorialBackToChaptersBtn?.addEventListener("click", openTutorialMenu);
+    elements.tutorialRestartChapterBtn?.addEventListener("click", () => startTutorialChapter(tutorial.chapter));
+
+    [elements.tutorialHumanL, elements.tutorialHumanR, elements.tutorialCpuL, elements.tutorialCpuR].forEach(element => {
+      element?.addEventListener("click", () => tutorialHandleHand(element.dataset.owner, element.dataset.hand, element));
+    });
+
+    elements.tutorialSplitBtn?.addEventListener("click", () => {
+      if (tutorial.chapter !== 2 || tutorial.step !== 0) return;
+      tutorialAdvance();
+    });
+    elements.tutorialSplitPanel?.querySelectorAll("[data-split]").forEach(button => {
+      button.addEventListener("click", () => {
+        if (tutorial.chapter !== 2 || tutorial.step !== 1 || button.dataset.split !== "1,1") return;
+        tutorialAdvance();
+      });
+    });
+
+    elements.tutorialChoiceYesBtn?.addEventListener("click", () => {
+      if (tutorial.chapter !== 4 || tutorial.step !== 2) return;
+      tutorialMessage("空振りが発動", "攻撃を無効にしました。手動罠は、発動するか温存するかを選べます。", "攻撃を無効化");
+      elements.tutorialChoicePanel.classList.add("hidden");
+      elements.tutorialNextBtn.textContent = "次へ";
+      elements.tutorialNextBtn.classList.remove("hidden");
+      tutorialHighlight(elements.tutorialNextBtn);
+    });
+    elements.tutorialChoiceNoBtn?.addEventListener("click", () => {
+      if (tutorial.chapter === 4 && tutorial.step === 2) {
+        tutorialMessage("今回は発動しましょう", "空振りの体験なので、「発動する」を選んでください。");
+      }
+    });
+
+    elements.tutorialNextBtn?.addEventListener("click", () => {
+      if (tutorial.chapterComplete) {
+        const next = tutorial.chapter + 1;
+        if (next <= 5) startTutorialChapter(next);
+        else openTutorialMenu();
+        return;
+      }
+      if (tutorial.chapter === 2 && tutorial.step === 2) { tutorialAdvance(); return; }
+      if (tutorial.chapter === 3 && tutorial.step === 0) { tutorialAdvance(); return; }
+      if (tutorial.chapter === 3 && tutorial.step === 7) { tutorialAdvance(); return; }
+      if (tutorial.chapter === 4 && tutorial.step === 2) { tutorialAdvance(); return; }
+      if (tutorial.chapter === 4 && tutorial.step === 5) { tutorialAdvance(); return; }
+      if (tutorial.chapter === 5 && tutorial.step === 4) { tutorialAdvance(); return; }
+    });
+
+    elements.tutorialWelcomeStartBtn?.addEventListener("click", () => {
+      tutorialSetWelcomeSeen();
+      closeTutorialWelcome();
+      openTutorialMenu();
+    });
+    elements.tutorialWelcomeLaterBtn?.addEventListener("click", () => {
+      tutorialSetWelcomeSeen();
+      closeTutorialWelcome();
+      showMajorUpdateAfterTutorialWelcome();
+    });
+    elements.tutorialWelcomeSkipBtn?.addEventListener("click", () => {
+      tutorialSetWelcomeSeen();
+      closeTutorialWelcome();
+      showMajorUpdateAfterTutorialWelcome();
+    });
+
     elements.menuStartBtn.addEventListener("click", () => showScreen("battleSelect"));
     elements.plVsCpuBtn.addEventListener("click", () => showScreen("difficulty"));
     elements.plVsPlBtn.addEventListener("click", () => {
@@ -8763,7 +9353,10 @@ async function endTurn() {
     updateNewsUnreadBadge();
     renderFeaturedNews();
     renderNewsList("all");
-    if (shouldShowMajorUpdate()) {
+    renderTutorialChapterList();
+    if (shouldShowTutorialWelcome()) {
+      setTimeout(() => showTutorialWelcome(), 180);
+    } else if (shouldShowMajorUpdate()) {
       setTimeout(() => openMajorUpdate(), 320);
     }
     loadRoomFromUrl();

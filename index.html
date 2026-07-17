@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=88">
+  <link rel="stylesheet" href="style.css?v=90">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -133,6 +133,19 @@
     </div>
   </div>
 
+  <div class="tutorial-welcome-modal" id="tutorialWelcomeModal" aria-hidden="true">
+    <div class="tutorial-welcome-card">
+      <div class="menu-kicker">WELCOME</div>
+      <h2>はじめて遊びますか？</h2>
+      <p>基本攻撃からカード、罠、加護・呪縛まで、実際に操作しながら学べます。</p>
+      <div class="tutorial-welcome-actions">
+        <button id="tutorialWelcomeStartBtn">チュートリアルを始める</button>
+        <button id="tutorialWelcomeLaterBtn" class="secondary">あとで</button>
+        <button id="tutorialWelcomeSkipBtn" class="secondary">経験者なので省略</button>
+      </div>
+    </div>
+  </div>
+
   <main class="app">
     <header>
       <h1>割り箸カード</h1>
@@ -149,11 +162,86 @@
         <div class="menu-actions">
           <button id="menuStartBtn">スタート</button>
           <button id="menuDeckBtn" class="blue">デッキ編集</button>
+          <button id="menuTutorialBtn" class="tutorial-menu-btn">チュートリアル</button>
           <button id="menuSettingsBtn" class="secondary">設定</button>
           <button id="menuNewsBtn" class="news-menu-btn">
             お知らせ
             <span class="news-unread-badge" id="newsUnreadBadge">NEW</span>
           </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen tutorial-screen screen-hidden" id="tutorialScreen">
+      <div class="tutorial-shell">
+        <div class="tutorial-topbar">
+          <div>
+            <div class="menu-kicker">TUTORIAL</div>
+            <h2 id="tutorialChapterTitle">チュートリアル</h2>
+            <p id="tutorialChapterSubtitle">章を選んでください。</p>
+          </div>
+          <button id="tutorialExitBtn" class="secondary">メニューへ戻る</button>
+        </div>
+
+        <div class="tutorial-chapter-list" id="tutorialChapterList"></div>
+
+        <div class="tutorial-stage hidden" id="tutorialStage">
+          <div class="tutorial-progress">
+            <span id="tutorialProgressText">1 / 1</span>
+            <div class="tutorial-progress-track"><div id="tutorialProgressFill"></div></div>
+          </div>
+
+          <div class="tutorial-message-box">
+            <strong id="tutorialMessageTitle">説明</strong>
+            <p id="tutorialMessageText"></p>
+          </div>
+
+          <div class="tutorial-board">
+            <div class="tutorial-side opponent">
+              <div class="tutorial-side-label">相手</div>
+              <div class="tutorial-hands">
+                <button class="tutorial-hand" id="tutorialCpuL" data-owner="cpu" data-hand="L"><span>左手</span><strong>1</strong></button>
+                <button class="tutorial-hand" id="tutorialCpuR" data-owner="cpu" data-hand="R"><span>右手</span><strong>1</strong></button>
+              </div>
+              <div class="tutorial-attachments" id="tutorialCpuAttachments"></div>
+            </div>
+
+            <div class="tutorial-center">
+              <div class="tutorial-calculation" id="tutorialCalculation">準備中</div>
+              <button id="tutorialSplitBtn" class="secondary">分ける</button>
+              <button id="tutorialNextBtn" class="hidden">次へ</button>
+            </div>
+
+            <div class="tutorial-side player">
+              <div class="tutorial-side-label">あなた</div>
+              <div class="tutorial-hands">
+                <button class="tutorial-hand" id="tutorialHumanL" data-owner="human" data-hand="L"><span>左手</span><strong>1</strong></button>
+                <button class="tutorial-hand" id="tutorialHumanR" data-owner="human" data-hand="R"><span>右手</span><strong>1</strong></button>
+              </div>
+              <div class="tutorial-attachments" id="tutorialHumanAttachments"></div>
+            </div>
+          </div>
+
+          <div class="tutorial-split-panel hidden" id="tutorialSplitPanel">
+            <p>分けた後の形を選びます。</p>
+            <button data-split="1,1">1・1に分ける</button>
+            <button data-split="2,0" class="secondary">2・0のまま</button>
+          </div>
+
+          <div class="tutorial-hand-cards" id="tutorialHandCards"></div>
+
+          <div class="tutorial-choice-panel hidden" id="tutorialChoicePanel">
+            <strong id="tutorialChoiceTitle">罠を発動しますか？</strong>
+            <div>
+              <button id="tutorialChoiceYesBtn">発動する</button>
+              <button id="tutorialChoiceNoBtn" class="secondary">発動しない</button>
+            </div>
+          </div>
+
+          <div class="tutorial-stage-actions">
+            <button id="tutorialRestartChapterBtn" class="secondary">この章をやり直す</button>
+            <button id="tutorialBackToChaptersBtn" class="secondary">章一覧へ</button>
+          </div>
         </div>
       </div>
     </section>
@@ -567,6 +655,6 @@
     }
   </script>
 
-  <script src="game.js?v=88"></script>
+  <script src="game.js?v=90"></script>
 </body>
 </html>
