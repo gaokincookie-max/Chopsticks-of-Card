@@ -1613,9 +1613,27 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v91-tutorial-screen-fix";
+    const LATEST_NEWS_ID = "v92-tutorial-real-battle-ui";
 
     const UPDATE_NEWS = [
+      {
+        id: "v92-tutorial-real-battle-ui",
+        version: "v92",
+        date: "2026-07-17",
+        title: "チュートリアルを通常対戦画面へ統合",
+        summary: "専用の簡易盤面を廃止し、CPU戦と同じ盤面・手札・演出・分ける・設置UIで学べるように作り直しました。",
+        featured: false,
+        tags: ["system", "fix"],
+        items: [
+          "章選択後は通常のCPU戦画面をそのまま使用",
+          "実際の攻撃選択と計算演出で基本攻撃を練習",
+          "通常の分ける欄と決定ボタンを使用",
+          "実際の手札カードUIからひらめき・強打・軽打・終端を使用",
+          "通常の罠設置と手動罠確認、自動罠処理を使用",
+          "通常の加護・呪縛設置UIを使用",
+          "チュートリアルは固定盤面と操作誘導のみ担当"
+        ]
+      },
       {
         id: "v91-tutorial-screen-fix",
         version: "v91",
@@ -1827,7 +1845,10 @@ const CARD_LIBRARY = {
       chapter: 0,
       step: 0,
       selectedAttackHand: null,
-      chapterComplete: false
+      chapterComplete: false,
+      usingRealBattle: false,
+      expected: null,
+      cardUsed: null
     };
 
     function loadTutorialProgress() {
@@ -1899,6 +1920,13 @@ const CARD_LIBRARY = {
       tutorialCpuR: document.getElementById("tutorialCpuR"),
       tutorialHumanAttachments: document.getElementById("tutorialHumanAttachments"),
       tutorialCpuAttachments: document.getElementById("tutorialCpuAttachments"),
+      realTutorialOverlay: document.getElementById("realTutorialOverlay"),
+      realTutorialChapter: document.getElementById("realTutorialChapter"),
+      realTutorialTitle: document.getElementById("realTutorialTitle"),
+      realTutorialText: document.getElementById("realTutorialText"),
+      realTutorialProgressFill: document.getElementById("realTutorialProgressFill"),
+      realTutorialRetryBtn: document.getElementById("realTutorialRetryBtn"),
+      realTutorialChaptersBtn: document.getElementById("realTutorialChaptersBtn"),
       menuDeckBtn: document.getElementById("menuDeckBtn"),
       menuSettingsBtn: document.getElementById("menuSettingsBtn"),
       menuNewsBtn: document.getElementById("menuNewsBtn"),
@@ -3854,6 +3882,195 @@ const CARD_LIBRARY = {
       }
     }
 
+
+    function clearRealTutorialTargets() {
+      document.querySelectorAll(".real-tutorial-target").forEach(el => el.classList.remove("real-tutorial-target"));
+    }
+
+    function realTutorialTarget(selector) {
+      clearRealTutorialTargets();
+      const el = typeof selector === "string" ? document.querySelector(selector) : selector;
+      el?.classList.add("real-tutorial-target");
+    }
+
+    function setRealTutorialGuide(text, expected, progress, total) {
+      tutorial.expected = expected;
+      elements.realTutorialText.innerHTML = text;
+      elements.realTutorialProgressFill.style.width = `${Math.max(0, Math.min(100, progress / total * 100))}%`;
+      setMessage(text.replace(/<[^>]*>/g, ""));
+      clearRealTutorialTargets();
+
+      if (expected === "humanL") realTutorialTarget("#humanL");
+      if (expected === "humanR") realTutorialTarget("#humanR");
+      if (expected === "cpuL") realTutorialTarget("#cpuL");
+      if (expected === "cpuR") realTutorialTarget("#cpuR");
+      if (expected === "split") realTutorialTarget("#splitBtn");
+      if (expected === "confirmSplit") realTutorialTarget("#confirmSplitBtn");
+      if (expected?.startsWith("card:")) {
+        const cardId = expected.slice(5);
+        const index = state.hands.human.indexOf(cardId);
+        if (index >= 0) realTutorialTarget(elements.humanCards.children[index]);
+      }
+    }
+
+    function setupRealTutorialBase(chapter) {
+      tutorial.usingRealBattle = true;
+      tutorial.chapter = chapter;
+      tutorial.step = 0;
+      tutorial.chapterComplete = false;
+      tutorial.selectedAttackHand = null;
+      tutorial.cardUsed = null;
+
+      state.battleMode = "tutorial";
+      handNames.cpu = "練習CPU";
+      showScreen("battle");
+      resetGame();
+      state.battleMode = "tutorial";
+      state.turn = "human";
+      state.gameOver = false;
+      state.animating = false;
+      state.mode = "attack";
+      state.hands.human = [];
+      state.hands.cpu = [];
+      state.decks.human = [];
+      state.decks.cpu = [];
+      state.discard.human = [];
+      state.discard.cpu = [];
+      state.traps.human = { L: [], R: [] };
+      state.traps.cpu = { L: [], R: [] };
+      state.temp.human.cardActionUsed = false;
+      state.temp.cpu.cardActionUsed = false;
+
+      elements.realTutorialOverlay.classList.remove("hidden");
+      const info = TUTORIAL_CHAPTERS.find(item => item.id === chapter);
+      elements.realTutorialChapter.textContent = `第${chapter}章`;
+      elements.realTutorialTitle.textContent = info.title;
+      render();
+      renderRealTutorialStep();
+    }
+
+    function startTutorialChapter(chapter) {
+      saveTutorialProgress(chapter, false);
+      setupRealTutorialBase(chapter);
+    }
+
+    function realTutorialHands(hL,hR,cL,cR) {
+      state.human.L=hL; state.human.R=hR; state.cpu.L=cL; state.cpu.R=cR;
+      state.selectedAttackHand=null; state.mode="attack"; state.turn="human";
+      state.temp.human.cardActionUsed=false;
+      state.temp.human.attackBonus=0;
+      state.pendingTerminalEnd.human=false;
+      render();
+    }
+
+    function realTutorialCards(ids) {
+      state.hands.human=[...ids];
+      state.temp.human.cardActionUsed=false;
+      render();
+    }
+
+    function finishRealTutorialChapter() {
+      tutorial.chapterComplete = true;
+      saveTutorialProgress(tutorial.chapter, true);
+      clearRealTutorialTargets();
+      elements.realTutorialText.innerHTML =
+        tutorial.chapter < 5
+          ? `第${tutorial.chapter}章クリア！ ホームの章一覧から次の章へ進めます。`
+          : "全5章クリア！ 基本ルールを覚えました。";
+      elements.realTutorialProgressFill.style.width = "100%";
+      setMessage("チュートリアルをクリアしました。章一覧へ戻れます。");
+    }
+
+    function renderRealTutorialStep() {
+      const ch=tutorial.chapter, st=tutorial.step;
+      if(ch===1){
+        const total=8;
+        if(st===0){ realTutorialHands(1,1,1,1); realTutorialCards([]); setRealTutorialGuide("通常試合と同じ操作です。まず自分の右手を選んでください。","humanR",1,total); }
+        else if(st===1){ setRealTutorialGuide("次に相手の左手を選びます。1＋1で相手の手は2になります。","cpuL",2,total); }
+        else if(st===2){ realTutorialHands(1,1,4,1); setRealTutorialGuide("5になった手は0になります。自分の右手を選んでください。","humanR",3,total); }
+        else if(st===3){ setRealTutorialGuide("相手の左手4を選び、4＋1＝5→0を確認しましょう。","cpuL",4,total); }
+        else if(st===4){ realTutorialHands(3,1,4,1); setRealTutorialGuide("6以上は5を引いた余りになります。自分の左手3を選んでください。","humanL",5,total); }
+        else if(st===5){ setRealTutorialGuide("相手の左手4を選びます。4＋3＝7→2になります。","cpuL",6,total); }
+        else finishRealTutorialChapter();
+      } else if(ch===2){
+        const total=4;
+        if(st===0){ realTutorialHands(2,0,3,2); realTutorialCards([]); setRealTutorialGuide("このままでは相手の3で自分の2を5にされて負けます。「分ける」を押してください。","split",1,total); }
+        else if(st===1){
+          elements.splitLeft.value="1"; elements.splitRight.value="1";
+          setRealTutorialGuide("分け直し欄を1・1にし、「決定」を押してください。","confirmSplit",2,total);
+        } else if(st===2){
+          setRealTutorialGuide("分けたターンは攻撃できません。攻撃か分けるのどちらか一方を選ぶルールです。",null,3,total);
+          finishRealTutorialChapter();
+        }
+      } else if(ch===3){
+        const total=10;
+        if(st===0){ realTutorialHands(1,1,1,1); state.decks.human=["strongHit"]; realTutorialCards(["insight"]); setRealTutorialGuide("実際の手札UIです。「ひらめき」を使って1枚引きましょう。","card:insight",1,total); }
+        else if(st===1){ realTutorialHands(1,0,3,0); realTutorialCards(["strongHit"]); setRealTutorialGuide("1で3を殴るだけでは4です。「強打」を使って攻撃を＋1してください。","card:strongHit",2,total); }
+        else if(st===2){ setRealTutorialGuide("自分の左手1を選びます。強打により2として攻撃します。","humanL",3,total); }
+        else if(st===3){ setRealTutorialGuide("相手の左手3を選び、3＋2＝5で倒しましょう。","cpuL",4,total); }
+        else if(st===4){ realTutorialHands(3,0,3,0); realTutorialCards(["lightHit"]); setRealTutorialGuide("3で3を殴ると6→1です。「軽打」を使って攻撃を－1してください。","card:lightHit",5,total); }
+        else if(st===5){ setRealTutorialGuide("自分の左手3を選びます。軽打により2として攻撃します。","humanL",6,total); }
+        else if(st===6){ setRealTutorialGuide("相手の左手3を選び、3＋2＝5で倒しましょう。","cpuL",7,total); }
+        else if(st===7){ realTutorialHands(1,1,1,1); realTutorialCards(["passCard"]); setRealTutorialGuide("「終端」のパスを使ってください。使った時点でターンが終了します。","card:passCard",8,total); }
+        else finishRealTutorialChapter();
+      } else if(ch===4){
+        const total=8;
+        if(st===0){ realTutorialHands(1,1,2,1); realTutorialCards(["dodgeTrap"]); setRealTutorialGuide("「空振り」を押し、実際の罠設置モードにしてください。","card:dodgeTrap",1,total); }
+        else if(st===1){ setRealTutorialGuide("空振りを自分の左手に置いてください。","humanL",2,total); }
+        else if(st===2){
+          setRealTutorialGuide("練習CPUが左手を攻撃します。実際の手動罠確認で「発動する」を選んでください。",null,3,total);
+          setTimeout(async()=>{ state.turn="cpu"; render(); await attack("cpu","L","human","L"); state.turn="human"; render(); },350);
+        }
+        else if(st===3){ realTutorialHands(1,1,2,1); realTutorialCards(["thornTrap"]); setRealTutorialGuide("次は「茨」を押してください。","card:thornTrap",4,total); }
+        else if(st===4){ setRealTutorialGuide("茨を自分の右手に置いてください。","humanR",5,total); }
+        else if(st===5){
+          setRealTutorialGuide("練習CPUが右手を攻撃します。茨は確認なしで自動発動します。",null,6,total);
+          setTimeout(async()=>{ state.turn="cpu"; render(); await attack("cpu","L","human","R"); state.turn="human"; render(); tutorial.step++; renderRealTutorialStep(); },350);
+        }
+        else finishRealTutorialChapter();
+      } else if(ch===5){
+        const total=7;
+        if(st===0){ realTutorialHands(1,1,2,2); realTutorialCards(["powerBlessing"]); setRealTutorialGuide("「力の加護」を押してください。","card:powerBlessing",1,total); }
+        else if(st===1){ setRealTutorialGuide("力の加護を自分の左手へ置いてください。","humanL",2,total); }
+        else if(st===2){ state.temp.human.cardActionUsed=false; realTutorialCards(["slowCurse"]); setRealTutorialGuide("次に「鈍重の呪縛」を押してください。","card:slowCurse",3,total); }
+        else if(st===3){ setRealTutorialGuide("鈍重の呪縛を相手の左手へ置いてください。","cpuL",4,total); }
+        else if(st===4){
+          setRealTutorialGuide("罠は条件で発動し、多くは一度で消えます。加護は自分、呪縛は相手へ置き、継続して残ります。ただし付いた手が0になると消えます。",null,6,total);
+          finishRealTutorialChapter();
+        }
+      }
+    }
+
+    function tutorialExpectedHand(owner, hand) {
+      if(!tutorial.usingRealBattle || state.battleMode!=="tutorial") return true;
+      const map={humanL:["human","L"],humanR:["human","R"],cpuL:["cpu","L"],cpuR:["cpu","R"]};
+      const exp=map[tutorial.expected];
+      if(!exp) return true;
+      if(exp[0]===owner && exp[1]===hand) return true;
+      setMessage("今は黄色く光っている場所を選んでください。");
+      return false;
+    }
+
+    function tutorialAfterHandClick(owner,hand) {
+      if(!tutorial.usingRealBattle || state.battleMode!=="tutorial") return;
+      const expected=tutorial.expected;
+      const expectedMap={humanL:["human","L"],humanR:["human","R"],cpuL:["cpu","L"],cpuR:["cpu","R"]};
+      const exp=expectedMap[expected];
+      if(!exp || exp[0]!==owner || exp[1]!==hand) return;
+      setTimeout(()=>{
+        if(tutorial.chapter===4 && [1,4].includes(tutorial.step)) tutorial.step++;
+        else if(tutorial.chapter===5 && [1,3].includes(tutorial.step)) tutorial.step++;
+        else tutorial.step++;
+        renderRealTutorialStep();
+      },700);
+    }
+
+    function tutorialAfterCard(cardId) {
+      if(!tutorial.usingRealBattle || state.battleMode!=="tutorial") return;
+      if(tutorial.expected!==`card:${cardId}`) return;
+      setTimeout(()=>{ tutorial.step++; renderRealTutorialStep(); },650);
+    }
+
     function showScreen(screen) {
       state.currentScreen = screen;
       const showMenu = screen === "menu";
@@ -3879,6 +4096,7 @@ const CARD_LIBRARY = {
       document.body.classList.toggle("deck-mode", showDeck);
       document.body.classList.toggle("battle-mode", showBattle);
       document.body.classList.toggle("tutorial-mode", showTutorial);
+      if (!showBattle && elements.realTutorialOverlay) elements.realTutorialOverlay.classList.add("hidden");
 
       if (showDeck) {
         elements.deckPanel.classList.add("show");
@@ -6952,6 +7170,13 @@ function renderLastAction() {
     async function setTrap(player, hand, handIndex, owner = player) {
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
+      if (tutorial.usingRealBattle && state.battleMode === "tutorial" && player === "human") {
+        if (tutorial.expected !== `card:${cardId}`) {
+          setMessage("今は黄色く光っているカードを使ってください。");
+          return false;
+        }
+        tutorialAfterCard(cardId);
+      }
       if (!card || !isAttachmentCard(cardId)) return false;
       const setupActive = !!state.temp[player].setupMode;
       if (setupActive && !card.trap) return false;
@@ -8644,6 +8869,9 @@ async function endTurn() {
       const owner = card.dataset.owner;
       const hand = card.dataset.hand;
 
+      if (!tutorialExpectedHand(owner, hand)) return;
+      if (tutorial.usingRealBattle && state.battleMode === "tutorial") tutorialAfterHandClick(owner, hand);
+
       if (state.gameOver || state.animating || state.turn !== "human") return;
 
       if (state.mode === "dimensionalSlashSacrifice") {
@@ -8989,6 +9217,12 @@ async function endTurn() {
     });
 
     elements.menuTutorialBtn?.addEventListener("click", openTutorialMenu);
+    elements.realTutorialRetryBtn?.addEventListener("click", () => startTutorialChapter(tutorial.chapter));
+    elements.realTutorialChaptersBtn?.addEventListener("click", () => {
+      tutorial.usingRealBattle = false;
+      elements.realTutorialOverlay.classList.add("hidden");
+      openTutorialMenu();
+    });
     elements.tutorialExitBtn?.addEventListener("click", () => showScreen("menu"));
     elements.tutorialBackToChaptersBtn?.addEventListener("click", openTutorialMenu);
     elements.tutorialRestartChapterBtn?.addEventListener("click", () => startTutorialChapter(tutorial.chapter));
@@ -9168,6 +9402,13 @@ async function endTurn() {
     });
 
     elements.splitBtn.addEventListener("click", () => {
+      if (tutorial.usingRealBattle && state.battleMode === "tutorial") {
+        if (tutorial.expected !== "split") {
+          setMessage("今は指定された操作を行ってください。");
+          return;
+        }
+        setTimeout(() => { tutorial.step++; renderRealTutorialStep(); }, 120);
+      }
       if (state.temp.human.setupMode) return;
       if (
         (state.temp.human?.attackLimit || 1) > 1 &&
@@ -9242,6 +9483,9 @@ async function endTurn() {
     elements.splitRight.addEventListener("change", () => syncSplitSelects("right"));
 
     elements.confirmSplitBtn.addEventListener("click", async () => {
+      if (tutorial.usingRealBattle && state.battleMode === "tutorial" && tutorial.expected === "confirmSplit") {
+        setTimeout(() => { tutorial.step++; renderRealTutorialStep(); }, 700);
+      }
       const value = elements.splitLeft.value;
       if (!value || state.animating) return;
 

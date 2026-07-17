@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=91">
+  <link rel="stylesheet" href="style.css?v=92">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -510,6 +510,21 @@
       <div class="last-card empty" id="lastCardDisplay">まだ行動はありません。</div>
     </section>
 
+    <section class="real-tutorial-overlay battle-screen screen-hidden hidden" id="realTutorialOverlay">
+      <div class="real-tutorial-head">
+        <div>
+          <span id="realTutorialChapter">第1章</span>
+          <strong id="realTutorialTitle">攻撃を使おう</strong>
+        </div>
+        <div class="real-tutorial-overlay-actions">
+          <button id="realTutorialRetryBtn" class="secondary">やり直す</button>
+          <button id="realTutorialChaptersBtn" class="secondary">章一覧</button>
+        </div>
+      </div>
+      <p id="realTutorialText">説明</p>
+      <div class="real-tutorial-progress"><div id="realTutorialProgressFill"></div></div>
+    </section>
+
     <section class="board battle-screen screen-hidden">
       <div class="player-panel cpu">
         <div class="panel-head">
@@ -655,6 +670,6 @@
     }
   </script>
 
-  <script src="game.js?v=91"></script>
+  <script src="game.js?v=92"></script>
 </body>
 </html>

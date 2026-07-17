@@ -3146,3 +3146,77 @@
   .tutorial-topbar { display:grid; }
   .tutorial-topbar button { width:100%; }
 }
+
+
+/* v92: tutorial on the real battle screen */
+.real-tutorial-overlay {
+  position: sticky;
+  top: 8px;
+  z-index: 70;
+  margin: 8px auto 14px;
+  width: min(940px, calc(100% - 20px));
+  padding: 14px 16px;
+  border-radius: 17px;
+  border: 1px solid #91c8b8;
+  background: linear-gradient(135deg, rgba(240,255,250,.97), rgba(218,244,235,.97));
+  box-shadow: 0 12px 35px rgba(26,84,68,.2);
+}
+.real-tutorial-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+}
+.real-tutorial-head > div:first-child {
+  display:grid;
+  gap:3px;
+}
+.real-tutorial-head span {
+  color:#43836f;
+  font-size:11px;
+  font-weight:1000;
+}
+.real-tutorial-head strong {
+  color:#245d4d;
+  font-size:19px;
+}
+.real-tutorial-overlay p {
+  margin:10px 0;
+  color:#426c61;
+  line-height:1.6;
+}
+.real-tutorial-overlay-actions {
+  display:flex;
+  gap:6px;
+}
+.real-tutorial-overlay-actions button {
+  width:auto;
+  padding:7px 10px;
+}
+.real-tutorial-progress {
+  height:7px;
+  border-radius:999px;
+  overflow:hidden;
+  background:#c8e4db;
+}
+.real-tutorial-progress div {
+  height:100%;
+  width:0;
+  background:linear-gradient(90deg,#25a47f,#75cbb0);
+  transition:.25s;
+}
+.real-tutorial-target {
+  position:relative!important;
+  z-index:65!important;
+  animation:realTutorialPulse .9s ease-in-out infinite!important;
+  box-shadow:0 0 0 5px rgba(255,190,45,.34),0 0 28px rgba(255,175,27,.72)!important;
+  outline:3px solid #ffb52e!important;
+}
+@keyframes realTutorialPulse {
+  50% { transform:translateY(-2px) scale(1.025); }
+}
+@media(max-width:600px){
+  .real-tutorial-head { display:grid; }
+  .real-tutorial-overlay-actions { width:100%; }
+  .real-tutorial-overlay-actions button { flex:1; }
+}
