@@ -3237,3 +3237,42 @@ body.tutorial-split-only #cpuL,
 body.tutorial-split-only #cpuR {
   cursor: not-allowed;
 }
+
+
+/* v95: tutorial chapter card overflow fix */
+.tutorial-chapter-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+}
+.tutorial-chapter-card {
+  min-width: 0;
+  width: 100%;
+  min-height: 176px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.tutorial-chapter-card strong,
+.tutorial-chapter-card span,
+.tutorial-chapter-card em {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tutorial-chapter-card strong {
+  font-size: clamp(15px, 2.2vw, 18px);
+  line-height: 1.35;
+}
+.tutorial-chapter-card span:not(.tutorial-chapter-number) {
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 520px) {
+  .tutorial-chapter-list {
+    grid-template-columns: 1fr;
+  }
+  .tutorial-chapter-card {
+    min-height: 148px;
+    padding: 14px;
+  }
+}

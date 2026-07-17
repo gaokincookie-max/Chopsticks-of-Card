@@ -1615,9 +1615,25 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v94-tutorial-action-lock-fix";
+    const LATEST_NEWS_ID = "v95-tutorial-attachment-board-fix";
 
     const UPDATE_NEWS = [
+      {
+        id: "v95-tutorial-attachment-board-fix",
+        version: "v95",
+        date: "2026-07-17",
+        title: "設置カード進行と課題盤面を修正",
+        summary: "罠・加護・呪縛で手の選択へ進めない問題、強打後に軽打用の相手が消える問題、章選択文字のはみ出しを修正しました。",
+        featured: false,
+        tags: ["fix"],
+        items: [
+          "設置カードを選んだ時点で、設置する手を選ぶ段階へ移行",
+          "実際に設置した後で次の課題へ進行",
+          "強打の攻撃演出完了後に軽打用の3・0対3・0を再構築",
+          "軽打完了後も終端カード用の1・1対1・1を再構築",
+          "章選択カードの文字折り返しとスマートフォン表示を改善"
+        ]
+      },
       {
         id: "v94-tutorial-action-lock-fix",
         version: "v94",
@@ -4186,11 +4202,41 @@ const CARD_LIBRARY = {
         return;
       }
 
+      const isCardAttackTarget =
+        tutorial.chapter === 3 &&
+        ((tutorial.step === 3 && owner === "cpu" && hand === "L") ||
+         (tutorial.step === 6 && owner === "cpu" && hand === "L"));
+
       setTimeout(()=>{
         if(!isTutorialBattle()) return;
         tutorial.step++;
         renderRealTutorialStep();
-      },700);
+
+        // 強打・軽打の撃破演出が遅れて盤面を書き戻さないよう、
+        // 次の課題の固定盤面を演出完了後にも再適用する。
+        if (tutorial.chapter === 3 && tutorial.step === 4) {
+          setTimeout(() => {
+            if (!isTutorialBattle() || tutorial.chapter !== 3 || tutorial.step !== 4) return;
+            realTutorialHands(3,0,3,0);
+            realTutorialCards(["lightHit"]);
+            setRealTutorialGuide(
+              "3で3を殴ると6→1です。「軽打」を使って攻撃を－1してください。",
+              "card:lightHit",5,10
+            );
+          }, 350);
+        }
+        if (tutorial.chapter === 3 && tutorial.step === 7) {
+          setTimeout(() => {
+            if (!isTutorialBattle() || tutorial.chapter !== 3 || tutorial.step !== 7) return;
+            realTutorialHands(1,1,1,1);
+            realTutorialCards(["passCard"]);
+            setRealTutorialGuide(
+              "「終端」のパスを使ってください。使った時点でターンが終了します。",
+              "card:passCard",8,10
+            );
+          }, 350);
+        }
+      }, isCardAttackTarget ? 1500 : 700);
     }
 
     function tutorialAfterCard(cardId) {
@@ -7319,6 +7365,13 @@ function renderLastAction() {
       const target = card.curse ? "相手の手" : "自分の手";
       setMessage(`「${card.name}」を設置する${target}を選んでください。`);
       render();
+
+      // 設置カードは「カードを選ぶ」→「置く手を選ぶ」の二段階。
+      // カード選択画面になった時点で、手を選ぶステップへ進める。
+      if (isTutorialBattle() && tutorial.expected === `card:${cardId}`) {
+        tutorial.step++;
+        renderRealTutorialStep();
+      }
     }
 
     async function setTrap(player, hand, handIndex, owner = player) {
@@ -7396,9 +7449,8 @@ function renderLastAction() {
       triggerChemicalGeneration(player, cardId);
       render();
 
-      if (isTutorialBattle() && player === "human") {
-        tutorialAfterCard(cardId);
-      }
+      // 罠・加護・呪縛は、対象の手を選んで設置できた後に
+      // tutorialAfterHandClick 側で次のステップへ進む。
 
       // 罠・加護・呪縛の設置は相手側の表示に直結するため、オンラインでは即時同期する。
       if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
