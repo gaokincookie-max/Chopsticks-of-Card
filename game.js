@@ -1615,9 +1615,27 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v95-tutorial-attachment-board-fix";
+    const LATEST_NEWS_ID = "v96-tutorial-explanation-ok-trap-fix";
 
     const UPDATE_NEWS = [
+      {
+        id: "v96-tutorial-explanation-ok-trap-fix",
+        version: "v96",
+        date: "2026-07-17",
+        title: "空振りの進行と説明確認を改善",
+        summary: "空振り発動後に進まない問題を修正し、分ける・加護・呪縛の説明をOKボタンで確認するステップを追加しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "空振りの効果処理完了後に茨の課題へ進行",
+          "説明専用ステップにOKボタンを追加",
+          "分けたターンは攻撃できないことを改めて説明",
+          "分ける前後で合計本数は変わらないことを説明",
+          "分けた結果として片方を0にできないことを説明",
+          "罠・加護・呪縛の設置先、公開状態、継続性を文章でも説明",
+          "付いている手が0になると設置カードも消えることを説明"
+        ]
+      },
       {
         id: "v95-tutorial-attachment-board-fix",
         version: "v95",
@@ -1978,6 +1996,7 @@ const CARD_LIBRARY = {
       realTutorialTitle: document.getElementById("realTutorialTitle"),
       realTutorialText: document.getElementById("realTutorialText"),
       realTutorialProgressFill: document.getElementById("realTutorialProgressFill"),
+      realTutorialOkBtn: document.getElementById("realTutorialOkBtn"),
       realTutorialRetryBtn: document.getElementById("realTutorialRetryBtn"),
       realTutorialChaptersBtn: document.getElementById("realTutorialChaptersBtn"),
       menuDeckBtn: document.getElementById("menuDeckBtn"),
@@ -3958,6 +3977,7 @@ const CARD_LIBRARY = {
       );
       elements.realTutorialText.innerHTML = text;
       elements.realTutorialProgressFill.style.width = `${Math.max(0, Math.min(100, progress / total * 100))}%`;
+      elements.realTutorialOkBtn?.classList.toggle("hidden", expected !== "ok");
       setMessage(text.replace(/<[^>]*>/g, ""));
       clearRealTutorialTargets();
 
@@ -3967,6 +3987,7 @@ const CARD_LIBRARY = {
       if (expected === "cpuR") realTutorialTarget("#cpuR");
       if (expected === "split") realTutorialTarget("#splitBtn");
       if (expected === "confirmSplit") realTutorialTarget("#confirmSplitBtn");
+      if (expected === "ok") realTutorialTarget("#realTutorialOkBtn");
       if (expected?.startsWith("card:")) {
         const cardId = expected.slice(5);
         const index = state.hands.human.indexOf(cardId);
@@ -4058,6 +4079,7 @@ const CARD_LIBRARY = {
       tutorial.chapterComplete = true;
       saveTutorialProgress(tutorial.chapter, true);
       clearRealTutorialTargets();
+      elements.realTutorialOkBtn?.classList.add("hidden");
       elements.realTutorialText.innerHTML =
         tutorial.chapter < 5
           ? `第${tutorial.chapter}章クリア！ ホームの章一覧から次の章へ進めます。`
@@ -4086,15 +4108,30 @@ const CARD_LIBRARY = {
         }
         else finishRealTutorialChapter();
       } else if(ch===2){
-        const total=4;
-        if(st===0){ realTutorialHands(2,0,3,2); realTutorialCards([]); setRealTutorialGuide("このままでは相手の3で自分の2を5にされて負けます。「分ける」を押してください。","split",1,total); }
-        else if(st===1){
-          elements.splitLeft.value="1"; elements.splitRight.value="1";
-          setRealTutorialGuide("分け直し欄を1・1にし、「決定」を押してください。","confirmSplit",2,total);
-        } else if(st===2){
-          setRealTutorialGuide("分けたターンは攻撃できません。攻撃か分けるのどちらか一方を選ぶルールです。",null,3,total);
-          finishRealTutorialChapter();
+        const total=5;
+        if(st===0){
+          realTutorialHands(2,0,3,2);
+          realTutorialCards([]);
+          setRealTutorialGuide("このままでは相手の3で自分の2を5にされて負けます。「分ける」を押してください。","split",1,total);
         }
+        else if(st===1){
+          elements.splitLeft.value="1";
+          elements.splitRight.value="1";
+          setRealTutorialGuide("分け直し欄を1・1にし、「決定」を押してください。","confirmSplit",2,total);
+        }
+        else if(st===2){
+          setRealTutorialGuide(
+            "分けたターンは攻撃できません。<br><strong>攻撃か分けるのどちらか一方</strong>を選ぶルールです。",
+            "ok",3,total
+          );
+        }
+        else if(st===3){
+          setRealTutorialGuide(
+            "分ける前と後で、左右の<strong>合計本数は変えられません</strong>。また、分けた結果として片方を0にする形にはできません。<br>例：2・0→1・1は可能ですが、2・1→3・0のように片方を0にする分け方はできません。",
+            "ok",4,total
+          );
+        }
+        else finishRealTutorialChapter();
       } else if(ch===3){
         const total=10;
         if(st===0){ realTutorialHands(1,1,1,1); state.decks.human=["strongHit"]; realTutorialCards(["insight"]); setRealTutorialGuide("実際の手札UIです。「ひらめき」を使って1枚引きましょう。","card:insight",1,total); }
@@ -4140,15 +4177,42 @@ const CARD_LIBRARY = {
         }
         else finishRealTutorialChapter();
       } else if(ch===5){
-        const total=7;
-        if(st===0){ realTutorialHands(1,1,2,2); realTutorialCards(["powerBlessing"]); setRealTutorialGuide("「力の加護」を押してください。","card:powerBlessing",1,total); }
-        else if(st===1){ setRealTutorialGuide("力の加護を自分の左手へ置いてください。","humanL",2,total); }
-        else if(st===2){ state.temp.human.cardActionUsed=false; realTutorialCards(["slowCurse"]); setRealTutorialGuide("次に「鈍重の呪縛」を押してください。","card:slowCurse",3,total); }
-        else if(st===3){ setRealTutorialGuide("鈍重の呪縛を相手の左手へ置いてください。","cpuL",4,total); }
-        else if(st===4){
-          setRealTutorialGuide("罠は条件で発動し、多くは一度で消えます。加護は自分、呪縛は相手へ置き、継続して残ります。ただし付いた手が0になると消えます。",null,6,total);
-          finishRealTutorialChapter();
+        const total=8;
+        if(st===0){
+          realTutorialHands(1,1,2,2);
+          realTutorialCards(["powerBlessing"]);
+          setRealTutorialGuide("「力の加護」を押してください。","card:powerBlessing",1,total);
         }
+        else if(st===1){
+          setRealTutorialGuide("力の加護を自分の左手へ置いてください。","humanL",2,total);
+        }
+        else if(st===2){
+          state.temp.human.cardActionUsed=false;
+          realTutorialCards(["slowCurse"]);
+          setRealTutorialGuide("次に「鈍重の呪縛」を押してください。","card:slowCurse",3,total);
+        }
+        else if(st===3){
+          setRealTutorialGuide("鈍重の呪縛を相手の左手へ置いてください。","cpuL",4,total);
+        }
+        else if(st===4){
+          setRealTutorialGuide(
+            "<strong>加護</strong>は自分の手に付け、良い効果を継続させます。<br><strong>呪縛</strong>は相手の手に付け、不利な効果を継続させます。どちらも相手から名前が見えます。",
+            "ok",5,total
+          );
+        }
+        else if(st===5){
+          setRealTutorialGuide(
+            "<strong>罠</strong>は自分の手へ裏向きで置かれ、相手には種類が分かりません。条件を満たした時に発動し、多くは一度発動すると捨て札へ行きます。",
+            "ok",6,total
+          );
+        }
+        else if(st===6){
+          setRealTutorialGuide(
+            "罠・加護・呪縛は、付いている手が0になると一緒に消えます。<br>どの手に付けるかも重要な判断になります。",
+            "ok",7,total
+          );
+        }
+        else finishRealTutorialChapter();
       }
     }
 
@@ -4163,7 +4227,9 @@ const CARD_LIBRARY = {
             ? "この課題では攻撃できません。黄色く光っている「分ける」の操作をしてください。"
             : tutorial.expected?.startsWith("card:")
               ? "今は黄色く光っているカードを使ってください。"
-              : "今は説明に従ってください。"
+              : tutorial.expected === "ok"
+                ? "説明を確認して、画面上部の「OK」を押してください。"
+                : "今は説明に従ってください。"
         );
         return false;
       }
@@ -7713,6 +7779,24 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       await showCardPopup(defender, card, true, 760);
       const result = await card.trigger({ ...context, defender, placedHand }) || {};
       render();
+
+      // 第4章の空振りは、選択画面で選んだ時ではなく
+      // 実際の罠効果が完了した後に次の課題へ進める。
+      if (
+        isTutorialBattle() &&
+        tutorial.chapter === 4 &&
+        tutorial.step === 2 &&
+        defender === "human" &&
+        cardId === "dodgeTrap"
+      ) {
+        setTimeout(() => {
+          if (!isTutorialBattle() || tutorial.chapter !== 4 || tutorial.step !== 2) return;
+          tutorial.step = 3;
+          freezeTutorialBattleToHumanTurn();
+          renderRealTutorialStep();
+        }, 500);
+      }
+
       return result;
     }
 
@@ -9449,6 +9533,11 @@ async function endTurn() {
     });
 
     elements.menuTutorialBtn?.addEventListener("click", openTutorialMenu);
+    elements.realTutorialOkBtn?.addEventListener("click", () => {
+      if (!isTutorialBattle() || tutorial.expected !== "ok") return;
+      tutorial.step++;
+      renderRealTutorialStep();
+    });
     elements.realTutorialRetryBtn?.addEventListener("click", () => startTutorialChapter(tutorial.chapter));
     elements.realTutorialChaptersBtn?.addEventListener("click", () => {
       tutorial.usingRealBattle = false;

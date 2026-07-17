@@ -3276,3 +3276,19 @@ body.tutorial-split-only #cpuR {
     padding: 14px;
   }
 }
+
+
+/* v96: tutorial explanation confirmation */
+#realTutorialOkBtn {
+  min-width: 92px;
+  background: linear-gradient(135deg, #228f73, #49b593);
+  color: #fff;
+  border-color: #1e7b65;
+  font-weight: 1000;
+}
+#realTutorialOkBtn.real-tutorial-target {
+  animation: realTutorialOkPulse .9s ease-in-out infinite !important;
+}
+@keyframes realTutorialOkPulse {
+  50% { transform: scale(1.06); }
+}
