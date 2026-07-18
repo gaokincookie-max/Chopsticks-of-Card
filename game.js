@@ -5736,7 +5736,7 @@ function wrapFinger(value) {
 
       if (cardId === "electromagneticInduction") {
         const charge = getChargeLevel(player);
-        const before = currentValue;
+        const before = state[player][hand];
         let finalValue = normalize(charge, player, hand);
         finalValue = await maybePreventLethalWithEmc2(player, hand, finalValue, "電磁誘導");
         state[player][hand] = finalValue;
