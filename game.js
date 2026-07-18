@@ -291,8 +291,9 @@ const CARD_LIBRARY = {
 
           if (charge < 10) {
             if (player === "human") {
-              state.temp[player].dimensionalSlashPending = true;
+              state.animating = false;
               state.mode = "dimensionalSlashSacrifice";
+              state.selectedAttackHand = null;
               setMessage("「空間切断」：代償として0にする、自分の0ではない手を選んでください。");
               render();
               return;
@@ -2331,10 +2332,8 @@ const CARD_LIBRARY = {
           kind === "emc2" ? " emc2" :
           kind === "scout" ? " scout" :
           kind === "card-detail" ? " card-detail" :
-          kind === "magical-chant-1" ? " magical-chant stage-1" :
-          kind === "magical-chant-2" ? " magical-chant stage-2" :
-          kind === "magical-chant-3" ? " magical-chant stage-3" :
-          kind === "magical-chant-complete" ? " magical-chant chant-complete" : "") +
+          kind === "magical-chant" ? " magical-chant" :
+          kind === "arcana" ? " arcana" : "") +
         (kind === "emc2" ? " emc2" : "") +
         (kind === "scout" ? " scout" : "") +
         (kind === "card-detail" ? " card-detail" : "") +
@@ -2345,7 +2344,8 @@ const CARD_LIBRARY = {
           kind === "notice" ? " advance-notice" :
           kind === "charge-recoil" ? " charge-recoil" :
           kind === "accel" ? ` action ${player === "cpu" ? "cpu-accel-user" : "human-accel-user"}` :
-          kind.startsWith("magical-chant") ? " magical-chant-user" :
+          kind === "magical-chant" ? " magical-chant" :
+          kind === "arcana" ? " arcana" :
           kind === "action" ? " action" : "");
       elements.popupUser.textContent =
         kind === "trap" ? `${handNames[player]}の罠発動` :
@@ -2355,7 +2355,8 @@ const CARD_LIBRARY = {
         kind === "scout" ? `${handNames[player]}の偵察` :
         kind === "card-detail" ? "カード詳細" :
         kind === "accel" ? `${handNames[player]}の加速` :
-        kind.startsWith("magical-chant") ? `${handNames[player]}の魔法詠唱` :
+        kind === "magical-chant" ? `${handNames[player]}の詠唱` :
+        kind === "arcana" ? `${handNames[player]}の大魔法` :
         kind === "action" ? `${handNames[player]}の行動` :
         `${handNames[player]}が使用`;
       elements.popupName.textContent = title;
@@ -5735,7 +5736,7 @@ function wrapFinger(value) {
 
       if (cardId === "electromagneticInduction") {
         const charge = getChargeLevel(player);
-        const before = state[player][hand];
+        const before = currentValue;
         let finalValue = normalize(charge, player, hand);
         finalValue = await maybePreventLethalWithEmc2(player, hand, finalValue, "電磁誘導");
         state[player][hand] = finalValue;
@@ -5789,36 +5790,27 @@ function wrapFinger(value) {
       const charge = getChargeLevel(player);
       if (charge < 5) {
         addLog(`${handNames[player]}の「空間切断」は充電不足で不発。`);
-        state.temp[player].dimensionalSlashPending = false;
         state.mode = "attack";
         render();
         return false;
       }
 
-      if (hand !== null && hand !== undefined) {
-        if (!['L','R'].includes(hand) || state[player][hand] <= 0) {
-          addLog(`${handNames[player]}の「空間切断」は、代償にできない手が選ばれたため選択を続ける。`);
-          state.temp[player].dimensionalSlashPending = true;
+      if (hand) {
+        hand = hand === "R" ? "R" : "L";
+        const currentValue = Number(state[player]?.[hand] || 0);
+        if (currentValue <= 0) {
+          addLog(`${handNames[player]}の「空間切断」は、代償にする手がすでに0だったため発動しなかった。`);
           state.mode = "dimensionalSlashSacrifice";
-          setMessage("「空間切断」：0ではない自分の手を選んでください。");
-          render();
-          return false;
-        }
-
-        // 充電を先に確定消費し、その後に選択した手を直接0にする。
-        // これにより、片手がすでに0の状況や付与物の消滅処理があっても代償が取り消されない。
-        if (!consumeCharge(player, 5, false, "空間切断")) {
-          state.temp[player].dimensionalSlashPending = false;
-          state.mode = "attack";
           render();
           return false;
         }
 
         const before = state[player][hand];
+
+        // 自傷はダメージではなく発動前の代償。選択した手を確実に0にする。
         state[player][hand] = 0;
         clearHandAttachments(player, hand);
         clearBrokenTraps(player);
-        state.temp[player].dimensionalSlashPending = false;
         addLog(`${handNames[player]}は「空間切断」の代償として${handNames[hand]}を${before}→0にした。`);
         render();
 
@@ -5832,19 +5824,19 @@ function wrapFinger(value) {
           }
         }
 
+        // 最後の手を代償にした場合は、その場で敗北。強化は付与しない。
         if (checkWin()) {
           state.mode = "attack";
           setMessage("「空間切断」の代償で両手が0になったため敗北しました。");
           render();
           return false;
         }
-      } else {
-        if (!consumeCharge(player, 5, false, "空間切断")) {
-          state.temp[player].dimensionalSlashPending = false;
-          state.mode = "attack";
-          render();
-          return false;
-        }
+      }
+
+      if (!consumeCharge(player, 5, false, "空間切断")) {
+        state.mode = "attack";
+        render();
+        return false;
       }
 
       state.temp[player].dimensionalSlashBonus =
@@ -5852,7 +5844,6 @@ function wrapFinger(value) {
       state.temp[player].attackLimit =
         Math.max(2, state.temp[player].attackLimit || 1);
       state.temp[player].multiAttackSource = "空間切断";
-      state.temp[player].dimensionalSlashPending = false;
       state.mode = "attack";
       setMessage("「空間切断」：このターン、通常攻撃で与える本数+1。通常攻撃を2回まで行えます。");
       render();
@@ -5866,6 +5857,538 @@ function wrapFinger(value) {
       }
       return true;
     }
+
+    function isEffectCopyExcluded(cardId, source = "") {
+      if (!cardId) return true;
+      if (isDirectiveCard(cardId)) return true;
+      if (isProtectedChargeCard(cardId)) return true;
+      if (cardId === "logicAtelier") return true;
+      if (source === "brawl" && cardId === "brawl") return true;
+      if (source === "advanceNotice" && cardId === "advanceNotice") return true;
+      return false;
+    }
+
+    function getBrawlCandidates(player) {
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => {
+          const card = CARD_LIBRARY[item.cardId];
+          return card && typeof card.effect === "function" && !isEffectCopyExcluded(item.cardId, "brawl");
+        });
+    }
+
+    function getAdvanceNoticeCandidates(player) {
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => {
+          const card = CARD_LIBRARY[item.cardId];
+          if (!card || typeof card.effect !== "function" || isEffectCopyExcluded(item.cardId, "advanceNotice")) return false;
+          if (!canUseChargeCardThisTurn(player, item.cardId)) return false;
+          try {
+            return !!card.canPlay(player);
+          } catch {
+            return false;
+          }
+        });
+    }
+
+    async function activateCopiedCardEffect(player, cardId, sourceLabel) {
+      const card = CARD_LIBRARY[cardId];
+      if (!card || typeof card.effect !== "function") {
+        addLog(`${sourceLabel}で選ばれたカードには発動できる効果がなかった。`);
+        return false;
+      }
+
+      // 乱闘・予告状の発動は「カードの効果だけを使う」ため、
+      // 充電カードの1ターン1回制限を確認せず、使用済みにも記録しない。
+      const previousCopy = state.copiedEffectContext;
+      state.copiedEffectContext = { sourceLabel, cardId };
+      try {
+        await card.effect(player);
+        if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
+          state.pendingTerminalEnd[player] = true;
+        }
+        return true;
+      } finally {
+        state.copiedEffectContext = previousCopy;
+      }
+    }
+
+    async function chooseAdvanceNoticeCard(player, handIndex) {
+      if (state.mode === "advanceNoticeChoose" && player === "human" && state.turn !== "human") return false;
+      const cardId = state.hands[player][handIndex];
+      const valid = getAdvanceNoticeCandidates(player).some(item => item.index === handIndex && item.cardId === cardId);
+      if (!valid) {
+        if (player === "human") {
+          const attemptedId = state.hands[player][handIndex];
+          const attemptedCard = CARD_LIBRARY[attemptedId];
+          if (attemptedCard?.chargeCard && hasUsedChargeCardThisTurn(player, attemptedId)) {
+            setMessage(`「${attemptedCard.name}」はこのターンすでに使用しているため予告できません。`);
+          } else {
+            setMessage("そのカードは現在の条件では予告できません。");
+          }
+        }
+        return false;
+      }
+      const card = CARD_LIBRARY[cardId];
+
+      if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+        emitFriendFx("advanceNoticeReveal", {
+          playerSide: friendSideForLocalPlayer(player),
+          cardId
+        }).catch(error => console.error("PVP advance notice reveal fx failed", error));
+      }
+      await showAdvanceNoticeRevealPopup(player, card, 1100);
+
+      // 予告状は発動時ではなく、公開した宣言ターンにカードを使った扱いにする。
+      markChargeCardUsedThisTurn(player, cardId);
+      state.hands[player].splice(handIndex, 1);
+      state.discard[player].push(cardId);
+      state.pendingAdvanceNotice[player] = state.pendingAdvanceNotice[player] || [];
+      state.pendingAdvanceNotice[player].push(cardId);
+      state.mode = "attack";
+      addLog(`${handNames[player]}は「予告状」で「${card.name}」を公開し、捨て札にした。次の自分のターン開始時に効果が発動する。`);
+      setLastAction(player, "予告状", `「${card.name}」を公開して予告しました。`, "card");
+      if (player === "human") setMessage(`「予告状」：次の自分のターン開始時に「${card.name}」の効果が発動します。`);
+      render();
+      return true;
+    }
+
+    async function resolveAdvanceNotice(player) {
+      const queue = [...(state.pendingAdvanceNotice?.[player] || [])];
+      state.pendingAdvanceNotice[player] = [];
+      for (const cardId of queue) {
+        const card = CARD_LIBRARY[cardId];
+        if (!card) continue;
+        addLog(`【予告状】${handNames[player]}が予告した「${card.name}」の効果が発動する。`);
+        await showCardPopup(player, card, false, player === "cpu" ? 760 : 650);
+        await activateCopiedCardEffect(player, cardId, "予告状");
+        if (state.gameOver || state.pendingTerminalEnd[player] || state.mode !== "attack") break;
+      }
+    }
+
+    function drawCard(player) {
+      if (state.decks[player].length > 0) {
+        const cardId = state.decks[player].pop();
+        state.hands[player].push(materializeDrawnCard(cardId));
+        return true;
+      }
+
+      fatigue(player);
+      return false;
+    }
+
+    function fatigue(player) {
+      if (state.hands[player].length > 0) {
+        const discarded = state.hands[player].shift();
+        state.discard[player].push(discarded);
+        addLog(`${handNames[player]}は山札切れ。代わりに手札から「${CARD_LIBRARY[discarded].name}」を捨てた。`);
+      } else {
+        const candidates = ["L", "R"].filter(h => isAlive(player, h) && !hasAnyMagicalTransformed(player,h));
+        if (!candidates.length && ["L","R"].some(h => isAlive(player,h))) {
+          addLog(`${handNames[player]}の変身後加護により、疲弊による本数変化を受けなかった。`);
+          return;
+        }
+        const target = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : "L";
+        const before = state[player][target];
+        state[player][target] = normalize(before + 1, player, target);
+        addLog(`${handNames[player]}は山札切れで手札もない。${handNames[target]}が${before}→${state[player][target]}。`);
+        clearBrokenTraps(player);
+      }
+    }
+
+    async function startTurn(player) {
+      if (isTutorialBattle()) {
+        if (player === "cpu") {
+          freezeTutorialBattleToHumanTurn();
+          return;
+        }
+        state.turn = "human";
+        state.mode = "attack";
+        state.selectedAttackHand = null;
+        state.gameOver = false;
+        render();
+        return;
+      }
+      // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
+      if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
+      ensureOnlineStateMaps();
+      if (!state.firstTurnStarted) state.firstTurnStarted = { human: false, cpu: false };
+      if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
+      if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
+      state.firstTurnStarted[player] = true;
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.turn = player;
+      state.mode = "attack";
+      state.selectedAttackHand = null;
+      state.selectedTrapCardIndex = null;
+      state.pendingTrapTargetEffect = null;
+      state.pendingRepairDiscard = null;
+      state.pendingEqualTradeSelf = null;
+      state.pendingRapidFireDiscard = null;
+      elements.splitBox.classList.remove("active");
+      elements.andanteBox?.classList.remove("active");
+      clearHighlights();
+
+      state.pendingTerminalEnd[player] = false;
+      state.activeCostLimit[player] = state.costLimitNextTurn[player];
+      state.costLimitNextTurn[player] = null;
+      if ((state.energyBarrier[player] || 0) > 0) {
+        state.energyBarrier[player] = 0;
+        addLog(`${handNames[player]}の「エネルギーバリア」が終了した。`);
+      }
+
+      if ((state.cheapBatteryDecay[player] || 0) > 0) {
+        const beforeCharge = getChargeLevel(player);
+        setChargeLevel(player, Math.max(0, beforeCharge - 2));
+        state.cheapBatteryDecay[player] -= 1;
+        const remaining = state.cheapBatteryDecay[player];
+        addLog(`${handNames[player]}の「廉価バッテリー」が劣化。充電Lv.${beforeCharge}→Lv.${Math.max(0, beforeCharge - 2)}。残り${remaining}回。`);
+        await showPopup(
+          player,
+          "廉価バッテリー劣化",
+          `<div class="battery-decay-main">充電 -2</div><div>残り劣化回数：${remaining}回</div>`,
+          "charge-recoil",
+          900,
+          true
+        );
+      }
+
+      const solarCount = countOwnAttachment(player, "solarGeneration");
+      if (solarCount > 0) gainCharge(player, solarCount * 2, "太陽光発電");
+
+      // 魔法少女のターン開始効果。ここで例外が出るとターン移行全体が止まるため、
+      // 必ず共通のdrawCard()を使い、実行内容をログへ残す。
+      state.pendingMagicalHeartDraw = state.pendingMagicalHeartDraw || { human: 0, cpu: 0 };
+      const magicalHeartDraw = Number(state.pendingMagicalHeartDraw[player] || 0);
+      if (magicalHeartDraw > 0) {
+        state.pendingMagicalHeartDraw[player] = 0;
+        for (let i=0;i<magicalHeartDraw;i++) drawCard(player);
+      }
+
+      const greedCount = countOwnAttachment(player, "magicalGreed");
+      if (greedCount > 0) {
+        let greedDrawn = 0;
+        for (let i = 0; i < greedCount * 2; i++) {
+          if (drawCard(player)) greedDrawn += 1;
+        }
+        const greedDiscarded = discardRandomCards(player, greedCount * 2, "「貪欲」");
+        addLog(
+          `${handNames[player]}の「貪欲」が発動。` +
+          `${greedDrawn}枚引き、手札からランダムに${greedDiscarded}枚捨てた。`
+        );
+      }
+      const wrathCount = countOwnAttachment(player, "magicalWrath");
+      if (wrathCount > 0) {
+        let wrathDrawn = 0;
+        for (let i = 0; i < wrathCount; i++) {
+          if (drawCard(player)) wrathDrawn += 1;
+        }
+        addLog(`${handNames[player]}の「憤怒」が発動。追加で${wrathDrawn}枚引いた。`);
+      }
+
+      const pendingTorrent = state.pendingWillTorrent[player] || 0;
+      state.pendingWillTorrent[player] = 0;
+      for (let i = 0; i < pendingTorrent; i++) {
+        state.hands[player].push("willTorrent");
+      }
+      if (pendingTorrent > 0) {
+        addLog(`${handNames[player]}は「不吉な力」により「意志の奔流」を${pendingTorrent}枚得た。`);
+      }
+
+      const scheduledDirectives = state.pendingDirectiveDraw[player] || 0;
+      state.pendingDirectiveDraw[player] = 0;
+      for (let i = 0; i < scheduledDirectives; i++) {
+        if (!drawDirectiveFromDeck(player)) break;
+      }
+      if (scheduledDirectives > 0) {
+        addLog(`${handNames[player]}は「指令の意味」により山札から指令を最大${scheduledDirectives}枚加えた。`);
+      }
+
+      if (state.berserkerTurns[player] > 0) {
+        addLog(`${handNames[player]}はバーサーカー状態。攻撃+2、カード使用・罠設置・分ける不可。残り${state.berserkerTurns[player]}ターン。`);
+      }
+
+      let draws = 1;
+      if ((state.pendingDirectiveNoDraw[player] || 0) > 0) {
+        state.pendingDirectiveNoDraw[player] -= 1;
+        draws = 0;
+        addLog(`${handNames[player]}は未達成の「指令：沈黙」により、このターンの通常ドローを行わない。`);
+      }
+      if ((state.pendingDirectiveBonusDraw[player] || 0) > 0) {
+        draws += state.pendingDirectiveBonusDraw[player];
+        addLog(`${handNames[player]}は達成した「指令：再編成」により追加で${state.pendingDirectiveBonusDraw[player]}枚引く。`);
+        state.pendingDirectiveBonusDraw[player] = 0;
+      }
+      let accelerationTriggered = false;
+      let noDrawTriggered = false;
+      let remainingAcceleration = state.activeAcceleration[player];
+      let remainingNoDraw = state.activeNoDraw[player];
+
+      if (state.pendingAcceleration[player] > 0) {
+        state.activeAcceleration[player] += state.pendingAcceleration[player];
+        state.pendingAcceleration[player] = 0;
+      }
+
+      if (state.activeAcceleration[player] > 0) {
+        draws += 1;
+        state.activeAcceleration[player] -= 1;
+        remainingAcceleration = state.activeAcceleration[player];
+        accelerationTriggered = true;
+        addLog(`${handNames[player]}は「過加速」の効果で追加で1枚引く。残り${remainingAcceleration}ターン。`);
+
+        if (state.activeAcceleration[player] === 0 && state.pendingNoDraw[player] > 0) {
+          state.activeNoDraw[player] += state.pendingNoDraw[player];
+          state.pendingNoDraw[player] = 0;
+        }
+      } else {
+        if (state.pendingNoDraw[player] > 0 && state.activeNoDraw[player] === 0) {
+          state.activeNoDraw[player] += state.pendingNoDraw[player];
+          state.pendingNoDraw[player] = 0;
+        }
+      }
+
+      if (!accelerationTriggered && state.activeNoDraw[player] > 0) {
+        draws = 0;
+        state.activeNoDraw[player] -= 1;
+        remainingNoDraw = state.activeNoDraw[player];
+        noDrawTriggered = true;
+        addLog(`${handNames[player]}は「過加速」の反動で、このターン開始時にカードを引けない。残り${remainingNoDraw}ターン。`);
+      }
+
+      if (accelerationTriggered) {
+        render();
+        await showAccelerationPopup(player, draws, remainingAcceleration);
+      } else if (noDrawTriggered) {
+        render();
+        await showNoDrawPopup(player, remainingNoDraw);
+      }
+
+      for (let i = 0; i < draws; i++) drawCard(player);
+
+      await resolveAdvanceNotice(player);
+      if (state.pendingChargeStun[player]) {
+        const recoilSource = state.pendingChargeStunSource?.[player] || "充電効果";
+
+        // 予約された反動は、次の自分ターン開始時にだけ消費する。
+        state.pendingChargeStun[player] = false;
+        state.pendingChargeStunSource[player] = "";
+
+        addLog(`${handNames[player]}は「${recoilSource}」の反動により、このターンは行動不能。`);
+        setMessage(`${handNames[player]}は「${recoilSource}」の反動で行動不能です。`);
+        render();
+
+        if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+          emitFriendFx("chargeRecoil", {
+            playerSide: friendSideForLocalPlayer(player),
+            source: recoilSource
+          }).catch(error => console.error("PVP charge recoil fx failed", error));
+        }
+
+        await showChargeRecoilPopup(player, recoilSource, 1250);
+
+        if (
+          state.battleMode === "friend" &&
+          player === "human" &&
+          !state.friendApplyingRemoteState
+        ) {
+          await publishFriendStateNow();
+        }
+
+        await delay(250);
+        await endTurn();
+        return;
+      }
+      if (state.pendingTerminalEnd[player]) {
+        state.pendingTerminalEnd[player] = false;
+        await endTurn();
+        return;
+      }
+      if (state.mode !== "attack") {
+        render();
+        return;
+      }
+
+      if (player === "human") {
+        setMessage(state.noSplit.human
+          ? "あなたの番です。固定の効果で、このターンは分けるを選べません。"
+          : accelerationTriggered
+            ? `過過加速中です。このターンは${draws}枚ドローしました。`
+            : noDrawTriggered
+              ? "過加速の反動で、このターン開始時のドローはありません。"
+              : "あなたの番です。カードを使うか罠を伏せてから、攻撃か分けるを選べます。");
+      } else {
+        setMessage(state.noSplit.cpu ? "CPUの番です。固定の効果でCPUは分けられません。" : accelerationTriggered ? `CPUは過過加速中です。このターン${draws}枚ドローしました。` : noDrawTriggered ? "CPUは過加速の反動でドローできません。" : "CPUの番です。");
+      }
+
+      render();
+    }
+
+    function render() {
+      ensureOnlineStateMaps();
+      scheduleFriendStatePublish();
+      for (const player of ["human", "cpu"]) {
+        for (const hand of ["L", "R"]) {
+          const value = state[player][hand];
+          const card = document.getElementById(`${player}${hand}`);
+          if (!card.classList.contains("calculating")) {
+            document.getElementById(`${player}${hand}Num`).textContent = value;
+            document.getElementById(`${player}${hand}Icons`).textContent = "☝".repeat(value);
+          }
+          card.classList.toggle("zero", value === 0);
+          card.classList.remove("selectable", "trap-target", "roulette-hand");
+          if (!card.classList.contains("cpu-selected") && !card.classList.contains("calculating")) {
+            card.classList.remove("selected", "hit-target");
+          }
+
+          if (!state.gameOver && !state.animating && state.turn === "human") {
+            if (state.mode === "attack") {
+              if (player === "human" && value > 0) card.classList.add("selectable");
+              if (player === "cpu" && state.selectedAttackHand && value > 0) card.classList.add("selectable");
+            }
+            if ((state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing") && player === "human" && value > 0 && state.traps.human[hand].length < 2) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "setCurse" && player === "cpu" && value > 0 && state.traps.cpu[hand].length < 2) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "moveOne" && player === "human" && getMoveOneOptionFrom("human", hand)) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "repair" && player === "human" && value === 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "randomDice" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "equalTradeSelf" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "equalTradeOpponent" && player === "cpu" && value >= 2) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "snipe" && player === "cpu" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "rapidFireTarget" && player === "cpu" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "cursedBullet" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "andante" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "chargeTargetOwn" && player === "human" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "chargeTargetOpponent" && player === "cpu" && value > 0) {
+              card.classList.add("trap-target");
+            }
+            if (state.mode === "dimensionalSlashSacrifice" && player === "human" && value > 0) {
+              card.classList.add("dimensional-sacrifice-target");
+            }
+          }
+
+          if (state.highlight && state.highlight.player === player && state.highlight.hand === hand && state.highlight.type === "roulette") {
+            card.classList.add("roulette-hand");
+          }
+
+          if (player === "human" && hand === state.selectedAttackHand && !state.animating) {
+            card.classList.add("selected");
+          }
+
+          renderTrapSlots(player, hand);
+        }
+      }
+
+      elements.humanState.textContent =
+        state.gameOver ? "" : state.turn === "human" ? "あなたの番です" : "CPUの番です";
+      elements.cpuState.textContent =
+        state.gameOver ? "" : state.turn === "cpu" ? "考え中…" : "待機中";
+
+      if (elements.battleRestartBtn) {
+        elements.battleRestartBtn.classList.toggle("screen-hidden", state.battleMode === "friend");
+      }
+      if (elements.battleResultReopenBtn) {
+        elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
+      }
+      const lock = state.animating || state.turn !== "human" || state.gameOver;
+      const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
+      elements.attackBtn.disabled = lock || setupActive;
+      elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
+      elements.drawBtn.disabled = lock || setupActive;
+      elements.cancelBtn.disabled = lock && !setupActive;
+      elements.cancelBtn.textContent = setupActive ? "仕込み終了" : "解除";
+      elements.confirmSplitBtn.disabled = lock || setupActive;
+
+      elements.humanDeckCount.textContent = state.decks.human.length;
+      elements.cpuDeckCount.textContent = state.decks.cpu.length;
+      elements.handInfo.textContent = `あなた ${state.hands.human.length}枚 / CPU ${state.hands.cpu.length}枚`;
+      renderHumanCards();
+      renderLastAction();
+
+      elements.log.innerHTML = state.log.map(item => `<div>${escapeHtml(item)}</div>`).join("");
+      updateSplitOptions();
+    }
+
+    function makeTrapInstance(cardId) {
+      const instance = {
+        id: `trap_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        cardId
+      };
+      if (cardId === "weaknessCurse") instance.waitTurns = 1;
+      if (cardId === "duelSurge") {
+        instance.level = 0;
+        instance.duelTargetOwner = null;
+        instance.duelTargetHand = null;
+      }
+      return instance;
+    }
+
+    function trapCardId(slot) {
+      return typeof slot === "string" ? slot : slot?.cardId;
+    }
+
+    function trapInstanceId(slot) {
+      return typeof slot === "string" ? null : slot?.id;
+    }
+
+    function isTrapCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.trap;
+    }
+
+    function isBlessingCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.blessing;
+    }
+
+    function isCurseCard(cardId) {
+      return !!CARD_LIBRARY[cardId]?.curse;
+    }
+
+    function isAttachmentCard(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      return !!(card?.trap || card?.blessing || card?.curse);
+    }
+
+    const MAGICAL_EVOLUTION_MAP = {
+      wornHope: "togetherWithFriends", hysteria: "withLove",
+      fadedCreed: "knightCreed", intemperance: "goldMadness",
+      betrayedHeart: "friendship", emptyHeart: "fullHeart"
+    };
+    function transformMagicalEvolutionCards(player) {
+      const f=id=>MAGICAL_EVOLUTION_MAP[id]||id;
+      state.hands[player]=state.hands[player].map(f);
+      state.decks[player]=state.decks[player].map(f);
+      state.discard[player]=state.discard[player].map(f);
+    }
+    function countOwnBlessings(player){let n=0;for(const h of ["L","R"])n+=state.traps[player][h].filter(s=>CARD_LIBRARY[trapCardId(s)]?.blessing).length;return n;}
+    function randomIndex(n){return n>0?Math.floor(Math.random()*n):-1;}
+    const MAGICAL_CHANT_LINES = [
+      "正義よりも蒼き者よ、愛よりも紅き者よ",
+      "運命の中に埋もれしそなたの名に懸けて　我、ここで光に誓う",
+      "我が前に立ちはだかる憎らしき存在たちへ　我とそなたの力を合わせ、偉大なる愛の力を示さんことを"
+    ];
 
     function hasCompletedMagicalBlessing(player) {
       return ["magicalLove","magicalJustice","magicalHappiness","magicalCourage"].some(id =>
@@ -5895,30 +6418,25 @@ function wrapFinger(value) {
 
     async function showMagicalChantStage(player, stage) {
       const line = MAGICAL_CHANT_LINES[stage - 1];
-      const stageLabels = ["第一詠唱", "第二詠唱", "最終詠唱"];
-      const circles = [1, 2, 3].map(i => `<span class="chant-circle ${i <= stage ? 'lit' : ''}"></span>`).join('');
+      const seals = [1, 2, 3].map(n => `<span class="chant-seal ${n <= stage ? "lit" : ""}">${n}</span>`).join("");
       const html = `
-        <div class="magical-chant-visual stage-${stage}">
-          <div class="chant-sigil" aria-hidden="true"><i></i><b></b><em></em></div>
-          <div class="chant-stage-label">${stageLabels[stage - 1]}</div>
-          <div class="chant-line">${escapeHtml(line).replace(/　/g, '<br>')}</div>
-          <div class="chant-progress-orbs">${circles}</div>
-          <div class="chant-progress-text">詠唱進捗 ${stage} / 3</div>
-        </div>`;
-      await showPopup(player, stage === 3 ? "魔法陣、完成へ" : `詠唱・第${stage}段階`, html, `magical-chant-${stage}`, stage === 3 ? 3000 : 2200, true);
+        <div class="chant-sky"></div>
+        <div class="chant-rings"><i></i><i></i><i></i></div>
+        <div class="chant-stage-label">CHANT PHASE ${stage}</div>
+        <div class="chant-line">${escapeHtml(line)}</div>
+        <div class="chant-progress">${seals}</div>
+        <div class="chant-count">詠唱進捗 ${stage} / 3</div>`;
+      await showPopup(player, `魔法少女の詠唱`, html, "magical-chant", stage === 3 ? 2700 : 2100, true);
     }
 
-    async function showMagicalChantCompletion(player) {
+    async function showMagicalChantComplete(player) {
       const html = `
-        <div class="magical-chant-complete">
-          <div class="complete-burst" aria-hidden="true"></div>
-          <div class="complete-small">三節の詠唱が結ばれた</div>
-          <div class="complete-title">詠唱完了</div>
-          <div class="complete-arrow">魔法少女の詠唱　→</div>
-          <div class="complete-arcana">アルカナ・スレイブ！！</div>
-          <div class="complete-note">次に引いた同名カードから発動可能</div>
-        </div>`;
-      await showPopup(player, "契約魔法・解放", html, "magical-chant-complete", 2600, true);
+        <div class="arcana-burst"></div>
+        <div class="arcana-star">✦</div>
+        <div class="arcana-complete-label">CHANT COMPLETE</div>
+        <div class="arcana-title">アルカナ・スレイブ！！</div>
+        <div class="arcana-sub">以後、すべての同名カードが大魔法へ変化する</div>`;
+      await showPopup(player, "詠唱完了", html, "arcana", 2400, true);
     }
 
     async function useMagicalChant(player) {
@@ -5932,7 +6450,7 @@ function wrapFinger(value) {
       if (next >= 3) {
         state.magicalChantCompleted[player] = true;
         transformMagicalChantCards(player);
-        await showMagicalChantCompletion(player);
+        await showMagicalChantComplete(player);
         addLog(`${handNames[player]}は詠唱を完成させた。以後、同名カードは「アルカナ・スレイブ！！」になる。`);
       } else {
         addLog(`使用した「魔法少女の詠唱」は山札へ戻り、山札をシャッフルした。`);
@@ -5953,7 +6471,7 @@ function wrapFinger(value) {
       state[opponent][target] = 0;
       clearBrokenTraps(opponent);
       state.pendingTerminalEnd[player] = true;
-      await showPopup(player, "アルカナ・スレイブ！！", `${handNames[opponent]}の${handNames[target]}を${before}→0`, "action", 1500);
+      await showPopup(player, "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>${handNames[opponent]}の${handNames[target]}</span><strong>${before} → 0</strong></div>`, "arcana", 1900, true);
       addLog(`${handNames[player]}の「アルカナ・スレイブ！！」が${handNames[opponent]}の${handNames[target]}を0にした。`);
       return true;
     }
@@ -9313,7 +9831,7 @@ async function endTurn() {
         clearBrokenTraps("cpu");
         state.mode = "attack";
         state.pendingTerminalEnd.human = true;
-        await showPopup("human", "アルカナ・スレイブ！！", `${handNames[hand]}を${before}→0`, "action", 1500);
+        await showPopup("human", "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>相手の${handNames[hand]}</span><strong>${before} → 0</strong></div>`, "arcana", 1900, true);
         addLog(`あなたの「アルカナ・スレイブ！！」が相手の${handNames[hand]}を0にした。`);
         setMessage(`「アルカナ・スレイブ！！」：相手の${handNames[hand]}を0にしました。`);
         checkWin();
@@ -9356,6 +9874,7 @@ async function endTurn() {
       }
 
       if (state.mode === "dimensionalSlashSacrifice") {
+        state.animating = false;
         if (owner !== "human") {
           setMessage("「空間切断」：0にする自分の手を選んでください。");
           return;
