@@ -3498,3 +3498,69 @@ body.tutorial-split-only #cpuR {
   color: transparent;
   font-weight: 1000;
 }
+
+/* v106: Magical chant cinematic */
+.popup-card.magical-chant {
+  position: relative;
+  overflow: hidden;
+  width: min(520px, 94vw);
+  min-height: 330px;
+  border: 1px solid rgba(255,255,255,.55);
+  background:
+    radial-gradient(circle at 50% 44%, rgba(255,255,255,.18), transparent 28%),
+    radial-gradient(circle at 50% 45%, rgba(93,193,255,.28), transparent 52%),
+    linear-gradient(145deg, #091125, #151044 48%, #290d38);
+  color: white;
+  box-shadow: 0 0 35px rgba(102,185,255,.45), 0 28px 90px rgba(0,0,0,.65);
+  animation: chantCardIn .42s cubic-bezier(.2,.8,.2,1);
+}
+.popup-card.magical-chant.stage-2 {
+  background: radial-gradient(circle at 50% 42%, rgba(255,109,171,.24), transparent 34%), linear-gradient(145deg,#090d27,#291249 52%,#490f3c);
+  box-shadow: 0 0 45px rgba(255,98,174,.42), 0 28px 90px rgba(0,0,0,.68);
+}
+.popup-card.magical-chant.stage-3,
+.popup-card.magical-chant.chant-complete {
+  background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.35), transparent 22%), conic-gradient(from 0deg at 50% 50%,#18113f,#3d115c,#7d244d,#164a78,#18113f);
+  box-shadow: 0 0 70px rgba(255,255,255,.38), 0 0 110px rgba(151,77,255,.35), 0 30px 100px rgba(0,0,0,.72);
+}
+.popup-user.magical-chant-user {
+  background: linear-gradient(90deg,#3da8ff,#a06cff,#ff5ca8);
+  box-shadow: 0 0 18px rgba(140,117,255,.55);
+}
+.popup-card.magical-chant .popup-name {
+  color: #fff;
+  text-shadow: 0 0 14px rgba(255,255,255,.75), 0 0 28px rgba(105,178,255,.55);
+  letter-spacing: .06em;
+}
+.popup-card.magical-chant .popup-text { color: #fff; }
+.magical-chant-visual { position: relative; min-height: 235px; display:flex; flex-direction:column; align-items:center; justify-content:center; isolation:isolate; }
+.chant-sigil { position:absolute; width:210px; height:210px; border:2px solid rgba(167,224,255,.7); border-radius:50%; animation:chantSpin 8s linear infinite; box-shadow:0 0 25px rgba(89,188,255,.34), inset 0 0 30px rgba(113,81,255,.2); z-index:-1; }
+.chant-sigil::before,.chant-sigil::after,.chant-sigil i,.chant-sigil b,.chant-sigil em { content:""; position:absolute; inset:16%; border:1px solid rgba(255,255,255,.48); transform:rotate(45deg); }
+.chant-sigil::after { inset:29%; transform:rotate(22.5deg); border-color:rgba(255,103,184,.55); }
+.chant-sigil i { inset:7%; border-radius:50%; transform:none; animation:chantSpinReverse 5s linear infinite; }
+.chant-sigil b { inset:38%; border-radius:50%; transform:none; background:radial-gradient(circle,#fff,rgba(119,196,255,.55) 20%,transparent 65%); border:0; animation:chantPulse 1.4s ease-in-out infinite; }
+.chant-sigil em { inset:-8%; border-radius:50%; transform:none; border-style:dashed; opacity:.45; animation:chantSpinReverse 12s linear infinite; }
+.stage-2 .chant-sigil { transform:scale(1.08); border-color:rgba(255,111,184,.78); }
+.stage-3 .chant-sigil { width:235px; height:235px; border-color:#fff; animation-duration:3.5s; }
+.chant-stage-label { font-size:12px; font-weight:900; letter-spacing:.28em; color:#bfe8ff; margin-bottom:13px; text-shadow:0 0 9px currentColor; }
+.stage-2 .chant-stage-label { color:#ffc0dd; }
+.stage-3 .chant-stage-label { color:#fff4b4; }
+.chant-line { max-width:430px; font-family:serif; font-size:clamp(17px,4vw,23px); font-weight:800; line-height:1.75; letter-spacing:.045em; text-shadow:0 2px 4px #000,0 0 13px rgba(255,255,255,.55); animation:chantTextReveal .8s ease both; }
+.chant-progress-orbs { display:flex; gap:12px; margin-top:22px; }
+.chant-circle { width:13px; height:13px; border-radius:50%; border:1px solid rgba(255,255,255,.6); background:rgba(255,255,255,.08); }
+.chant-circle.lit { background:#fff; box-shadow:0 0 9px #fff,0 0 20px #6ac8ff; animation:chantPulse 1.1s ease-in-out infinite; }
+.chant-progress-text { margin-top:8px; font-size:12px; font-weight:900; letter-spacing:.18em; opacity:.85; }
+.magical-chant-complete { position:relative; min-height:245px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.complete-burst { position:absolute; width:240px; height:240px; border-radius:50%; background:repeating-conic-gradient(from 0deg,rgba(255,255,255,.55) 0 2deg,transparent 2deg 15deg); filter:blur(.3px); animation:chantBurst 2.2s ease-out infinite; opacity:.55; }
+.complete-small { font-size:12px; letter-spacing:.24em; opacity:.85; }
+.complete-title { font-size:clamp(32px,8vw,52px); font-weight:1000; letter-spacing:.12em; margin:10px 0 16px; text-shadow:0 0 10px #fff,0 0 30px #a665ff; animation:chantCompleteFlash 1.1s ease-in-out infinite alternate; }
+.complete-arrow { font-size:13px; opacity:.8; }
+.complete-arcana { margin-top:8px; font-size:clamp(23px,6vw,37px); font-weight:1000; background:linear-gradient(90deg,#8ee8ff,#fff,#ff8ecf,#ffe893); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 8px rgba(255,255,255,.7)); }
+.complete-note { margin-top:14px; font-size:12px; opacity:.8; }
+@keyframes chantCardIn { from{opacity:0;transform:scale(.82) rotateX(12deg)} to{opacity:1;transform:none} }
+@keyframes chantSpin { to{transform:rotate(360deg)} }
+@keyframes chantSpinReverse { to{transform:rotate(-360deg)} }
+@keyframes chantPulse { 50%{transform:scale(1.14);opacity:.72} }
+@keyframes chantTextReveal { from{opacity:0;filter:blur(8px);transform:translateY(10px)} to{opacity:1;filter:none;transform:none} }
+@keyframes chantBurst { from{transform:scale(.3) rotate(0);opacity:.7} to{transform:scale(1.45) rotate(50deg);opacity:0} }
+@keyframes chantCompleteFlash { from{filter:brightness(1)} to{filter:brightness(1.5)} }
