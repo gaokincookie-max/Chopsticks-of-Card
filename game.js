@@ -1599,52 +1599,6 @@ const CARD_LIBRARY = {
         canPlay: (player) => ["L","R"].some(h => state[otherPlayer(player)][h] > 0),
         effect: async (player) => { await beginArcanaSlave(player); }
       },
-      frenzy: {
-        name: "狂乱", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "次の攻撃で与える本数+2。その攻撃の対象は、相手の生存している手と自分のもう片方の生存している手からランダムに選ばれる。",
-        magicalEvolutionBase: true,
-        canPlay: () => true,
-        effect: (player) => {
-          state.temp[player].frenzyAttack = true;
-          addLog(`${handNames[player]}は「狂乱」を使用。次の攻撃は+2され、対象がランダムになる。`);
-        }
-      },
-      rationalPower: {
-        name: "理性ある力", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の攻撃で与える本数+1。相手の手を攻撃したとき、もう片方の相手の手にも同じ本数を与える。追加効果では罠・共鳴・攻撃時効果は発動しない。",
-        token: true, magicalEvolution: true,
-        canPlay: () => true,
-        effect: (player) => {
-          state.temp[player].rationalPowerAttack = true;
-          addLog(`${handNames[player]}は「理性ある力」を使用。次の攻撃は+1され、相手のもう片方にも同じ本数を与える。`);
-        }
-      },
-      selfRighteousness: {
-        name: "独善", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "次の攻撃で与える本数+2。その攻撃で相手の手を0にできなかった場合、自分の攻撃した手に2本加える。対象が変更された場合は変更後の対象で判定する。",
-        magicalEvolutionBase: true,
-        canPlay: () => true,
-        effect: (player) => {
-          state.temp[player].selfRighteousAttack = true;
-          addLog(`${handNames[player]}は「独善」を使用。次の攻撃+2。相手の手を0にできなければ反動を受ける。`);
-        }
-      },
-      justiceForEveryone: {
-        name: "みんなのための正義", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の攻撃で与える本数+1。その攻撃で相手の手を0にした場合、自分のもう片方の手を1にする。0の手も対象になる。対象が変更された場合は変更後の対象で判定する。",
-        token: true, magicalEvolution: true,
-        canPlay: () => true,
-        effect: (player) => {
-          state.temp[player].justiceForEveryoneAttack = true;
-          addLog(`${handNames[player]}は「みんなのための正義」を使用。次の攻撃+1。相手の手を0にすれば、もう片方の手を1にする。`);
-        }
-      },
-      villainMark: {
-        name: "悪党の印", cost: 2, type: "呪縛 / 魔法少女",
-        text: "相手の手に表向きで置く。この手を攻撃したとき、与える本数+1し、カードを1枚引く。1ターンに何度でも発動する。",
-        curse: true, magicalCore: true,
-        canPlay: (player) => canPlaceAttachment(player, otherPlayer(player))
-      },
       magicalVoid: {
         name: "虚無", cost: 2, type: "魔法少女",
         text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させる。",
@@ -1729,9 +1683,6 @@ const CARD_LIBRARY = {
       intemperance: 1,
       betrayedHeart: 1,
       emptyHeart: 1,
-      frenzy: 1,
-      selfRighteousness: 1,
-      villainMark: 1,
       guardBlessing: 1,
       growthBlessing: 1,
       recklessBlessing: 1,
@@ -6460,8 +6411,7 @@ function wrapFinger(value) {
     const MAGICAL_EVOLUTION_MAP = {
       wornHope: "togetherWithFriends", hysteria: "withLove",
       fadedCreed: "knightCreed", intemperance: "goldMadness",
-      betrayedHeart: "friendship", emptyHeart: "fullHeart",
-      frenzy: "rationalPower", selfRighteousness: "justiceForEveryone"
+      betrayedHeart: "friendship", emptyHeart: "fullHeart"
     };
     function transformMagicalEvolutionCards(player) {
       const f=id=>MAGICAL_EVOLUTION_MAP[id]||id;
@@ -8567,30 +8517,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
         }
       }
 
-      const frenzyActive = !!state.temp[attacker]?.frenzyAttack;
-      const rationalPowerActive = !!state.temp[attacker]?.rationalPowerAttack;
-      const selfRighteousActive = !!state.temp[attacker]?.selfRighteousAttack;
-      const justiceForEveryoneActive = !!state.temp[attacker]?.justiceForEveryoneAttack;
-      state.temp[attacker].frenzyAttack = false;
-      state.temp[attacker].rationalPowerAttack = false;
-      state.temp[attacker].selfRighteousAttack = false;
-      state.temp[attacker].justiceForEveryoneAttack = false;
-
-      if (frenzyActive) {
-        const originalOpponent = otherPlayer(attacker);
-        const candidates = [
-          { owner: originalOpponent, hand: "L" },
-          { owner: originalOpponent, hand: "R" },
-          { owner: attacker, hand: otherHand(attackHand) }
-        ].filter(x => isAlive(x.owner, x.hand));
-        if (candidates.length > 0) {
-          const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-          defender = chosen.owner;
-          targetHand = chosen.hand;
-          addLog(`「狂乱」により攻撃対象が${handNames[defender]}の${handNames[targetHand]}へ変更された。`);
-        }
-      }
-
       state.animating = true;
       render();
 
@@ -8614,15 +8540,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const lightningBonus=state.temp[attacker].lightningBonus||0;
       const synapseBonus=state.temp[attacker].synapseBonus||0;
       const dimensionalSlashBonus=state.temp[attacker].dimensionalSlashBonus||0;
-      const frenzyBonus = immutable || !frenzyActive ? 0 : 2;
-      const rationalPowerBonus = immutable || !rationalPowerActive ? 0 : 1;
-      const selfRighteousBonus = immutable || !selfRighteousActive ? 0 : 2;
-      const justiceForEveryoneBonus = immutable || !justiceForEveryoneActive ? 0 : 1;
       const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + dischargeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
@@ -8632,10 +8554,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
       if (willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、攻撃力+${willBladeBonus}。`);
       if (dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、攻撃力+${dimensionalSlashBonus}。`);
-      if (frenzyBonus) addLog(`${handNames[attacker]}の「狂乱」により、攻撃力+2。`);
-      if (rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、攻撃力+1。`);
-      if (selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、攻撃力+2。`);
-      if (justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、攻撃力+1。`);
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
@@ -8733,13 +8651,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
           }).catch(error => console.error("PVP redirected attack fx failed", error));
         }
         await animateAttackIntent(attacker, attackHand, defender, targetHand);
-      }
-
-      if (defender === otherPlayer(attacker) && hasAttachment(defender, targetHand, "villainMark")) {
-        power += 1;
-        context = { defender, targetHand, attacker, attackHand, incomingPower: power };
-        drawCard(attacker);
-        addLog(`${handNames[defender]}の${handNames[targetHand]}の「悪党の印」により、攻撃力+1。${handNames[attacker]}はカードを1枚引いた。`);
       }
 
       recordDirectiveAttack(attacker, attackHand, defender, targetHand);
@@ -8854,30 +8765,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
         `${handNames[defender]}の${handNames[targetHand]}を攻撃。` +
         `${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`
       );
-
-      const finalTargetWasOpponent = defender === otherPlayer(attacker);
-      const finalTargetWasZero = finalTargetWasOpponent && state[defender][targetHand] === 0;
-
-      if (selfRighteousActive && !finalTargetWasZero && state[attacker][attackHand] > 0) {
-        await addFingersWithCalculation(attacker, attackHand, 2, "独善の反動");
-      }
-
-      if (justiceForEveryoneActive && finalTargetWasZero) {
-        const rescueHand = otherHand(attackHand);
-        const beforeRescue = state[attacker][rescueHand];
-        state[attacker][rescueHand] = 1;
-        addLog(`「みんなのための正義」により、${handNames[attacker]}の${handNames[rescueHand]}が${beforeRescue}→1になった。`);
-        clearBrokenTraps(attacker);
-        render();
-      }
-
-      if (rationalPowerActive && finalTargetWasOpponent) {
-        const splashHand = otherHand(targetHand);
-        if (state[defender][splashHand] > 0) {
-          await addFingersWithCalculation(defender, splashHand, power, "理性ある力", true);
-          addLog(`「理性ある力」により、${handNames[defender]}の${handNames[splashHand]}にも同じ${power}本を与えた。`);
-        }
-      }
 
       if (hasAttachment(attacker,attackHand,"magicalHatred")) {
         discardRandomCards(attacker,1,"「憎悪」");
