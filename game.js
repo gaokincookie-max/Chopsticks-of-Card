@@ -3132,6 +3132,23 @@ const CARD_LIBRARY = {
         if (player && defender && payload.targetHand) {
           await showLogicAtelierFx(player, defender, payload.targetHand);
         }
+        return;
+      }
+      if (fx.type === "arcanaSlave") {
+        const caster = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        const targetPlayer = localPlayerForFriendSide(payload.targetSide);
+        if (caster && targetPlayer && payload.targetHand) {
+          await showArcanaSlaveCinematic(caster);
+          await showArcanaTargetCircle(targetPlayer, payload.targetHand);
+        }
+        return;
+      }
+      if (fx.type === "randomDice") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player && payload.hand) {
+          await showRoulettePopup(player, payload.hand, Number(payload.result) || 0);
+        }
+        return;
       }
       if (fx.type === "lightSpeedCircuit") {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
@@ -3657,6 +3674,8 @@ const CARD_LIBRARY = {
         L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
         temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, chargeCardsUsed: [] },
         noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
+        pendingIntemperanceCardLock: false, activeIntemperanceCardLock: false, pendingMagicalHeartDraw: 0,
+        magicalChantProgress: 0, magicalChantCompleted: false,
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
       const createdAtMs = Date.now();
@@ -3727,6 +3746,12 @@ const CARD_LIBRARY = {
       state.pendingChargeStun = { human: false, cpu: false };
       state.pendingChargeStunSource = { human: "", cpu: "" };
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
+      // 新しいオンライン試合では、前試合の魔法少女系・ターン予約状態を必ず破棄する。
+      state.pendingIntemperanceCardLock = { human: false, cpu: false };
+      state.activeIntemperanceCardLock = { human: false, cpu: false };
+      state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
+      state.magicalChantProgress = { human: 0, cpu: 0 };
+      state.magicalChantCompleted = { human: false, cpu: false };
       state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
@@ -6703,6 +6728,13 @@ function wrapFinger(value) {
         return true;
       }
       const target = alive.sort((a,b) => state[opponent][b] - state[opponent][a])[0];
+      if (state.battleMode === "friend" && player === "human") {
+        await emitFriendFx("arcanaSlave", {
+          playerSide: friendSideForLocalPlayer(player),
+          targetSide: friendSideForLocalPlayer(opponent),
+          targetHand: target
+        });
+      }
       await showArcanaSlaveCinematic(player);
       await showArcanaTargetCircle(opponent, target);
       state[opponent][target] = 0;
@@ -10240,6 +10272,14 @@ async function endTurn() {
       await showRoulettePopup(player, hand, next);
 
       state[player][hand] = next;
+      if (state.battleMode === "friend" && player === "human") {
+        await emitFriendFx("randomDice", {
+          playerSide: friendSideForLocalPlayer(player),
+          hand,
+          before,
+          result: next
+        });
+      }
       addLog(`${handNames[player]}は「ランダムダイス」で${handNames[hand]}を${before}→${next}にした。`);
       setLastAction(player, "ランダムダイス", `${handNames[hand]}が${before}→${next}になりました。`, "card");
       clearBrokenTraps(player);
@@ -10249,6 +10289,10 @@ async function endTurn() {
         setMessage(`「ランダムダイス」：${handNames[hand]}が${before}→${next}になりました。まだ攻撃か分けるができます。`);
       }
       render();
+      if (state.battleMode === "friend" && player === "human") {
+        // 選択式カードは playCard() 終了時点では未確定なので、結果確定後に明示同期する。
+        await publishFriendStateNow();
+      }
       return true;
     }
 
@@ -10325,6 +10369,13 @@ async function endTurn() {
         if (owner !== "cpu" || state.cpu[hand] <= 0) {
           setMessage("「アルカナ・スレイブ！！」：相手の0ではない手を選んでください。");
           return;
+        }
+        if (state.battleMode === "friend") {
+          await emitFriendFx("arcanaSlave", {
+            playerSide: friendSideForLocalPlayer("human"),
+            targetSide: friendSideForLocalPlayer("cpu"),
+            targetHand: hand
+          });
         }
         await showArcanaSlaveCinematic("human");
         await showArcanaTargetCircle("cpu", hand);
