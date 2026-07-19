@@ -979,12 +979,12 @@ const CARD_LIBRARY = {
         name: "バーサーカー",
         cost: 3,
         type: "補助",
-        text: "このターンと次の自分のターン、自分はカード使用・罠設置・分けるができない。その間、自分の攻撃力を+2する。",
+        text: "このターンと次の自分のターン、自分はカード使用・罠設置・分けるができない。その間、自分の攻撃力を+2する。さらに、その攻撃で対象の手が7以上になったとき、超過処理をせず0にする。",
         canPlay: () => true,
         effect: (player) => {
           state.berserkerTurns[player] = Math.max(state.berserkerTurns[player], 2);
           state.temp[player].berserkerJustUsed = true;
-          addLog(`${handNames[player]}は「バーサーカー」を使った。2ターンの間、攻撃+2、分けるとカード使用不可。`);
+          addLog(`${handNames[player]}は「バーサーカー」を使った。2ターンの間、攻撃+2、分けるとカード使用不可。攻撃で対象が7以上になった場合は超過処理をせず0にする。`);
         }
       },
       calmDown: {
@@ -1879,9 +1879,25 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v120";
-    const LATEST_NEWS_ID = "v120-love-and-hatred-theme-release";
+    const LATEST_NEWS_ID = "v122-berserker-buff";
 
     const UPDATE_NEWS = [
+      {
+        id: "v122-berserker-buff",
+        version: "v122",
+        date: "2026-07-19",
+        title: "バーサーカーを強化",
+        summary: "攻撃にすべてを委ねるバーサーカーへ、7以上の対象をそのまま0にする新効果を追加しました。",
+        featured: false,
+        tags: ["balance"],
+        items: [
+          "バーサーカーの効果期間中、攻撃で対象の手が7以上になった場合は超過処理をせず0に変更",
+          "対象変更が発生した場合は、変更後の最終対象で7以上かを判定",
+          "効果期間中の複数回攻撃にも毎回適用",
+          "CPUが新しい即0条件を考慮して攻撃対象を選ぶよう調整",
+          "スターターデッキ更新などv121までの内容を維持"
+        ]
+      },
       {
         id: "v120-love-and-hatred-theme-release",
         version: "v120",
@@ -6271,7 +6287,7 @@ function wrapFinger(value) {
       }
 
       if (state.berserkerTurns[player] > 0) {
-        addLog(`${handNames[player]}はバーサーカー状態。攻撃+2、カード使用・罠設置・分ける不可。残り${state.berserkerTurns[player]}ターン。`);
+        addLog(`${handNames[player]}はバーサーカー状態。攻撃+2、カード使用・罠設置・分ける不可。攻撃で対象が7以上になった場合は0。残り${state.berserkerTurns[player]}ターン。`);
       }
 
       let draws = 1;
@@ -9174,9 +9190,13 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const overflowWouldApply = total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
       const guardWouldApply = total >= 5 && !overflowWouldApply && state.temp[defender].guard;
       const lightningZeroActive = !!state.temp[attacker].lightningZeroAtFive;
+      const berserkerZeroActive = state.berserkerTurns[attacker] > 0;
       let resolvedFinal;
 
-      if (hasMagicalCourage(attacker) && total >= 7) {
+      if (berserkerZeroActive && total >= 7) {
+        resolvedFinal = 0;
+        addLog(`「バーサーカー」により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過処理をせず0になった。`);
+      } else if (hasMagicalCourage(attacker) && total >= 7) {
         resolvedFinal = 0;
         addLog(`「勇気」により、相手の手が7以上になったため超過計算をせず0になった。`);
       } else if (lightningZeroActive && total >= 5) {
@@ -9632,7 +9652,8 @@ async function endTurn() {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
           const immutable = hasImmutableCurse("cpu", a);
           const power = Math.max(1, state.cpu[a] + (immutable ? Math.min(0, state.temp.cpu.attackBonus + extraBonus) : state.temp.cpu.attackBonus + extraBonus) + (immutable ? 0 : (state.berserkerTurns.cpu > 0 ? 2 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "recklessBlessing") ? 2 : 0)) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
-          const result = wrapFinger(state.human[t] + power);
+          const attackTotal = state.human[t] + power;
+          const result = state.berserkerTurns.cpu > 0 && attackTotal >= 7 ? 0 : wrapFinger(attackTotal);
           let score = 20 + state.human[t] * 8 + state.cpu[a] * 2;
           if (result === 0) score += wouldCpuWinByZeroing(t) ? 10000 : 520;
           if (state.human[t] === 4) score += 120;
@@ -9840,7 +9861,8 @@ async function endTurn() {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
           const immutable = hasImmutableCurse("cpu", a);
           const power = Math.max(1, state.cpu[a] + (immutable ? Math.min(0, state.temp.cpu.attackBonus) : state.temp.cpu.attackBonus) + (immutable ? 0 : (state.berserkerTurns.cpu > 0 ? 2 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "recklessBlessing") ? 2 : 0)) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
-          const result = wrapFinger(state.human[t] + power);
+          const attackTotal = state.human[t] + power;
+          const result = state.berserkerTurns.cpu > 0 && attackTotal >= 7 ? 0 : wrapFinger(attackTotal);
           let score = 25 + state.human[t] * 8 + state.cpu[a] * 3;
 
           if (result === 0) score += wouldCpuWinByZeroing(t) ? 10000 : 620;
