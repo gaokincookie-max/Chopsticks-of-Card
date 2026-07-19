@@ -1496,12 +1496,9 @@ const CARD_LIBRARY = {
       },
       wornHope: {
         name: "すり減る希望", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "手札を1枚選んで捨てる。その後、捨て札の「憎悪」「絶望」「貪欲」「憤怒」「虚無」から1枚を選び、山札へ戻してシャッフルする。",
+        text: "捨て札の「憎悪」「絶望」「貪欲」「憤怒」「虚無」から1枚を選び、山札へ戻してシャッフルする。その後、手札を1枚捨てる。",
         magicalEvolutionBase: true,
-        canPlay: (player) => state.hands[player].length > 1 && (
-          state.discard[player].some(id => ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id)) ||
-          state.hands[player].some(id => id !== "wornHope" && ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id))
-        ),
+        canPlay: (player) => state.discard[player].some(id => ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id)),
         effect: async (player) => { await useWornHope(player); }
       },
       togetherWithFriends: {
@@ -1513,10 +1510,10 @@ const CARD_LIBRARY = {
       },
       hysteria: {
         name: "ヒステリー", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "手札にある加護カードを1枚選んで捨てる。その後、山札からデッキ投入可能な加護カードをランダムに1枚手札へ加える。",
+        text: "自分の場の加護をランダムに1枚捨て、山札のデッキ投入可能な加護をランダムに1枚手札へ加える。",
         magicalEvolutionBase: true,
-        canPlay: (player) => state.hands[player].some(id => id !== "hysteria" && CARD_LIBRARY[id]?.blessing) && state.decks[player].some(id => CARD_LIBRARY[id]?.blessing && !CARD_LIBRARY[id]?.token),
-        effect: async (player) => { await useHysteria(player); }
+        canPlay: (player) => countOwnBlessings(player) > 0 && state.decks[player].some(id => CARD_LIBRARY[id]?.blessing && !CARD_LIBRARY[id]?.token),
+        effect: (player) => useHysteria(player)
       },
       withLove: {
         name: "愛で！", cost: 2, type: "補助 / 魔法少女・変身後",
@@ -1685,24 +1682,6 @@ const CARD_LIBRARY = {
           state.pendingTerminalEnd[player] = true;
         }
       },
-      sacrificePower: {
-        name: "犠牲の力", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "自分の手に付いている加護を1枚以上、好きな数だけ選んで捨てる。次の攻撃で、捨てた加護の数だけ与える本数を増やす。",
-        magicalEvolutionBase: true,
-        canPlay: (player) => countOwnBlessings(player) > 0,
-        effect: async (player) => { await useSacrificePower(player); }
-      },
-      powerOfEveryone: {
-        name: "みんなの力で", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の攻撃で、攻撃時に自分の両手に付いている加護の合計数だけ与える本数を増やす。",
-        token: true, magicalEvolution: true,
-        canPlay: () => true,
-        effect: (player) => {
-          const bonus = countOwnBlessings(player);
-          state.temp[player].attackBonus = Number(state.temp[player].attackBonus || 0) + bonus;
-          addLog(`${handNames[player]}は「みんなの力で」を使用。場の加護${bonus}枚分、次の攻撃力を+${bonus}した。`);
-        }
-      },
       magicalVoid: {
         name: "虚無", cost: 2, type: "魔法少女",
         text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させる。",
@@ -1793,7 +1772,6 @@ const CARD_LIBRARY = {
       tearSharpenedSword: 1,
       goldRush: 1,
       voidEqualization: 1,
-      sacrificePower: 1,
       guardBlessing: 1,
       growthBlessing: 1,
       recklessBlessing: 1,
@@ -6523,8 +6501,7 @@ function wrapFinger(value) {
       wornHope: "togetherWithFriends", hysteria: "withLove",
       fadedCreed: "knightCreed", intemperance: "goldMadness",
       betrayedHeart: "friendship", emptyHeart: "fullHeart",
-      frenzy: "rationalPower", selfRighteousness: "justiceForEveryone",
-      sacrificePower: "powerOfEveryone"
+      frenzy: "rationalPower", selfRighteousness: "justiceForEveryone"
     };
     function transformMagicalEvolutionCards(player) {
       const f=id=>MAGICAL_EVOLUTION_MAP[id]||id;
@@ -6626,172 +6603,16 @@ function wrapFinger(value) {
       return true;
     }
 
-    function ensureMagicalChoiceOverlay() {
-      let overlay = document.getElementById("magicalChoiceOverlay");
-      if (overlay) return overlay;
-      overlay = document.createElement("div");
-      overlay.id = "magicalChoiceOverlay";
-      overlay.className = "magical-choice-overlay";
-      overlay.innerHTML = `<div class="magical-choice-panel"><h2></h2><p class="magical-choice-guide"></p><div class="magical-choice-list"></div><div class="magical-choice-actions"></div></div>`;
-      document.body.appendChild(overlay);
-      return overlay;
-    }
-
-    function magicalChoiceCardHtml(item, selected = false) {
-      const card = CARD_LIBRARY[item.id] || { name: item.id, type: "カード", cost: "?", text: "" };
-      return `<button type="button" class="magical-choice-card${selected ? " selected" : ""}" data-key="${escapeHtml(item.key)}">
-        <span class="magical-choice-name">${escapeHtml(card.name)}</span>
-        ${item.location ? `<span class="magical-choice-location">${escapeHtml(item.location)}</span>` : ""}
-        <span class="magical-choice-type">${escapeHtml(card.type)}</span>
-        <span class="magical-choice-cost">コスト ${card.cost}</span>
-        <span class="magical-choice-text">${escapeHtml(card.text)}</span>
-      </button>`;
-    }
-
-    function chooseOneMagicalCard(title, guide, items) {
-      return new Promise(resolve => {
-        const overlay = ensureMagicalChoiceOverlay();
-        overlay.querySelector("h2").textContent = title;
-        overlay.querySelector(".magical-choice-guide").textContent = guide;
-        const list = overlay.querySelector(".magical-choice-list");
-        list.innerHTML = items.map(item => magicalChoiceCardHtml(item)).join("");
-        overlay.querySelector(".magical-choice-actions").innerHTML = "";
-        overlay.classList.add("show");
-        list.querySelectorAll(".magical-choice-card").forEach(button => {
-          button.addEventListener("click", () => {
-            overlay.classList.remove("show");
-            resolve(items.find(item => item.key === button.dataset.key));
-          }, { once: true });
-        });
-      });
-    }
-
-    function chooseMultipleMagicalCards(title, guide, items, minimum = 1) {
-      return new Promise(resolve => {
-        const overlay = ensureMagicalChoiceOverlay();
-        overlay.querySelector("h2").textContent = title;
-        overlay.querySelector(".magical-choice-guide").textContent = guide;
-        const list = overlay.querySelector(".magical-choice-list");
-        const actions = overlay.querySelector(".magical-choice-actions");
-        const selected = new Set();
-        list.innerHTML = items.map(item => magicalChoiceCardHtml(item)).join("");
-        actions.innerHTML = `<button type="button" class="magical-choice-confirm" disabled>選択を決定（0枚）</button>`;
-        const confirm = actions.querySelector("button");
-        const update = () => {
-          confirm.disabled = selected.size < minimum;
-          confirm.textContent = `選択を決定（${selected.size}枚）`;
-        };
-        list.querySelectorAll(".magical-choice-card").forEach(button => {
-          button.addEventListener("click", () => {
-            const key = button.dataset.key;
-            if (selected.has(key)) selected.delete(key); else selected.add(key);
-            button.classList.toggle("selected", selected.has(key));
-            update();
-          });
-        });
-        confirm.addEventListener("click", () => {
-          if (selected.size < minimum) return;
-          overlay.classList.remove("show");
-          resolve(items.filter(item => selected.has(item.key)));
-        }, { once: true });
-        overlay.classList.add("show");
-        update();
-      });
-    }
-
-    async function useWornHope(player) {
-      const recoverable = ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"];
-      if (!state.hands[player].length) return false;
-      let discardIndex;
-      if (player === "human") {
-        const handItems = state.hands[player].map((id, index) => ({ id, index, key: `hand-${index}` }));
-        const chosen = await chooseOneMagicalCard("すり減る希望", "まず、捨てる自分の手札を1枚タップしてください。", handItems);
-        discardIndex = chosen.index;
-      } else {
-        discardIndex = randomIndex(state.hands[player].length);
-      }
-      const [discardedId] = state.hands[player].splice(discardIndex, 1);
-      state.discard[player].push(discardedId);
-      await handleCardDiscardEffect(player, discardedId);
-      addLog(`${handNames[player]}は「すり減る希望」で「${CARD_LIBRARY[discardedId]?.name || discardedId}」を捨てた。`);
-
-      const candidates = state.discard[player].map((id, index) => ({ id, index, key: `discard-${index}` })).filter(item => recoverable.includes(item.id));
-      if (!candidates.length) {
-        addLog(`「すり減る希望」で山札へ戻せる感情カードがなかった。`);
-        render();
-        return false;
-      }
-      let chosen;
-      if (player === "human") {
-        chosen = await chooseOneMagicalCard("すり減る希望", "山札へ戻す感情カードをタップしてください。", candidates);
-      } else {
-        chosen = candidates[randomIndex(candidates.length)];
-      }
-      const [returnedId] = state.discard[player].splice(chosen.index, 1);
-      state.decks[player].push(returnedId);
-      shuffle(state.decks[player]);
-      addLog(`${handNames[player]}は「${CARD_LIBRARY[returnedId]?.name || returnedId}」を山札へ戻し、シャッフルした。`);
-      render();
+    async function useWornHope(player){
+      const ok=["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"];
+      const c=state.discard[player].map((id,index)=>({id,index})).filter(x=>ok.includes(x.id)); if(!c.length)return false;
+      let p=c[player==="human"?Math.max(0,Math.min(c.length-1,(Number(prompt(c.map((x,i)=>`${i+1}. ${CARD_LIBRARY[x.id].name}`).join("\n")))-1)||0)):randomIndex(c.length)];
+      state.decks[player].push(state.discard[player].splice(p.index,1)[0]); shuffle(state.decks[player]);
+      if(state.hands[player].length){let i=player==="human"?Math.max(0,Math.min(state.hands[player].length-1,(Number(prompt(state.hands[player].map((id,j)=>`${j+1}. ${CARD_LIBRARY[id]?.name||id}`).join("\n")))-1)||0)):randomIndex(state.hands[player].length);const [id]=state.hands[player].splice(i,1);state.discard[player].push(id);await handleCardDiscardEffect(player,id);}
       return true;
     }
-
     function useTogetherWithFriends(player){const n=Math.min(3,state.discard[player].length);for(let i=0;i<n;i++)state.decks[player].push(state.discard[player].splice(randomIndex(state.discard[player].length),1)[0]);shuffle(state.decks[player]);drawCard(player);drawCard(player);drawCard(player);}
-
-    async function useHysteria(player) {
-      const handBlessings = state.hands[player].map((id,index)=>({id,index,key:`hand-${index}`})).filter(item => CARD_LIBRARY[item.id]?.blessing);
-      const deckBlessings = state.decks[player].map((id,index)=>({id,index})).filter(item => CARD_LIBRARY[item.id]?.blessing && !CARD_LIBRARY[item.id]?.token);
-      if (!handBlessings.length || !deckBlessings.length) return false;
-      const lost = player === "human"
-        ? await chooseOneMagicalCard("ヒステリー", "捨てる手札の加護カードをタップしてください。", handBlessings)
-        : handBlessings[randomIndex(handBlessings.length)];
-      const [lostId] = state.hands[player].splice(lost.index, 1);
-      state.discard[player].push(lostId);
-      await handleCardDiscardEffect(player, lostId);
-      const refreshed = state.decks[player].map((id,index)=>({id,index})).filter(item => CARD_LIBRARY[item.id]?.blessing && !CARD_LIBRARY[item.id]?.token);
-      if (!refreshed.length) {
-        addLog(`${handNames[player]}は「ヒステリー」で加護を捨てたが、山札に引ける加護がなかった。`);
-        render();
-        return false;
-      }
-      const gain = refreshed[randomIndex(refreshed.length)];
-      state.decks[player].splice(gain.index, 1);
-      state.hands[player].push(gain.id);
-      addLog(`${handNames[player]}は「ヒステリー」で「${CARD_LIBRARY[lostId]?.name || lostId}」を捨て、山札から「${CARD_LIBRARY[gain.id]?.name || gain.id}」を引いた。`);
-      render();
-      return true;
-    }
-
-    function getOwnBlessingAttachments(player) {
-      const result = [];
-      for (const hand of ["L", "R"]) {
-        state.traps[player][hand].forEach((slot, index) => {
-          const id = trapCardId(slot);
-          if (CARD_LIBRARY[id]?.blessing) result.push({ id, hand, index, key: `${hand}-${index}`, location: `${handNames[hand]}の加護` });
-        });
-      }
-      return result;
-    }
-
-    async function useSacrificePower(player) {
-      const blessings = getOwnBlessingAttachments(player);
-      if (!blessings.length) return false;
-      const selected = player === "human"
-        ? await chooseMultipleMagicalCards("犠牲の力", "捨てる加護を好きな数だけ選び、決定してください。", blessings, 1)
-        : blessings;
-      const grouped = { L: [], R: [] };
-      selected.forEach(item => grouped[item.hand].push(item));
-      for (const hand of ["L", "R"]) {
-        grouped[hand].sort((a,b) => b.index - a.index).forEach(item => {
-          const slot = state.traps[player][hand].splice(item.index, 1)[0];
-          const id = trapCardId(slot);
-          if (id) state.discard[player].push(id);
-        });
-      }
-      state.temp[player].attackBonus = Number(state.temp[player].attackBonus || 0) + selected.length;
-      addLog(`${handNames[player]}は「犠牲の力」で加護を${selected.length}枚捨て、次の攻撃力を+${selected.length}した。`);
-      render();
-      return true;
-    }
+    function useHysteria(player){const b=[];for(const h of ["L","R"])state.traps[player][h].forEach((s,i)=>{const id=trapCardId(s);if(CARD_LIBRARY[id]?.blessing)b.push({h,i,id});});const d=state.decks[player].map((id,i)=>({id,i})).filter(x=>CARD_LIBRARY[x.id]?.blessing&&!CARD_LIBRARY[x.id]?.token);if(!b.length||!d.length)return false;const lost=b[randomIndex(b.length)],gain=d[randomIndex(d.length)];state.traps[player][lost.h].splice(lost.i,1);state.discard[player].push(lost.id);state.decks[player].splice(gain.i,1);state.hands[player].push(gain.id);render();return true;}
     function beginWithLove(player){if(player==="human"){state.mode="magicalWithLove";setMessage("「愛で！」：2にする自分の手を選んでください。0の手も選べます。");}else{const h=state[player].L===0?"L":state[player].R===0?"R":"L";state[player][h]=2;clearBrokenTraps(player);drawCard(player);}}
     async function useFadedCreed(player){const c=["L","R"].filter(h=>state[player][h]>0);if(!c.length)return false;await addFingersWithCalculation(player,c[randomIndex(c.length)],1,"色褪せた信条");state.temp[player].fadedCreedGuard=true;}
     function beginBetrayedHeart(player){state.temp[player].betrayedHeartPenalty=true;if(player==="human"){state.mode="magicalBetrayedHeart";setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");}else{const c=["L","R"].filter(h=>state[player][h]>0);if(c.length)addFingersWithCalculation(player,c[randomIndex(c.length)],1,"裏切られた心");}}
