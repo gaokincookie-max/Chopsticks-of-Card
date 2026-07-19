@@ -1765,45 +1765,19 @@ const CARD_LIBRARY = {
     const DECK_MAX_COUNT = 20;
 
     const DEFAULT_DECK_COUNTS = {
-      insight: 1,
-      nekodamashi: 1,
-      swapAttachment: 1,
-      snipe: 1,
-      rapidFire: 1,
-      prayer: 1,
-      dispelCurse: 1,
-      escapeDevice: 1,
-      magicMirror: 1,
-      powerBlessing: 1,
-      magicalHatred: 1,
-      magicalDespair: 1,
-      magicalGreed: 1,
-      magicalWrath: 1,
-      magicalVoid: 1,
-      magicalChant: 1,
-      wornHope: 1,
-      hysteria: 1,
-      fadedCreed: 1,
-      intemperance: 1,
-      betrayedHeart: 1,
-      emptyHeart: 1,
-      frenzy: 1,
-      selfRighteousness: 1,
-      villainMark: 1,
-      tearSharpenedSword: 1,
-      goldRush: 1,
-      voidEqualization: 1,
-      sacrificePower: 1,
-      guardBlessing: 1,
-      growthBlessing: 1,
-      recklessBlessing: 1,
-      ricochetBlessing: 1,
-      slowCurse: 1,
-      weaknessCurse: 1,
-      overflowCurse: 1,
-      immutableCurse: 1,
-      sealCurse: 1,
+      insight: 2,
+      strongHit: 2,
+      lightHit: 2,
+      repair: 2,
+      calm: 2,
       passCard: 1,
+      deflect: 1,
+      attention: 1,
+      braceTrap: 1,
+      dodgeTrap: 1,
+      thornTrap: 1,
+      powerBlessing: 2,
+      slowCurse: 2
     };
 
     const state = {
@@ -4905,6 +4879,17 @@ function wrapFinger(value) {
 
     function writeDeckSlots(slots) {
       localStorage.setItem(DECK_SLOT_STORAGE_KEY, JSON.stringify(slots));
+    }
+
+    function ensureStarterDeckInHumanSlotOne() {
+      const slots = readDeckSlots();
+      if (slots?.human?.["1"]) return false;
+      slots.human["1"] = {
+        name: "スターターデッキ",
+        counts: cloneValidDeckCounts(DEFAULT_DECK_COUNTS)
+      };
+      writeDeckSlots(slots);
+      return true;
     }
 
     function refreshDeckSlotOptionLabels() {
@@ -11206,6 +11191,7 @@ async function endTurn() {
 
     // 起動時に保存済みデッキを自動読込する。ゲスト側も準備完了時に実際の自分用デッキを提出できる。
     loadDecksSilentlyOnStartup();
+    ensureStarterDeckInHumanSlotOne();
     renderDeckBuilder();
     loadDisplaySettings();
     if (elements.compactCardDescriptionsToggle) {
