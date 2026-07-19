@@ -6572,15 +6572,38 @@ function wrapFinger(value) {
 
     async function showMagicalChantStage(player, stage) {
       const line = MAGICAL_CHANT_LINES[stage - 1];
+      const circles = [1, 2, 3].map(n =>
+        `<i class="chant-magic-circle circle-${n} ${n <= stage ? "active" : ""}"><span></span></i>`
+      ).join("");
       const seals = [1, 2, 3].map(n => `<span class="chant-seal ${n <= stage ? "lit" : ""}">${n}</span>`).join("");
       const html = `
-        <div class="chant-sky"></div>
-        <div class="chant-rings"><i></i><i></i><i></i></div>
+        <div class="chant-dim"></div>
+        <div class="chant-circle-field stage-${stage}">${circles}</div>
         <div class="chant-stage-label">CHANT PHASE ${stage}</div>
         <div class="chant-line">${escapeHtml(line)}</div>
         <div class="chant-progress">${seals}</div>
         <div class="chant-count">詠唱進捗 ${stage} / 3</div>`;
-      await showPopup(player, `魔法少女の詠唱`, html, "magical-chant", stage === 3 ? 2700 : 2100, true);
+      await showPopup(player, `魔法少女の詠唱`, html, "magical-chant", stage === 3 ? 3200 : 2400, true);
+    }
+
+    async function showArcanaTargetCircle(player, hand) {
+      const target = handEl(player, hand);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const overlay = document.createElement("div");
+      overlay.className = "arcana-target-circle-overlay";
+      overlay.style.left = `${rect.left + rect.width / 2}px`;
+      overlay.style.top = `${rect.top + rect.height / 2}px`;
+      overlay.style.width = `${Math.max(rect.width, rect.height) * 1.35}px`;
+      overlay.style.height = overlay.style.width;
+      overlay.innerHTML = `<i></i><i></i><span>✦</span>`;
+      document.body.appendChild(overlay);
+      target.classList.add("arcana-targeted-hand");
+      await delay(1050);
+      overlay.classList.add("burst");
+      await delay(420);
+      overlay.remove();
+      target.classList.remove("arcana-targeted-hand");
     }
 
     async function showMagicalChantComplete(player) {
@@ -6622,10 +6645,11 @@ function wrapFinger(value) {
       }
       const target = alive.sort((a,b) => state[opponent][b] - state[opponent][a])[0];
       const before = state[opponent][target];
+      await showArcanaTargetCircle(opponent, target);
       state[opponent][target] = 0;
       clearBrokenTraps(opponent);
       state.pendingTerminalEnd[player] = true;
-      await showPopup(player, "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>${handNames[opponent]}の${handNames[target]}</span><strong>${before} → 0</strong></div>`, "arcana", 1900, true);
+      await showPopup(player, "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>${handNames[opponent]}の${handNames[target]}</span><strong>${before} → 0</strong></div>`, "arcana", 1550, true);
       addLog(`${handNames[player]}の「アルカナ・スレイブ！！」が${handNames[opponent]}の${handNames[target]}を0にした。`);
       return true;
     }
@@ -10245,11 +10269,12 @@ async function endTurn() {
           return;
         }
         const before = state.cpu[hand];
+        await showArcanaTargetCircle("cpu", hand);
         state.cpu[hand] = 0;
         clearBrokenTraps("cpu");
         state.mode = "attack";
         state.pendingTerminalEnd.human = true;
-        await showPopup("human", "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>相手の${handNames[hand]}</span><strong>${before} → 0</strong></div>`, "arcana", 1900, true);
+        await showPopup("human", "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>相手の${handNames[hand]}</span><strong>${before} → 0</strong></div>`, "arcana", 1550, true);
         addLog(`あなたの「アルカナ・スレイブ！！」が相手の${handNames[hand]}を0にした。`);
         setMessage(`「アルカナ・スレイブ！！」：相手の${handNames[hand]}を0にしました。`);
         checkWin();
