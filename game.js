@@ -1698,8 +1698,9 @@ const CARD_LIBRARY = {
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
-          state.temp[player].powerOfEveryoneAttack = true;
-          addLog(`${handNames[player]}は「みんなの力で」を使用。次の攻撃に、場の加護の合計数を加える。`);
+          const bonus = countOwnBlessings(player);
+          state.temp[player].attackBonus = Number(state.temp[player].attackBonus || 0) + bonus;
+          addLog(`${handNames[player]}は「みんなの力で」を使用。場の加護${bonus}枚分、次の攻撃力を+${bonus}した。`);
         }
       },
       magicalVoid: {
@@ -6786,7 +6787,7 @@ function wrapFinger(value) {
           if (id) state.discard[player].push(id);
         });
       }
-      state.temp[player].sacrificePowerBonus = Number(state.temp[player].sacrificePowerBonus || 0) + selected.length;
+      state.temp[player].attackBonus = Number(state.temp[player].attackBonus || 0) + selected.length;
       addLog(`${handNames[player]}は「犠牲の力」で加護を${selected.length}枚捨て、次の攻撃力を+${selected.length}した。`);
       render();
       return true;
@@ -8811,16 +8812,12 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const justiceForEveryoneActive = !!state.temp[attacker]?.justiceForEveryoneAttack;
       const tearSharpenedSwordActive = !!state.temp[attacker]?.tearSharpenedSwordAttack;
       const goldRushActive = !!state.temp[attacker]?.goldRushAttack;
-      const sacrificePowerBonusStored = Number(state.temp[attacker]?.sacrificePowerBonus || 0);
-      const powerOfEveryoneActive = !!state.temp[attacker]?.powerOfEveryoneAttack;
       state.temp[attacker].frenzyAttack = false;
       state.temp[attacker].rationalPowerAttack = false;
       state.temp[attacker].selfRighteousAttack = false;
       state.temp[attacker].justiceForEveryoneAttack = false;
       state.temp[attacker].tearSharpenedSwordAttack = false;
       state.temp[attacker].goldRushAttack = false;
-      state.temp[attacker].sacrificePowerBonus = 0;
-      state.temp[attacker].powerOfEveryoneAttack = false;
 
       if (frenzyActive) {
         const originalOpponent = otherPlayer(attacker);
@@ -8865,13 +8862,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const rationalPowerBonus = immutable || !rationalPowerActive ? 0 : 1;
       const selfRighteousBonus = immutable || !selfRighteousActive ? 0 : 2;
       const justiceForEveryoneBonus = immutable || !justiceForEveryoneActive ? 0 : 1;
-      const sacrificePowerBonus = immutable ? 0 : sacrificePowerBonusStored;
-      const powerOfEveryoneBonus = immutable || !powerOfEveryoneActive ? 0 : countOwnBlessings(attacker);
       const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + sacrificePowerBonus + powerOfEveryoneBonus + dischargeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
@@ -8886,8 +8881,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、攻撃力+1。`);
       if (selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、攻撃力+2。`);
       if (justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、攻撃力+1。`);
-      if (sacrificePowerBonus) addLog(`${handNames[attacker]}の「犠牲の力」により、攻撃力+${sacrificePowerBonus}。`);
-      if (powerOfEveryoneBonus) addLog(`${handNames[attacker]}の「みんなの力で」により、場の加護${powerOfEveryoneBonus}枚分、攻撃力+${powerOfEveryoneBonus}。`);
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
