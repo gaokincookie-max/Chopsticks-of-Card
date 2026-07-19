@@ -1878,10 +1878,42 @@ const CARD_LIBRARY = {
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
-    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v120";
-    const LATEST_NEWS_ID = "v122-berserker-buff";
+    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v124";
+    const LATEST_NEWS_ID = "v124-online-hand-final-hit-sync";
 
     const UPDATE_NEWS = [
+      {
+        id: "v124-online-hand-final-hit-sync",
+        version: "v124",
+        date: "2026-07-19",
+        title: "オンラインの手の変化とトドメ同期を改善",
+        summary: "整えるなどで手の本数を直接変更した結果と、勝敗を決める最後の攻撃を相手側へ確実に反映するよう修正しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "整える・補修・アンダンテ・等価交換などの確定結果を即時同期",
+          "愛で！・裏切られた心など、手の本数を直接変更する選択式カードも即時同期",
+          "通常攻撃と狙撃の計算結果を専用演出イベントとして相手側へ送信",
+          "トドメの盤面と攻撃結果を勝敗通知より先に同期",
+          "相手側でも何の攻撃で倒されたか確認してからリザルトへ進行"
+        ]
+      },
+      {
+        id: "v123-online-trap-zero-fix",
+        version: "v123",
+        date: "2026-07-19",
+        title: "オンラインの手動罠と0化処理を修正",
+        summary: "手動罠を発動しない選択後に進行できない場合がある問題と、狙撃・捨て身で手が0になった際の勝敗・同期処理を改善しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "手動罠を発動しない選択を明示的なスキップ応答として同期",
+          "解決済みのオンライン割り込み情報を処理後に消去",
+          "手動罠の確認通信に失敗しても不発扱いで試合を続行",
+          "狙撃で最後の手が0になった直後に勝敗を判定・同期",
+          "捨て身の反動で両手が0になった直後に勝敗を判定"
+        ]
+      },
       {
         id: "v122-berserker-buff",
         version: "v122",
@@ -3013,6 +3045,17 @@ const CARD_LIBRARY = {
       });
     }
 
+    async function forcePublishFriendStateNow(reason = "state change") {
+      if (state.battleMode !== "friend" || state.friendApplyingRemoteState) return;
+      try {
+        state.friendLastPublishedSignature = "";
+        await publishFriendStateNow();
+      } catch (error) {
+        console.error(`PVP ${reason} sync failed`, error);
+        setMessage(`オンライン同期エラー：${error.message || error}`);
+      }
+    }
+
     function canPublishFriendStateSafely() {
       if (state.battleMode !== "friend" || state.friendApplyingRemoteState || !state.friendMatchStarted) return false;
       // 通常の自動同期は、現在手番を持つ端末だけが書き込む。
@@ -3095,6 +3138,20 @@ const CARD_LIBRARY = {
           await animateAttackIntent(attacker, payload.attackHand, defender, payload.targetHand);
           clearHighlights();
           render();
+        }
+        return;
+      }
+      if (fx.type === "attackResult") {
+        const defender = localPlayerForFriendSide(payload.defenderSide);
+        if (defender && payload.targetHand) {
+          const total = Number(payload.total);
+          const finalValue = Number(payload.finalValue);
+          if (Number.isFinite(total) && Number.isFinite(finalValue)) {
+            await animateCalculation(defender, payload.targetHand, total, finalValue);
+            state[defender][payload.targetHand] = finalValue;
+            clearBrokenTraps(defender);
+            render();
+          }
         }
         return;
       }
@@ -3230,6 +3287,23 @@ const CARD_LIBRARY = {
       });
     }
 
+    async function clearResolvedFriendInterrupt(interruptId) {
+      if (!interruptId || state.battleMode !== "friend" || !state.friendRoomId) return;
+      const fb = firebaseApi();
+      if (!fb) return;
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      try {
+        const current = state.friendRoomData?.match?.interrupt;
+        if (current?.id && current.id !== interruptId) return;
+        await fb.updateDoc(roomRef, {
+          "match.interrupt": null,
+          updatedAt: fb.serverTimestamp()
+        });
+      } catch (error) {
+        console.warn("PVP interrupt cleanup failed", error);
+      }
+    }
+
     async function handleIncomingFriendInterrupt(interrupt) {
       if (!interrupt || interrupt.status !== "pending" || interrupt.targetSide !== state.friendRole) return;
       if (state.friendHandledInterruptIds.has(interrupt.id) || state.friendInterruptHandling) return;
@@ -3254,7 +3328,9 @@ const CARD_LIBRARY = {
             targetHand: payload.targetHand || "L",
             isRapidFire: !!payload.isRapidFire
           });
-          response = chosen ? { chosen: { placedHand: chosen.placedHand, index: chosen.index, cardId: chosen.cardId } } : { chosen: null };
+          response = chosen
+            ? { chosen: { placedHand: chosen.placedHand, index: chosen.index, cardId: chosen.cardId }, skipped: false }
+            : { chosen: null, skipped: true };
         } else if (interrupt.type === "magicMirror") {
           const use = await askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId);
           response = { use: !!use };
@@ -3274,6 +3350,8 @@ const CARD_LIBRARY = {
       state.friendInterruptWaiting = null;
       if (interrupt.response?.error) waiting.reject(new Error(interrupt.response.error));
       else waiting.resolve(interrupt.response || {});
+      clearResolvedFriendInterrupt(interrupt.id).catch(() => {});
+      render();
       return true;
     }
 
@@ -7557,6 +7635,18 @@ function wrapFinger(value) {
       addLog(`${handNames[player]}は「狙撃」で${handNames[defender]}の${handNames[targetHand]}に${amount}本加えた。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
       setLastAction(player, "狙撃", `${handNames[defender]}の${handNames[targetHand]}を+1しました。`, "card");
       clearBrokenTraps(defender);
+      render();
+      if (state.battleMode === "friend" && player === "human") {
+        await emitFriendFx("attackResult", {
+          defenderSide: friendSideForLocalPlayer(defender),
+          targetHand,
+          total,
+          finalValue,
+          source: "狙撃"
+        });
+        await forcePublishFriendStateNow("snipe result");
+      }
+      if (checkWin()) return true;
       if (player === "human") {
         state.mode = "attack";
         setMessage(`「狙撃」：${handNames[defender]}の${handNames[targetHand]}に本数を加えました。まだ攻撃か分けるができます。`);
@@ -8333,7 +8423,7 @@ function renderLastAction() {
       return ["L", "R"].map(hand => getMoveOneOptionFrom(player, hand)).filter(Boolean);
     }
 
-    function applyMoveOne(player, from) {
+    async function applyMoveOne(player, from) {
       const opt = getMoveOneOptionFrom(player, from);
       if (!opt) return false;
       state[player].L = opt.L;
@@ -8345,6 +8435,7 @@ function renderLastAction() {
       state.selectedAttackHand = null;
       setMessage(`「整える」で${handNames[from]}から${handNames[opt.to]}へ1本移しました。`);
       render();
+      if (player === "human") await forcePublishFriendStateNow("move one");
       return true;
     }
 
@@ -8780,16 +8871,28 @@ async function maybeChooseManualTrap(defender, candidates, context) {
         return await askHumanTrapChoice(candidates, context);
       }
       if (state.battleMode === "friend") {
-        const response = await requestRemoteFriendDecision("manualTrap", {
-          candidates: candidates.map(info => ({ placedHand: info.placedHand, index: info.index, cardId: info.cardId })),
-          attackHand: context.attackHand,
-          targetHand: context.targetHand,
-          isRapidFire: !!context.isRapidFire,
-          timing: context.resolvedFinal !== undefined ? "after" : "before"
-        });
-        const chosen = response?.chosen;
-        if (!chosen) return null;
-        return candidates.find(info => info.placedHand === chosen.placedHand && info.index === Number(chosen.index) && info.cardId === chosen.cardId) || null;
+        try {
+          const response = await requestRemoteFriendDecision("manualTrap", {
+            candidates: candidates.map(info => ({ placedHand: info.placedHand, index: info.index, cardId: info.cardId })),
+            attackHand: context.attackHand,
+            targetHand: context.targetHand,
+            isRapidFire: !!context.isRapidFire,
+            timing: context.resolvedFinal !== undefined ? "after" : "before"
+          });
+          if (response?.skipped || !response?.chosen) {
+            addLog(`${handNames[defender]}は手動罠を発動しなかった。`);
+            return null;
+          }
+          const chosen = response.chosen;
+          return candidates.find(info => info.placedHand === chosen.placedHand && info.index === Number(chosen.index) && info.cardId === chosen.cardId) || null;
+        } catch (error) {
+          console.error("PVP manual trap decision failed", error);
+          state.friendInterruptWaiting = null;
+          addLog(`手動罠のオンライン確認に失敗したため、発動しないものとして処理を続行した。`);
+          return null;
+        } finally {
+          render();
+        }
       }
       return chooseCpuManualTrap(candidates, context);
     }
@@ -9296,6 +9399,27 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
+
+      // オンラインでは最終攻撃結果を勝敗通知より先に送る。
+      // これにより、相手側でもトドメの計算・0化を確認してからリザルトへ進める。
+      if (state.battleMode === "friend" && attacker === "human") {
+        await emitFriendFx("attackResult", {
+          defenderSide: friendSideForLocalPlayer(defender),
+          targetHand,
+          total,
+          finalValue: state[defender][targetHand],
+          source: "通常攻撃"
+        });
+        await forcePublishFriendStateNow("attack result");
+      }
+
+      // 捨て身などの攻撃後効果で両手が0になった場合は、ターン終了を待たず即座に勝敗を確定する。
+      if (checkWin()) {
+        state.animating = false;
+        clearHighlights();
+        render();
+        return true;
+      }
 
       const damageChargeBlocked = !!state.temp[attacker].lightningNoChargeGain;
       if (!trapResult.cancelAttack && !damageChargeBlocked) {
@@ -10333,7 +10457,7 @@ async function endTurn() {
       return true;
     }
 
-    function applyEqualTradeOpponent(player, opponent, hand) {
+    async function applyEqualTradeOpponent(player, opponent, hand) {
       if (state[opponent][hand] < 2) return false;
       state[opponent][hand] = Math.max(0, state[opponent][hand] - 1);
       clearBrokenTraps(opponent);
@@ -10342,6 +10466,7 @@ async function endTurn() {
       state.mode = "attack";
       setMessage(`「等価交換」：相手の${handNames[hand]}を-1しました。まだ攻撃か分けるができます。`);
       render();
+      if (player === "human") await forcePublishFriendStateNow("equal trade");
       return true;
     }
 
@@ -10377,7 +10502,7 @@ async function endTurn() {
       addLog(`あなたは「アンダンテ」で${handNames[hand]}を${before}→${next}に微調整した。`);
       setMessage(`「アンダンテ」：${handNames[hand]}を${before}→${next}にしました。まだ攻撃か分けるができます。`);
       render();
-      if (state.battleMode === "friend") scheduleFriendStatePublish();
+      await forcePublishFriendStateNow("andante");
       return true;
     }
 
@@ -10411,8 +10536,9 @@ async function endTurn() {
         state.pendingTerminalEnd.human = true;
         addLog(`あなたの「アルカナ・スレイブ！！」が相手の${handNames[hand]}を0にした。`);
         setMessage("「アルカナ・スレイブ！！」が発動しました。");
-        checkWin();
         render();
+        await forcePublishFriendStateNow("arcana slave final state");
+        checkWin();
         if (!state.gameOver && state.turn === "human") {
           state.pendingTerminalEnd.human = false;
           await endTurn();
@@ -10435,6 +10561,7 @@ async function endTurn() {
         addLog(`あなたは「愛で！」で${handNames[hand]}を${before}→2にし、1枚引いた。`);
         setMessage(`「愛で！」：${handNames[hand]}を2にして1枚引きました。`);
         render();
+        await forcePublishFriendStateNow("with love");
         return;
       }
 
@@ -10447,6 +10574,7 @@ async function endTurn() {
         state.mode = "attack";
         setMessage("「裏切られた心」：手を1本増やしました。このターン、与える本数-1。");
         render();
+        await forcePublishFriendStateNow("betrayed heart");
         return;
       }
 
@@ -10495,6 +10623,7 @@ async function endTurn() {
         addLog(`あなたは「補修」で${discarded ? `「${CARD_LIBRARY[discarded].name}」を捨て、` : ""}${handNames[hand]}を0→1に戻した。`);
         setMessage(`「補修」：${handNames[hand]}を1に戻しました。まだ攻撃か分けるができます。`);
         render();
+        await forcePublishFriendStateNow("repair");
         return;
       }
 
@@ -10538,7 +10667,7 @@ async function endTurn() {
           setMessage("等価交換では、相手の1以下の手は選べません。");
           return;
         }
-        applyEqualTradeOpponent("human", "cpu", hand);
+        await applyEqualTradeOpponent("human", "cpu", hand);
         return;
       }
 
@@ -10617,7 +10746,7 @@ async function endTurn() {
           setMessage("自分の手を選んでください。");
           return;
         }
-        if (!applyMoveOne("human", hand)) {
+        if (!await applyMoveOne("human", hand)) {
           setMessage("その手からは移せません。もう片方の手を選んでください。");
         }
         return;
