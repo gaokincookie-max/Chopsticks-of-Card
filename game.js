@@ -6608,6 +6608,30 @@ function wrapFinger(value) {
       overlay.innerHTML = "";
     }
 
+    async function showArcanaSlaveCinematic(player) {
+      const overlay = ensureChantCinematicOverlay();
+      const circles = [1, 2, 3].map(n => `<i class="chant-cinematic-circle circle-${n} active"><span></span></i>`).join("");
+      const seals = [1, 2, 3].map(n => `<span class="chant-cinematic-seal lit">${n}</span>`).join("");
+      overlay.className = "chant-cinematic-overlay stage-3 arcana-cast";
+      overlay.innerHTML = `
+        <div class="chant-cinematic-vignette"></div>
+        <div class="chant-cinematic-particles"></div>
+        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="chant-cinematic-copy">
+          <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の大魔法</div>
+          <div class="chant-cinematic-phase">ARCANA RELEASE</div>
+          <div class="chant-cinematic-line arcana-cast-line">アルカナ・スレイブ！！</div>
+          <div class="chant-cinematic-progress">${seals}</div>
+          <div class="chant-cinematic-count">詠唱工程 完了</div>
+        </div>`;
+      overlay.classList.add("show");
+      await delay(3000);
+      overlay.classList.add("closing");
+      await delay(520);
+      overlay.className = "chant-cinematic-overlay";
+      overlay.innerHTML = "";
+    }
+
     async function showArcanaTargetCircle(player, hand) {
       const target = handEl(player, hand);
       if (!target) return;
@@ -6679,6 +6703,7 @@ function wrapFinger(value) {
         return true;
       }
       const target = alive.sort((a,b) => state[opponent][b] - state[opponent][a])[0];
+      await showArcanaSlaveCinematic(player);
       await showArcanaTargetCircle(opponent, target);
       state[opponent][target] = 0;
       clearBrokenTraps(opponent);
@@ -10301,13 +10326,14 @@ async function endTurn() {
           setMessage("「アルカナ・スレイブ！！」：相手の0ではない手を選んでください。");
           return;
         }
+        await showArcanaSlaveCinematic("human");
         await showArcanaTargetCircle("cpu", hand);
         state.cpu[hand] = 0;
         clearBrokenTraps("cpu");
         state.mode = "attack";
         state.pendingTerminalEnd.human = true;
         addLog(`あなたの「アルカナ・スレイブ！！」が相手の${handNames[hand]}を0にした。`);
-        setMessage(`「アルカナ・スレイブ！！」：相手の${handNames[hand]}を0にしました。`);
+        setMessage("「アルカナ・スレイブ！！」が発動しました。");
         checkWin();
         render();
         if (!state.gameOver && state.turn === "human") {
