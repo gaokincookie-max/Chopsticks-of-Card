@@ -2714,12 +2714,13 @@ const CARD_LIBRARY = {
     }
 
     function shuffle(array) {
-      const arr = [...array];
-      for (let i = arr.length - 1; i > 0; i--) {
+      // 元の配列を直接シャッフルする。
+      // 戻り値を代入する呼び出し方と、shuffle(deck)だけの呼び出し方の両方に対応。
+      for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+        [array[i], array[j]] = [array[j], array[i]];
       }
-      return arr;
+      return array;
     }
 
     
@@ -6570,20 +6571,41 @@ function wrapFinger(value) {
       return true;
     }
 
+    function ensureChantCinematicOverlay() {
+      let overlay = document.getElementById("chantCinematicOverlay");
+      if (overlay) return overlay;
+      overlay = document.createElement("div");
+      overlay.id = "chantCinematicOverlay";
+      overlay.className = "chant-cinematic-overlay";
+      document.body.appendChild(overlay);
+      return overlay;
+    }
+
     async function showMagicalChantStage(player, stage) {
       const line = MAGICAL_CHANT_LINES[stage - 1];
+      const overlay = ensureChantCinematicOverlay();
       const circles = [1, 2, 3].map(n =>
-        `<i class="chant-magic-circle circle-${n} ${n <= stage ? "active" : ""}"><span></span></i>`
+        `<i class="chant-cinematic-circle circle-${n} ${n <= stage ? "active" : ""}"><span></span></i>`
       ).join("");
-      const seals = [1, 2, 3].map(n => `<span class="chant-seal ${n <= stage ? "lit" : ""}">${n}</span>`).join("");
-      const html = `
-        <div class="chant-dim"></div>
-        <div class="chant-circle-field stage-${stage}">${circles}</div>
-        <div class="chant-stage-label">CHANT PHASE ${stage}</div>
-        <div class="chant-line">${escapeHtml(line)}</div>
-        <div class="chant-progress">${seals}</div>
-        <div class="chant-count">詠唱進捗 ${stage} / 3</div>`;
-      await showPopup(player, `魔法少女の詠唱`, html, "magical-chant", stage === 3 ? 3200 : 2400, true);
+      const seals = [1, 2, 3].map(n => `<span class="chant-cinematic-seal ${n <= stage ? "lit" : ""}">${n}</span>`).join("");
+      overlay.className = `chant-cinematic-overlay stage-${stage}`;
+      overlay.innerHTML = `
+        <div class="chant-cinematic-vignette"></div>
+        <div class="chant-cinematic-particles"></div>
+        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="chant-cinematic-copy">
+          <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の詠唱</div>
+          <div class="chant-cinematic-phase">CHANT PHASE ${stage}</div>
+          <div class="chant-cinematic-line">${escapeHtml(line)}</div>
+          <div class="chant-cinematic-progress">${seals}</div>
+          <div class="chant-cinematic-count">詠唱進捗 ${stage} / 3</div>
+        </div>`;
+      overlay.classList.add("show");
+      await delay(stage === 3 ? 3400 : 2550);
+      overlay.classList.add("closing");
+      await delay(480);
+      overlay.className = "chant-cinematic-overlay";
+      overlay.innerHTML = "";
     }
 
     async function showArcanaTargetCircle(player, hand) {
@@ -6607,13 +6629,26 @@ function wrapFinger(value) {
     }
 
     async function showMagicalChantComplete(player) {
-      const html = `
-        <div class="arcana-burst"></div>
-        <div class="arcana-star">✦</div>
-        <div class="arcana-complete-label">CHANT COMPLETE</div>
-        <div class="arcana-title">アルカナ・スレイブ！！</div>
-        <div class="arcana-sub">以後、すべての同名カードが大魔法へ変化する</div>`;
-      await showPopup(player, "詠唱完了", html, "arcana", 2400, true);
+      const overlay = ensureChantCinematicOverlay();
+      const circles = [1, 2, 3].map(n => `<i class="chant-cinematic-circle circle-${n} active"><span></span></i>`).join("");
+      overlay.className = "chant-cinematic-overlay complete";
+      overlay.innerHTML = `
+        <div class="chant-cinematic-vignette"></div>
+        <div class="chant-cinematic-particles"></div>
+        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="chant-complete-flash"></div>
+        <div class="chant-cinematic-copy chant-complete-copy">
+          <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の詠唱</div>
+          <div class="chant-complete-label">CHANT COMPLETE</div>
+          <div class="chant-complete-title">アルカナ・スレイブ！！</div>
+          <div class="chant-complete-sub">すべての同名カードが大魔法へ変化した</div>
+        </div>`;
+      overlay.classList.add("show");
+      await delay(2700);
+      overlay.classList.add("closing");
+      await delay(520);
+      overlay.className = "chant-cinematic-overlay";
+      overlay.innerHTML = "";
     }
 
     async function useMagicalChant(player) {
@@ -6644,12 +6679,10 @@ function wrapFinger(value) {
         return true;
       }
       const target = alive.sort((a,b) => state[opponent][b] - state[opponent][a])[0];
-      const before = state[opponent][target];
       await showArcanaTargetCircle(opponent, target);
       state[opponent][target] = 0;
       clearBrokenTraps(opponent);
       state.pendingTerminalEnd[player] = true;
-      await showPopup(player, "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>${handNames[opponent]}の${handNames[target]}</span><strong>${before} → 0</strong></div>`, "arcana", 1550, true);
       addLog(`${handNames[player]}の「アルカナ・スレイブ！！」が${handNames[opponent]}の${handNames[target]}を0にした。`);
       return true;
     }
@@ -10268,13 +10301,11 @@ async function endTurn() {
           setMessage("「アルカナ・スレイブ！！」：相手の0ではない手を選んでください。");
           return;
         }
-        const before = state.cpu[hand];
         await showArcanaTargetCircle("cpu", hand);
         state.cpu[hand] = 0;
         clearBrokenTraps("cpu");
         state.mode = "attack";
         state.pendingTerminalEnd.human = true;
-        await showPopup("human", "アルカナ・スレイブ！！", `<div class="arcana-hit"><span>相手の${handNames[hand]}</span><strong>${before} → 0</strong></div>`, "arcana", 1550, true);
         addLog(`あなたの「アルカナ・スレイブ！！」が相手の${handNames[hand]}を0にした。`);
         setMessage(`「アルカナ・スレイブ！！」：相手の${handNames[hand]}を0にしました。`);
         checkWin();

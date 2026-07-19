@@ -3666,3 +3666,136 @@ body.tutorial-split-only #cpuR {
 @keyframes arcanaTargetSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
 @keyframes arcanaTargetStar{to{transform:scale(1.18);opacity:.72}}
 @keyframes arcanaTargetBurst{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,-50%) scale(1.9);filter:brightness(2)}}
+
+/* v115: full-screen magical chant cinematic */
+.chant-cinematic-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(119,20,82,.18), rgba(9,2,15,.72) 58%, rgba(0,0,0,.88) 100%);
+  transition: opacity .42s ease, visibility .42s step-end;
+}
+.chant-cinematic-overlay.show { opacity: 1; visibility: visible; transition: opacity .42s ease; }
+.chant-cinematic-overlay.closing { opacity: 0; }
+.chant-cinematic-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 25%, rgba(0,0,0,.16) 55%, rgba(0,0,0,.72) 100%);
+  animation: chantCinemaDim 1.4s ease-in-out infinite alternate;
+}
+.chant-cinematic-particles {
+  position: absolute;
+  inset: -20%;
+  opacity: .55;
+  background-image:
+    radial-gradient(circle, rgba(255,228,246,.95) 0 1px, transparent 1.8px),
+    radial-gradient(circle, rgba(255,92,185,.8) 0 1.3px, transparent 2px);
+  background-size: 54px 54px, 83px 83px;
+  animation: chantCinemaParticles 12s linear infinite;
+  mask-image: radial-gradient(circle at center, #000 0 50%, transparent 82%);
+}
+.chant-cinematic-circles {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(92vw, 780px);
+  height: min(92vw, 780px);
+  transform: translate(-50%,-50%);
+  filter: drop-shadow(0 0 18px rgba(255,70,171,.72));
+}
+.chant-cinematic-circle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  border: 2px solid rgba(255,117,205,.9);
+  box-shadow: 0 0 14px rgba(255,117,205,.95), inset 0 0 24px rgba(255,79,178,.48);
+  opacity: 0;
+  transform: translate(-50%,-50%) scale(.16) rotate(-38deg);
+}
+.chant-cinematic-circle::before,
+.chant-cinematic-circle::after,
+.chant-cinematic-circle span::before,
+.chant-cinematic-circle span::after {
+  content: "";
+  position: absolute;
+  inset: 9%;
+  border: 1px solid rgba(255,214,239,.84);
+  transform: rotate(45deg);
+}
+.chant-cinematic-circle::after { inset: 23%; border-radius: 50%; transform: none; }
+.chant-cinematic-circle span::before { inset: 16%; transform: rotate(22.5deg); }
+.chant-cinematic-circle span::after { inset: 34%; border-radius: 50%; transform: none; box-shadow: 0 0 18px #ff65b9; }
+.chant-cinematic-circle.circle-1 { width: 38%; height: 38%; }
+.chant-cinematic-circle.circle-2 { width: 67%; height: 67%; border-style: dashed; border-width: 3px; }
+.chant-cinematic-circle.circle-3 { width: 96%; height: 96%; border-width: 3px; }
+.chant-cinematic-circle.active { animation: chantCinemaCircleIn .9s cubic-bezier(.16,.86,.2,1) forwards, chantCinemaSpin 12s linear .9s infinite; }
+.chant-cinematic-circle.circle-2.active { animation-delay: .22s, 1.12s; animation-direction: normal, reverse; }
+.chant-cinematic-circle.circle-3.active { animation-delay: .42s, 1.32s; animation-duration: .9s, 17s; }
+.chant-cinematic-overlay.stage-1 .circle-1 { filter: brightness(1.05); }
+.chant-cinematic-overlay.stage-2 .circle-2,
+.chant-cinematic-overlay.stage-3 .circle-3,
+.chant-cinematic-overlay.complete .chant-cinematic-circle { filter: brightness(1.25); }
+.chant-cinematic-copy {
+  position: relative;
+  z-index: 3;
+  width: min(90vw, 760px);
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 0 7px #fff, 0 0 18px #ff59b4, 0 0 38px rgba(189,36,125,.95);
+}
+.chant-cinematic-user { margin-bottom: 9px; font-size: 12px; font-weight: 900; letter-spacing: .22em; color: #ffd4eb; }
+.chant-cinematic-phase { font-size: clamp(12px,2.5vw,16px); font-weight: 1000; letter-spacing: .34em; color: #ffb9de; }
+.chant-cinematic-line {
+  margin: clamp(34px,8vh,76px) auto clamp(30px,6vh,58px);
+  max-width: 720px;
+  font-size: clamp(20px,4.8vw,38px);
+  line-height: 1.85;
+  font-weight: 1000;
+  letter-spacing: .045em;
+  animation: chantCinemaLineIn .85s .28s ease-out both;
+}
+.chant-cinematic-progress { display:flex; justify-content:center; gap:22px; }
+.chant-cinematic-seal {
+  display:grid; place-items:center; width:38px; height:38px; border-radius:50%;
+  border:2px solid rgba(255,255,255,.28); color:rgba(255,255,255,.38); font-weight:1000;
+  background:rgba(30,0,23,.4);
+}
+.chant-cinematic-seal.lit {
+  color:#fff; border-color:#fff;
+  background:radial-gradient(circle,#fff 0 12%,#ffc2e2 20%,#ef4ba8 68%);
+  box-shadow:0 0 10px #fff,0 0 30px #ff55b1;
+  animation:chantCinemaSeal .55s ease-out both;
+}
+.chant-cinematic-count { margin-top:14px; font-size:12px; font-weight:900; letter-spacing:.17em; color:#ffd3ea; }
+.chant-complete-flash {
+  position:absolute; left:50%; top:50%; width:10vmin; height:10vmin; border-radius:50%;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 45px 22px #fff,0 0 130px 70px #ff59b5,0 0 240px 120px rgba(255,64,177,.68);
+  animation:chantCompleteFlash 2s ease-in-out infinite alternate;
+}
+.chant-complete-copy { animation:chantCompleteCopy 1s .35s ease-out both; }
+.chant-complete-label { font-size:clamp(13px,3vw,19px); font-weight:1000; letter-spacing:.42em; color:#fff2a9; }
+.chant-complete-title { margin-top:22px; font-size:clamp(32px,8vw,68px); line-height:1.1; font-weight:1000; letter-spacing:.03em; color:#fff; text-shadow:0 0 10px #fff,0 0 30px #ff58b4,0 0 72px #d22b91; }
+.chant-complete-sub { margin-top:24px; font-size:clamp(12px,2.7vw,17px); font-weight:900; color:#ffd9ed; letter-spacing:.08em; }
+@keyframes chantCinemaDim { to { background-color:rgba(0,0,0,.16); } }
+@keyframes chantCinemaParticles { to { transform:translate3d(54px,83px,0) rotate(3deg); } }
+@keyframes chantCinemaCircleIn { from {opacity:0;transform:translate(-50%,-50%) scale(.16) rotate(-38deg)} to {opacity:.88;transform:translate(-50%,-50%) scale(1) rotate(0)} }
+@keyframes chantCinemaSpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+@keyframes chantCinemaLineIn { from {opacity:0;transform:scale(.8);filter:blur(12px)} to {opacity:1;transform:none;filter:none} }
+@keyframes chantCinemaSeal { from {opacity:0;transform:scale(.1) rotate(-120deg)} to {opacity:1;transform:none} }
+@keyframes chantCompleteFlash { to {transform:translate(-50%,-50%) scale(1.25);filter:brightness(1.25)} }
+@keyframes chantCompleteCopy { from {opacity:0;transform:scale(1.4);filter:blur(12px)} to {opacity:1;transform:none;filter:none} }
+@media (max-width: 600px) {
+  .chant-cinematic-circles { width: 108vw; height: 108vw; }
+  .chant-cinematic-copy { padding: 18px; }
+  .chant-cinematic-line { line-height: 1.7; }
+}
