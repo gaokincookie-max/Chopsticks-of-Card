@@ -3799,3 +3799,90 @@ body.tutorial-split-only #cpuR {
   .chant-cinematic-copy { padding: 18px; }
   .chant-cinematic-line { line-height: 1.7; }
 }
+
+
+/* v119: 魔法少女テーマ正式実装・初回大型告知 */
+.major-update-card.magical-release-card {
+  border-color: rgba(255, 208, 235, .74);
+  background:
+    radial-gradient(circle at 24% 22%, rgba(255, 239, 212, .22), transparent 28%),
+    radial-gradient(circle at 78% 18%, rgba(255, 157, 217, .22), transparent 26%),
+    linear-gradient(115deg, #fff1dc 0%, #f7c6de 18%, #5a2959 54%, #170b21 100%);
+  box-shadow: 0 30px 110px rgba(26, 7, 37, .78), inset 0 0 60px rgba(255, 215, 238, .08);
+  color: #fff8fd;
+}
+.magical-release-card .major-update-kicker { color: rgba(255, 241, 226, .92); }
+.magical-release-card h2 {
+  text-shadow: 0 0 10px rgba(255, 244, 220, .82), 0 0 24px rgba(255, 146, 203, .58), 0 0 50px rgba(85, 42, 116, .55);
+}
+.magical-release-card .major-update-actions button:first-child {
+  background: linear-gradient(135deg, #ff83c7, #bd4d9b 55%, #8249b7);
+  border-color: rgba(255, 218, 241, .72);
+}
+.major-update-electric.magical-release-bg {
+  inset: -18%;
+  opacity: .86;
+  background:
+    radial-gradient(circle, rgba(255,255,255,.95) 0 1px, transparent 2px) 10% 18% / 52px 52px,
+    radial-gradient(circle, rgba(255,192,231,.8) 0 1px, transparent 2px) 72% 65% / 68px 68px;
+  filter: drop-shadow(0 0 10px rgba(255, 125, 205, .75));
+  animation: magicalReleaseDrift 8s linear infinite;
+}
+.major-update-electric.magical-release-bg::before,
+.major-update-electric.magical-release-bg::after,
+.major-update-electric.magical-release-bg i {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(74vw, 430px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 178, 224, .38);
+  box-shadow: 0 0 18px rgba(255, 103, 197, .28), inset 0 0 18px rgba(255, 170, 222, .16);
+}
+.major-update-electric.magical-release-bg::before {
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,.42) 0 1deg, transparent 1deg 29deg);
+  mask: radial-gradient(circle, transparent 0 57%, #000 58% 61%, transparent 62%);
+  animation: magicalReleaseSpin 16s linear infinite;
+}
+.major-update-electric.magical-release-bg::after {
+  width: min(55vw, 320px);
+  border-style: double;
+  border-width: 5px;
+  animation: magicalReleaseSpinReverse 11s linear infinite;
+}
+.major-update-electric.magical-release-bg i:nth-child(1) {
+  width: min(39vw, 230px);
+  border: 1px dashed rgba(255, 231, 247, .55);
+  animation: magicalReleaseSpin 8s linear infinite;
+}
+.major-update-electric.magical-release-bg i:nth-child(2) {
+  width: min(22vw, 130px);
+  border: 3px double rgba(255, 199, 233, .52);
+  animation: magicalReleasePulse 2.4s ease-in-out infinite;
+}
+.major-update-electric.magical-release-bg i:nth-child(3) {
+  width: 18px;
+  background: rgba(255,245,252,.92);
+  border: 0;
+  box-shadow: 0 0 16px #fff, 0 0 36px #ff75c2;
+  animation: magicalReleasePulse 1.5s ease-in-out infinite;
+}
+@keyframes magicalReleaseSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes magicalReleaseSpinReverse {
+  from { transform: translate(-50%, -50%) rotate(360deg); }
+  to { transform: translate(-50%, -50%) rotate(0deg); }
+}
+@keyframes magicalReleasePulse {
+  0%,100% { opacity: .45; transform: translate(-50%, -50%) scale(.94); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+}
+@keyframes magicalReleaseDrift {
+  from { transform: rotate(0deg) scale(1); }
+  to { transform: rotate(360deg) scale(1.04); }
+}

@@ -1904,10 +1904,29 @@ const CARD_LIBRARY = {
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
-    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v85";
-    const LATEST_NEWS_ID = "v97-dimensional-slash-self-sacrifice-fix";
+    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v120";
+    const LATEST_NEWS_ID = "v120-love-and-hatred-theme-release";
 
     const UPDATE_NEWS = [
+      {
+        id: "v120-love-and-hatred-theme-release",
+        version: "v120",
+        date: "2026-07-19",
+        title: "新テーマ「愛と憎しみの名の下に」",
+        summary: "光と影のはざまで感情を抱えたまま戦い、四つの心をそろえてカードそのものを変化させる魔法少女テーマを正式実装しました。",
+        featured: true,
+        tags: ["new", "system"],
+        items: [
+          "新テーマ「愛と憎しみの名の下に」を正式実装",
+          "虚無によって4種類の加護と9種類の感情変化カードが変身後の姿へ変化",
+          "憎悪・絶望・貪欲・憤怒を、愛・正義・幸福・勇気へ変える変身システムを追加",
+          "共有詠唱を3段階進めて解禁する終端技『アルカナ・スレイブ！！』を追加",
+          "詠唱・変身・アルカナ・スレイブに全画面専用演出を追加",
+          "すり減る希望、ヒステリー、犠牲の力などに専用カード選択UIを追加",
+          "狂乱、独善、悪党の印、涙で研ぎ澄まされた剣、ゴールドラッシュ、空虚など新しい攻撃・妨害戦術を追加",
+          "CPU戦とフレンド対戦の進捗・変身・演出・ランダム結果を同期"
+        ]
+      },
       {
         id: "v97-dimensional-slash-self-sacrifice-fix",
         version: "v97",
