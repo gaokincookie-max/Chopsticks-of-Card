@@ -1454,7 +1454,7 @@ const CARD_LIBRARY = {
       },
       magicalDespair: {
         name: "絶望", cost: 2, type: "加護 / 魔法少女",
-        text: "この手が攻撃を受けるとき本数-1（最低0）。攻撃後、自分のもう片方の手に1本加える。虚無で「正義」へ変化する。",
+        text: "この手が攻撃を受けるとき本数-1（最低1）。攻撃後、自分のもう片方の手に1本加える。虚無で「正義」へ変化する。",
         blessing: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1645,43 +1645,6 @@ const CARD_LIBRARY = {
         curse: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, otherPlayer(player))
       },
-      tearSharpenedSword: {
-        name: "涙で研ぎ澄まされた剣", cost: 2, type: "補助 / 魔法少女",
-        text: "次の攻撃時、対象変更後の攻撃対象に付いている加護をすべて捨ててから攻撃する。",
-        magicalCore: true,
-        canPlay: () => true,
-        effect: (player) => {
-          state.temp[player].tearSharpenedSwordAttack = true;
-          addLog(`${handNames[player]}は「涙で研ぎ澄まされた剣」を構えた。次の攻撃対象の加護をすべて捨てる。`);
-        }
-      },
-      goldRush: {
-        name: "ゴールドラッシュ", cost: 2, type: "補助 / 魔法少女",
-        text: "次の攻撃で与える基本本数を、攻撃時の自分の手札枚数にする。ほかの攻撃力増減はその後に適用する。",
-        magicalCore: true,
-        canPlay: () => true,
-        effect: (player) => {
-          state.temp[player].goldRushAttack = true;
-          addLog(`${handNames[player]}は「ゴールドラッシュ」を使用。次の攻撃の基本本数は攻撃時の手札枚数になる。`);
-        }
-      },
-      voidEqualization: {
-        name: "空虚", cost: 2, type: "終端 / 魔法少女",
-        text: "終端。相手の手札が自分より多い場合、自分と同じ枚数になるまで相手の手札をランダムに捨てさせる。自分の方が多い、または同数なら何も起こらない。",
-        terminal: true, magicalCore: true,
-        canPlay: () => true,
-        effect: (player) => {
-          const opponent = otherPlayer(player);
-          const difference = Math.max(0, state.hands[opponent].length - state.hands[player].length);
-          if (difference > 0) {
-            const discarded = discardRandomCards(opponent, difference, "「空虚」");
-            addLog(`${handNames[player]}の「空虚」により、${handNames[opponent]}は手札を${discarded}枚捨て、${state.hands[opponent].length}枚になった。`);
-          } else {
-            addLog(`${handNames[player]}は「空虚」を使用したが、相手の手札は自分より多くないため何も起こらなかった。`);
-          }
-          state.pendingTerminalEnd[player] = true;
-        }
-      },
       magicalVoid: {
         name: "虚無", cost: 2, type: "魔法少女",
         text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させる。",
@@ -1769,9 +1732,6 @@ const CARD_LIBRARY = {
       frenzy: 1,
       selfRighteousness: 1,
       villainMark: 1,
-      tearSharpenedSword: 1,
-      goldRush: 1,
-      voidEqualization: 1,
       guardBlessing: 1,
       growthBlessing: 1,
       recklessBlessing: 1,
@@ -6794,26 +6754,6 @@ function wrapFinger(value) {
       return duelSurgeStats(slot.level).defense;
     }
 
-    function discardAllBlessingsFromHand(owner, hand, sourceLabel = "効果") {
-      const slots = state.traps[owner][hand];
-      const removed = [];
-      for (let i = slots.length - 1; i >= 0; i--) {
-        const cardId = trapCardId(slots[i]);
-        if (!CARD_LIBRARY[cardId]?.blessing) continue;
-        const [slot] = slots.splice(i, 1);
-        const instanceId = trapInstanceId(slot);
-        if (instanceId) state.revealedTrapIds.delete(instanceId);
-        state.discard[owner].push(cardId);
-        removed.push(cardId);
-      }
-      if (removed.length > 0) {
-        addLog(`${sourceLabel}により、${handNames[owner]}の${handNames[hand]}に付いていた加護「${removed.map(id => CARD_LIBRARY[id]?.name || id).join("」「")}」をすべて捨てた。`);
-      } else {
-        addLog(`${sourceLabel}が攻撃対象を捉えたが、捨てる加護はなかった。`);
-      }
-      return removed.length;
-    }
-
     function hasAttachment(owner, hand, cardId) {
       return state.traps[owner][hand].some(slot => trapCardId(slot) === cardId);
     }
@@ -8631,14 +8571,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const rationalPowerActive = !!state.temp[attacker]?.rationalPowerAttack;
       const selfRighteousActive = !!state.temp[attacker]?.selfRighteousAttack;
       const justiceForEveryoneActive = !!state.temp[attacker]?.justiceForEveryoneAttack;
-      const tearSharpenedSwordActive = !!state.temp[attacker]?.tearSharpenedSwordAttack;
-      const goldRushActive = !!state.temp[attacker]?.goldRushAttack;
       state.temp[attacker].frenzyAttack = false;
       state.temp[attacker].rationalPowerAttack = false;
       state.temp[attacker].selfRighteousAttack = false;
       state.temp[attacker].justiceForEveryoneAttack = false;
-      state.temp[attacker].tearSharpenedSwordAttack = false;
-      state.temp[attacker].goldRushAttack = false;
 
       if (frenzyActive) {
         const originalOpponent = otherPlayer(attacker);
@@ -8658,8 +8594,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       state.animating = true;
       render();
 
-      const normalBasePower = state[attacker][attackHand];
-      const basePower = goldRushActive ? state.hands[attacker].length : normalBasePower;
+      const basePower = state[attacker][attackHand];
       const immutable = hasImmutableCurse(attacker, attackHand);
       const rawBonus = state.temp[attacker].attackBonus || 0;
       const positiveCardBonus = Math.max(0, rawBonus);
@@ -8687,7 +8622,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
@@ -8697,7 +8632,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
       if (willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、攻撃力+${willBladeBonus}。`);
       if (dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、攻撃力+${dimensionalSlashBonus}。`);
-      if (goldRushActive) addLog(`${handNames[attacker]}の「ゴールドラッシュ」により、攻撃の基本本数が手札枚数の${basePower}になった。`);
       if (frenzyBonus) addLog(`${handNames[attacker]}の「狂乱」により、攻撃力+2。`);
       if (rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、攻撃力+1。`);
       if (selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、攻撃力+2。`);
@@ -8722,9 +8656,8 @@ async function attack(attacker, attackHand, defender, targetHand) {
           power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
         }
         if (hasAttachment(defender,targetHand,"magicalDespair")) {
-          const beforeDespair = power;
-          power=Math.max(0,power-1);
-          addLog(`${handNames[defender]}の「絶望」により、受ける本数が${beforeDespair}→${power}になった。`);
+          power=Math.max(1,power-1);
+          addLog(`${handNames[defender]}の「絶望」により、受ける本数-1。`);
         }
         if (hasMagicalJustice(defender)) {
           power=Math.max(1,power-2);
@@ -8800,11 +8733,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
           }).catch(error => console.error("PVP redirected attack fx failed", error));
         }
         await animateAttackIntent(attacker, attackHand, defender, targetHand);
-      }
-
-      if (tearSharpenedSwordActive) {
-        discardAllBlessingsFromHand(defender, targetHand, "「涙で研ぎ澄まされた剣」");
-        render();
       }
 
       if (defender === otherPlayer(attacker) && hasAttachment(defender, targetHand, "villainMark")) {
