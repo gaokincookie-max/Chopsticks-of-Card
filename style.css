@@ -3886,3 +3886,22 @@ body.tutorial-split-only #cpuR {
   from { transform: rotate(0deg) scale(1); }
   to { transform: rotate(360deg) scale(1.04); }
 }
+
+/* v125: 山札切れ・疲労ポップアップ */
+.popup-card.fatigue {
+  border-color: rgba(126, 98, 146, .72);
+  background: linear-gradient(180deg, rgba(247,243,250,.99), rgba(218,207,226,.99));
+  box-shadow: 0 22px 70px rgba(35, 21, 47, .46);
+}
+.popup-user.fatigue {
+  color: #fff;
+  background: linear-gradient(90deg, #3f314b, #745b82);
+}
+.popup-card.fatigue .popup-name { color: #4c3858; }
+.fatigue-popup-main {
+  margin-bottom: 7px;
+  color: #6d3f78;
+  font-size: clamp(20px, 5vw, 29px);
+  font-weight: 1100;
+  letter-spacing: .08em;
+}

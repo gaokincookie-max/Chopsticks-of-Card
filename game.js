@@ -1879,9 +1879,25 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v124";
-    const LATEST_NEWS_ID = "v124-online-hand-final-hit-sync";
+    const LATEST_NEWS_ID = "v125-fatigue-rule-rework";
 
     const UPDATE_NEWS = [
+      {
+        id: "v125-fatigue-rule-rework",
+        version: "v125",
+        date: "2026-07-20",
+        title: "山札切れ時の「疲労」を改正",
+        summary: "山札が0枚の状態でカードを引こうとするたび、手札または手の本数を失う明確な疲労ルールへ変更しました。",
+        featured: false,
+        tags: ["balance", "system"],
+        items: [
+          "山札0枚でドローを試みるたびに疲労を1回適用",
+          "手札がある場合はランダムに1枚捨てる",
+          "手札がない場合は生存している手をランダムに1本減らす",
+          "複数ドローではドロー回数分だけ疲労を繰り返す",
+          "疲労発生時の専用ポップアップとオンライン同期を追加"
+        ]
+      },
       {
         id: "v124-online-hand-final-hit-sync",
         version: "v124",
@@ -3213,6 +3229,16 @@ const CARD_LIBRARY = {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         if (player && payload.hand) {
           await showRoulettePopup(player, payload.hand, Number(payload.result) || 0);
+        }
+        return;
+      }
+      if (fx.type === "fatigue") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) {
+          const text = payload.kind === "discard"
+            ? `<div class="fatigue-popup-main">山札切れ</div><div>手札から「${escapeHtml(payload.cardName || "カード")}」をランダムに捨てました。</div>`
+            : `<div class="fatigue-popup-main">山札切れ</div><div>${handNames[payload.hand] || "手"}が ${Number(payload.before) || 0} → ${Number(payload.after) || 0}</div>`;
+          await showPopup(player, "疲労", text, "fatigue", 720, true);
         }
         return;
       }
@@ -6224,6 +6250,30 @@ function wrapFinger(value) {
       }
     }
 
+    let fatigueFxQueue = Promise.resolve();
+
+    function queueFatiguePopup(player, detail) {
+      const title = "疲労";
+      const text = detail.kind === "discard"
+        ? `<div class="fatigue-popup-main">山札切れ</div><div>手札から「${escapeHtml(detail.cardName)}」をランダムに捨てました。</div>`
+        : `<div class="fatigue-popup-main">山札切れ</div><div>${handNames[detail.hand]}が ${detail.before} → ${detail.after}</div>`;
+
+      fatigueFxQueue = fatigueFxQueue
+        .catch(() => {})
+        .then(async () => {
+          await showPopup(player, title, text, "fatigue", 720, true);
+          if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
+            await emitFriendFx("fatigue", {
+              playerSide: friendSideForLocalPlayer(player),
+              ...detail
+            });
+            state.friendLastPublishedSignature = "";
+            await publishFriendStateNow();
+          }
+        })
+        .catch(error => console.error("疲労演出・同期エラー", error));
+    }
+
     function drawCard(player) {
       if (state.decks[player].length > 0) {
         const cardId = state.decks[player].pop();
@@ -6237,21 +6287,31 @@ function wrapFinger(value) {
 
     function fatigue(player) {
       if (state.hands[player].length > 0) {
-        const discarded = state.hands[player].shift();
+        const index = Math.floor(Math.random() * state.hands[player].length);
+        const [discarded] = state.hands[player].splice(index, 1);
         state.discard[player].push(discarded);
-        addLog(`${handNames[player]}は山札切れ。代わりに手札から「${CARD_LIBRARY[discarded].name}」を捨てた。`);
-      } else {
-        const candidates = ["L", "R"].filter(h => isAlive(player, h) && !hasAnyMagicalTransformed(player,h));
-        if (!candidates.length && ["L","R"].some(h => isAlive(player,h))) {
-          addLog(`${handNames[player]}の変身後加護により、疲弊による本数変化を受けなかった。`);
-          return;
-        }
-        const target = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : "L";
-        const before = state[player][target];
-        state[player][target] = normalize(before + 1, player, target);
-        addLog(`${handNames[player]}は山札切れで手札もない。${handNames[target]}が${before}→${state[player][target]}。`);
-        clearBrokenTraps(player);
+        const cardName = CARD_LIBRARY[discarded]?.name || discarded;
+        addLog(`${handNames[player]}は疲労を受け、手札から「${cardName}」をランダムに捨てた。`);
+        queueFatiguePopup(player, { kind: "discard", cardId: discarded, cardName });
+        render();
+        return;
       }
+
+      const candidates = ["L", "R"].filter(hand => isAlive(player, hand));
+      if (!candidates.length) {
+        checkWin();
+        return;
+      }
+
+      const target = candidates[Math.floor(Math.random() * candidates.length)];
+      const before = state[player][target];
+      const after = Math.max(0, before - 1);
+      state[player][target] = after;
+      addLog(`${handNames[player]}は疲労を受け、${handNames[target]}が${before}→${after}になった。`);
+      clearBrokenTraps(player);
+      queueFatiguePopup(player, { kind: "hand", hand: target, before, after });
+      render();
+      checkWin();
     }
 
     async function startTurn(player) {
@@ -8224,10 +8284,12 @@ function renderLastAction() {
           <div class="help-note">
             補助カード使用と罠設置は合わせて1ターン1回です。強打を使ったターンに罠を伏せることはできません。ただし「仕込み」中は罠カードだけ好きなだけ伏せられます。
           </div>
-          <h3>山札切れ</h3>
+          <h3>山札切れと疲労</h3>
           <ul>
-            <li>山札がない状態で引く場合、代わりに手札を1枚捨てます。</li>
-            <li>手札もない場合、自分の生きている手が1本増えます。</li>
+            <li>山札が0枚の状態でカードを引こうとするたび、「疲労」を1回受けます。</li>
+            <li>手札がある場合、手札をランダムに1枚捨てます。</li>
+            <li>手札がない場合、自分の0ではない手をランダムに1つ選び、その本数を1減らします。</li>
+            <li>複数枚引く効果では、引こうとした枚数だけ疲労を繰り返します。</li>
           </ul>
         `;
         return;
