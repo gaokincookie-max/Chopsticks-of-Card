@@ -1713,6 +1713,20 @@ const CARD_LIBRARY = {
         }
       },
 
+      appeal: {
+        name: "控訴", cost: 2, type: "割り込み / 天秤",
+        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の手札へ戻す。相手はこのターン同名カードを使用できない。その後、他の「控訴」はすべて「上告」に変化する。",
+        canPlay: () => false,
+        effect: () => {}
+      },
+      supremeAppeal: {
+        name: "上告", cost: 3, type: "割り込み / 天秤・変化",
+        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の山札へ戻してシャッフルする。相手に「執行」を1枚与え、その後、自分の残りの「上告」をすべて捨てる。",
+        token: true,
+        canPlay: () => false,
+        effect: () => {}
+      },
+
       balanceBlade: {
         name: "均衡の刃", cost: 2, type: "補助 / 天秤",
         text: "次の攻撃時、自分の両手の本数が等しいなら、与える本数+2。",
@@ -3148,7 +3162,7 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // match 全体を古いキャッシュで上書きしない。更新するフィールドだけを原子的に書く。
       await fb.updateDoc(roomRef, {
-        "match.version": 50,
+        "match.version": 51,
         "match.stateRevision": nextRevision,
         "match.state": snapshot,
         "match.result": state.matchResult ?? null,
@@ -3216,7 +3230,7 @@ const CARD_LIBRARY = {
       };
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       await fb.updateDoc(roomRef, {
-        "match.version": 50,
+        "match.version": 51,
         "match.fx": fx,
         updatedAt: fb.serverTimestamp()
       });
@@ -3369,7 +3383,7 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // 割り込みだけを書き換え、盤面 state / revision を古い値で巻き戻さない。
       await fb.updateDoc(roomRef, {
-        "match.version": 50,
+        "match.version": 51,
         "match.interrupt": interrupt,
         updatedAt: fb.serverTimestamp()
       });
@@ -3455,6 +3469,10 @@ const CARD_LIBRARY = {
         } else if (interrupt.type === "magicMirror") {
           const use = await askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId);
           response = { use: !!use };
+        } else if (interrupt.type === "terminalAppeal") {
+          const terminalCard = CARD_LIBRARY[payload.cardId] || { name: payload.cardName || "終端カード" };
+          const cardId = await askHumanTerminalAppeal("human", terminalCard);
+          response = { cardId: cardId || null };
         }
         await respondFriendInterrupt(interrupt, response || {});
       } catch (error) {
@@ -8719,6 +8737,10 @@ function renderLastAction() {
       if ((state.judgmentPrisonTurns?.human || 0) > 0) { setMessage("「懲役」により、このターンはカードを使用できません。"); return; }
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
+      if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) {
+        if (player === "human") setMessage(`「${card?.name || "このカード"}」は控訴により、このターン再使用できません。`);
+        return false;
+      }
 
       if (isTutorialBattle() && tutorial.expected !== `card:${cardId}`) {
         setMessage("今は黄色く光っているカードだけを使ってください。");
@@ -8848,6 +8870,116 @@ function renderLastAction() {
       return true;
     }
 
+    function terminalAppealChoices(player) {
+      const choices = [];
+      for (const id of ["supremeAppeal", "appeal"]) {
+        const index = state.hands[player].indexOf(id);
+        if (index >= 0) choices.push({ cardId: id, index });
+      }
+      return choices;
+    }
+
+    function transformRemainingAppeals(player) {
+      const transform = zone => {
+        for (let i = 0; i < zone.length; i++) if (zone[i] === "appeal") zone[i] = "supremeAppeal";
+      };
+      transform(state.hands[player]);
+      transform(state.decks[player]);
+      transform(state.discard[player]);
+    }
+
+    function discardAllRemainingSupremeAppeals(player) {
+      let count = 0;
+      for (const zoneName of ["hands", "decks"]) {
+        const zone = state[zoneName][player];
+        for (let i = zone.length - 1; i >= 0; i--) {
+          if (zone[i] !== "supremeAppeal") continue;
+          zone.splice(i, 1);
+          state.discard[player].push("supremeAppeal");
+          count += 1;
+        }
+      }
+      return count;
+    }
+
+    async function askHumanTerminalAppeal(defender, terminalCard) {
+      const choices = terminalAppealChoices(defender);
+      if (!choices.length) return null;
+      return await new Promise(resolve => {
+        elements.trapChoiceList.innerHTML = "";
+        elements.trapChoiceText.textContent = `相手が終端カード「${terminalCard.name}」を使用しました。割り込みますか？`;
+        const cleanup = () => {
+          elements.trapChoice.classList.remove("show");
+          elements.trapSkipBtn.onclick = null;
+        };
+        for (const choice of choices) {
+          const card = CARD_LIBRARY[choice.cardId];
+          const div = document.createElement("div");
+          div.className = "trap-choice-card";
+          div.innerHTML = `<div class="card-title"><span>「${escapeHtml(card.name)}」</span><span class="card-type">割り込み</span></div><div class="card-cost">${escapeHtml(card.type)}</div><div class="card-text">${escapeHtml(card.text)}</div>`;
+          div.addEventListener("click", () => { cleanup(); resolve(choice.cardId); });
+          elements.trapChoiceList.appendChild(div);
+        }
+        elements.trapSkipBtn.onclick = () => { cleanup(); resolve(null); };
+        elements.trapChoice.classList.add("show");
+      });
+    }
+
+    async function chooseTerminalAppeal(defender, attacker, cardId, card) {
+      const choices = terminalAppealChoices(defender);
+      if (!choices.length) return null;
+      if (defender === "human") return await askHumanTerminalAppeal(defender, card);
+      if (state.battleMode === "friend") {
+        const response = await requestRemoteFriendDecision("terminalAppeal", { cardId, cardName: card.name });
+        return choices.some(choice => choice.cardId === response?.cardId) ? response.cardId : null;
+      }
+      // CPUは強力な終端を基本的に止める。上告を優先する。
+      return choices[0]?.cardId || null;
+    }
+
+    async function maybeResolveTerminalAppeal(attacker, rawCardId, cardId, card) {
+      if (!card?.terminal || cardId === "appeal" || cardId === "supremeAppeal") return false;
+      const defender = otherPlayer(attacker);
+      const reactionId = await chooseTerminalAppeal(defender, attacker, cardId, card);
+      if (!reactionId) return false;
+      const reactionIndex = state.hands[defender].indexOf(reactionId);
+      if (reactionIndex < 0) return false;
+
+      // 使用された終端カードは、この時点では攻撃側の捨て札にある。
+      const originalIndex = state.discard[attacker].lastIndexOf(rawCardId);
+      if (originalIndex < 0) return false;
+      state.discard[attacker].splice(originalIndex, 1);
+      state.hands[defender].splice(reactionIndex, 1);
+
+      if (reactionId === "appeal") {
+        // 使用した控訴以外を上告へ変えるため、先に変化させてから使用済み控訴を捨てる。
+        transformRemainingAppeals(defender);
+        state.discard[defender].push("appeal");
+        state.hands[attacker].push(rawCardId);
+        if (!Array.isArray(state.temp[attacker].terminalCardBanIds)) state.temp[attacker].terminalCardBanIds = [];
+        if (!state.temp[attacker].terminalCardBanIds.includes(cardId)) state.temp[attacker].terminalCardBanIds.push(cardId);
+        addLog(`${handNames[defender]}は「控訴」を発動。「${card.name}」の効果と終端を無効にし、${handNames[attacker]}の手札へ戻した。`);
+        await showCardPopup(defender, CARD_LIBRARY.appeal, false, 850);
+      } else {
+        state.decks[attacker].push(rawCardId);
+        shuffle(state.decks[attacker]);
+        state.hands[attacker].push("execution");
+        const purged = discardAllRemainingSupremeAppeals(defender);
+        state.discard[defender].push("supremeAppeal");
+        addLog(`${handNames[defender]}は「上告」を発動。「${card.name}」を${handNames[attacker]}の山札へ戻し、「執行」を1枚与えた。残りの上告${purged}枚を捨てた。`);
+        await showCardPopup(defender, CARD_LIBRARY.supremeAppeal, false, 900);
+      }
+
+      setLastAction(defender, `「${CARD_LIBRARY[reactionId].name}」`, `「${card.name}」を無効化しました。`, "card");
+      state.pendingTerminalEnd[attacker] = false;
+      render();
+      if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
+        state.friendLastPublishedSignature = "";
+        await publishFriendStateNow().catch(error => scheduleFriendStatePublish());
+      }
+      return true;
+    }
+
     async function playCard(player, handIndex, showPopup = true) {
       if (state.gameOver || state.turn !== player) return false;
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
@@ -8914,6 +9046,18 @@ function renderLastAction() {
         emitFriendFx("card", { playerSide: friendSideForLocalPlayer(player), cardId }).catch(error => console.error("PVP card fx failed", error));
       }
       if (showPopup && cardId !== "finale") await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
+
+      if (card.terminal && await maybeResolveTerminalAppeal(player, rawCardId, cardId, card)) {
+        if (state.battleMode === "friend") {
+          state.friendCardResolving = false;
+          state.friendLastPublishedSignature = "";
+          await publishFriendStateNow().catch(() => scheduleFriendStatePublish());
+        }
+        if (player === "human") setMessage(`「${card.name}」は無効化されました。通常のカード使用権は消費されています。`);
+        else setMessage(`CPUの「${card.name}」は無効化されました。`);
+        render();
+        return true;
+      }
 
       await card.effect(player);
       triggerChemicalGeneration(player, cardId);
@@ -9879,7 +10023,7 @@ async function endTurn() {
         state.friendLastPublishedSignature = JSON.stringify(snapshot);
         const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
         await fb.updateDoc(roomRef, {
-          "match.version": 50,
+          "match.version": 51,
           "match.stateRevision": nextRevision,
           "match.state": snapshot,
           "match.result": result,
