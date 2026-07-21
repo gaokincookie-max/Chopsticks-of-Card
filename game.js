@@ -1075,6 +1075,7 @@ const CARD_LIBRARY = {
           if (player === "human") {
             state.mode = "andante";
             state.pendingAndanteHand = null;
+      state.pendingBalanceTarget = null;
       state.pendingDirectiveDraw = { human: 0, cpu: 0 };
       state.pendingDirectiveNoDraw = { human: 0, cpu: 0 };
       state.pendingDirectiveBonusDraw = { human: 0, cpu: 0 };
@@ -1711,6 +1712,91 @@ const CARD_LIBRARY = {
           return await activateMagicalVoid(player);
         }
       },
+
+      balanceBlade: {
+        name: "均衡の刃", cost: 2, type: "補助 / 天秤",
+        text: "次の攻撃時、自分の両手の本数が等しいなら、与える本数+2。",
+        canPlay: () => true,
+        effect: (player) => { state.temp[player].balanceBladeAttack = true; addLog(`${handNames[player]}は「均衡の刃」を構えた。次の攻撃時に均衡なら攻撃力+2。`); }
+      },
+      tuning: {
+        name: "調律", cost: 2, type: "補助 / 天秤",
+        text: "自分の0ではない手を1つ選び、もう片方の手と同じ本数にする。0の手がある場合は使用できない。",
+        canPlay: (player) => state[player].L > 0 && state[player].R > 0,
+        effect: (player) => beginTuning(player)
+      },
+      scalesBlessing: {
+        name: "天秤の加護", cost: 2, type: "加護 / 天秤",
+        text: "両手の本数が等しいなら、この手が受ける攻撃-2（最低0）。等しくないなら受ける攻撃+1。同じ手では重複しない。",
+        blessing: true,
+        canPlay: (player) => canPlaceAttachment(player, player)
+      },
+      equalCondemnation: {
+        name: "等価なる断罪", cost: 3, type: "終端 / 天秤",
+        text: "終端。自分の両手の本数が等しいなら、その本数を相手の0ではない両手に与える。ただし相手の両手の本数が等しいなら無効。",
+        terminal: true,
+        canPlay: (player) => isBalanced(player),
+        effect: async (player) => { await resolveEqualCondemnation(player); }
+      },
+      fairWorld: {
+        name: "公平な世界", cost: 3, type: "終端 / 天秤",
+        text: "終端。自分の0ではない手を1つ選ぶ。すべての0ではない手の本数を、選んだ手と同じにする。",
+        terminal: true,
+        canPlay: (player) => state[player].L > 0 || state[player].R > 0,
+        effect: async (player) => { await beginFairWorld(player); }
+      },
+      balanceBenefit: {
+        name: "均衡の恩恵", cost: 2, type: "補助 / 天秤",
+        text: "自分の両手の本数が等しいなら自分は2枚引く。相手の両手の本数が等しいなら相手は2枚引く。それぞれ個別に判定する。",
+        canPlay: (player) => isBalanced(player) || isBalanced(otherPlayer(player)),
+        effect: (player) => { if(isBalanced(player)){drawCard(player);drawCard(player);} const o=otherPlayer(player); if(isBalanced(o)){drawCard(o);drawCard(o);} addLog(`${handNames[player]}は「均衡の恩恵」を使用した。`); }
+      },
+      unfairWorld: {
+        name: "不公平な世界", cost: 3, type: "終端 / 天秤",
+        text: "終端。すべての0ではない手について、それぞれ1～4をランダムに決め、その本数にする。",
+        terminal: true, canPlay: () => true,
+        effect: async (player) => { await resolveUnfairWorld(player); }
+      },
+      divinePunishment: {
+        name: "天罰", cost: 3, type: "終端 / 天秤",
+        text: "終端。すべての0ではない手からランダムに1つ選び、1本加える。これを4回繰り返す。各回ごとに対象を選び直す。",
+        terminal: true, canPlay: () => true,
+        effect: async (player) => { await resolveDivinePunishment(player); }
+      },
+      tiltedScales: {
+        name: "傾いた天秤", cost: 2, type: "補助 / 天秤",
+        text: "自分と相手の両手の合計本数を比べる。合計が少ないプレイヤーは手札をランダムに2枚捨てる。同じなら何も起こらない。",
+        canPlay: () => true,
+        effect: (player) => { const o=otherPlayer(player), a=state[player].L+state[player].R, b=state[o].L+state[o].R; if(a<b) discardRandomCards(player,2,'「傾いた天秤」'); else if(b<a) discardRandomCards(o,2,'「傾いた天秤」'); addLog(`${handNames[player]}は「傾いた天秤」を使用。合計${a}対${b}。`); }
+      },
+      finalJudgmentConfiscation: {
+        name: "最終判決：没収", cost: 3, type: "終端 / 天秤・最終判決",
+        text: "終端。自分の2度目のターン以降のみ使用可能。すべての0ではない手の本数が等しいなら、相手の手札をすべて捨てる。",
+        terminal: true,
+        canPlay: (player) => canUseFinalJudgment(player),
+        effect: (player) => { const o=otherPlayer(player); discardRandomCards(o,state.hands[o].length,'「最終判決：没収」'); state.pendingTerminalEnd[player]=true; }
+      },
+      finalJudgmentDeath: {
+        name: "最終判決：死刑", cost: 3, type: "終端 / 天秤・最終判決",
+        text: "終端。自分の2度目のターン以降のみ使用可能。すべての0ではない手の本数が等しいなら、「執行」を2枚得る。",
+        terminal: true,
+        canPlay: (player) => canUseFinalJudgment(player),
+        effect: (player) => { state.hands[player].push('execution','execution'); addLog(`${handNames[player]}は「執行」を2枚得た。`); state.pendingTerminalEnd[player]=true; }
+      },
+      finalJudgmentPrison: {
+        name: "最終判決：懲役", cost: 3, type: "終端 / 天秤・最終判決",
+        text: "終端。自分の2度目のターン以降のみ使用可能。すべての0ではない手の本数が等しいなら、相手は次の3回のターン、カードを使用できない。",
+        terminal: true,
+        canPlay: (player) => canUseFinalJudgment(player),
+        effect: (player) => { const o=otherPlayer(player); state.judgmentPrisonTurns[o]=Math.max(3,Number(state.judgmentPrisonTurns[o]||0)); addLog(`${handNames[o]}は「懲役」により次の3回のターン、カードを使用できない。`); state.pendingTerminalEnd[player]=true; }
+      },
+      execution: {
+        name: "執行", cost: 0, type: "終端 / 生成カード・天秤",
+        text: "終端。相手の0ではない手のうち、本数が多い方を0にする。同じ本数なら対象を選ぶ。",
+        terminal: true, token: true,
+        canPlay: (player) => state[otherPlayer(player)].L>0 || state[otherPlayer(player)].R>0,
+        effect: async (player) => { await beginExecution(player); }
+      },
       slowCurse: {
         name: "鈍重の呪縛",
         cost: 2,
@@ -1812,6 +1898,8 @@ const CARD_LIBRARY = {
       pendingTerminalEnd: { human: false, cpu: false },
       pendingIntemperanceCardLock: { human: false, cpu: false },
       activeIntemperanceCardLock: { human: false, cpu: false },
+      judgmentPrisonTurns: { human: 0, cpu: 0 },
+      personalTurnCount: { human: 0, cpu: 0 },
       magicalChantProgress: { human: 0, cpu: 0 },
       magicalChantCompleted: { human: false, cpu: false },
       costLimitNextTurn: { human: null, cpu: null },
@@ -1821,6 +1909,7 @@ const CARD_LIBRARY = {
       pendingRapidFireDiscard: null,
       pendingSwapFirst: null,
       pendingAndanteHand: null,
+      pendingBalanceTarget: null,
       pendingDirectiveDraw: { human: 0, cpu: 0 },
       pendingDirectiveNoDraw: { human: 0, cpu: 0 },
       pendingDirectiveBonusDraw: { human: 0, cpu: 0 },
@@ -2846,6 +2935,8 @@ const CARD_LIBRARY = {
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
       if (!state.pendingIntemperanceCardLock || typeof state.pendingIntemperanceCardLock !== "object") state.pendingIntemperanceCardLock = { human: false, cpu: false };
       if (!state.activeIntemperanceCardLock || typeof state.activeIntemperanceCardLock !== "object") state.activeIntemperanceCardLock = { human: false, cpu: false };
+      if (!state.judgmentPrisonTurns || typeof state.judgmentPrisonTurns !== "object") state.judgmentPrisonTurns = { human: 0, cpu: 0 };
+      if (!state.personalTurnCount || typeof state.personalTurnCount !== "object") state.personalTurnCount = { human: 0, cpu: 0 };
       if (!state.pendingMagicalHeartDraw || typeof state.pendingMagicalHeartDraw !== "object") state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       if (!state.magicalChantProgress || typeof state.magicalChantProgress !== "object") state.magicalChantProgress = { human: 0, cpu: 0 };
       if (!state.magicalChantCompleted || typeof state.magicalChantCompleted !== "object") state.magicalChantCompleted = { human: false, cpu: false };
@@ -2887,6 +2978,8 @@ const CARD_LIBRARY = {
         pendingTerminalEnd: !!state.pendingTerminalEnd[player],
         pendingIntemperanceCardLock: !!state.pendingIntemperanceCardLock[player],
         activeIntemperanceCardLock: !!state.activeIntemperanceCardLock[player],
+        judgmentPrisonTurns: Number(state.judgmentPrisonTurns?.[player] || 0),
+        personalTurnCount: Number(state.personalTurnCount?.[player] || 0),
         pendingMagicalHeartDraw: Number(state.pendingMagicalHeartDraw?.[player] || 0),
         magicalChantProgress: Number(state.magicalChantProgress?.[player] || 0),
         magicalChantCompleted: !!state.magicalChantCompleted?.[player],
@@ -2960,6 +3053,8 @@ const CARD_LIBRARY = {
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingIntemperanceCardLock[player] = !!side.pendingIntemperanceCardLock;
       state.activeIntemperanceCardLock[player] = !!side.activeIntemperanceCardLock;
+      state.judgmentPrisonTurns[player] = Number(side.judgmentPrisonTurns || 0);
+      state.personalTurnCount[player] = Number(side.personalTurnCount || 0);
       state.pendingMagicalHeartDraw[player] = Number(side.pendingMagicalHeartDraw || 0);
       state.magicalChantProgress[player] = Math.max(0, Math.min(3, Number(side.magicalChantProgress || 0)));
       state.magicalChantCompleted[player] = !!side.magicalChantCompleted;
@@ -3862,6 +3957,8 @@ const CARD_LIBRARY = {
       // 新しいオンライン試合では、前試合の魔法少女系・ターン予約状態を必ず破棄する。
       state.pendingIntemperanceCardLock = { human: false, cpu: false };
       state.activeIntemperanceCardLock = { human: false, cpu: false };
+      state.judgmentPrisonTurns = { human: 0, cpu: 0 };
+      state.personalTurnCount = { human: 0, cpu: 0 };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
@@ -5916,6 +6013,54 @@ function wrapFinger(value) {
       );
     }
 
+
+    function isBalanced(player) {
+      return state[player].L > 0 && state[player].R > 0 && state[player].L === state[player].R;
+    }
+    function allLivingHandsEqual() {
+      const values=[];
+      for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0) values.push(state[p][h]);
+      return values.length>0 && values.every(v=>v===values[0]);
+    }
+    function canUseFinalJudgment(player) {
+      return Number(state.personalTurnCount?.[player]||0) >= 2 && allLivingHandsEqual();
+    }
+    function beginTuning(player) {
+      if(player==="human") { state.mode="tuningTarget"; setMessage("「調律」：もう片方と同じ本数にする自分の手を選んでください。"); return; }
+      const h=state.cpu.L<state.cpu.R?"L":"R"; state.cpu[h]=state.cpu[otherHand(h)]; clearBrokenTraps("cpu"); addLog(`CPUは「調律」で${handNames[h]}を${state.cpu[h]}にそろえた。`);
+    }
+    async function beginFairWorld(player) {
+      if(player==="human") { state.mode="fairWorldTarget"; setMessage("「公平な世界」：基準にする自分の0ではない手を選んでください。"); return; }
+      const h=state.cpu.L>=state.cpu.R?"L":"R"; await resolveFairWorld("cpu",h);
+    }
+    async function resolveFairWorld(player, hand) {
+      const value=state[player][hand]; if(value<=0) return false;
+      for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0) state[p][h]=value;
+      state.mode="attack"; state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「公平な世界」により、すべての生存している手が${value}になった。`); clearBrokenTraps("human"); clearBrokenTraps("cpu"); render(); if(player==="human") await forcePublishFriendStateNow("fair world"); return true;
+    }
+    async function resolveEqualCondemnation(player) {
+      const o=otherPlayer(player); if(isBalanced(o)){addLog(`「等価なる断罪」は相手も均衡しているため無効。`); state.pendingTerminalEnd[player]=true; return;}
+      const amount=state[player].L;
+      for(const h of ["L","R"]) if(state[o][h]>0){ await addFingersWithCalculation(o,h,amount,"等価なる断罪",true); if(checkWin()) break; }
+      state.pendingTerminalEnd[player]=true;
+    }
+    async function resolveUnfairWorld(player) {
+      for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0) state[p][h]=1+Math.floor(Math.random()*4);
+      addLog(`${handNames[player]}の「不公平な世界」により、すべての生存している手が個別に振り直された。`); state.pendingTerminalEnd[player]=true; render(); if(player==="human") await forcePublishFriendStateNow("unfair world");
+    }
+    async function resolveDivinePunishment(player) {
+      for(let i=0;i<4;i++){
+        const candidates=[]; for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0)candidates.push({p,h});
+        if(!candidates.length||checkWin()) break; const x=candidates[Math.floor(Math.random()*candidates.length)]; await addFingersWithCalculation(x.p,x.h,1,"天罰",true); if(checkWin()) break;
+      }
+      state.pendingTerminalEnd[player]=true;
+    }
+    async function beginExecution(player) {
+      const o=otherPlayer(player), l=state[o].L, r=state[o].R;
+      if(l>0&&r>0&&l===r&&player==="human"){state.mode="executionTarget";setMessage("「執行」：0にする相手の手を選んでください。");return;}
+      let h=l>=r?"L":"R"; if(state[o][h]<=0)h=otherHand(h); state[o][h]=0; clearBrokenTraps(o); state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「執行」により${handNames[o]}の${handNames[h]}が0になった。`); render(); if(player==="human")await forcePublishFriendStateNow("execution"); checkWin();
+    }
+
     function beginChargeTargetEffect(player, cardId) {
       state.pendingChargeTarget = { player, cardId };
       if (player === "human") {
@@ -6334,6 +6479,7 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
+      state.personalTurnCount[player] = Number(state.personalTurnCount[player] || 0) + 1;
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.turn = player;
       state.mode = "attack";
@@ -6486,6 +6632,13 @@ function wrapFinger(value) {
       for (let i = 0; i < draws; i++) drawCard(player);
 
       await resolveAdvanceNotice(player);
+
+      if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
+        addLog(`${handNames[player]}は「懲役」により、このターンはカードを使用できない。残り${state.judgmentPrisonTurns[player]}回。`);
+        setMessage(`${handNames[player]}は「懲役」により、このターンはカードを使用できません。`);
+        render();
+        await showPopup(player,"懲役",`<div class="intemperance-lock-main">このターン、カード使用不可</div><div>残り${state.judgmentPrisonTurns[player]}回</div>`,"intemperance-lock",1200,true);
+      }
 
       if (state.activeIntemperanceCardLock[player]) {
         addLog(`${handNames[player]}は「無節制」の代償により、このターンはカードを使用できない。`);
@@ -8563,6 +8716,7 @@ function renderLastAction() {
     }
 
     function selectTrapCard(index) {
+      if ((state.judgmentPrisonTurns?.human || 0) > 0) { setMessage("「懲役」により、このターンはカードを使用できません。"); return; }
       const cardId = state.hands.human[index];
       const card = CARD_LIBRARY[cardId];
 
@@ -8696,6 +8850,10 @@ function renderLastAction() {
 
     async function playCard(player, handIndex, showPopup = true) {
       if (state.gameOver || state.turn !== player) return false;
+      if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
+        if(player==="human") setMessage("「懲役」により、このターンはカードを使用できません。");
+        return false;
+      }
       if (state.activeIntemperanceCardLock?.[player]) {
         if (player === "human") {
           setMessage("「無節制」の代償により、このターンはカードを使用できません。");
@@ -9115,12 +9273,14 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const justiceForEveryoneActive = !!state.temp[attacker]?.justiceForEveryoneAttack;
       const tearSharpenedSwordActive = !!state.temp[attacker]?.tearSharpenedSwordAttack;
       const goldRushActive = !!state.temp[attacker]?.goldRushAttack;
+      const balanceBladeActive = !!state.temp[attacker]?.balanceBladeAttack;
       state.temp[attacker].frenzyAttack = false;
       state.temp[attacker].rationalPowerAttack = false;
       state.temp[attacker].selfRighteousAttack = false;
       state.temp[attacker].justiceForEveryoneAttack = false;
       state.temp[attacker].tearSharpenedSwordAttack = false;
       state.temp[attacker].goldRushAttack = false;
+      state.temp[attacker].balanceBladeAttack = false;
 
       if (frenzyActive) {
         const originalOpponent = otherPlayer(attacker);
@@ -9166,10 +9326,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const selfRighteousBonus = immutable || !selfRighteousActive ? 0 : 2;
       const justiceForEveryoneBonus = immutable || !justiceForEveryoneActive ? 0 : 1;
       const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
+      const balanceBladeBonus = immutable || !balanceBladeActive || !isBalanced(attacker) ? 0 : 2;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + cursePenalty + resonanceBonus);
+      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
       if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
         addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
@@ -9183,6 +9344,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (frenzyBonus) addLog(`${handNames[attacker]}の「狂乱」により、攻撃力+2。`);
       if (rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、攻撃力+1。`);
       if (selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、攻撃力+2。`);
+      if (balanceBladeBonus) addLog(`${handNames[attacker]}の「均衡の刃」により、攻撃力+2。`);
       if (justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、攻撃力+1。`);
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
@@ -9202,6 +9364,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
             addLog(`${handNames[defender]}の「色褪せた信条」により、受ける本数-1。`);
           }
           power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
+        }
+        if (hasAttachment(defender,targetHand,"scalesBlessing")) {
+          const beforeScale=power;
+          power = isBalanced(defender) ? Math.max(0,power-2) : power+1;
+          addLog(`${handNames[defender]}の「天秤の加護」により、受ける本数が${beforeScale}→${power}。`);
         }
         if (hasAttachment(defender,targetHand,"magicalDespair")) {
           const beforeDespair = power;
@@ -9628,6 +9795,7 @@ async function endTurn() {
       if (state.berserkerTurns[state.turn] > 0) state.berserkerTurns[state.turn] -= 1;
       state.activeCostLimit[state.turn] = null;
       state.activeIntemperanceCardLock[state.turn] = false;
+      if ((state.judgmentPrisonTurns?.[state.turn] || 0) > 0) state.judgmentPrisonTurns[state.turn] -= 1;
       state.noSplit[state.turn] = false;
       const next = state.turn === "human" ? "cpu" : "human";
 
@@ -10610,6 +10778,17 @@ async function endTurn() {
         return;
       }
 
+      if (state.mode === "tuningTarget") {
+        if(owner!=="human"||state.human[hand]<=0){setMessage("自分の0ではない手を選んでください。");return;}
+        const other=otherHand(hand), before=state.human[hand]; state.human[hand]=state.human[other]; clearBrokenTraps("human"); state.mode="attack"; addLog(`あなたは「調律」で${handNames[hand]}を${before}→${state.human[hand]}にした。`); render(); await forcePublishFriendStateNow("tuning"); return;
+      }
+      if (state.mode === "fairWorldTarget") {
+        if(owner!=="human"||state.human[hand]<=0){setMessage("自分の0ではない手を選んでください。");return;} await resolveFairWorld("human",hand); if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();} return;
+      }
+      if (state.mode === "executionTarget") {
+        if(owner!=="cpu"||state.cpu[hand]<=0){setMessage("相手の0ではない手を選んでください。");return;} state.cpu[hand]=0; clearBrokenTraps("cpu"); state.mode="attack"; state.pendingTerminalEnd.human=true; addLog(`あなたの「執行」により相手の${handNames[hand]}が0になった。`); render(); await forcePublishFriendStateNow("execution target"); checkWin(); if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();} return;
+      }
+
       if (state.mode === "magicalWithLove") {
         if (owner !== "human") {
           setMessage("自分の手を選んでください。");
@@ -10917,6 +11096,8 @@ async function endTurn() {
       state.pendingTerminalEnd = { human: false, cpu: false };
       state.pendingIntemperanceCardLock = { human: false, cpu: false };
       state.activeIntemperanceCardLock = { human: false, cpu: false };
+      state.judgmentPrisonTurns = { human: 0, cpu: 0 };
+      state.personalTurnCount = { human: 0, cpu: 0 };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
@@ -10930,6 +11111,7 @@ async function endTurn() {
       state.pendingChargeStunSource = { human: "", cpu: "" };
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
       state.pendingAndanteHand = null;
+      state.pendingBalanceTarget = null;
       state.firstTurnStarted = { human: false, cpu: false };
       state.weaknessWait = {};
       state.highlight = null;
