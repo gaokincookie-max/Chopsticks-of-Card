@@ -1715,13 +1715,13 @@ const CARD_LIBRARY = {
 
       appeal: {
         name: "控訴", cost: 2, type: "割り込み / 天秤",
-        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の手札へ戻す。相手はこのターン同名カードを使用できない。その後、他の「控訴」はすべて「上告」に変化する。",
+        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の手札へ戻す。相手のカード使用権を返すが、このターン同名カードは使用できない。その後、他の「控訴」はすべて「上告」に変化する。",
         canPlay: () => false,
         effect: () => {}
       },
       supremeAppeal: {
         name: "上告", cost: 3, type: "割り込み / 天秤・変化",
-        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の山札へ戻してシャッフルする。相手に「執行」を1枚与え、その後、自分の残りの「上告」をすべて捨てる。",
+        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の山札へ戻してシャッフルする。相手のカード使用権を返すが、このターン同名カードは使用できない。相手に「執行」を1枚与え、その後、自分の残りの「上告」をすべて捨てる。",
         token: true,
         canPlay: () => false,
         effect: () => {}
@@ -8951,13 +8951,14 @@ function renderLastAction() {
       state.discard[attacker].splice(originalIndex, 1);
       state.hands[defender].splice(reactionIndex, 1);
 
+      if (!Array.isArray(state.temp[attacker].terminalCardBanIds)) state.temp[attacker].terminalCardBanIds = [];
+      if (!state.temp[attacker].terminalCardBanIds.includes(cardId)) state.temp[attacker].terminalCardBanIds.push(cardId);
+
       if (reactionId === "appeal") {
         // 使用した控訴以外を上告へ変えるため、先に変化させてから使用済み控訴を捨てる。
         transformRemainingAppeals(defender);
         state.discard[defender].push("appeal");
         state.hands[attacker].push(rawCardId);
-        if (!Array.isArray(state.temp[attacker].terminalCardBanIds)) state.temp[attacker].terminalCardBanIds = [];
-        if (!state.temp[attacker].terminalCardBanIds.includes(cardId)) state.temp[attacker].terminalCardBanIds.push(cardId);
         addLog(`${handNames[defender]}は「控訴」を発動。「${card.name}」の効果と終端を無効にし、${handNames[attacker]}の手札へ戻した。`);
         await showCardPopup(defender, CARD_LIBRARY.appeal, false, 850);
       } else {
@@ -8998,6 +8999,11 @@ function renderLastAction() {
       const cardId = effectiveCardIdForPlayer(player, rawCardId);
       const card = CARD_LIBRARY[cardId];
 
+      if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) {
+        if (player === "human") setMessage(`「${card?.name || "このカード"}」は控訴・上告により、このターン再使用できません。`);
+        return false;
+      }
+
       if (isTutorialBattle() && player === "human" && tutorial.expected !== `card:${cardId}`) {
         setMessage("今は黄色く光っているカードだけを使ってください。");
         return false;
@@ -9029,6 +9035,10 @@ function renderLastAction() {
         return false;
       }
 
+      const cardAllowanceBeforeUse = {
+        cardActionUsed: !!state.temp[player].cardActionUsed,
+        cardExtraUses: Number(state.temp[player].cardExtraUses || 0)
+      };
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
       state.discard[player].push(rawCardId);
@@ -9048,13 +9058,16 @@ function renderLastAction() {
       if (showPopup && cardId !== "finale") await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
 
       if (card.terminal && await maybeResolveTerminalAppeal(player, rawCardId, cardId, card)) {
+        // 控訴・上告で使用そのものが差し戻されたため、消費したカード使用権を使用前の状態へ戻す。
+        state.temp[player].cardActionUsed = cardAllowanceBeforeUse.cardActionUsed;
+        state.temp[player].cardExtraUses = cardAllowanceBeforeUse.cardExtraUses;
         if (state.battleMode === "friend") {
           state.friendCardResolving = false;
           state.friendLastPublishedSignature = "";
           await publishFriendStateNow().catch(() => scheduleFriendStatePublish());
         }
-        if (player === "human") setMessage(`「${card.name}」は無効化されました。通常のカード使用権は消費されています。`);
-        else setMessage(`CPUの「${card.name}」は無効化されました。`);
+        if (player === "human") setMessage(`「${card.name}」は無効化されました。カード使用権は返されましたが、このターン同名カードは使用できません。`);
+        else setMessage(`CPUの「${card.name}」は無効化され、カード使用権が返されました。`);
         render();
         return true;
       }
