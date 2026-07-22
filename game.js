@@ -1714,7 +1714,7 @@ const CARD_LIBRARY = {
       },
 
       appeal: {
-        name: "控訴", cost: 2, type: "割り込み / 天秤",
+        name: "控訴", cost: 3, type: "割り込み / 天秤",
         text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の手札へ戻す。相手のカード使用権を返すが、このターン同名カードは使用できない。その後、他の「控訴」はすべて「上告」に変化する。",
         canPlay: () => false,
         effect: () => {}
@@ -1728,7 +1728,7 @@ const CARD_LIBRARY = {
       },
 
       balanceBlade: {
-        name: "均衡の刃", cost: 2, type: "補助 / 天秤",
+        name: "均衡の刃", cost: 1, type: "補助 / 天秤",
         text: "次の攻撃時、自分の両手の本数が等しいなら、与える本数+2。",
         canPlay: () => true,
         effect: (player) => { state.temp[player].balanceBladeAttack = true; addLog(`${handNames[player]}は「均衡の刃」を構えた。次の攻撃時に均衡なら攻撃力+2。`); }
@@ -1746,33 +1746,33 @@ const CARD_LIBRARY = {
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       equalCondemnation: {
-        name: "等価なる断罪", cost: 3, type: "終端 / 天秤",
+        name: "等価なる断罪", cost: 2, type: "終端 / 天秤",
         text: "終端。自分の両手の本数が等しいなら、その本数を相手の0ではない両手に与える。ただし相手の両手の本数が等しいなら無効。",
         terminal: true,
         canPlay: (player) => isBalanced(player),
         effect: async (player) => { await resolveEqualCondemnation(player); }
       },
       fairWorld: {
-        name: "公平な世界", cost: 3, type: "終端 / 天秤",
+        name: "公平な世界", cost: 2, type: "終端 / 天秤",
         text: "終端。自分の0ではない手を1つ選ぶ。すべての0ではない手の本数を、選んだ手と同じにする。",
         terminal: true,
         canPlay: (player) => state[player].L > 0 || state[player].R > 0,
         effect: async (player) => { await beginFairWorld(player); }
       },
       balanceBenefit: {
-        name: "均衡の恩恵", cost: 2, type: "補助 / 天秤",
+        name: "均衡の恩恵", cost: 1, type: "補助 / 天秤",
         text: "自分の両手の本数が等しいなら自分は2枚引く。相手の両手の本数が等しいなら相手は2枚引く。それぞれ個別に判定する。",
         canPlay: (player) => isBalanced(player) || isBalanced(otherPlayer(player)),
         effect: (player) => { if(isBalanced(player)){drawCard(player);drawCard(player);} const o=otherPlayer(player); if(isBalanced(o)){drawCard(o);drawCard(o);} addLog(`${handNames[player]}は「均衡の恩恵」を使用した。`); }
       },
       unfairWorld: {
-        name: "不公平な世界", cost: 3, type: "終端 / 天秤",
+        name: "不公平な世界", cost: 2, type: "終端 / 天秤",
         text: "終端。すべての0ではない手について、それぞれ1～4をランダムに決め、その本数にする。",
         terminal: true, canPlay: () => true,
         effect: async (player) => { await resolveUnfairWorld(player); }
       },
       divinePunishment: {
-        name: "天罰", cost: 3, type: "終端 / 天秤",
+        name: "天罰", cost: 2, type: "終端 / 天秤",
         text: "終端。すべての0ではない手からランダムに1つ選び、1本加える。これを4回繰り返す。各回ごとに対象を選び直す。",
         terminal: true, canPlay: () => true,
         effect: async (player) => { await resolveDivinePunishment(player); }
