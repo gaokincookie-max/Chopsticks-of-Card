@@ -3359,6 +3359,23 @@ const CARD_LIBRARY = {
         }
         return;
       }
+      if (fx.type === "judgmentCinematic") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player && payload.verdict) await showJudgmentCinematic(player, payload.verdict);
+        return;
+      }
+      if (fx.type === "executionCinematic") {
+        const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
+        if (player) await showExecutionCinematic(player);
+        return;
+      }
+      if (fx.type === "executionStrike") {
+        const targetPlayer = localPlayerForFriendSide(payload.targetSide);
+        if (targetPlayer && payload.targetHand) {
+          await showExecutionTargetSeal(targetPlayer, payload.targetHand);
+        }
+        return;
+      }
       if (fx.type === "randomDice") {
         const player = localPlayerForFriendSide(payload.playerSide || fx.sourceSide);
         if (player && payload.hand) {
@@ -6100,8 +6117,21 @@ function wrapFinger(value) {
     }
     async function beginExecution(player) {
       const o=otherPlayer(player), l=state[o].L, r=state[o].R;
+      if (state.battleMode === "friend" && player === "human") {
+        await emitFriendFx("executionCinematic", { playerSide: friendSideForLocalPlayer(player) }).catch(error => console.error("PVP execution cinematic fx failed", error));
+      }
+      await showExecutionCinematic(player);
       if(l>0&&r>0&&l===r&&player==="human"){state.mode="executionTarget";setMessage("「執行」：0にする相手の手を選んでください。");return;}
-      let h=l>=r?"L":"R"; if(state[o][h]<=0)h=otherHand(h); state[o][h]=0; clearBrokenTraps(o); state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「執行」により${handNames[o]}の${handNames[h]}が0になった。`); render(); if(player==="human")await forcePublishFriendStateNow("execution"); checkWin();
+      let h=l>=r?"L":"R"; if(state[o][h]<=0)h=otherHand(h);
+      if (state.battleMode === "friend" && player === "human") {
+        await emitFriendFx("executionStrike", {
+          playerSide: friendSideForLocalPlayer(player),
+          targetSide: friendSideForLocalPlayer(o),
+          targetHand: h
+        }).catch(error => console.error("PVP execution strike fx failed", error));
+      }
+      await showExecutionTargetSeal(o, h);
+      state[o][h]=0; clearBrokenTraps(o); state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「執行」により${handNames[o]}の${handNames[h]}が0になった。`); render(); if(player==="human")await forcePublishFriendStateNow("execution"); checkWin();
     }
 
     function beginChargeTargetEffect(player, cardId) {
@@ -7029,6 +7059,72 @@ function wrapFinger(value) {
       await delay(420);
       overlay.remove();
       target.classList.remove("arcana-targeted-hand");
+    }
+
+
+    async function showJudgmentCinematic(player, verdict) {
+      const overlay = ensureChantCinematicOverlay();
+      const circles = [1, 2, 3].map(n => `<i class="chant-cinematic-circle circle-${n} active"><span></span></i>`).join("");
+      overlay.className = "chant-cinematic-overlay judgment-cast";
+      overlay.innerHTML = `
+        <div class="chant-cinematic-vignette"></div>
+        <div class="chant-cinematic-particles"></div>
+        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="chant-cinematic-copy judgment-cast-copy">
+          <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の宣告</div>
+          <div class="chant-cinematic-phase">FINAL JUDGMENT</div>
+          <div class="judgment-main-title">最終判決</div>
+          <div class="judgment-verdict">${escapeHtml(verdict)}</div>
+          <div class="chant-cinematic-count judgment-count">法は下された</div>
+        </div>`;
+      overlay.classList.add("show");
+      await delay(2450);
+      overlay.classList.add("closing");
+      await delay(480);
+      overlay.className = "chant-cinematic-overlay";
+      overlay.innerHTML = "";
+    }
+
+    async function showExecutionCinematic(player) {
+      const overlay = ensureChantCinematicOverlay();
+      const circles = [1, 2, 3].map(n => `<i class="chant-cinematic-circle circle-${n} active"><span></span></i>`).join("");
+      overlay.className = "chant-cinematic-overlay execution-cast";
+      overlay.innerHTML = `
+        <div class="chant-cinematic-vignette"></div>
+        <div class="chant-cinematic-particles"></div>
+        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="chant-cinematic-copy execution-cast-copy">
+          <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の執行</div>
+          <div class="chant-cinematic-phase">JUDGEMENT EXECUTION</div>
+          <div class="judgment-main-title execution-main-title">執行</div>
+          <div class="execution-subtitle">裁きは、今ここに下る</div>
+        </div>`;
+      overlay.classList.add("show");
+      await delay(2150);
+      overlay.classList.add("closing");
+      await delay(420);
+      overlay.className = "chant-cinematic-overlay";
+      overlay.innerHTML = "";
+    }
+
+    async function showExecutionTargetSeal(player, hand) {
+      const target = handEl(player, hand);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const overlay = document.createElement("div");
+      overlay.className = "execution-target-seal-overlay";
+      overlay.style.left = `${rect.left + rect.width / 2}px`;
+      overlay.style.top = `${rect.top + rect.height / 2}px`;
+      overlay.style.width = `${Math.max(rect.width, rect.height) * 1.48}px`;
+      overlay.style.height = overlay.style.width;
+      overlay.innerHTML = `<i></i><i></i><span>裁</span>`;
+      document.body.appendChild(overlay);
+      target.classList.add("execution-targeted-hand");
+      await delay(980);
+      overlay.classList.add("burst");
+      await delay(420);
+      overlay.remove();
+      target.classList.remove("execution-targeted-hand");
     }
 
     async function showMagicalChantComplete(player) {
@@ -9100,6 +9196,21 @@ function renderLastAction() {
         return true;
       }
 
+      const judgmentVerdictMap = {
+        finalJudgmentConfiscation: "没収",
+        finalJudgmentDeath: "死刑",
+        finalJudgmentPrison: "懲役"
+      };
+      if (judgmentVerdictMap[cardId]) {
+        if (state.battleMode === "friend" && player === "human") {
+          await emitFriendFx("judgmentCinematic", {
+            playerSide: friendSideForLocalPlayer(player),
+            verdict: judgmentVerdictMap[cardId]
+          }).catch(error => console.error("PVP judgment cinematic fx failed", error));
+        }
+        await showJudgmentCinematic(player, judgmentVerdictMap[cardId]);
+      }
+
       await card.effect(player);
       triggerChemicalGeneration(player, cardId);
       checkWin();
@@ -10971,7 +11082,16 @@ async function endTurn() {
         if(owner!=="human"||state.human[hand]<=0){setMessage("自分の0ではない手を選んでください。");return;} await resolveFairWorld("human",hand); if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();} return;
       }
       if (state.mode === "executionTarget") {
-        if(owner!=="cpu"||state.cpu[hand]<=0){setMessage("相手の0ではない手を選んでください。");return;} state.cpu[hand]=0; clearBrokenTraps("cpu"); state.mode="attack"; state.pendingTerminalEnd.human=true; addLog(`あなたの「執行」により相手の${handNames[hand]}が0になった。`); render(); await forcePublishFriendStateNow("execution target"); checkWin(); if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();} return;
+        if(owner!=="cpu"||state.cpu[hand]<=0){setMessage("相手の0ではない手を選んでください。");return;}
+        if (state.battleMode === "friend") {
+          await emitFriendFx("executionStrike", {
+            playerSide: friendSideForLocalPlayer("human"),
+            targetSide: friendSideForLocalPlayer("cpu"),
+            targetHand: hand
+          }).catch(error => console.error("PVP execution strike fx failed", error));
+        }
+        await showExecutionTargetSeal("cpu", hand);
+        state.cpu[hand]=0; clearBrokenTraps("cpu"); state.mode="attack"; state.pendingTerminalEnd.human=true; addLog(`あなたの「執行」により相手の${handNames[hand]}が0になった。`); render(); await forcePublishFriendStateNow("execution target"); checkWin(); if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();} return;
       }
 
       if (state.mode === "magicalWithLove") {
