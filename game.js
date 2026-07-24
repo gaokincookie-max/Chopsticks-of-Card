@@ -7064,12 +7064,20 @@ function wrapFinger(value) {
 
     async function showJudgmentCinematic(player, verdict) {
       const overlay = ensureChantCinematicOverlay();
-      const circles = [1, 2, 3].map(n => `<i class="chant-cinematic-circle circle-${n} active"><span></span></i>`).join("");
       overlay.className = "chant-cinematic-overlay judgment-cast";
       overlay.innerHTML = `
         <div class="chant-cinematic-vignette"></div>
-        <div class="chant-cinematic-particles"></div>
-        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="courtroom-columns"><i></i><i></i><i></i><i></i></div>
+        <div class="judgment-scale" aria-hidden="true">
+          <span class="scale-top"></span>
+          <span class="scale-beam"></span>
+          <span class="scale-post"></span>
+          <span class="scale-foot"></span>
+          <span class="scale-chain left"></span>
+          <span class="scale-chain right"></span>
+          <span class="scale-pan left"></span>
+          <span class="scale-pan right"></span>
+        </div>
         <div class="chant-cinematic-copy judgment-cast-copy">
           <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の宣告</div>
           <div class="chant-cinematic-phase">COURT VERDICT</div>
@@ -7078,7 +7086,9 @@ function wrapFinger(value) {
           <div class="chant-cinematic-count judgment-count">判決言渡し</div>
         </div>`;
       overlay.classList.add("show");
-      await delay(2450);
+      await delay(1450);
+      overlay.classList.add("verdict-phase");
+      await delay(1550);
       overlay.classList.add("closing");
       await delay(480);
       overlay.className = "chant-cinematic-overlay";
@@ -7087,12 +7097,20 @@ function wrapFinger(value) {
 
     async function showExecutionCinematic(player) {
       const overlay = ensureChantCinematicOverlay();
-      const circles = [1, 2, 3].map(n => `<i class="chant-cinematic-circle circle-${n} active"><span></span></i>`).join("");
       overlay.className = "chant-cinematic-overlay execution-cast";
       overlay.innerHTML = `
         <div class="chant-cinematic-vignette"></div>
-        <div class="chant-cinematic-particles"></div>
-        <div class="chant-cinematic-circles">${circles}</div>
+        <div class="courtroom-columns"><i></i><i></i><i></i><i></i></div>
+        <div class="judgment-scale execution-scale" aria-hidden="true">
+          <span class="scale-top"></span>
+          <span class="scale-beam"></span>
+          <span class="scale-post"></span>
+          <span class="scale-foot"></span>
+          <span class="scale-chain left"></span>
+          <span class="scale-chain right"></span>
+          <span class="scale-pan left"></span>
+          <span class="scale-pan right"></span>
+        </div>
         <div class="chant-cinematic-copy execution-cast-copy">
           <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の執行</div>
           <div class="chant-cinematic-phase">COURT EXECUTION</div>

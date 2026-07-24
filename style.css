@@ -4047,3 +4047,33 @@ body.tutorial-split-only #cpuR {
   font-weight: 1100;
   letter-spacing: .08em;
 }
+
+/* v134: 法廷・天秤演出。最終判決と判決名を二段階表示 */
+.chant-cinematic-overlay.judgment-cast .chant-cinematic-particles,
+.chant-cinematic-overlay.execution-cast .chant-cinematic-particles,
+.chant-cinematic-overlay.judgment-cast .chant-cinematic-circles,
+.chant-cinematic-overlay.execution-cast .chant-cinematic-circles { display:none!important; }
+.courtroom-columns { position:absolute; inset:0; pointer-events:none; opacity:.42; }
+.courtroom-columns i { position:absolute; top:-4%; bottom:-4%; width:11vw; max-width:116px; min-width:58px; border-left:2px solid rgba(189,155,88,.2); border-right:2px solid rgba(189,155,88,.2); background:linear-gradient(90deg,rgba(0,0,0,.12),rgba(212,187,126,.055),rgba(0,0,0,.18)); box-shadow:inset 0 0 28px rgba(0,0,0,.7); }
+.courtroom-columns i::before,.courtroom-columns i::after { content:""; position:absolute; left:-10%; right:-10%; height:25px; border:1px solid rgba(197,164,95,.2); background:linear-gradient(#1b1814,#090807); }
+.courtroom-columns i::before{top:5%}.courtroom-columns i::after{bottom:5%}
+.courtroom-columns i:nth-child(1){left:3%}.courtroom-columns i:nth-child(2){left:18%}.courtroom-columns i:nth-child(3){right:18%}.courtroom-columns i:nth-child(4){right:3%}
+.judgment-scale { position:absolute; left:50%; top:49%; width:min(72vw,560px); height:min(48vw,370px); transform:translate(-50%,-50%) scale(.88); opacity:.26; filter:drop-shadow(0 0 18px rgba(160,125,55,.16)); transition:opacity .55s ease,transform .55s ease; }
+.judgment-scale span{position:absolute;display:block}
+.scale-top{left:50%;top:3%;width:18px;height:18px;border:3px solid rgba(228,205,147,.9);border-radius:50%;transform:translateX(-50%)}
+.scale-beam{left:13%;right:13%;top:18%;height:8px;border-radius:6px;background:linear-gradient(#ead7a1,#907238,#3e2e17);box-shadow:0 0 8px rgba(234,215,161,.18)}
+.scale-post{left:50%;top:9%;bottom:17%;width:10px;transform:translateX(-50%);background:linear-gradient(90deg,#47351b,#ddbf78,#4a361a)}
+.scale-foot{left:31%;right:31%;bottom:10%;height:15px;border-radius:50% 50% 18% 18%;background:linear-gradient(#d4b76f,#5d4522,#24190e)}
+.scale-chain{top:20%;width:2px;height:39%;background:rgba(226,207,158,.74)}
+.scale-chain.left{left:24%;box-shadow:72px 0 0 rgba(226,207,158,.74)}
+.scale-chain.right{right:24%;box-shadow:-72px 0 0 rgba(226,207,158,.74)}
+.scale-pan{top:57%;width:150px;height:34px;border-bottom:7px solid rgba(215,189,126,.88);border-radius:0 0 50% 50%}
+.scale-pan.left{left:9%}.scale-pan.right{right:9%}
+.chant-cinematic-overlay.show .judgment-scale{opacity:.5;transform:translate(-50%,-50%) scale(1)}
+.judgment-cast-copy .judgment-main-title{opacity:1;transform:none;transition:opacity .42s ease,transform .42s ease,filter .42s ease}
+.judgment-cast-copy .judgment-verdict,.judgment-cast-copy .judgment-count{opacity:0;visibility:hidden;transform:translateY(18px) scale(.96);filter:blur(8px);transition:opacity .5s ease,transform .5s ease,filter .5s ease,visibility .5s step-end}
+.chant-cinematic-overlay.judgment-cast.verdict-phase .judgment-main-title{opacity:0;transform:translateY(-12px) scale(.94);filter:blur(8px)}
+.chant-cinematic-overlay.judgment-cast.verdict-phase .judgment-verdict,.chant-cinematic-overlay.judgment-cast.verdict-phase .judgment-count{opacity:1;visibility:visible;transform:none;filter:none;transition:opacity .58s ease .12s,transform .58s ease .12s,filter .58s ease .12s,visibility 0s}
+.chant-cinematic-overlay.judgment-cast.verdict-phase .judgment-scale{opacity:.7;transform:translate(-50%,-50%) scale(1.035)}
+.execution-scale{opacity:.58!important}
+@media (max-width:700px){.judgment-scale{width:88vw;height:58vw}.scale-pan{width:110px}.scale-chain.left{box-shadow:52px 0 0 rgba(226,207,158,.74)}.scale-chain.right{box-shadow:-52px 0 0 rgba(226,207,158,.74)}}
