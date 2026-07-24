@@ -1753,7 +1753,7 @@ const CARD_LIBRARY = {
         effect: async (player) => { await resolveEqualCondemnation(player); }
       },
       fairWorld: {
-        name: "公平な世界", cost: 2, type: "終端 / 天秤",
+        name: "平等な世界", cost: 2, type: "終端 / 天秤",
         text: "終端。自分の0ではない手を1つ選ぶ。すべての0ではない手の本数を、選んだ手と同じにする。",
         terminal: true,
         canPlay: (player) => state[player].L > 0 || state[player].R > 0,
@@ -1766,7 +1766,7 @@ const CARD_LIBRARY = {
         effect: (player) => { if(isBalanced(player)){drawCard(player);drawCard(player);} const o=otherPlayer(player); if(isBalanced(o)){drawCard(o);drawCard(o);} addLog(`${handNames[player]}は「均衡の恩恵」を使用した。`); }
       },
       unfairWorld: {
-        name: "不公平な世界", cost: 2, type: "終端 / 天秤",
+        name: "不平等な世界", cost: 2, type: "終端 / 天秤",
         text: "終端。すべての0ではない手について、それぞれ1～4をランダムに決め、その本数にする。",
         terminal: true, canPlay: () => true,
         effect: async (player) => { await resolveUnfairWorld(player); }
@@ -1982,9 +1982,24 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v124";
-    const LATEST_NEWS_ID = "v125-fatigue-rule-rework";
+    const LATEST_NEWS_ID = "v131-card-use-lock-fix";
 
     const UPDATE_NEWS = [
+      {
+        id: "v131-card-use-lock-fix",
+        version: "v131",
+        date: "2026-07-24",
+        title: "カードが反応しなくなる問題を修正",
+        summary: "設置系カードの選択時に処理が停止する不具合と、オンラインでカード使用済み状態が残る可能性を修正しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "罠・加護・呪縛を選んだ際の未定義変数エラーを修正",
+          "控訴・上告の同名使用禁止を設置系カードにも正しく適用",
+          "オンラインで古い同期状態が自分のカード使用権を上書きしないよう改善",
+          "ダブルダブルは追加の攻撃・分けるだけを付与し、カード使用権には影響しないことを確認"
+        ]
+      },
       {
         id: "v125-fatigue-rule-rework",
         version: "v125",
@@ -3043,6 +3058,13 @@ const CARD_LIBRARY = {
       const ownedChargeCardsUsed = Array.isArray(state.temp?.[player]?.chargeCardsUsed)
         ? [...state.temp[player].chargeCardsUsed]
         : [];
+      // 相手が公開したスナップショットは、自分の直前操作より古い場合がある。
+      // カード使用権と同名禁止を古い値で上書きすると、使用済み状態が残り続けるため所有者側を優先する。
+      const ownedCardActionUsed = !!state.temp?.[player]?.cardActionUsed;
+      const ownedCardExtraUses = Number(state.temp?.[player]?.cardExtraUses || 0);
+      const ownedTerminalCardBanIds = Array.isArray(state.temp?.[player]?.terminalCardBanIds)
+        ? [...state.temp[player].terminalCardBanIds]
+        : [];
       const ownedCheapBatteryDecay = Number(state.cheapBatteryDecay?.[player]) || 0;
       const ownedEnergyBarrier = Number(state.energyBarrier?.[player]) || 0;
       state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
@@ -3053,6 +3075,9 @@ const CARD_LIBRARY = {
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
       if (preserveOwnerOnlyMeta) {
         state.temp[player].chargeCardsUsed = ownedChargeCardsUsed;
+        state.temp[player].cardActionUsed = ownedCardActionUsed;
+        state.temp[player].cardExtraUses = ownedCardExtraUses;
+        state.temp[player].terminalCardBanIds = ownedTerminalCardBanIds;
       } else if (!Array.isArray(state.temp[player].chargeCardsUsed)) {
         state.temp[player].chargeCardsUsed = [];
       }
@@ -6048,13 +6073,13 @@ function wrapFinger(value) {
       const h=state.cpu.L<state.cpu.R?"L":"R"; state.cpu[h]=state.cpu[otherHand(h)]; clearBrokenTraps("cpu"); addLog(`CPUは「調律」で${handNames[h]}を${state.cpu[h]}にそろえた。`);
     }
     async function beginFairWorld(player) {
-      if(player==="human") { state.mode="fairWorldTarget"; setMessage("「公平な世界」：基準にする自分の0ではない手を選んでください。"); return; }
+      if(player==="human") { state.mode="fairWorldTarget"; setMessage("「平等な世界」：基準にする自分の0ではない手を選んでください。"); return; }
       const h=state.cpu.L>=state.cpu.R?"L":"R"; await resolveFairWorld("cpu",h);
     }
     async function resolveFairWorld(player, hand) {
       const value=state[player][hand]; if(value<=0) return false;
       for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0) state[p][h]=value;
-      state.mode="attack"; state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「公平な世界」により、すべての生存している手が${value}になった。`); clearBrokenTraps("human"); clearBrokenTraps("cpu"); render(); if(player==="human") await forcePublishFriendStateNow("fair world"); return true;
+      state.mode="attack"; state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「平等な世界」により、すべての生存している手が${value}になった。`); clearBrokenTraps("human"); clearBrokenTraps("cpu"); render(); if(player==="human") await forcePublishFriendStateNow("fair world"); return true;
     }
     async function resolveEqualCondemnation(player) {
       const o=otherPlayer(player); if(isBalanced(o)){addLog(`「等価なる断罪」は相手も均衡しているため無効。`); state.pendingTerminalEnd[player]=true; return;}
@@ -6064,7 +6089,7 @@ function wrapFinger(value) {
     }
     async function resolveUnfairWorld(player) {
       for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0) state[p][h]=1+Math.floor(Math.random()*4);
-      addLog(`${handNames[player]}の「不公平な世界」により、すべての生存している手が個別に振り直された。`); state.pendingTerminalEnd[player]=true; render(); if(player==="human") await forcePublishFriendStateNow("unfair world");
+      addLog(`${handNames[player]}の「不平等な世界」により、すべての生存している手が個別に振り直された。`); state.pendingTerminalEnd[player]=true; render(); if(player==="human") await forcePublishFriendStateNow("unfair world");
     }
     async function resolveDivinePunishment(player) {
       for(let i=0;i<4;i++){
@@ -8735,10 +8760,13 @@ function renderLastAction() {
 
     function selectTrapCard(index) {
       if ((state.judgmentPrisonTurns?.human || 0) > 0) { setMessage("「懲役」により、このターンはカードを使用できません。"); return; }
-      const cardId = state.hands.human[index];
+      const rawCardId = state.hands.human[index];
+      const cardId = effectiveCardIdForPlayer("human", rawCardId);
       const card = CARD_LIBRARY[cardId];
-      if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) {
-        if (player === "human") setMessage(`「${card?.name || "このカード"}」は控訴により、このターン再使用できません。`);
+      // 設置カードでも控訴・上告による同名使用禁止を確認する。
+      // 以前は未定義の player を参照して例外が発生し、設置系カードが反応しなくなっていた。
+      if (Array.isArray(state.temp.human?.terminalCardBanIds) && state.temp.human.terminalCardBanIds.includes(cardId)) {
+        setMessage(`「${card?.name || "このカード"}」は控訴・上告により、このターン再使用できません。`);
         return false;
       }
 
