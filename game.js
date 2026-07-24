@@ -7072,10 +7072,10 @@ function wrapFinger(value) {
         <div class="chant-cinematic-circles">${circles}</div>
         <div class="chant-cinematic-copy judgment-cast-copy">
           <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の宣告</div>
-          <div class="chant-cinematic-phase">FINAL JUDGMENT</div>
+          <div class="chant-cinematic-phase">COURT VERDICT</div>
           <div class="judgment-main-title">最終判決</div>
           <div class="judgment-verdict">${escapeHtml(verdict)}</div>
-          <div class="chant-cinematic-count judgment-count">法は下された</div>
+          <div class="chant-cinematic-count judgment-count">判決言渡し</div>
         </div>`;
       overlay.classList.add("show");
       await delay(2450);
@@ -7095,9 +7095,9 @@ function wrapFinger(value) {
         <div class="chant-cinematic-circles">${circles}</div>
         <div class="chant-cinematic-copy execution-cast-copy">
           <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の執行</div>
-          <div class="chant-cinematic-phase">JUDGEMENT EXECUTION</div>
+          <div class="chant-cinematic-phase">COURT EXECUTION</div>
           <div class="judgment-main-title execution-main-title">執行</div>
-          <div class="execution-subtitle">裁きは、今ここに下る</div>
+          <div class="execution-subtitle">判決を、ここに執行する</div>
         </div>`;
       overlay.classList.add("show");
       await delay(2150);
