@@ -1781,7 +1781,21 @@ const CARD_LIBRARY = {
         name: "傾いた天秤", cost: 2, type: "補助 / 天秤",
         text: "自分と相手の両手の合計本数を比べる。合計が少ないプレイヤーは手札をランダムに2枚捨てる。同じなら何も起こらない。",
         canPlay: () => true,
-        effect: (player) => { const o=otherPlayer(player), a=state[player].L+state[player].R, b=state[o].L+state[o].R; if(a<b) discardRandomCards(player,2,'「傾いた天秤」'); else if(b<a) discardRandomCards(o,2,'「傾いた天秤」'); addLog(`${handNames[player]}は「傾いた天秤」を使用。合計${a}対${b}。`); }
+        effect: async (player) => {
+          const o=otherPlayer(player), a=state[player].L+state[player].R, b=state[o].L+state[o].R;
+          if (state.battleMode === "friend" && player === "human") {
+            await emitFriendFx("tiltedScales", {
+              leftSide: friendSideForLocalPlayer(player),
+              rightSide: friendSideForLocalPlayer(o),
+              leftCount: a,
+              rightCount: b
+            }).catch(error => console.error("PVP tilted scales fx failed", error));
+          }
+          await showTiltedScalesCinematic(player, a, o, b);
+          if(a<b) discardRandomCards(player,2,'「傾いた天秤」');
+          else if(b<a) discardRandomCards(o,2,'「傾いた天秤」');
+          addLog(`${handNames[player]}は「傾いた天秤」を使用。合計${a}対${b}。`);
+        }
       },
       finalJudgmentConfiscation: {
         name: "最終判決：没収", cost: 3, type: "終端 / 天秤・最終判決",
@@ -3373,6 +3387,14 @@ const CARD_LIBRARY = {
         const targetPlayer = localPlayerForFriendSide(payload.targetSide);
         if (targetPlayer && payload.targetHand) {
           await showExecutionTargetSeal(targetPlayer, payload.targetHand);
+        }
+        return;
+      }
+      if (fx.type === "tiltedScales") {
+        const leftPlayer = localPlayerForFriendSide(payload.leftSide);
+        const rightPlayer = localPlayerForFriendSide(payload.rightSide);
+        if (leftPlayer && rightPlayer) {
+          await showTiltedScalesCinematic(leftPlayer, Number(payload.leftCount) || 0, rightPlayer, Number(payload.rightCount) || 0);
         }
         return;
       }
@@ -7143,6 +7165,46 @@ function wrapFinger(value) {
       await delay(420);
       overlay.remove();
       target.classList.remove("execution-targeted-hand");
+    }
+
+
+    async function showTiltedScalesCinematic(leftPlayer, leftCount, rightPlayer, rightCount) {
+      const overlay = ensureChantCinematicOverlay();
+      const heavier = leftCount === rightCount ? "balanced" : (leftCount > rightCount ? "left-heavy" : "right-heavy");
+      const verdict = leftCount === rightCount ? "均衡" : (leftCount > rightCount ? `${handNames[leftPlayer]}が重い` : `${handNames[rightPlayer]}が重い`);
+      overlay.className = `chant-cinematic-overlay tilted-scales-cast ${heavier}`;
+      overlay.innerHTML = `
+        <div class="chant-cinematic-vignette"></div>
+        <div class="courtroom-columns"><i></i><i></i><i></i><i></i></div>
+        <div class="tilted-scale-stage" aria-hidden="true">
+          <div class="tilted-scale-title">傾いた天秤</div>
+          <div class="tilted-scale-subtitle">両者の合計本数を比較</div>
+          <div class="tilted-scale-figure ${heavier}">
+            <span class="tilted-scale-pivot"></span>
+            <span class="tilted-scale-beam"></span>
+            <span class="tilted-scale-post"></span>
+            <span class="tilted-scale-foot"></span>
+            <span class="tilted-scale-chain left"></span>
+            <span class="tilted-scale-chain right"></span>
+            <span class="tilted-scale-pan left">
+              <b class="tilted-scale-name">${escapeHtml(handNames[leftPlayer])}</b>
+              <strong class="tilted-scale-count">${leftCount}</strong>
+            </span>
+            <span class="tilted-scale-pan right">
+              <b class="tilted-scale-name">${escapeHtml(handNames[rightPlayer])}</b>
+              <strong class="tilted-scale-count">${rightCount}</strong>
+            </span>
+          </div>
+          <div class="tilted-scale-verdict">${escapeHtml(verdict)}</div>
+        </div>`;
+      overlay.classList.add("show");
+      await delay(650);
+      overlay.classList.add("result-phase");
+      await delay(1750);
+      overlay.classList.add("closing");
+      await delay(460);
+      overlay.className = "chant-cinematic-overlay";
+      overlay.innerHTML = "";
     }
 
     async function showMagicalChantComplete(player) {
