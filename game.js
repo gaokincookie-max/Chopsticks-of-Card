@@ -7090,15 +7090,13 @@ function wrapFinger(value) {
       overlay.innerHTML = `
         <div class="chant-cinematic-vignette"></div>
         <div class="courtroom-columns"><i></i><i></i><i></i><i></i></div>
-        <div class="judgment-scale" aria-hidden="true">
-          <span class="scale-top"></span>
-          <span class="scale-beam"></span>
-          <span class="scale-post"></span>
-          <span class="scale-foot"></span>
-          <span class="scale-chain left"></span>
-          <span class="scale-chain right"></span>
-          <span class="scale-pan left"></span>
-          <span class="scale-pan right"></span>
+        <div class="courtroom-gavel" aria-hidden="true">
+          <span class="gavel-shadow"></span>
+          <span class="gavel-block"></span>
+          <span class="gavel-handle"></span>
+          <span class="gavel-head"></span>
+          <span class="gavel-band"></span>
+          <span class="gavel-impact"></span>
         </div>
         <div class="chant-cinematic-copy judgment-cast-copy">
           <div class="chant-cinematic-user">${escapeHtml(handNames[player])}の宣告</div>
@@ -7108,9 +7106,9 @@ function wrapFinger(value) {
           <div class="chant-cinematic-count judgment-count">判決言渡し</div>
         </div>`;
       overlay.classList.add("show");
-      await delay(1450);
+      await delay(1100);
       overlay.classList.add("verdict-phase");
-      await delay(1550);
+      await delay(1700);
       overlay.classList.add("closing");
       await delay(480);
       overlay.className = "chant-cinematic-overlay";

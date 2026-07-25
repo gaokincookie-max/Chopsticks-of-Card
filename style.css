@@ -4153,3 +4153,87 @@ body.tutorial-split-only #cpuR {
   .tilted-scale-chain.left { box-shadow:54px 0 0 rgba(226,207,158,.74); }
   .tilted-scale-chain.right { box-shadow:-54px 0 0 rgba(226,207,158,.74); }
 }
+
+/* v136: 最終判決をガベル（木槌）モチーフへ */
+.chant-cinematic-overlay.judgment-cast .judgment-scale { display:none !important; }
+.courtroom-gavel {
+  position:absolute;
+  left:50%;
+  top:48%;
+  width:min(64vw,520px);
+  height:min(36vw,280px);
+  transform:translate(-50%,-50%);
+  opacity:.34;
+  pointer-events:none;
+  filter:drop-shadow(0 0 18px rgba(156,122,61,.18));
+}
+.courtroom-gavel span { position:absolute; display:block; }
+.gavel-shadow {
+  left:20%; right:18%; bottom:8%; height:22px; border-radius:50%;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,.58), rgba(0,0,0,0) 72%);
+}
+.gavel-block {
+  left:57%; bottom:16%; width:120px; height:28px; border-radius:18px 18px 10px 10px;
+  background:linear-gradient(180deg, #b99a62, #5a4021 56%, #27190e 100%);
+  box-shadow:0 0 12px rgba(222,190,121,.18), inset 0 2px 0 rgba(255,242,207,.25);
+}
+.gavel-handle {
+  left:23%; top:44%; width:195px; height:14px; border-radius:14px;
+  transform-origin:92% 50%; transform:rotate(-30deg);
+  background:linear-gradient(180deg, #d7ba79, #77542c 58%, #322012 100%);
+  box-shadow:0 0 10px rgba(215,186,121,.12), inset 0 2px 0 rgba(255,241,208,.22);
+}
+.gavel-head {
+  left:54%; top:23%; width:120px; height:48px; border-radius:14px;
+  transform-origin:18% 70%; transform:rotate(-30deg);
+  background:linear-gradient(180deg, #ba9a63, #6a4a25 55%, #2e1d10 100%);
+  box-shadow:0 0 14px rgba(213,181,111,.18), inset 0 2px 0 rgba(255,241,211,.22);
+}
+.gavel-band {
+  left:60.5%; top:26%; width:18px; height:42px; border-radius:8px;
+  transform-origin:50% 50%; transform:rotate(-30deg);
+  background:linear-gradient(180deg, #eddcb0, #ae8645 62%, #5e401c 100%);
+  box-shadow:0 0 10px rgba(229,208,157,.14);
+}
+.gavel-impact {
+  left:63%; bottom:19%; width:44px; height:44px; border-radius:50%;
+  border:2px solid rgba(235,219,175,.0);
+  opacity:0; transform:translate(-50%,0) scale(.28);
+}
+.chant-cinematic-overlay.show .courtroom-gavel { opacity:.5; }
+.chant-cinematic-overlay.show .gavel-handle,
+.chant-cinematic-overlay.show .gavel-head,
+.chant-cinematic-overlay.show .gavel-band {
+  animation:gavelRaise .65s ease-out both;
+}
+.chant-cinematic-overlay.judgment-cast.verdict-phase .gavel-handle,
+.chant-cinematic-overlay.judgment-cast.verdict-phase .gavel-head,
+.chant-cinematic-overlay.judgment-cast.verdict-phase .gavel-band {
+  animation:gavelStrike .5s cubic-bezier(.18,.84,.2,1) forwards;
+}
+.chant-cinematic-overlay.judgment-cast.verdict-phase .gavel-impact {
+  animation:gavelImpact .52s ease-out forwards;
+}
+.chant-cinematic-overlay.judgment-cast.verdict-phase .courtroom-gavel {
+  opacity:.68;
+}
+@keyframes gavelRaise {
+  from { transform:rotate(8deg) translate(16px, 12px); filter:blur(2px); }
+  to { filter:none; }
+}
+@keyframes gavelStrike {
+  0% { transform:rotate(-30deg); }
+  68% { transform:rotate(14deg) translate(16px, 18px); }
+  100% { transform:rotate(6deg) translate(10px, 14px); }
+}
+@keyframes gavelImpact {
+  0% { opacity:0; border-color:rgba(235,219,175,0); transform:translate(-50%,0) scale(.28); }
+  18% { opacity:.95; border-color:rgba(235,219,175,.9); }
+  100% { opacity:0; border-color:rgba(235,219,175,0); transform:translate(-50%,0) scale(1.9); }
+}
+@media (max-width:700px) {
+  .courtroom-gavel { width:86vw; height:46vw; }
+  .gavel-handle { width:148px; }
+  .gavel-head { width:92px; height:38px; }
+  .gavel-block { width:94px; height:24px; }
+}
