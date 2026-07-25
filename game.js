@@ -1995,10 +1995,31 @@ const CARD_LIBRARY = {
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
-    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v124";
-    const LATEST_NEWS_ID = "v131-card-use-lock-fix";
+    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v137";
+    const LATEST_NEWS_ID = "v137-judgment-theme-release";
 
     const UPDATE_NEWS = [
+      {
+        id: "v137-judgment-theme-release",
+        version: "v137",
+        date: "2026-07-25",
+        title: "新テーマ「傾かぬ天秤に判決を」",
+        summary: "両手の均衡を整え、互いの重さを量り、条件を満たして最終判決を下す法廷・天秤テーマを正式実装しました。",
+        featured: true,
+        tags: ["new", "system"],
+        items: [
+          "新テーマ「傾かぬ天秤に判決を」を正式実装",
+          "両手の本数が等しい『均衡』状態を利用する、均衡の刃・均衡の恩恵・天秤の加護を追加",
+          "調律・平等な世界で盤面をそろえ、不平等な世界・天罰で均衡を崩す二つの戦術を追加",
+          "等価なる断罪と傾いた天秤により、均衡状態や両者の合計本数を直接勝負へ結びつけるカードを追加",
+          "条件を満たした2度目の自分のターン以降に使用できる、没収・死刑・懲役の3種類の最終判決を追加",
+          "死刑から得られる生成カード『執行』で、相手の本数が多い手を0にする処刑ルートを追加",
+          "相手の終端カードを差し戻す『控訴』と、山札へ戻す『上告』の手札割り込みシステムを追加",
+          "控訴・上告されたカードは効果と終端が無効になり、使用権は返るが同名カードはそのターン使用不可",
+          "最終判決にはガベル、執行には裁きの紋章、傾いた天秤には合計本数を量る専用演出を追加",
+          "CPU戦・フレンド対戦の条件判定、割り込み、状態変化、演出同期に対応"
+        ]
+      },
       {
         id: "v131-card-use-lock-fix",
         version: "v131",
@@ -2084,7 +2105,7 @@ const CARD_LIBRARY = {
         date: "2026-07-19",
         title: "新テーマ「愛と憎しみの名の下に」",
         summary: "光と影のはざまで感情を抱えたまま戦い、四つの心をそろえてカードそのものを変化させる魔法少女テーマを正式実装しました。",
-        featured: true,
+        featured: false,
         tags: ["new", "system"],
         items: [
           "新テーマ「愛と憎しみの名の下に」を正式実装",

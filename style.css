@@ -4237,3 +4237,64 @@ body.tutorial-split-only #cpuR {
   .gavel-head { width:92px; height:38px; }
   .gavel-block { width:94px; height:24px; }
 }
+
+
+/* v137: 「傾かぬ天秤に判決を」正式リリース告知 */
+.major-update-card.judgment-release-card {
+  position:relative;
+  overflow:hidden;
+  border:1px solid rgba(202,169,96,.46);
+  background:
+    linear-gradient(145deg, rgba(35,28,19,.98), rgba(10,9,9,.98) 54%, rgba(28,19,15,.98)),
+    #0c0b0b;
+  box-shadow:0 28px 90px rgba(0,0,0,.64), inset 0 0 80px rgba(155,112,39,.08);
+}
+.judgment-release-card .major-update-kicker { color:#d7c18e; letter-spacing:.24em; }
+.judgment-release-card h2 {
+  position:relative; z-index:2;
+  color:#f4e8c6;
+  text-shadow:0 0 10px rgba(255,248,226,.2),0 0 34px rgba(122,87,31,.4);
+}
+.judgment-release-card .major-update-lead { position:relative; z-index:2; color:#d5c8aa; }
+.judgment-release-card .major-update-tags { position:relative; z-index:2; }
+.judgment-release-card .major-update-tags span {
+  border-color:rgba(210,176,100,.35);
+  background:rgba(176,132,55,.09);
+  color:#ead8ad;
+}
+.judgment-release-card .major-update-actions { position:relative; z-index:2; }
+.judgment-release-card .major-update-actions button:first-child {
+  background:linear-gradient(180deg,#d4b66f,#85652f);
+  color:#17110a;
+  border-color:#e3cc95;
+}
+.judgment-release-bg { position:absolute; inset:0; opacity:.28; pointer-events:none; }
+.judgment-release-bg::before,
+.judgment-release-bg::after {
+  content:""; position:absolute; top:-5%; bottom:-5%; width:13%;
+  border-left:1px solid rgba(220,191,125,.24); border-right:1px solid rgba(220,191,125,.24);
+  background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(232,205,139,.05),rgba(0,0,0,.25));
+}
+.judgment-release-bg::before { left:4%; }
+.judgment-release-bg::after { right:4%; }
+.judgment-release-bg i { position:absolute; left:12%; right:12%; height:1px; background:linear-gradient(90deg,transparent,rgba(224,195,124,.28),transparent); }
+.judgment-release-bg i:nth-child(1){top:24%}.judgment-release-bg i:nth-child(2){top:50%}.judgment-release-bg i:nth-child(3){top:76%}
+.release-gavel-head,.release-gavel-handle,.release-gavel-block { position:absolute; display:block; }
+.release-gavel-head {
+  width:150px;height:56px;left:58%;top:24%;border-radius:15px;transform:rotate(-28deg);
+  background:linear-gradient(#c1a369,#6e4e29 56%,#2f1e11);
+  box-shadow:0 0 22px rgba(213,179,105,.22);
+}
+.release-gavel-handle {
+  width:250px;height:16px;left:27%;top:47%;border-radius:14px;transform:rotate(-28deg);
+  background:linear-gradient(#d5b978,#77542d 60%,#332113);
+}
+.release-gavel-block {
+  width:150px;height:30px;left:58%;bottom:19%;border-radius:18px 18px 10px 10px;
+  background:linear-gradient(#b99a62,#5a4021 58%,#26180d);
+}
+@media (max-width:700px){
+  .release-gavel-head{width:105px;height:42px;left:56%}
+  .release-gavel-handle{width:170px;left:25%}
+  .release-gavel-block{width:110px;left:56%}
+}
