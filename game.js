@@ -1996,7 +1996,8 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v137";
-    const LATEST_NEWS_ID = "v137-judgment-theme-release";
+    const TOURNAMENT_ANNOUNCEMENT_STORAGE_KEY = "waribashi_card_tournament_2026_08";
+    const LATEST_NEWS_ID = "v138-tournament-announcement";
 
     const UPDATE_NEWS = [
       {
@@ -2018,6 +2019,23 @@ const CARD_LIBRARY = {
           "控訴・上告されたカードは効果と終端が無効になり、使用権は返るが同名カードはそのターン使用不可",
           "最終判決にはガベル、執行には裁きの紋章、傾いた天秤には合計本数を量る専用演出を追加",
           "CPU戦・フレンド対戦の条件判定、割り込み、状態変化、演出同期に対応"
+        ]
+      },
+      {
+        id: "v138-tournament-announcement",
+        version: "v138",
+        date: "2026-07-25",
+        title: "大会開催予告",
+        summary: "8月8日前後に、割り箸カードゲームの大会を開催予定です。参加希望者は主催者までご連絡ください。",
+        featured: false,
+        tags: ["system"],
+        items: [
+          "8月8日前後に、割り箸カードゲームの大会を開催予定",
+          "磨き上げたデッキで正面から挑む方も、意外なカードで対戦相手を揺さぶる方も歓迎",
+          "大会当日にルールを思い出すところから始める方も参加可能",
+          "優勝を目指す方、実戦でデッキを試したい方、なんとなく面白そうだと思った方まで参加理由は不問",
+          "参加希望者は主催者まで連絡",
+          "開催日や大会形式などの詳細は後日改めて告知予定"
         ]
       },
       {
@@ -2532,6 +2550,8 @@ const CARD_LIBRARY = {
       majorUpdateModal: document.getElementById("majorUpdateModal"),
       majorUpdateDetailBtn: document.getElementById("majorUpdateDetailBtn"),
       majorUpdateCloseBtn: document.getElementById("majorUpdateCloseBtn"),
+      tournamentAnnouncementModal: document.getElementById("tournamentAnnouncementModal"),
+      tournamentAnnouncementCloseBtn: document.getElementById("tournamentAnnouncementCloseBtn"),
       plVsCpuBtn: document.getElementById("plVsCpuBtn"),
       plVsPlBtn: document.getElementById("plVsPlBtn"),
       battleSelectBackBtn: document.getElementById("battleSelectBackBtn"),
@@ -4233,6 +4253,32 @@ const CARD_LIBRARY = {
       elements.majorUpdateModal?.classList.remove("show");
       elements.majorUpdateModal?.setAttribute("aria-hidden", "true");
       markMajorUpdateSeen();
+      if (shouldShowTournamentAnnouncement()) setTimeout(() => openTournamentAnnouncement(), 220);
+    }
+
+    function shouldShowTournamentAnnouncement() {
+      try {
+        return localStorage.getItem(TOURNAMENT_ANNOUNCEMENT_STORAGE_KEY) !== "seen";
+      } catch {
+        return true;
+      }
+    }
+
+    function markTournamentAnnouncementSeen() {
+      try {
+        localStorage.setItem(TOURNAMENT_ANNOUNCEMENT_STORAGE_KEY, "seen");
+      } catch {}
+    }
+
+    function openTournamentAnnouncement() {
+      elements.tournamentAnnouncementModal?.classList.add("show");
+      elements.tournamentAnnouncementModal?.setAttribute("aria-hidden", "false");
+    }
+
+    function closeTournamentAnnouncement() {
+      elements.tournamentAnnouncementModal?.classList.remove("show");
+      elements.tournamentAnnouncementModal?.setAttribute("aria-hidden", "true");
+      markTournamentAnnouncementSeen();
     }
 
     function tutorialSetWelcomeSeen(value = "seen") {
@@ -4255,6 +4301,7 @@ const CARD_LIBRARY = {
 
     function showMajorUpdateAfterTutorialWelcome() {
       if (shouldShowMajorUpdate()) setTimeout(() => openMajorUpdate(), 220);
+      else if (shouldShowTournamentAnnouncement()) setTimeout(() => openTournamentAnnouncement(), 220);
     }
 
     function renderTutorialChapterList() {
@@ -11727,6 +11774,10 @@ async function endTurn() {
     elements.majorUpdateModal?.addEventListener("click", event => {
       if (event.target === elements.majorUpdateModal) closeMajorUpdate();
     });
+    elements.tournamentAnnouncementCloseBtn?.addEventListener("click", closeTournamentAnnouncement);
+    elements.tournamentAnnouncementModal?.addEventListener("click", event => {
+      if (event.target === elements.tournamentAnnouncementModal) closeTournamentAnnouncement();
+    });
     elements.difficultyBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.settingsBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.compactCardDescriptionsToggle?.addEventListener("change", event => {
@@ -12005,5 +12056,7 @@ async function endTurn() {
       setTimeout(() => showTutorialWelcome(), 180);
     } else if (shouldShowMajorUpdate()) {
       setTimeout(() => openMajorUpdate(), 320);
+    } else if (shouldShowTournamentAnnouncement()) {
+      setTimeout(() => openTournamentAnnouncement(), 320);
     }
     loadRoomFromUrl();

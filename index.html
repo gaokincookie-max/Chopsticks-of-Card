@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=137">
+  <link rel="stylesheet" href="style.css?v=138">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -134,6 +134,27 @@
       <div class="major-update-actions">
         <button id="majorUpdateDetailBtn">更新内容を見る</button>
         <button id="majorUpdateCloseBtn" class="secondary">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tournament-announcement-modal" id="tournamentAnnouncementModal" aria-hidden="true">
+    <div class="tournament-announcement-card" role="dialog" aria-modal="true" aria-labelledby="tournamentAnnouncementTitle">
+      <div class="tournament-announcement-decor" aria-hidden="true">
+        <span class="tournament-cup"></span>
+        <i></i><i></i><i></i>
+      </div>
+      <div class="major-update-kicker">TOURNAMENT ANNOUNCEMENT</div>
+      <h2 id="tournamentAnnouncementTitle">大会開催予告</h2>
+      <p class="tournament-announcement-date">8月8日前後 開催予定</p>
+      <div class="tournament-announcement-copy">
+        <p>磨き上げたデッキで、正面から勝負するもよし。<br>誰も予想しないカードで、対戦相手を混乱させるもよし。<br>大会当日に、ルールを思い出すところから始めるもよし。</p>
+        <p>優勝を目指す方も、実戦でデッキを試してみたい方も、<br>なんとなく面白そうだと思った方も、参加理由は問いません。</p>
+        <p class="tournament-announcement-contact">参加を希望する方は、主催者までご連絡ください。</p>
+        <p class="tournament-announcement-note">開催日や大会形式などの詳しい情報は、後日改めてお知らせします。</p>
+      </div>
+      <div class="major-update-actions">
+        <button id="tournamentAnnouncementCloseBtn">確認しました</button>
       </div>
     </div>
   </div>
@@ -699,6 +720,6 @@
     }
   </script>
 
-  <script src="game.js?v=137"></script>
+  <script src="game.js?v=138"></script>
 </body>
 </html>
