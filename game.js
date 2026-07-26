@@ -1721,7 +1721,7 @@ const CARD_LIBRARY = {
       },
       supremeAppeal: {
         name: "上告", cost: 3, type: "割り込み / 天秤・変化",
-        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の山札へ戻してシャッフルする。相手のカード使用権を返すが、このターン同名カードは使用できない。相手に「執行」を1枚与え、その後、自分の残りの「上告」をすべて捨てる。",
+        text: "相手が終端カードを使用した時、手札から発動できる。その効果と終端を無効にし、カードを相手の山札へ戻してシャッフルする。相手のカード使用権を返すが、このターン同名カードは使用できない。相手の次のターン開始時に「執行」を1枚与え、その後、自分の残りの「上告」をすべて捨てる。",
         token: true,
         canPlay: () => false,
         effect: () => {}
@@ -1927,6 +1927,7 @@ const CARD_LIBRARY = {
       pendingIntemperanceCardLock: { human: false, cpu: false },
       activeIntemperanceCardLock: { human: false, cpu: false },
       judgmentPrisonTurns: { human: 0, cpu: 0 },
+      pendingAppealExecution: { human: 0, cpu: 0 },
       personalTurnCount: { human: 0, cpu: 0 },
       magicalChantProgress: { human: 0, cpu: 0 },
       magicalChantCompleted: { human: false, cpu: false },
@@ -3022,6 +3023,7 @@ const CARD_LIBRARY = {
       if (!state.pendingIntemperanceCardLock || typeof state.pendingIntemperanceCardLock !== "object") state.pendingIntemperanceCardLock = { human: false, cpu: false };
       if (!state.activeIntemperanceCardLock || typeof state.activeIntemperanceCardLock !== "object") state.activeIntemperanceCardLock = { human: false, cpu: false };
       if (!state.judgmentPrisonTurns || typeof state.judgmentPrisonTurns !== "object") state.judgmentPrisonTurns = { human: 0, cpu: 0 };
+      if (!state.pendingAppealExecution || typeof state.pendingAppealExecution !== "object") state.pendingAppealExecution = { human: 0, cpu: 0 };
       if (!state.personalTurnCount || typeof state.personalTurnCount !== "object") state.personalTurnCount = { human: 0, cpu: 0 };
       if (!state.pendingMagicalHeartDraw || typeof state.pendingMagicalHeartDraw !== "object") state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       if (!state.magicalChantProgress || typeof state.magicalChantProgress !== "object") state.magicalChantProgress = { human: 0, cpu: 0 };
@@ -3065,6 +3067,7 @@ const CARD_LIBRARY = {
         pendingIntemperanceCardLock: !!state.pendingIntemperanceCardLock[player],
         activeIntemperanceCardLock: !!state.activeIntemperanceCardLock[player],
         judgmentPrisonTurns: Number(state.judgmentPrisonTurns?.[player] || 0),
+        pendingAppealExecution: Number(state.pendingAppealExecution?.[player] || 0),
         personalTurnCount: Number(state.personalTurnCount?.[player] || 0),
         pendingMagicalHeartDraw: Number(state.pendingMagicalHeartDraw?.[player] || 0),
         magicalChantProgress: Number(state.magicalChantProgress?.[player] || 0),
@@ -3150,6 +3153,7 @@ const CARD_LIBRARY = {
       state.pendingIntemperanceCardLock[player] = !!side.pendingIntemperanceCardLock;
       state.activeIntemperanceCardLock[player] = !!side.activeIntemperanceCardLock;
       state.judgmentPrisonTurns[player] = Number(side.judgmentPrisonTurns || 0);
+      state.pendingAppealExecution[player] = Number(side.pendingAppealExecution || 0);
       state.personalTurnCount[player] = Number(side.personalTurnCount || 0);
       state.pendingMagicalHeartDraw[player] = Number(side.pendingMagicalHeartDraw || 0);
       state.magicalChantProgress[player] = Math.max(0, Math.min(3, Number(side.magicalChantProgress || 0)));
@@ -4083,6 +4087,7 @@ const CARD_LIBRARY = {
       state.pendingIntemperanceCardLock = { human: false, cpu: false };
       state.activeIntemperanceCardLock = { human: false, cpu: false };
       state.judgmentPrisonTurns = { human: 0, cpu: 0 };
+      state.pendingAppealExecution = { human: 0, cpu: 0 };
       state.personalTurnCount = { human: 0, cpu: 0 };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
@@ -6648,6 +6653,20 @@ function wrapFinger(value) {
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
+      const reservedExecutions = Number(state.pendingAppealExecution?.[player] || 0);
+      if (reservedExecutions > 0) {
+        for (let i = 0; i < reservedExecutions; i++) state.hands[player].push("execution");
+        state.pendingAppealExecution[player] = 0;
+        addLog(`${handNames[player]}のターン開始時、上告の判決により「執行」を${reservedExecutions}枚得た。`);
+        await showPopup(
+          player,
+          "上告の判決",
+          `<div class="intemperance-lock-main">執行 ×${reservedExecutions}</div><div>次ターン開始時の付与が執行されました。</div>`,
+          "card-detail",
+          1050,
+          true
+        );
+      }
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;
@@ -9235,10 +9254,11 @@ function renderLastAction() {
       } else {
         state.decks[attacker].push(rawCardId);
         shuffle(state.decks[attacker]);
-        state.hands[attacker].push("execution");
+        if (!state.pendingAppealExecution) state.pendingAppealExecution = { human: 0, cpu: 0 };
+        state.pendingAppealExecution[attacker] = Number(state.pendingAppealExecution[attacker] || 0) + 1;
         const purged = discardAllRemainingSupremeAppeals(defender);
         state.discard[defender].push("supremeAppeal");
-        addLog(`${handNames[defender]}は「上告」を発動。「${card.name}」を${handNames[attacker]}の山札へ戻し、「執行」を1枚与えた。残りの上告${purged}枚を捨てた。`);
+        addLog(`${handNames[defender]}は「上告」を発動。「${card.name}」を${handNames[attacker]}の山札へ戻した。${handNames[attacker]}の次のターン開始時に「執行」が1枚与えられる。残りの上告${purged}枚を捨てた。`);
         await showCardPopup(defender, CARD_LIBRARY.supremeAppeal, false, 900);
       }
 
@@ -11549,6 +11569,7 @@ async function endTurn() {
       state.pendingIntemperanceCardLock = { human: false, cpu: false };
       state.activeIntemperanceCardLock = { human: false, cpu: false };
       state.judgmentPrisonTurns = { human: 0, cpu: 0 };
+      state.pendingAppealExecution = { human: 0, cpu: 0 };
       state.personalTurnCount = { human: 0, cpu: 0 };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
