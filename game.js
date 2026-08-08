@@ -2020,6 +2020,22 @@ const CARD_LIBRARY = {
         ]
       },
       {
+        id: "v140-charge-bugfixes",
+        version: "v140",
+        date: "2026-08-08",
+        title: "充電テーマの進行不能・状態持越しを修正",
+        summary: "空間切断・予告状＋過充電・廉価バッテリー・疲労で確認された充電関連の不具合をまとめて修正しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "充電Lv.5～9で空間切断の代償を選ぶと処理が停止する不具合を修正",
+          "予告状で過充電を予約した場合、発動したターンではなく次の自分ターンに反動が発生するよう修正",
+          "廉価バッテリーの劣化回数がゲームリセット後も残る不具合を修正",
+          "疲労では充電を捨てず、充電しかない場合は手札0枚として手の本数を1減らす仕様に修正",
+          "充電は通常のランダム手札破棄でも保護されるよう処理を統一"
+        ]
+      },
+      {
         id: "v137-judgment-theme-release",
         version: "v137",
         date: "2026-07-25",
@@ -6406,7 +6422,8 @@ function wrapFinger(value) {
 
         // 自傷はダメージではなく発動前の代償。選択した手を確実に0にする。
         state[player][hand] = 0;
-        clearHandAttachments(player, hand);
+        // 0になった手の罠・加護・呪縛は既存の共通処理で整理する。
+        // 以前は未定義の clearHandAttachments() を呼んでおり、充電5～9時にここで処理が停止していた。
         clearBrokenTraps(player);
         addLog(`${handNames[player]}は「空間切断」の代償として${handNames[hand]}を${before}→0にした。`);
         render();
@@ -6600,9 +6617,12 @@ function wrapFinger(value) {
     }
 
     function fatigue(player) {
-      if (state.hands[player].length > 0) {
-        const index = Math.floor(Math.random() * state.hands[player].length);
-        const [discarded] = state.hands[player].splice(index, 1);
+      const discardableCards = state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => !isProtectedChargeCard(item.cardId));
+      if (discardableCards.length > 0) {
+        const picked = discardableCards[Math.floor(Math.random() * discardableCards.length)];
+        const [discarded] = state.hands[player].splice(picked.index, 1);
         state.discard[player].push(discarded);
         const cardName = CARD_LIBRARY[discarded]?.name || discarded;
         addLog(`${handNames[player]}は疲労を受け、手札から「${cardName}」をランダムに捨てた。`);
@@ -6611,6 +6631,7 @@ function wrapFinger(value) {
         return;
       }
 
+      // 充電しか持っていない場合、疲労では「手札0枚」として扱う。
       const candidates = ["L", "R"].filter(hand => isAlive(player, hand));
       if (!candidates.length) {
         checkWin();
@@ -6644,6 +6665,14 @@ function wrapFinger(value) {
       // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
       if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
       ensureOnlineStateMaps();
+      // ターン開始時点ですでに予約されていた反動だけを「今回の反動」として確定する。
+      // 予告状など、ターン開始処理の途中で新しく予約された反動は次の自分ターンまで残す。
+      const chargeStunDueThisTurn = !!state.pendingChargeStun[player];
+      const chargeStunSourceDueThisTurn = state.pendingChargeStunSource?.[player] || "充電効果";
+      if (chargeStunDueThisTurn) {
+        state.pendingChargeStun[player] = false;
+        state.pendingChargeStunSource[player] = "";
+      }
       if (!state.firstTurnStarted) state.firstTurnStarted = { human: false, cpu: false };
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
@@ -6837,12 +6866,8 @@ function wrapFinger(value) {
         );
       }
 
-      if (state.pendingChargeStun[player]) {
-        const recoilSource = state.pendingChargeStunSource?.[player] || "充電効果";
-
-        // 予約された反動は、次の自分ターン開始時にだけ消費する。
-        state.pendingChargeStun[player] = false;
-        state.pendingChargeStunSource[player] = "";
+      if (chargeStunDueThisTurn) {
+        const recoilSource = chargeStunSourceDueThisTurn;
 
         addLog(`${handNames[player]}は「${recoilSource}」の反動により、このターンは行動不能。`);
         setMessage(`${handNames[player]}は「${recoilSource}」の反動で行動不能です。`);
@@ -7646,9 +7671,13 @@ function wrapFinger(value) {
 
     function discardRandomCards(player,count,reason) {
       let discarded=0;
-      while(discarded<count && state.hands[player].length){
-        const i=Math.floor(Math.random()*state.hands[player].length);
-        const id=state.hands[player].splice(i,1)[0];
+      while(discarded<count){
+        const candidates = state.hands[player]
+          .map((id,index)=>({id,index}))
+          .filter(item=>!isProtectedChargeCard(item.id));
+        if (!candidates.length) break;
+        const picked=candidates[Math.floor(Math.random()*candidates.length)];
+        const id=state.hands[player].splice(picked.index,1)[0];
         state.discard[player].push(id);
         addLog(`${reason}：${handNames[player]}は「${CARD_LIBRARY[id]?.name||id}」を捨てた。`);
         discarded++;
@@ -11582,6 +11611,10 @@ async function endTurn() {
       state.pendingSwapFirst = null;
       state.pendingChargeStun = { human: false, cpu: false };
       state.pendingChargeStunSource = { human: "", cpu: "" };
+      state.cheapBatteryDecay = { human: 0, cpu: 0 };
+      state.energyBarrier = { human: 0, cpu: 0 };
+      state.pendingChargeTarget = null;
+      state.pendingAdvanceNotice = { human: [], cpu: [] };
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
       state.pendingAndanteHand = null;
       state.pendingBalanceTarget = null;
