@@ -10008,9 +10008,35 @@ async function attack(attacker, attackHand, defender, targetHand) {
         }
         addLog(`${handNames[attacker]}の攻撃は無効になった。`);
         setLastAction(attacker, "攻撃", "攻撃は無効になりました。", "action");
+
+        // 空振りなどで無効化されても、攻撃を試みた回数は消費する。
+        // これにより空間切断の2発目を無効化された後に3発目が撃てる不具合を防ぐ。
+        state.temp[attacker].attacksUsed = (state.temp[attacker].attacksUsed || 0) + 1;
+        const canceledCompletedAttacks = state.temp[attacker].attacksUsed || 0;
+        const canceledAttackLimit = state.temp[attacker].attackLimit || 1;
+        if (canceledCompletedAttacks >= canceledAttackLimit) {
+          state.pendingTerminalEnd[attacker] = true;
+        }
+
+        state.temp[attacker].lightningNoChargeGain = false;
         state.animating = false;
         clearHighlights();
         render();
+
+        if (
+          state.battleMode === "friend" &&
+          attacker === "human" &&
+          canceledAttackLimit > 1 &&
+          canceledCompletedAttacks < canceledAttackLimit &&
+          !state.gameOver
+        ) {
+          try {
+            state.friendLastPublishedSignature = "";
+            await publishFriendStateNow();
+          } catch (error) {
+            console.error("PVP canceled multi-attack sync failed", error);
+          }
+        }
         return true;
       }
 
