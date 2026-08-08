@@ -1861,7 +1861,7 @@ const CARD_LIBRARY = {
         name: "不変の呪縛",
         cost: 2,
         type: "呪縛",
-        text: "相手の手に表向きで置く。この手は攻撃力を増やす効果を受けない。",
+        text: "相手の手に表向きで置く。この手の通常攻撃は、カード効果による与える本数の増加を受けない。カードによる直接の本数追加には影響しない。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -9793,8 +9793,13 @@ async function attack(attacker, attackHand, defender, targetHand) {
       render();
 
       const normalBasePower = state[attacker][attackHand];
-      const basePower = goldRushActive ? state.hands[attacker].length : normalBasePower;
       const immutable = hasImmutableCurse(attacker, attackHand);
+      // 不変の呪縛は「カードによる通常攻撃の増加」を無効化する。
+      // ゴールドラッシュの基本本数置換も、通常の手の本数を上回る場合は増加分を認めない。
+      const goldRushBase = state.hands[attacker].length;
+      const basePower = goldRushActive
+        ? (immutable ? Math.min(normalBasePower, goldRushBase) : goldRushBase)
+        : normalBasePower;
       const rawBonus = state.temp[attacker].attackBonus || 0;
       const positiveCardBonus = Math.max(0, rawBonus);
       const negativeCardBonus = Math.min(0, rawBonus);
@@ -9810,22 +9815,39 @@ async function attack(attacker, attackHand, defender, targetHand) {
       const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
       let duelSurgeBonus = 0;
-      const lightningBonus=state.temp[attacker].lightningBonus||0;
-      const synapseBonus=state.temp[attacker].synapseBonus||0;
-      const dimensionalSlashBonus=state.temp[attacker].dimensionalSlashBonus||0;
+      const lightningBonus=immutable ? 0 : (state.temp[attacker].lightningBonus||0);
+      const synapseBonus=immutable ? 0 : (state.temp[attacker].synapseBonus||0);
+      const dimensionalSlashBonus=immutable ? 0 : (state.temp[attacker].dimensionalSlashBonus||0);
       const frenzyBonus = immutable || !frenzyActive ? 0 : 2;
       const rationalPowerBonus = immutable || !rationalPowerActive ? 0 : 1;
       const selfRighteousBonus = immutable || !selfRighteousActive ? 0 : 2;
       const justiceForEveryoneBonus = immutable || !justiceForEveryoneActive ? 0 : 1;
-      const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
+      const dischargeBonus=immutable ? 0 : (hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0);
       const balanceBladeBonus = immutable || !balanceBladeActive || !isBalanced(attacker) ? 0 : 2;
       const danceActive = !!state.temp[attacker]?.dance;
       let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
       let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus);
       state.temp[attacker].attackBonus = 0;
-      if (immutable && (positiveCardBonus > 0 || (state.berserkerTurns[attacker] > 0) || hasAttachment(attacker, attackHand, "powerBlessing") || hasAttachment(attacker, attackHand, "recklessBlessing") || (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo"))))) {
-        addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、攻撃力増加を受けない。`);
+      const immutableBlockedIncrease = immutable && (
+        positiveCardBonus > 0 ||
+        state.berserkerTurns[attacker] > 0 ||
+        hasAttachment(attacker, attackHand, "powerBlessing") ||
+        hasAttachment(attacker, attackHand, "recklessBlessing") ||
+        hasAttachment(attacker, attackHand, "magicalHatred") ||
+        hasAttachment(attacker, attackHand, "magicalLove") ||
+        hasAttachment(attacker, attackHand, "magicalCourage") ||
+        hasAttachment(attacker, attackHand, "willBlade") ||
+        (state.temp[attacker].lightningBonus||0) > 0 ||
+        (state.temp[attacker].synapseBonus||0) > 0 ||
+        (state.temp[attacker].dimensionalSlashBonus||0) > 0 ||
+        (hasAttachment(attacker,attackHand,"dischargeBlessing") && getChargeLevel(attacker)>=10) ||
+        frenzyActive || rationalPowerActive || selfRighteousActive || justiceForEveryoneActive || balanceBladeActive ||
+        (goldRushActive && goldRushBase > normalBasePower) ||
+        (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo")))
+      );
+      if (immutableBlockedIncrease) {
+        addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、カード効果による与える本数の増加を受けない。`);
       }
       if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
       if (magicalAttackBonus) addLog(`${handNames[attacker]}の魔法少女加護により、攻撃力+1。`);
@@ -9859,8 +9881,16 @@ async function attack(attacker, attackHand, defender, targetHand) {
         }
         if (hasAttachment(defender,targetHand,"scalesBlessing")) {
           const beforeScale=power;
-          power = isBalanced(defender) ? Math.max(0,power-2) : power+1;
-          addLog(`${handNames[defender]}の「天秤の加護」により、受ける本数が${beforeScale}→${power}。`);
+          if (isBalanced(defender)) {
+            power = Math.max(0,power-2);
+          } else if (!immutable) {
+            power += 1;
+          }
+          if (immutable && !isBalanced(defender)) {
+            addLog(`${handNames[defender]}の「天秤の加護」による受ける本数+1は「不変の呪縛」で無効。`);
+          } else {
+            addLog(`${handNames[defender]}の「天秤の加護」により、受ける本数が${beforeScale}→${power}。`);
+          }
         }
         if (hasAttachment(defender,targetHand,"magicalDespair")) {
           const beforeDespair = power;
@@ -9917,9 +9947,12 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       if (typeof trapResult.powerDelta === "number") {
         const oldPower = power;
-        power = Math.max(1, power + trapResult.powerDelta);
+        const appliedPowerDelta = immutable && trapResult.powerDelta > 0 ? 0 : trapResult.powerDelta;
+        power = Math.max(1, power + appliedPowerDelta);
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
-        if (oldPower !== power) addLog(`攻撃力が${oldPower}→${power}になった。`);
+        if (immutable && trapResult.powerDelta > 0) {
+          addLog(`「不変の呪縛」により、カード効果による攻撃力+${trapResult.powerDelta}を無効化した。`);
+        } else if (oldPower !== power) addLog(`攻撃力が${oldPower}→${power}になった。`);
       }
 
       if (trapResult.targetHand) {
@@ -9949,10 +9982,12 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
 
       if (defender === otherPlayer(attacker) && hasAttachment(defender, targetHand, "villainMark")) {
-        power += 1;
+        if (!immutable) power += 1;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         drawCard(attacker);
-        addLog(`${handNames[defender]}の${handNames[targetHand]}の「悪党の印」により、攻撃力+1。${handNames[attacker]}はカードを1枚引いた。`);
+        addLog(immutable
+          ? `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」の攻撃力+1は「不変の呪縛」で無効。${handNames[attacker]}はカードを1枚引いた。`
+          : `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」により、攻撃力+1。${handNames[attacker]}はカードを1枚引いた。`);
       }
 
       recordDirectiveAttack(attacker, attackHand, defender, targetHand);
