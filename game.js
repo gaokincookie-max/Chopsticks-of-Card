@@ -25,7 +25,7 @@ const CARD_LIBRARY = {
         name: "強打",
         cost: 1,
         type: "補助",
-        text: "このターン、次の攻撃で攻撃する手の本数を+1して扱う。",
+        text: "このターン、次の通常攻撃で攻撃する手の本数を+1して扱う。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].attackBonus += 1;
@@ -36,7 +36,7 @@ const CARD_LIBRARY = {
         name: "軽打",
         cost: 1,
         type: "補助",
-        text: "このターン、次の攻撃で攻撃する手の本数を-1して扱う。ただし攻撃力は1未満にならない。",
+        text: "このターン、次の通常攻撃で攻撃する手の本数を-1して扱う。ただし攻撃力は1未満にならない。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].attackBonus -= 1;
@@ -79,9 +79,7 @@ const CARD_LIBRARY = {
           const hand = zeroHands[0];
           const discardIndex = chooseCpuDiscardIndex();
           if (discardIndex < 0) return;
-          const [discarded] = state.hands[player].splice(discardIndex, 1);
-          state.discard[player].push(discarded);
-          await handleCardDiscardEffect(player, discarded);
+          const discarded = await discardHandCardByEffect(player, discardIndex);
           state[player][hand] = 1;
           addLog(`${handNames[player]}は「補修」で「${CARD_LIBRARY[discarded].name}」を捨て、${handNames[hand]}を0→1に戻した。`);
         }
@@ -115,7 +113,7 @@ const CARD_LIBRARY = {
       },
       lightningStrike: {
         name: "雷撃", cost: 1, type: "補助 / 充電", chargeCard: true,
-        text: "充電5を消費。使用前の充電4につき、次の攻撃で与える本数+1。使用前がLv.10なら、その攻撃で超過計算前の合計が5以上になった時、あまりを計算せず0にする。充電不足なら不発。",
+        text: "充電5を消費。使用前の充電4につき、次の通常攻撃で与える本数+1。使用前がLv.10なら、その通常攻撃で超過計算前の合計が5以上になった時、あまりを計算せず0にする。充電不足なら不発。",
         canPlay: () => true,
         effect: (player) => {
           const before = getChargeLevel(player);
@@ -148,12 +146,12 @@ const CARD_LIBRARY = {
       },
       synapseMotion: {
         name: "シナプス運動", cost: 2, type: "補助 / 充電", chargeCard: true,
-        text: "次の攻撃で与える本数+1。充電を4得る。", canPlay: () => true,
+        text: "次の通常攻撃で与える本数+1。充電を4得る。", canPlay: () => true,
         effect: (player) => { state.temp[player].synapseBonus=(state.temp[player].synapseBonus||0)+1; gainCharge(player,4,"シナプス運動"); }
       },
       lightSpeedCircuit: {
         name: "光速回路", cost: 3, type: "補助 / 充電", chargeCard: true,
-        text: "1試合に1度だけ発動できる。使用時の充電がLv.10未満なら、カードは捨て札になるが効果は不発。Lv.10なら、このターン充電カードを何枚でも使用でき、充電カードの終端を無視する。終了時に充電0、次の自分ターンは行動不能。",
+        text: "この効果は1試合に1度しか発動できない。すでに発動済みなら不発。使用時の充電がLv.10未満なら不発。Lv.10なら、このターン充電カードを何枚でも使用でき、充電カードの終端を無視する。ターン終了時に充電を0にし、次の自分のターンは行動不能になる。",
         canPlay: (player) => !state.lightSpeedCircuitUsed[player],
         effect: async (player) => {
           const charge = getChargeLevel(player);
@@ -196,7 +194,7 @@ const CARD_LIBRARY = {
       },
       bioticE: {
         name: "バイオティックE", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
-        text: "この手の通常攻撃によって相手の手を0にした時、その攻撃で与えた本数の2倍だけ充電を得る。",
+        text: "この手の通常攻撃によって攻撃対象の手を0にした時、その攻撃で与えた本数の2倍だけ充電を得る。",
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       electromagneticWave: {
@@ -252,7 +250,7 @@ const CARD_LIBRARY = {
       },
       mechanicalGeneration: {
         name: "力学発電", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
-        text: "この手で相手を通常攻撃した時、その攻撃で与えた本数と同じ値だけ充電を得る。",
+        text: "この手で通常攻撃した時、その攻撃で与えた本数と同じ値だけ充電を得る。",
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       chemicalGeneration: {
@@ -273,7 +271,7 @@ const CARD_LIBRARY = {
 
       dimensionalSlash: {
         name: "空間切断", cost: 3, type: "補助 / 充電", chargeCard: true,
-        text: "1ターンに1度。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で与える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
+        text: "この効果は1ターンに1度しか発動できない。すでにこのターン発動している場合は不発。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で与える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
         canPlay: (player) => !state.temp[player].dimensionalSlashUsed,
         effect: async (player) => {
           if (state.temp[player].dimensionalSlashUsed) {
@@ -312,7 +310,7 @@ const CARD_LIBRARY = {
         name: "乱闘",
         cost: 2,
         type: "補助",
-        text: "自分の手札から「乱闘」「指令」「ロジックアトリエ」を除く、効果を持つカードをランダムに1枚選ぶ。使用条件とコストを無視して、その効果だけを発動する。選ばれたカードは消費されない。",
+        text: "自分の手札から「乱闘」「指令」「ロジックアトリエ」を除く、効果を持つカードをランダムに1枚選ぶ。そのカードを通常使用するための条件とコストを無視し、効果だけを発動する。効果本文にある発動条件・不発条件・対象・消費・代償は無視しない。選ばれたカードは消費されない。",
         canPlay: (player) => getBrawlCandidates(player).length > 0,
         effect: async (player) => {
           const candidates = getBrawlCandidates(player);
@@ -324,24 +322,24 @@ const CARD_LIBRARY = {
           const copied = CARD_LIBRARY[picked.cardId];
           addLog(`${handNames[player]}の「乱闘」により「${copied.name}」の効果が無償で発動する。元のカードは手札に残る。`);
           await showCardPopup(player, copied, false, player === "cpu" ? 760 : 620);
-          await activateCopiedCardEffect(player, picked.cardId, "乱闘");
+          await activateCopiedCardEffect(player, picked.cardId, "乱闘", { sourceHandIndex: picked.index });
         }
       },
       advanceNotice: {
         name: "予告状",
         cost: 2,
         type: "補助",
-        text: "現在使用条件を満たしているカードを手札から1枚選び、相手に公開して捨て札にする。次の自分のターン開始時、そのカードの使用条件とコストを無視して効果だけを発動する。「予告状」「指令」「ロジックアトリエ」は選べない。",
+        text: "現在通常使用できるカードを手札から1枚選び、相手に公開して捨て札にする。次の自分のターン開始時、そのカードを通常使用するための条件とコストを無視し、効果だけを発動する。効果本文にある発動条件・不発条件・対象・消費・代償は、その時点の状態で判定する。「予告状」「指令」「ロジックアトリエ」は選べない。",
         canPlay: (player) => getAdvanceNoticeCandidates(player).length > 0,
         effect: async (player) => {
-          if (player === "human") {
-            state.mode = "advanceNoticeChoose";
-            setMessage("「予告状」：次の自分のターンに発動するカードを選んでください。選んだカードは公開して捨て札になります。");
-            return;
-          }
           const candidates = getAdvanceNoticeCandidates(player);
           if (!candidates.length) {
             addLog(`${handNames[player]}の「予告状」は、宣言できるカードがなく不発になった。`);
+            return;
+          }
+          if (player === "human") {
+            state.mode = "advanceNoticeChoose";
+            setMessage("「予告状」：次の自分のターンに発動するカードを選んでください。選んだカードは公開して捨て札になります。");
             return;
           }
           candidates.sort((a, b) => (CARD_LIBRARY[b.cardId]?.cost || 0) - (CARD_LIBRARY[a.cardId]?.cost || 0));
@@ -388,6 +386,8 @@ const CARD_LIBRARY = {
         text: "自分の0でない手を1つ選ぶ。その手の本数を0〜4のランダムな本数に変更する。",
         canPlay: (player) => ["L", "R"].some(h => state[player][h] > 0),
         effect: async (player) => {
+          const choices = ["L", "R"].filter(h => state[player][h] > 0);
+          if (!choices.length) { addLog(`${handNames[player]}の「ランダムダイス」は対象が存在しないため不発。`); return; }
           if (player === "human") {
             state.mode = "randomDice";
             state.selectedAttackHand = null;
@@ -398,7 +398,6 @@ const CARD_LIBRARY = {
             setMessage("「ランダムダイス」：本数を変える自分の0でない手を選んでください。");
             return;
           }
-          const choices = ["L", "R"].filter(h => state[player][h] > 0);
           const hand = choices[Math.floor(Math.random() * choices.length)];
           await applyRandomDice(player, hand);
         }
@@ -409,7 +408,12 @@ const CARD_LIBRARY = {
         type: "補助",
         text: "自分の0でない手を1つ選び、その手を-1する。その後、相手の2以上の手を1つ選び、その手を-1する。",
         canPlay: (player) => ["L", "R"].some(h => state[player][h] > 0) && ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] >= 2),
-        effect: (player) => {
+        effect: async (player) => {
+          const opponent = otherPlayer(player);
+          if (!["L", "R"].some(h => state[player][h] > 0) || !["L", "R"].some(h => state[opponent][h] >= 2)) {
+            addLog(`${handNames[player]}の「等価交換」は対象が存在しないため不発。`);
+            return;
+          }
           if (player === "human") {
             state.mode = "equalTradeSelf";
             state.pendingEqualTradeSelf = null;
@@ -453,6 +457,10 @@ const CARD_LIBRARY = {
         text: "相手の0でない手を1つ選び、その手に1本加える。",
         canPlay: (player) => ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] > 0),
         effect: (player) => {
+          if (!["L", "R"].some(h => state[otherPlayer(player)][h] > 0)) {
+            addLog(`${handNames[player]}の「狙撃」は対象が存在しないため不発。`);
+            return;
+          }
           if (player === "human") {
             state.mode = "snipe";
             state.selectedAttackHand = null;
@@ -475,6 +483,18 @@ const CARD_LIBRARY = {
         canPlay: (player) => state.hands[player].length > 1 && ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] > 0),
         terminal: true,
         effect: async (player) => {
+          const opponent = otherPlayer(player);
+          state.pendingRapidFireExcludedIndex =
+            state.copiedEffectContext?.sourceLabel === "乱闘" && state.copiedEffectContext?.cardId === "rapidFire"
+              ? Number(state.copiedEffectContext.sourceHandIndex)
+              : null;
+          const hasDiscard = getRapidFireDiscardCandidates(player).length > 0;
+          const hasTarget = ["L", "R"].some(h => state[opponent][h] > 0);
+          if (!hasDiscard || !hasTarget) {
+            addLog(`${handNames[player]}の「乱射」は${!hasDiscard ? "捨てられる手札" : "攻撃対象"}が存在しないため不発。`);
+            state.pendingRapidFireExcludedIndex = null;
+            return;
+          }
           if (player === "human") {
             state.mode = "rapidFireDiscard";
             state.selectedAttackHand = null;
@@ -485,12 +505,11 @@ const CARD_LIBRARY = {
             setMessage("「乱射」：弾薬として捨てる手札を1枚選んでください。");
             return;
           }
-          const discardIndex = chooseCpuRapidFireDiscardIndex();
+          const discardIndex = chooseCpuRapidFireDiscardIndex(player);
           if (discardIndex < 0) {
             state.pendingTerminalEnd[player] = true;
             return;
           }
-          const opponent = "human";
           const target = chooseCpuSnipeTarget();
           if (target) {
             await applyRapidFire(player, opponent, discardIndex, target);
@@ -692,6 +711,7 @@ const CARD_LIBRARY = {
         text: "相手の伏せカードを1枚選び、捨て札に置く。",
         canPlay: (player) => hasOpponentTrap(player),
         effect: (player) => {
+          if (!hasOpponentTrap(player)) { addLog(`${handNames[player]}の「解除」は対象が存在しないため不発。`); return; }
           if (player === "human") {
             state.mode = "chooseOpponentTrap";
             state.pendingTrapTargetEffect = "remove";
@@ -713,6 +733,7 @@ const CARD_LIBRARY = {
         text: "相手の伏せカードを1枚選んで確認する。確認したカードは伏せたままにする。",
         canPlay: (player) => hasOpponentTrap(player),
         effect: (player) => {
+          if (!hasOpponentTrap(player)) { addLog(`${handNames[player]}の「看破」は対象が存在しないため不発。`); return; }
           if (player === "human") {
             state.mode = "chooseOpponentTrap";
             state.pendingTrapTargetEffect = "reveal";
@@ -734,6 +755,7 @@ const CARD_LIBRARY = {
         text: "相手の罠ゾーンにあるカード1枚を選び、相手のもう片方の手の空き枠へ移動する。罠・加護・呪縛を移動できる。",
         canPlay: (player) => hasMovableOpponentTrap(player),
         effect: (player) => {
+          if (!hasMovableOpponentTrap(player)) { addLog(`${handNames[player]}の「手繰り寄せ」は対象が存在しないため不発。`); return; }
           if (player === "human") {
             state.mode = "chooseOpponentTrap";
             state.pendingTrapTargetEffect = "move";
@@ -755,6 +777,7 @@ const CARD_LIBRARY = {
         text: "相手の罠ゾーンにある加護・呪縛を1枚選び、自分の罠ゾーンにある加護・呪縛を1枚選ぶ。その2枚を交換する。",
         canPlay: (player) => hasSwapTargets(player),
         effect: (player) => {
+          if (!hasSwapTargets(player)) { addLog(`${handNames[player]}の「すりかえ」は交換対象が存在しないため不発。`); return; }
           if (player === "human") {
             state.mode = "swapOpponentAttachment";
             state.pendingSwapFirst = null;
@@ -774,7 +797,7 @@ const CARD_LIBRARY = {
         name: "強行突破",
         cost: 3,
         type: "補助",
-        text: "このターン、自分の攻撃は相手側の罠・加護・呪縛の効果を受けない。",
+        text: "このターン、自分の通常攻撃は相手側の罠・加護・呪縛の効果を受けない。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].breakthrough = true;
@@ -789,6 +812,10 @@ const CARD_LIBRARY = {
         text: "このターン、罠カードに限りカード関連行動の回数制限を無視して好きなだけ伏せてもよい。攻撃も分けるもできず、仕込み終了で相手にターンを渡す。",
         canPlay: (player) => canSetAnyTrap(player) && state.hands[player].some(id => CARD_LIBRARY[id]?.trap),
         effect: (player) => {
+          if (!canSetAnyTrap(player) || !state.hands[player].some(id => CARD_LIBRARY[id]?.trap)) {
+            addLog(`${handNames[player]}の「仕込み」は設置できる罠が存在しないため不発。`);
+            return;
+          }
           state.temp[player].setupMode = true;
           state.mode = "setupTrap";
           state.selectedAttackHand = null;
@@ -877,7 +904,7 @@ const CARD_LIBRARY = {
         name: "意志の剣",
         cost: 3,
         type: "加護",
-        text: "前の自分のターンに達成した指令の数だけ、この手を使った通常攻撃で相手に加える本数を増やす。",
+        text: "前の自分のターンに達成した指令の数だけ、この手を使った通常攻撃で対象に加える本数を増やす。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -888,15 +915,18 @@ const CARD_LIBRARY = {
         text: "自分の手札にある「指令」カードを1枚選び、相手の手札に移す。指定内容はそのまま引き継ぐ。",
         canPlay: (player) => state.hands[player].some(id => isDirectiveCard(id)),
         effect: async (player) => {
+          const choices = state.hands[player]
+            .map((id, index) => ({ id, index }))
+            .filter(x => isDirectiveCard(x.id));
+          if (!choices.length) {
+            addLog(`${handNames[player]}の「都市の意志」は対象となる指令が存在しないため不発。`);
+            return;
+          }
           if (player === "human") {
             state.mode = "cityWillChoose";
             setMessage("「都市の意志」：相手に渡す指令を選んでください。");
             return;
           }
-          const choices = state.hands[player]
-            .map((id, index) => ({ id, index }))
-            .filter(x => isDirectiveCard(x.id));
-          if (!choices.length) return;
           const picked = choices[Math.floor(Math.random() * choices.length)];
           transferDirective(player, picked.index);
         }
@@ -943,10 +973,14 @@ const CARD_LIBRARY = {
         name: "凶弾",
         cost: 3,
         type: "終端",
-        text: "自分の両手が1以上のときに使える。選んだ自分の手で、選ばなかった自分の手を攻撃する。この攻撃で攻撃された手がちょうど5になった場合、相手の1以上の手に3本ずつ加える。この攻撃では対象変更できない。",
+        text: "自分の両手が1以上でなければ不発。選んだ自分の手で、選ばなかった自分の手を攻撃する。この攻撃で攻撃された手がちょうど5になった場合、相手の1以上の手に3本ずつ加える。この攻撃では対象変更できない。",
         canPlay: (player) => state[player].L > 0 && state[player].R > 0,
         terminal: true,
         effect: async (player) => {
+          if (state[player].L <= 0 || state[player].R <= 0) {
+            addLog(`${handNames[player]}の「凶弾」は両手が1以上ではないため不発。`);
+            return;
+          }
           if (player === "human") {
             state.mode = "cursedBullet";
             state.selectedAttackHand = null;
@@ -1006,9 +1040,7 @@ const CARD_LIBRARY = {
           }
           const discardIndex = chooseCpuDiscardIndex();
           if (discardIndex < 0) return;
-          const [discarded] = state.hands[player].splice(discardIndex, 1);
-          state.discard[player].push(discarded);
-          await handleCardDiscardEffect(player, discarded);
+          const discarded = await discardHandCardByEffect(player, discardIndex);
           drawCard(player);
           drawCard(player);
           addLog(`${handNames[player]}は「落ち着ける」で「${CARD_LIBRARY[discarded].name}」を捨て、2枚引いた。`);
@@ -1050,7 +1082,7 @@ const CARD_LIBRARY = {
         name: "乱舞",
         cost: 2,
         type: "補助",
-        text: "このターン、次の自分の攻撃ではダメージを与えない。代わりに、攻撃対象の手の本数を攻撃した手と同じ本数にする。",
+        text: "このターン、次の自分の通常攻撃ではダメージを与えない。代わりに、攻撃対象の手の本数を攻撃した手と同じ本数にする。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].dance = true;
@@ -1075,23 +1107,6 @@ const CARD_LIBRARY = {
           if (player === "human") {
             state.mode = "andante";
             state.pendingAndanteHand = null;
-      state.pendingBalanceTarget = null;
-      state.pendingDirectiveDraw = { human: 0, cpu: 0 };
-      state.pendingDirectiveNoDraw = { human: 0, cpu: 0 };
-      state.pendingDirectiveBonusDraw = { human: 0, cpu: 0 };
-      state.lastDirectiveClearCount = { human: 0, cpu: 0 };
-      state.activeDirectiveBlessing = { human: 0, cpu: 0 };
-      state.pendingChargeStun = { human: false, cpu: false };
-      state.pendingChargeStunSource = { human: "", cpu: "" };
-      state.cheapBatteryDecay = { human: 0, cpu: 0 };
-      state.energyBarrier = { human: 0, cpu: 0 };
-      state.pendingChargeTarget = null;
-      state.lightSpeedCircuitUsed = { human: false, cpu: false };
-      state.cheapBatteryDecay = { human: 0, cpu: 0 };
-      state.energyBarrier = { human: 0, cpu: 0 };
-      state.pendingChargeTarget = null;
-      state.pendingWillTorrent = { human: 0, cpu: 0 };
-      state.pendingAdvanceNotice = { human: [], cpu: [] };
             state.selectedAttackHand = null;
             elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
@@ -1234,10 +1249,9 @@ const CARD_LIBRARY = {
           return placedHand === targetHand && resolvedFinal === 0;
         },
         trigger: async ({ attacker }) => {
-          const discarded = discardOneCard(attacker);
+          const discarded = await discardOneCard(attacker);
           if (discarded) {
             addLog(`罠「置き土産」により、${handNames[attacker]}は「${CARD_LIBRARY[discarded]?.name || discarded}」を捨てた。`);
-            await handleCardDiscardEffect(attacker, discarded);
           } else {
             addLog(`罠「置き土産」が発動したが、${handNames[attacker]}の手札が0枚だったため捨てられなかった。`);
           }
@@ -1384,6 +1398,7 @@ const CARD_LIBRARY = {
         text: "自分の手に置かれている呪縛を1枚選び、捨て札に置く。",
         canPlay: (player) => hasOwnCurse(player),
         effect: (player) => {
+          if (!hasOwnCurse(player)) { addLog(`${handNames[player]}の「解呪」は対象が存在しないため不発。`); return; }
           if (player === "human") {
             state.mode = "chooseOwnCurse";
             state.selectedAttackHand = null;
@@ -1403,7 +1418,7 @@ const CARD_LIBRARY = {
         name: "力の加護",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手で攻撃するとき、攻撃力+1。手が0になったら捨て札に置く。",
+        text: "自分の手に表向きで置く。この手で通常攻撃するとき、攻撃力+1。手が0になったら捨て札に置く。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1435,7 +1450,7 @@ const CARD_LIBRARY = {
         name: "捨て身",
         cost: 3,
         type: "加護",
-        text: "自分の手に表向きで置く。この手で攻撃するとき攻撃力+2。相手を攻撃した後、この手に1本加える。",
+        text: "自分の手に表向きで置く。この手で通常攻撃するとき攻撃力+2。通常攻撃した後、この手に1本加える。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1443,13 +1458,13 @@ const CARD_LIBRARY = {
         name: "跳弾",
         cost: 3,
         type: "加護",
-        text: "自分の手に表向きで置く。この手で攻撃した後、相手のもう片方の手にこの手の本数の半分、切り捨ての本数を加える。",
+        text: "自分の手に表向きで置く。この手で相手を通常攻撃した後、相手のもう片方の手にこの手の本数の半分、切り捨ての本数を加える。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       magicalHatred: {
         name: "憎悪", cost: 2, type: "加護 / 魔法少女",
-        text: "自分の手に表向きで置く。この手で攻撃するとき攻撃力+1。攻撃するたび手札をランダムに1枚捨てる。虚無で「愛」へ変化する。",
+        text: "自分の手に表向きで置く。この手で通常攻撃するとき攻撃力+1。通常攻撃するたび手札をランダムに1枚捨てる。虚無で「愛」へ変化する。",
         blessing: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1473,7 +1488,7 @@ const CARD_LIBRARY = {
       },
       magicalLove: {
         name: "愛", cost: 2, type: "加護 / 魔法少女・変身後",
-        text: "この手で攻撃するとき攻撃力+1。攻撃時、自分のもう片方が4なら-1、1か2なら+1する。疲弊による本数変化を受けない。",
+        text: "この手で通常攻撃するとき攻撃力+1。通常攻撃時、自分のもう片方が4なら-1、1か2なら+1する。疲弊による本数変化を受けない。",
         blessing: true, token: true, magicalTransformed: true, magicalColor: "love",
         canPlay: () => false
       },
@@ -1485,13 +1500,13 @@ const CARD_LIBRARY = {
       },
       magicalHappiness: {
         name: "幸福", cost: 2, type: "加護 / 魔法少女・変身後",
-        text: "この手で攻撃した後、カードを2枚引き、相手は手札をランダムに1枚捨てる。疲弊による本数変化を受けない。",
+        text: "この手で通常攻撃した後、カードを2枚引き、相手は手札をランダムに1枚捨てる。疲弊による本数変化を受けない。",
         blessing: true, token: true, magicalTransformed: true, magicalColor: "happiness",
         canPlay: () => false
       },
       magicalCourage: {
         name: "勇気", cost: 2, type: "加護 / 魔法少女・変身後",
-        text: "この手で攻撃するとき攻撃力+1。相手の手が7以上になった場合、超過計算をせず0にする。疲弊による本数変化を受けない。",
+        text: "この手で通常攻撃するとき攻撃力+1。相手の手が7以上になった場合、超過計算をせず0にする。疲弊による本数変化を受けない。",
         blessing: true, token: true, magicalTransformed: true, magicalColor: "courage",
         canPlay: () => false
       },
@@ -1507,7 +1522,7 @@ const CARD_LIBRARY = {
       },
       togetherWithFriends: {
         name: "仲間と共に", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "捨て札からランダムに3枚を山札へ戻してシャッフルし、カードを3枚引く。",
+        text: "自分の捨て札が1枚以上ある時のみ使用可能。捨て札からランダムに最大3枚を山札へ戻してシャッフルし、カードを3枚引く。",
         token: true, magicalEvolution: true,
         canPlay: (player) => state.discard[player].length > 0,
         effect: (player) => useTogetherWithFriends(player)
@@ -1605,7 +1620,7 @@ const CARD_LIBRARY = {
       },
       frenzy: {
         name: "狂乱", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "次の攻撃で与える本数+2。その攻撃の対象は、相手の生存している手と自分のもう片方の生存している手からランダムに選ばれる。",
+        text: "次の通常攻撃で与える本数+2。その通常攻撃の対象は、相手の生存している手と自分のもう片方の生存している手からランダムに選ばれる。",
         magicalEvolutionBase: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1615,7 +1630,7 @@ const CARD_LIBRARY = {
       },
       rationalPower: {
         name: "理性ある力", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の攻撃で与える本数+1。相手の手を攻撃したとき、もう片方の相手の手にも同じ本数を与える。追加効果では罠・共鳴・攻撃時効果は発動しない。",
+        text: "次の通常攻撃で与える本数+1。相手の手を攻撃したとき、もう片方の相手の手にも同じ本数を与える。追加効果では罠・共鳴・攻撃時効果は発動しない。",
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1625,7 +1640,7 @@ const CARD_LIBRARY = {
       },
       selfRighteousness: {
         name: "独善", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "次の攻撃で与える本数+2。その攻撃で相手の手を0にできなかった場合、自分の攻撃した手に2本加える。対象が変更された場合は変更後の対象で判定する。",
+        text: "次の通常攻撃で与える本数+2。その通常攻撃で相手の手を0にできなかった場合、自分の攻撃した手に2本加える。対象が変更された場合は変更後の対象で判定する。",
         magicalEvolutionBase: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1635,7 +1650,7 @@ const CARD_LIBRARY = {
       },
       justiceForEveryone: {
         name: "みんなのための正義", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の攻撃で与える本数+1。その攻撃で相手の手を0にした場合、自分のもう片方の手を1にする。0の手も対象になる。対象が変更された場合は変更後の対象で判定する。",
+        text: "次の通常攻撃で与える本数+1。その通常攻撃で相手の手を0にした場合、自分のもう片方の手を1にする。0の手も対象になる。対象が変更された場合は変更後の対象で判定する。",
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1651,7 +1666,7 @@ const CARD_LIBRARY = {
       },
       tearSharpenedSword: {
         name: "涙で研ぎ澄まされた剣", cost: 2, type: "補助 / 魔法少女",
-        text: "次の攻撃時、対象変更後の攻撃対象に付いている加護をすべて捨ててから攻撃する。",
+        text: "次の通常攻撃時、対象変更後の攻撃対象に付いている加護をすべて捨ててから攻撃する。",
         magicalCore: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1661,7 +1676,7 @@ const CARD_LIBRARY = {
       },
       goldRush: {
         name: "ゴールドラッシュ", cost: 2, type: "補助 / 魔法少女",
-        text: "次の攻撃で与える基本本数を、攻撃時の自分の手札枚数にする。ほかの攻撃力増減はその後に適用する。",
+        text: "次の通常攻撃で与える基本本数を、攻撃時の自分の手札枚数にする。ほかの攻撃力増減はその後に適用する。",
         magicalCore: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1674,11 +1689,11 @@ const CARD_LIBRARY = {
         text: "終端。相手の手札が自分より多い場合、自分と同じ枚数になるまで相手の手札をランダムに捨てさせる。自分の方が多い、または同数なら何も起こらない。",
         terminal: true, magicalCore: true,
         canPlay: () => true,
-        effect: (player) => {
+        effect: async (player) => {
           const opponent = otherPlayer(player);
           const difference = Math.max(0, state.hands[opponent].length - state.hands[player].length);
           if (difference > 0) {
-            const discarded = discardRandomCards(opponent, difference, "「空虚」");
+            const discarded = await discardRandomCards(opponent, difference, "「空虚」");
             addLog(`${handNames[player]}の「空虚」により、${handNames[opponent]}は手札を${discarded}枚捨て、${state.hands[opponent].length}枚になった。`);
           } else {
             addLog(`${handNames[player]}は「空虚」を使用したが、相手の手札は自分より多くないため何も起こらなかった。`);
@@ -1688,14 +1703,14 @@ const CARD_LIBRARY = {
       },
       sacrificePower: {
         name: "犠牲の力", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "自分の手に付いている加護を1枚以上、好きな数だけ選んで捨てる。次の攻撃で、捨てた加護の数だけ与える本数を増やす。",
+        text: "自分の手に付いている加護を1枚以上、好きな数だけ選んで捨てる。次の通常攻撃で、捨てた加護の数だけ与える本数を増やす。",
         magicalEvolutionBase: true,
         canPlay: (player) => countOwnBlessings(player) > 0,
         effect: async (player) => { await useSacrificePower(player); }
       },
       powerOfEveryone: {
         name: "みんなの力で", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の攻撃で、攻撃時に自分の両手に付いている加護の合計数だけ与える本数を増やす。",
+        text: "次の通常攻撃で、攻撃時に自分の両手に付いている加護の合計数だけ与える本数を増やす。",
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1706,7 +1721,7 @@ const CARD_LIBRARY = {
       },
       magicalVoid: {
         name: "虚無", cost: 2, type: "魔法少女",
-        text: "自分の両手に「憎悪」「絶望」「貪欲」「憤怒」が1枚ずつ存在するとき使用可能。それぞれを「愛」「正義」「幸福」「勇気」へ変化させる。",
+        text: "憎悪・絶望・貪欲・憤怒が自分の両手に1枚ずつ揃っていなければ不発。揃っているなら、それぞれを愛・正義・幸福・勇気へ変化させる。",
         canPlay: (player) => canActivateMagicalVoid(player),
         effect: async (player) => {
           return await activateMagicalVoid(player);
@@ -1729,7 +1744,7 @@ const CARD_LIBRARY = {
 
       balanceBlade: {
         name: "均衡の刃", cost: 1, type: "補助 / 天秤",
-        text: "次の攻撃時、自分の両手の本数が等しいなら、与える本数+2。",
+        text: "次の通常攻撃時、自分の両手の本数が等しいなら、与える本数+2。",
         canPlay: () => true,
         effect: (player) => { state.temp[player].balanceBladeAttack = true; addLog(`${handNames[player]}は「均衡の刃」を構えた。次の攻撃時に均衡なら攻撃力+2。`); }
       },
@@ -1747,7 +1762,7 @@ const CARD_LIBRARY = {
       },
       equalCondemnation: {
         name: "等価なる断罪", cost: 2, type: "終端 / 天秤",
-        text: "終端。自分の両手の本数が等しいなら、その本数を相手の0ではない両手に与える。ただし相手の両手の本数が等しいなら無効。",
+        text: "終端。発動時、自分の両手の本数が等しくなければ不発。等しいなら、その本数を相手の0ではない両手に加える。ただし相手の両手の本数も等しい場合、この効果は無効。",
         terminal: true,
         canPlay: (player) => isBalanced(player),
         effect: async (player) => { await resolveEqualCondemnation(player); }
@@ -1792,31 +1807,31 @@ const CARD_LIBRARY = {
             }).catch(error => console.error("PVP tilted scales fx failed", error));
           }
           await showTiltedScalesCinematic(player, a, o, b);
-          if(a<b) discardRandomCards(player,2,'「傾いた天秤」');
-          else if(b<a) discardRandomCards(o,2,'「傾いた天秤」');
+          if(a<b) await discardRandomCards(player,2,'「傾いた天秤」');
+          else if(b<a) await discardRandomCards(o,2,'「傾いた天秤」');
           addLog(`${handNames[player]}は「傾いた天秤」を使用。合計${a}対${b}。`);
         }
       },
       finalJudgmentConfiscation: {
         name: "最終判決：没収", cost: 3, type: "終端 / 天秤・最終判決",
-        text: "終端。自分の2度目のターン以降のみ使用可能。すべての0ではない手の本数が等しいなら、相手の手札をすべて捨てる。",
+        text: "終端。自分の2度目のターン以降のみ使用可能。発動時、すべての0ではない手の本数が等しくなければ不発。等しいなら、相手の手札をすべて捨てる。",
         terminal: true,
         canPlay: (player) => canUseFinalJudgment(player),
-        effect: (player) => { const o=otherPlayer(player); discardRandomCards(o,state.hands[o].length,'「最終判決：没収」'); state.pendingTerminalEnd[player]=true; }
+        effect: async (player) => await resolveFinalJudgmentEffect(player, "没収")
       },
       finalJudgmentDeath: {
         name: "最終判決：死刑", cost: 3, type: "終端 / 天秤・最終判決",
-        text: "終端。自分の2度目のターン以降のみ使用可能。すべての0ではない手の本数が等しいなら、「執行」を2枚得る。",
+        text: "終端。自分の2度目のターン以降のみ使用可能。発動時、すべての0ではない手の本数が等しくなければ不発。等しいなら、「執行」を2枚得る。",
         terminal: true,
         canPlay: (player) => canUseFinalJudgment(player),
-        effect: (player) => { state.hands[player].push('execution','execution'); addLog(`${handNames[player]}は「執行」を2枚得た。`); state.pendingTerminalEnd[player]=true; }
+        effect: async (player) => await resolveFinalJudgmentEffect(player, "死刑")
       },
       finalJudgmentPrison: {
         name: "最終判決：懲役", cost: 3, type: "終端 / 天秤・最終判決",
-        text: "終端。自分の2度目のターン以降のみ使用可能。すべての0ではない手の本数が等しいなら、相手は次の3回のターン、カードを使用できない。",
+        text: "終端。自分の2度目のターン以降のみ使用可能。発動時、すべての0ではない手の本数が等しくなければ不発。等しいなら、相手は次の3回のターン、カードを使用できない。",
         terminal: true,
         canPlay: (player) => canUseFinalJudgment(player),
-        effect: (player) => { const o=otherPlayer(player); state.judgmentPrisonTurns[o]=Math.max(3,Number(state.judgmentPrisonTurns[o]||0)); addLog(`${handNames[o]}は「懲役」により次の3回のターン、カードを使用できない。`); state.pendingTerminalEnd[player]=true; }
+        effect: async (player) => await resolveFinalJudgmentEffect(player, "懲役")
       },
       execution: {
         name: "執行", cost: 0, type: "終端 / 生成カード・天秤",
@@ -1829,7 +1844,7 @@ const CARD_LIBRARY = {
         name: "鈍重の呪縛",
         cost: 2,
         type: "呪縛",
-        text: "相手の手に表向きで置く。この手で攻撃するとき、攻撃力-1。ただし最低1。手が0になったら捨て札に置く。",
+        text: "相手の手に表向きで置く。この手で通常攻撃するとき、攻撃力-1。ただし最低1。手が0になったら捨て札に置く。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -6025,9 +6040,7 @@ function wrapFinger(value) {
           .filter(x => !isDirectiveCard(x.id));
         if (options.length) {
           const picked = options[Math.floor(Math.random() * options.length)];
-          const [discarded] = state.hands[player].splice(picked.index, 1);
-          state.discard[player].push(discarded);
-          await handleCardDiscardEffect(player, discarded);
+          await discardHandCardByEffect(player, picked.index);
         }
       } else if (base === "directiveTarget") {
         const hand = card.directiveData?.attackHand;
@@ -6197,9 +6210,37 @@ function wrapFinger(value) {
     function canUseFinalJudgment(player) {
       return Number(state.personalTurnCount?.[player]||0) >= 2 && allLivingHandsEqual();
     }
+    async function resolveFinalJudgmentEffect(player, verdict) {
+      if (!allLivingHandsEqual()) {
+        addLog(`${handNames[player]}の「最終判決：${verdict}」は、すべての生存している手が均衡していないため不発。`);
+        return false;
+      }
+      const opponent = otherPlayer(player);
+      if (verdict === "没収") {
+        await discardRandomCards(opponent, state.hands[opponent].length, "「最終判決：没収」");
+      } else if (verdict === "死刑") {
+        state.hands[player].push("execution", "execution");
+        addLog(`${handNames[player]}は「執行」を2枚得た。`);
+      } else if (verdict === "懲役") {
+        state.judgmentPrisonTurns[opponent] = Math.max(3, Number(state.judgmentPrisonTurns[opponent] || 0));
+        addLog(`${handNames[opponent]}は「懲役」により次の3回のターン、カードを使用できない。`);
+      }
+      state.pendingTerminalEnd[player] = true;
+      return true;
+    }
     function beginTuning(player) {
-      if(player==="human") { state.mode="tuningTarget"; setMessage("「調律」：もう片方と同じ本数にする自分の手を選んでください。"); return; }
-      const h=state.cpu.L<state.cpu.R?"L":"R"; state.cpu[h]=state.cpu[otherHand(h)]; clearBrokenTraps("cpu"); addLog(`CPUは「調律」で${handNames[h]}を${state.cpu[h]}にそろえた。`);
+      const choices = ["L", "R"].filter(hand => state[player][hand] > 0);
+      if (!choices.length) {
+        addLog(`${handNames[player]}の「調律」は対象が存在しないため不発。`);
+        return false;
+      }
+      if(player==="human") { state.mode="tuningTarget"; setMessage("「調律」：もう片方と同じ本数にする自分の0ではない手を選んでください。"); return true; }
+      const hand = choices.sort((a, b) => state[player][b] - state[player][a])[0];
+      const before = state[player][hand];
+      state[player][hand] = state[player][otherHand(hand)];
+      clearBrokenTraps(player);
+      addLog(`${handNames[player]}は「調律」で${handNames[hand]}を${before}→${state[player][hand]}にそろえた。`);
+      return true;
     }
     async function beginFairWorld(player) {
       if(player==="human") { state.mode="fairWorldTarget"; setMessage("「平等な世界」：基準にする自分の0ではない手を選んでください。"); return; }
@@ -6211,10 +6252,15 @@ function wrapFinger(value) {
       state.mode="attack"; state.pendingTerminalEnd[player]=true; addLog(`${handNames[player]}の「平等な世界」により、すべての生存している手が${value}になった。`); clearBrokenTraps("human"); clearBrokenTraps("cpu"); render(); if(player==="human") await forcePublishFriendStateNow("fair world"); return true;
     }
     async function resolveEqualCondemnation(player) {
-      const o=otherPlayer(player); if(isBalanced(o)){addLog(`「等価なる断罪」は相手も均衡しているため無効。`); state.pendingTerminalEnd[player]=true; return;}
+      if (!isBalanced(player)) {
+        addLog(`${handNames[player]}の「等価なる断罪」は自分の両手が均衡していないため不発。`);
+        return false;
+      }
+      const o=otherPlayer(player); if(isBalanced(o)){addLog(`「等価なる断罪」は相手も均衡しているため無効。`); state.pendingTerminalEnd[player]=true; return false;}
       const amount=state[player].L;
       for(const h of ["L","R"]) if(state[o][h]>0){ await addFingersWithCalculation(o,h,amount,"等価なる断罪",true); if(checkWin()) break; }
       state.pendingTerminalEnd[player]=true;
+      return true;
     }
     async function resolveUnfairWorld(player) {
       for(const p of ["human","cpu"]) for(const h of ["L","R"]) if(state[p][h]>0) state[p][h]=1+Math.floor(Math.random()*4);
@@ -6506,7 +6552,7 @@ function wrapFinger(value) {
         });
     }
 
-    async function activateCopiedCardEffect(player, cardId, sourceLabel) {
+    async function activateCopiedCardEffect(player, cardId, sourceLabel, context = {}) {
       const card = CARD_LIBRARY[cardId];
       if (!card || typeof card.effect !== "function") {
         addLog(`${sourceLabel}で選ばれたカードには発動できる効果がなかった。`);
@@ -6516,7 +6562,7 @@ function wrapFinger(value) {
       // 乱闘・予告状の発動は「カードの効果だけを使う」ため、
       // 充電カードの1ターン1回制限を確認せず、使用済みにも記録しない。
       const previousCopy = state.copiedEffectContext;
-      state.copiedEffectContext = { sourceLabel, cardId };
+      state.copiedEffectContext = { sourceLabel, cardId, ...context };
       try {
         await card.effect(player);
         if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
@@ -6556,8 +6602,7 @@ function wrapFinger(value) {
 
       // 予告状は発動時ではなく、公開した宣言ターンにカードを使った扱いにする。
       markChargeCardUsedThisTurn(player, cardId);
-      state.hands[player].splice(handIndex, 1);
-      state.discard[player].push(cardId);
+      await discardHandCardByEffect(player, handIndex);
       state.pendingAdvanceNotice[player] = state.pendingAdvanceNotice[player] || [];
       state.pendingAdvanceNotice[player].push(cardId);
       state.mode = "attack";
@@ -6749,7 +6794,7 @@ function wrapFinger(value) {
         for (let i = 0; i < greedCount * 2; i++) {
           if (drawCard(player)) greedDrawn += 1;
         }
-        const greedDiscarded = discardRandomCards(player, greedCount * 2, "「貪欲」");
+        const greedDiscarded = await discardRandomCards(player, greedCount * 2, "「貪欲」");
         addLog(
           `${handNames[player]}の「貪欲」が発動。` +
           `${greedDrawn}枚引き、手札からランダムに${greedDiscarded}枚捨てた。`
@@ -7469,9 +7514,7 @@ function wrapFinger(value) {
       } else {
         discardIndex = randomIndex(state.hands[player].length);
       }
-      const [discardedId] = state.hands[player].splice(discardIndex, 1);
-      state.discard[player].push(discardedId);
-      await handleCardDiscardEffect(player, discardedId);
+      const discardedId = await discardHandCardByEffect(player, discardIndex);
       addLog(`${handNames[player]}は「すり減る希望」で「${CARD_LIBRARY[discardedId]?.name || discardedId}」を捨てた。`);
 
       const candidates = state.discard[player].map((id, index) => ({ id, index, key: `discard-${index}` })).filter(item => recoverable.includes(item.id));
@@ -7503,9 +7546,7 @@ function wrapFinger(value) {
       const lost = player === "human"
         ? await chooseOneMagicalCard("ヒステリー", "捨てる手札の加護カードをタップしてください。", handBlessings)
         : handBlessings[randomIndex(handBlessings.length)];
-      const [lostId] = state.hands[player].splice(lost.index, 1);
-      state.discard[player].push(lostId);
-      await handleCardDiscardEffect(player, lostId);
+      const lostId = await discardHandCardByEffect(player, lost.index);
       const refreshed = state.decks[player].map((id,index)=>({id,index})).filter(item => CARD_LIBRARY[item.id]?.blessing && !CARD_LIBRARY[item.id]?.token);
       if (!refreshed.length) {
         addLog(`${handNames[player]}は「ヒステリー」で加護を捨てたが、山札に引ける加護がなかった。`);
@@ -7554,8 +7595,8 @@ function wrapFinger(value) {
     function beginWithLove(player){if(player==="human"){state.mode="magicalWithLove";setMessage("「愛で！」：2にする自分の手を選んでください。0の手も選べます。");}else{const h=state[player].L===0?"L":state[player].R===0?"R":"L";state[player][h]=2;clearBrokenTraps(player);drawCard(player);}}
     async function useFadedCreed(player){const c=["L","R"].filter(h=>state[player][h]>0);if(!c.length)return false;await addFingersWithCalculation(player,c[randomIndex(c.length)],1,"色褪せた信条");state.temp[player].fadedCreedGuard=true;}
     function beginBetrayedHeart(player){state.temp[player].betrayedHeartPenalty=true;if(player==="human"){state.mode="magicalBetrayedHeart";setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");}else{const c=["L","R"].filter(h=>state[player][h]>0);if(c.length)addFingersWithCalculation(player,c[randomIndex(c.length)],1,"裏切られた心");}}
-    async function useEmptyHeart(player){const n=state.hands[player].length;while(state.hands[player].length){const id=state.hands[player].shift();state.discard[player].push(id);await handleCardDiscardEffect(player,id);}state.pendingMagicalHeartDraw=state.pendingMagicalHeartDraw||{human:0,cpu:0};state.pendingMagicalHeartDraw[player]=(state.pendingMagicalHeartDraw[player]||0)+n;}
-    async function useFullHeart(player){if(!state.hands[player].length)return false;let idx=[];if(player==="human"){const raw=prompt(state.hands[player].map((id,i)=>`${i+1}. ${CARD_LIBRARY[id]?.name||id}`).join("\n"),"1");idx=[...new Set(String(raw||"").split(",").map(x=>Number(x.trim())-1).filter(i=>i>=0&&i<state.hands[player].length))];}else idx=state.hands[player].map((_,i)=>i).slice(0,Math.max(1,Math.ceil(state.hands[player].length/2)));if(!idx.length)return false;idx.sort((a,b)=>b-a);for(const i of idx){const [id]=state.hands[player].splice(i,1);state.discard[player].push(id);await handleCardDiscardEffect(player,id);}discardRandomCards(otherPlayer(player),idx.length,"「満ちる心」");return true;}
+    async function useEmptyHeart(player){const n=state.hands[player].length;while(state.hands[player].length)await discardHandCardByEffect(player,0);state.pendingMagicalHeartDraw=state.pendingMagicalHeartDraw||{human:0,cpu:0};state.pendingMagicalHeartDraw[player]=(state.pendingMagicalHeartDraw[player]||0)+n;}
+    async function useFullHeart(player){if(!state.hands[player].length)return false;let idx=[];if(player==="human"){const raw=prompt(state.hands[player].map((id,i)=>`${i+1}. ${CARD_LIBRARY[id]?.name||id}`).join("\n"),"1");idx=[...new Set(String(raw||"").split(",").map(x=>Number(x.trim())-1).filter(i=>i>=0&&i<state.hands[player].length))];}else idx=state.hands[player].map((_,i)=>i).slice(0,Math.max(1,Math.ceil(state.hands[player].length/2)));if(!idx.length)return false;idx.sort((a,b)=>b-a);for(const i of idx)await discardHandCardByEffect(player,i);await discardRandomCards(otherPlayer(player),idx.length,"「満ちる心」");return true;}
     const MAGICAL_CORE_MAP = {
       magicalHatred: "magicalLove",
       magicalDespair: "magicalJustice",
@@ -7669,7 +7710,16 @@ function wrapFinger(value) {
       }
     }
 
-    function discardRandomCards(player,count,reason) {
+    async function discardHandCardByEffect(player, handIndex, reason = "") {
+      const [cardId] = state.hands[player].splice(handIndex, 1);
+      if (!cardId) return null;
+      state.discard[player].push(cardId);
+      if (reason) addLog(`${reason}：${handNames[player]}は「${CARD_LIBRARY[cardId]?.name || cardId}」を捨てた。`);
+      await handleCardDiscardEffect(player, cardId);
+      return cardId;
+    }
+
+    async function discardRandomCards(player,count,reason) {
       let discarded=0;
       while(discarded<count){
         const candidates = state.hands[player]
@@ -7677,9 +7727,8 @@ function wrapFinger(value) {
           .filter(item=>!isProtectedChargeCard(item.id));
         if (!candidates.length) break;
         const picked=candidates[Math.floor(Math.random()*candidates.length)];
-        const id=state.hands[player].splice(picked.index,1)[0];
-        state.discard[player].push(id);
-        addLog(`${reason}：${handNames[player]}は「${CARD_LIBRARY[id]?.name||id}」を捨てた。`);
+        const id = await discardHandCardByEffect(player, picked.index, reason);
+        if (!id) break;
         discarded++;
       }
       return discarded;
@@ -8042,11 +8091,11 @@ function wrapFinger(value) {
       return options[0];
     }
 
-    function discardOneCard(player) {
+    async function discardOneCard(player, reason = "") {
       const candidates=state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>!isProtectedChargeCard(x.cardId));
       if(!candidates.length) return null;
       const picked=candidates[Math.floor(Math.random()*candidates.length)];
-      const [cardId]=state.hands[player].splice(picked.index,1); state.discard[player].push(cardId); return cardId;
+      return await discardHandCardByEffect(player, picked.index, reason);
     }
 
        function discardEffectPopupText(cardId, player) {
@@ -8082,9 +8131,8 @@ function wrapFinger(value) {
         drawCard(player);
         addLog(`${handNames[player]}の「加速弾」効果。1枚引いた。`);
       } else if (cardId === "specialBullet") {
-        const discarded = discardOneCard(opponent);
+        const discarded = await discardOneCard(opponent);
         addLog(`${handNames[player]}の「特殊弾」効果。${handNames[opponent]}は${discarded ? `「${CARD_LIBRARY[discarded].name}」` : "手札"}を1枚捨てた。`);
-        if (discarded) await handleCardDiscardEffect(opponent, discarded);
       } else if (cardId === "pierceBullet") {
         const removed = removeRandomTrap(opponent);
         addLog(`${handNames[player]}の「貫通弾」効果。${removed ? `${handNames[opponent]}の罠「${CARD_LIBRARY[removed].name}」を捨て札にした。` : `${handNames[opponent]}に罠はなかった。`}`);
@@ -8110,12 +8158,21 @@ function wrapFinger(value) {
       return cardId;
     }
 
-    function chooseCpuRapidFireDiscardIndex() {
-      if (state.hands.cpu.length === 0) return -1;
+    function getRapidFireDiscardCandidates(player) {
+      const excludedIndex = Number.isInteger(state.pendingRapidFireExcludedIndex)
+        ? state.pendingRapidFireExcludedIndex
+        : null;
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => item.index !== excludedIndex && !isProtectedChargeCard(item.cardId));
+    }
+
+    function chooseCpuRapidFireDiscardIndex(player = "cpu") {
+      const candidates = getRapidFireDiscardCandidates(player);
+      if (!candidates.length) return -1;
       let bestIndex = -1;
       let bestScore = -1;
-      state.hands.cpu.forEach((cardId, index) => {
-        if (cardId === "rapidFire") return;
+      candidates.forEach(({ cardId, index }) => {
         const card = CARD_LIBRARY[cardId];
         const score = (card?.cost || 0) + (card?.bullet ? 1 : 0);
         if (score > bestScore) {
@@ -8635,7 +8692,7 @@ function renderLastAction() {
           canSetAttachmentTarget("human", cardId);
         const discardPlayable = repairDiscardMode && cardId !== "repair";
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown";
-        const rapidDiscardPlayable = rapidFireDiscardMode && cardId !== "rapidFire";
+        const rapidDiscardPlayable = rapidFireDiscardMode && getRapidFireDiscardCandidates("human").some(item => item.index === index);
         const cityWillPlayable = cityWillMode && isDirectiveCard(cardId);
         const advanceNoticePlayable = advanceNoticeMode && getAdvanceNoticeCandidates("human").some(item => item.index === index);
         const selected = state.selectedTrapCardIndex === index;
@@ -9722,7 +9779,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
         addLog(`${handNames[attacker]}の「成長」により、カードを1枚引いた。`);
       }
 
-      if (hasAttachment(attacker, attackHand, "ricochetBlessing")) {
+      if (defender === otherPlayer(attacker) && hasAttachment(attacker, attackHand, "ricochetBlessing")) {
         const other = otherHand(targetHand);
         const rawDamage = Math.floor(state[attacker][attackHand] / 2);
         if (rawDamage > 0 && state[defender][other] > 0) {
@@ -9737,7 +9794,45 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       }
     }
 
-async function attack(attacker, attackHand, defender, targetHand) {
+    async function completeNormalAttackAttempt(attacker) {
+      const attackerTemp = state.temp[attacker];
+      attackerTemp.attacksUsed = Number(attackerTemp.attacksUsed || 0) + 1;
+
+      const completedAttacks = attackerTemp.attacksUsed;
+      const attackLimit = Math.max(1, Number(attackerTemp.attackLimit || 1));
+      const hasRemainingAttack = completedAttacks < attackLimit;
+
+      if (!hasRemainingAttack) {
+        state.pendingTerminalEnd[attacker] = true;
+      }
+
+      if (
+        state.battleMode === "friend" &&
+        attacker === "human" &&
+        attackLimit > 1 &&
+        hasRemainingAttack &&
+        !state.gameOver
+      ) {
+        try {
+          // 直前の予約同期と署名が競合しても、途中結果を必ず新しいrevisionで送る。
+          state.friendLastPublishedSignature = "";
+          await publishFriendStateNow();
+          const source = attackerTemp.multiAttackSource || "追加攻撃";
+          addLog(`「${source}」：${completedAttacks}回目の攻撃結果をオンライン対戦相手へ同期した。`);
+        } catch (error) {
+          console.error("PVP multi-attack intermediate sync failed", error);
+          setMessage(`複数回攻撃の途中同期エラー：${error.message || error}`);
+        }
+      }
+
+      return { completedAttacks, attackLimit, hasRemainingAttack };
+    }
+
+async function attack(attacker, attackHand, defender, targetHand, options = {}) {
+      const completeAttackAttempt = async () => {
+        if (options.countAttackAttempt === false) return null;
+        return await completeNormalAttackAttempt(attacker);
+      };
       if (isTutorialBattle() && attacker === "cpu" && !state.tutorialScriptedCpuAction) {
         console.warn("Blocked unscripted CPU action during tutorial.");
         freezeTutorialBattleToHumanTurn();
@@ -9745,7 +9840,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
 
-      if (hasAttachment(attacker, attackHand, "magicalWrath")) {
+      if (!options.preventTargetChange && hasAttachment(attacker, attackHand, "magicalWrath")) {
         const candidates = [
           {owner:attacker, hand:otherHand(attackHand)},
           {owner:defender, hand:"L"},
@@ -9774,7 +9869,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       state.temp[attacker].goldRushAttack = false;
       state.temp[attacker].balanceBladeAttack = false;
 
-      if (frenzyActive) {
+      if (frenzyActive && !options.preventTargetChange) {
         const originalOpponent = otherPlayer(attacker);
         const candidates = [
           { owner: originalOpponent, hand: "L" },
@@ -9794,12 +9889,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       const normalBasePower = state[attacker][attackHand];
       const immutable = hasImmutableCurse(attacker, attackHand);
-      // 不変の呪縛は「カードによる通常攻撃の増加」を無効化する。
-      // ゴールドラッシュの基本本数置換も、通常の手の本数を上回る場合は増加分を認めない。
+      // 不変の呪縛は「カードによる通常攻撃の数値的な増加」を無効化する。
+      // ゴールドラッシュは攻撃力上昇ではなく基本本数の置換なので対象外。
       const goldRushBase = state.hands[attacker].length;
-      const basePower = goldRushActive
-        ? (immutable ? Math.min(normalBasePower, goldRushBase) : goldRushBase)
-        : normalBasePower;
+      const basePower = goldRushActive ? goldRushBase : normalBasePower;
       const rawBonus = state.temp[attacker].attackBonus || 0;
       const positiveCardBonus = Math.max(0, rawBonus);
       const negativeCardBonus = Math.min(0, rawBonus);
@@ -9843,7 +9936,6 @@ async function attack(attacker, attackHand, defender, targetHand) {
         (state.temp[attacker].dimensionalSlashBonus||0) > 0 ||
         (hasAttachment(attacker,attackHand,"dischargeBlessing") && getChargeLevel(attacker)>=10) ||
         frenzyActive || rationalPowerActive || selfRighteousActive || justiceForEveryoneActive || balanceBladeActive ||
-        (goldRushActive && goldRushBase > normalBasePower) ||
         (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo")))
       );
       if (immutableBlockedIncrease) {
@@ -9863,7 +9955,8 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
-      if (ignoresOpponentBoardEffects(attacker)) {
+      const ignoresDefenderBoard = defender === otherPlayer(attacker) && ignoresOpponentBoardEffects(attacker);
+      if (ignoresDefenderBoard) {
         addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
       } else {
         if (state.temp[attacker]?.betrayedHeartPenalty) {
@@ -9912,6 +10005,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
         state.animating = false;
         clearHighlights();
         render();
+        await completeAttackAttempt();
         return true;
       }
 
@@ -9926,18 +10020,20 @@ async function attack(attacker, attackHand, defender, targetHand) {
       await animateAttackIntent(attacker, attackHand, defender, targetHand);
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
-      if (state.temp[attacker].breakthrough || state.temp[attacker].electromagneticAttack) {
+      if (ignoresDefenderBoard || (defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
         addLog(state.temp[attacker].electromagneticAttack
           ? `${handNames[attacker]}の「電磁攻撃」により、相手の罠は発動しない。`
           : `${handNames[attacker]}の「強行突破」により、攻撃中の相手側の罠は発動できない。`);
       } else {
-        const beforeManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", true);
+        const beforeManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", true)
+          .filter(info => !options.preventTargetChange || !["deflect", "attention"].includes(info.cardId));
         const chosenBeforeManual = await maybeChooseManualTrap(defender, beforeManual, context);
         if (chosenBeforeManual) {
           trapResult = await triggerTrap(defender, chosenBeforeManual, context);
           trapUsed = true;
         } else {
-          const beforeAuto = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", false);
+          const beforeAuto = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", false)
+            .filter(info => !options.preventTargetChange || !["deflect", "attention"].includes(info.cardId));
           if (beforeAuto.length > 0) {
             trapResult = await triggerTrap(defender, beforeAuto[0], context);
             trapUsed = true;
@@ -10009,34 +10105,11 @@ async function attack(attacker, attackHand, defender, targetHand) {
         addLog(`${handNames[attacker]}の攻撃は無効になった。`);
         setLastAction(attacker, "攻撃", "攻撃は無効になりました。", "action");
 
-        // 空振りなどで無効化されても、攻撃を試みた回数は消費する。
-        // これにより空間切断の2発目を無効化された後に3発目が撃てる不具合を防ぐ。
-        state.temp[attacker].attacksUsed = (state.temp[attacker].attacksUsed || 0) + 1;
-        const canceledCompletedAttacks = state.temp[attacker].attacksUsed || 0;
-        const canceledAttackLimit = state.temp[attacker].attackLimit || 1;
-        if (canceledCompletedAttacks >= canceledAttackLimit) {
-          state.pendingTerminalEnd[attacker] = true;
-        }
-
         state.temp[attacker].lightningNoChargeGain = false;
         state.animating = false;
         clearHighlights();
         render();
-
-        if (
-          state.battleMode === "friend" &&
-          attacker === "human" &&
-          canceledAttackLimit > 1 &&
-          canceledCompletedAttacks < canceledAttackLimit &&
-          !state.gameOver
-        ) {
-          try {
-            state.friendLastPublishedSignature = "";
-            await publishFriendStateNow();
-          } catch (error) {
-            console.error("PVP canceled multi-attack sync failed", error);
-          }
-        }
+        await completeAttackAttempt();
         return true;
       }
 
@@ -10045,6 +10118,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
         state.animating = false;
         clearHighlights();
         render();
+        await completeAttackAttempt();
         return true;
       }
 
@@ -10060,14 +10134,16 @@ async function attack(attacker, attackHand, defender, targetHand) {
         state.animating = false;
         clearHighlights();
         render();
+        await completeAttackAttempt();
         return true;
       }
 
       if (power <= 0) {
         addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
         state.animating = false;
-        state.temp[attacker].attacksUsed = (state.temp[attacker].attacksUsed || 0) + 1;
+        clearHighlights();
         render();
+        await completeAttackAttempt();
         return true;
       }
       const before = state[defender][targetHand];
@@ -10081,7 +10157,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       if (berserkerZeroActive && total >= 7) {
         resolvedFinal = 0;
         addLog(`「バーサーカー」により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過処理をせず0になった。`);
-      } else if (hasMagicalCourage(attacker) && total >= 7) {
+      } else if (defender === otherPlayer(attacker) && hasMagicalCourage(attacker) && total >= 7) {
         resolvedFinal = 0;
         addLog(`「勇気」により、相手の手が7以上になったため超過計算をせず0になった。`);
       } else if (lightningZeroActive && total >= 5) {
@@ -10104,7 +10180,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       render();
 
       // 攻撃判定後：囮、踏み止まりなど。
-      if (!trapUsed && !state.temp[attacker].breakthrough && !state.temp[attacker].electromagneticAttack) {
+      if (!trapUsed && !ignoresDefenderBoard && !(defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
         const afterContext = { ...context, attackTotal: total, resolvedFinal };
         const afterManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "after", true, afterContext);
         const chosenAfterManual = await maybeChooseManualTrap(defender, afterManual, afterContext);
@@ -10158,7 +10234,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
 
       if (hasAttachment(attacker,attackHand,"magicalHatred")) {
-        discardRandomCards(attacker,1,"「憎悪」");
+        await discardRandomCards(attacker,1,"「憎悪」");
       }
       if (hasAttachment(defender,targetHand,"magicalDespair")) {
         const other=otherHand(targetHand);
@@ -10175,12 +10251,16 @@ async function attack(attacker, attackHand, defender, targetHand) {
       }
       if (hasAttachment(attacker,attackHand,"magicalHappiness")) {
         drawCard(attacker); drawCard(attacker);
-        discardRandomCards(defender,1,"「幸福」");
-        addLog(`「幸福」により${handNames[attacker]}は2枚引き、${handNames[defender]}はランダムに1枚捨てた。`);
+        const opponent = otherPlayer(attacker);
+        await discardRandomCards(opponent,1,"「幸福」");
+        addLog(`「幸福」により${handNames[attacker]}は2枚引き、${handNames[opponent]}はランダムに1枚捨てた。`);
       }
 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
+      if (typeof options.afterResolved === "function") {
+        await options.afterResolved({ attacker, attackHand, defender, targetHand, power, total, finalValue: state[defender][targetHand] });
+      }
 
       // オンラインでは最終攻撃結果を勝敗通知より先に送る。
       // これにより、相手側でもトドメの計算・0化を確認してからリザルトへ進める。
@@ -10200,6 +10280,7 @@ async function attack(attacker, attackHand, defender, targetHand) {
         state.animating = false;
         clearHighlights();
         render();
+        await completeAttackAttempt();
         return true;
       }
 
@@ -10218,35 +10299,10 @@ async function attack(attacker, attackHand, defender, targetHand) {
 
       clearBrokenTraps(defender);
       clearBrokenTraps(attacker);
-      state.temp[attacker].attacksUsed=(state.temp[attacker].attacksUsed||0)+1;
       state.animating = false;
       clearHighlights();
       render();
-
-      const completedAttacks = state.temp[attacker].attacksUsed || 0;
-      const currentAttackLimit = state.temp[attacker].attackLimit || 1;
-
-      // 空間切断の1回目は、2回目の入力へ進む前に盤面を明示同期する。
-      // 通常の遅延自動同期だけに任せると、相手側では2回分の結果がまとめて反映されてしまう。
-      if (
-        state.battleMode === "friend" &&
-        attacker === "human" &&
-        currentAttackLimit > 1 &&
-        completedAttacks < currentAttackLimit &&
-        !state.gameOver
-      ) {
-        try {
-          // 直前の予約同期と署名が競合しても、途中結果を必ず新しいrevisionで送る。
-          state.friendLastPublishedSignature = "";
-          await publishFriendStateNow();
-          addLog(`「空間切断」：${completedAttacks}回目の攻撃結果をオンライン対戦相手へ同期した。`);
-        } catch (error) {
-          console.error("PVP dimensional slash intermediate sync failed", error);
-          setMessage(`空間切断の途中同期エラー：${error.message || error}`);
-        }
-      }
-
-      if(completedAttacks>=currentAttackLimit) state.pendingTerminalEnd[attacker]=true;
+      await completeAttackAttempt();
       return true;
     }
 
@@ -10867,56 +10923,34 @@ async function endTurn() {
       if (state[player][attackHand] <= 0) return false;
 
       const targetHand = otherHand(attackHand);
-      const opponent = player === "human" ? "cpu" : "human";
-      recordDirectiveAttack(player, attackHand, player, targetHand);
-      const before = state[player][targetHand];
-      const rawPower = state[player][attackHand];
-      const resonance = isResonanceAttack(player, attackHand, player, targetHand);
-      const resonanceBonus = resonanceAttackBonus(player, attackHand, resonance);
-      const powerBeforeGuard = rawPower + resonanceBonus;
-      const power = applyGuardBlessingReduction(player, targetHand, powerBeforeGuard, "凶弾");
-      const total = before + power;
-      const finalValue = normalize(total, player, targetHand);
-
-      if (resonance && state.temp[player]?.crescendo) {
-        addLog(`${handNames[player]}の「クレッシェンド」により、凶弾の共鳴攻撃力+2。`);
-      }
-      if (resonance && hasAttachment(player, attackHand, "largo")) {
-        addLog(`${handNames[player]}の「ラルゴ」により、凶弾の共鳴攻撃力+1。`);
-      }
-
-      state.animating = true;
-      render();
-      await animateAttackIntent(player, attackHand, player, targetHand);
-      await animateCalculation(player, targetHand, total, finalValue);
-
-      state[player][targetHand] = finalValue;
-      addLog(`${handNames[player]}は「凶弾」で、自分の${handNames[attackHand]}${rawPower}本を使い、${handNames[targetHand]}に${power}本加えた。${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
-      await resolveResonanceRewards(player, attackHand, resonance);
-
-      if (total === 5) {
-        const targets = ["L", "R"].filter(h => state[opponent][h] > 0);
-        addLog(`「凶弾」の追加効果。${handNames[opponent]}の1以上の手に3本ずつ加える。`);
-        for (const h of targets) {
-          const ob = state[opponent][h];
-          const amount = applyGuardBlessingReduction(opponent, h, 3, "凶弾の追加効果");
-          const ot = ob + amount;
-          const of = normalize(ot, opponent, h);
-          await animateCalculation(opponent, h, ot, of);
-          state[opponent][h] = of;
-          addLog(`${handNames[opponent]}の${handNames[h]}：${ob}→${ot}${ot >= 5 ? `→${of}` : ""}`);
+      const resolved = await attack(player, attackHand, player, targetHand, {
+        countAttackAttempt: false,
+        sourceLabel: "凶弾",
+        preventTargetChange: true,
+        afterResolved: async ({ total }) => {
+          if (total === 5) await resolveCursedBulletBonus(player);
         }
-        if (targets.length === 0) addLog("対象になる1以上の手がなかったため、凶弾の追加効果は不発。");
-      }
-
-      clearBrokenTraps(player);
-      clearBrokenTraps(opponent);
-      state.animating = false;
-      clearHighlights();
+      });
       state.mode = "attack";
       state.pendingTerminalEnd[player] = true;
       render();
-      return true;
+      return !!resolved;
+    }
+
+    async function resolveCursedBulletBonus(player) {
+      const opponent = otherPlayer(player);
+      const targets = ["L", "R"].filter(hand => state[opponent][hand] > 0);
+      addLog(`「凶弾」の追加効果。${handNames[opponent]}の1以上の手に3本ずつ加える。`);
+      for (const hand of targets) {
+        const before = state[opponent][hand];
+        const amount = applyGuardBlessingReduction(opponent, hand, 3, "凶弾の追加効果");
+        const total = before + amount;
+        const finalValue = normalize(total, opponent, hand);
+        await animateCalculation(opponent, hand, total, finalValue);
+        state[opponent][hand] = finalValue;
+        addLog(`${handNames[opponent]}の${handNames[hand]}：${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
+      }
+      if (!targets.length) addLog("対象になる1以上の手がなかったため、凶弾の追加効果は不発。");
     }
 
     function canTriggerAgainstRapidFire(cardId) {
@@ -10927,7 +10961,7 @@ async function endTurn() {
       if (state[defender][targetHand] <= 0) return false;
       const cardId = state.hands[player][discardIndex];
       const ammo = CARD_LIBRARY[cardId];
-      if (!ammo || cardId === "rapidFire") return false;
+      if (!ammo || !getRapidFireDiscardCandidates(player).some(item => item.index === discardIndex)) return false;
 
       if (await maybeUseNekodamashi(defender, { defender, targetHand, attacker: player, attackHand: null, incomingPower: 0, isRapidFire: true })) {
         addLog(`${handNames[player]}の乱射は「ねこだまし」で無効になった。`);
@@ -10937,8 +10971,8 @@ async function endTurn() {
         return true;
       }
 
-      const [discarded] = state.hands[player].splice(discardIndex, 1);
-      state.discard[player].push(discarded);
+      const discarded = await discardHandCardByEffect(player, discardIndex);
+      state.pendingRapidFireExcludedIndex = null;
 
       if (discarded === "logicCrusherBullet") {
         state.animating = true;
@@ -10969,7 +11003,6 @@ async function endTurn() {
       if (hasBulletproofVest(defender, targetHand)) {
         await triggerBulletproofBlockedFx(defender, "乱射");
         addLog(`${handNames[defender]}の${handNames[targetHand]}にある「防弾チョッキ」が「乱射」を防いだ。`);
-        await handleCardDiscardEffect(player, discarded);
         state.pendingTerminalEnd[player] = true;
         state.mode = "attack";
         clearHighlights();
@@ -10981,7 +11014,6 @@ async function endTurn() {
       damage = applyGuardBlessingReduction(defender, targetHand, damage, "乱射");
       if (damage <= 0) {
         addLog(`${handNames[player]}は「乱射」で「${ammo.name}」を捨てたが、ダメージは0だった。`);
-        await handleCardDiscardEffect(player, discarded);
         state.pendingTerminalEnd[player] = true;
         render();
         return true;
@@ -11026,7 +11058,6 @@ async function endTurn() {
       if (trapResult.cancelAttack) {
         addLog(`${handNames[player]}の乱射は無効になった。`);
         state.animating = false;
-        await handleCardDiscardEffect(player, discarded);
         state.pendingTerminalEnd[player] = true;
         clearHighlights();
         render();
@@ -11070,8 +11101,6 @@ async function endTurn() {
       }
 
       addLog(`${handNames[player]}は「乱射」で「${ammo.name}」を捨て、${handNames[defender]}の${handNames[targetHand]}に${damage}ダメージ。${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`);
-      await handleCardDiscardEffect(player, discarded);
-
       clearBrokenTraps(defender);
       state.animating = false;
       clearHighlights();
@@ -11088,9 +11117,7 @@ async function endTurn() {
         setMessage("落ち着ける自身は捨てられません。別の手札を選んでください。");
         return;
       }
-      const [discarded] = state.hands.human.splice(index, 1);
-      state.discard.human.push(discarded);
-      await handleCardDiscardEffect("human", discarded);
+      const discarded = await discardHandCardByEffect("human", index);
       drawCard("human");
       drawCard("human");
       state.mode = "attack";
@@ -11102,8 +11129,8 @@ async function endTurn() {
     function chooseRapidFireDiscard(index) {
       if (state.mode !== "rapidFireDiscard") return;
       const cardId = state.hands.human[index];
-      if (!cardId || cardId === "rapidFire") {
-        setMessage("乱射自身は捨てられません。別の手札を選んでください。");
+      if (!cardId || !getRapidFireDiscardCandidates("human").some(item => item.index === index)) {
+        setMessage("乱闘でコピー元になった乱射自身や、捨てられないカードは選べません。");
         return;
       }
       state.pendingRapidFireDiscard = index;
@@ -11119,9 +11146,7 @@ async function endTurn() {
         setMessage("補修自身は捨てられません。別の手札を選んでください。");
         return;
       }
-      const [discarded] = state.hands.human.splice(index, 1);
-      state.discard.human.push(discarded);
-      await handleCardDiscardEffect("human", discarded);
+      const discarded = await discardHandCardByEffect("human", index);
       state.pendingRepairDiscard = discarded;
       state.mode = "repair";
       setMessage(`「${CARD_LIBRARY[discarded].name}」を捨てました。次に1に戻す0の手を選んでください。`);
@@ -11959,7 +11984,8 @@ async function endTurn() {
         (state.temp.human?.attacksUsed || 0) > 0 &&
         (state.temp.human?.attacksUsed || 0) < (state.temp.human?.attackLimit || 1)
       ) {
-        setMessage("「空間切断」の追加行動では攻撃だけを選べます。");
+        const source = state.temp.human?.multiAttackSource;
+        setMessage(source ? `「${source}」の追加攻撃中は攻撃だけを選べます。` : "追加攻撃中は攻撃だけを選べます。");
         return;
       }
       if (state.berserkerTurns.human > 0) {
