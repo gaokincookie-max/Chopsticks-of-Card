@@ -4298,4 +4298,15 @@ body.tutorial-split-only #cpuR {
   .release-gavel-handle{width:170px;left:25%}
   .release-gavel-block{width:110px;left:56%}
 }
-
+/* v150 starting-player roulette */
+.starting-roulette-overlay{position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:20px;background:rgba(5,8,18,.82);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .2s ease}
+.starting-roulette-overlay.show{opacity:1;pointer-events:auto}
+.starting-roulette-card{width:min(92vw,430px);padding:24px;border:1px solid rgba(255,255,255,.2);border-radius:24px;text-align:center;background:linear-gradient(160deg,#151b35,#090d1c);box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.starting-roulette-kicker{font-size:.72rem;letter-spacing:.24em;color:#9fc8ff}.starting-roulette-card h2{margin:5px 0 18px}
+.starting-roulette-stage{position:relative;width:min(68vw,280px);aspect-ratio:1;margin:auto}.starting-roulette-pointer{position:absolute;z-index:2;top:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:15px solid transparent;border-right:15px solid transparent;border-top:28px solid #ffe082;filter:drop-shadow(0 3px 4px #000)}
+.starting-roulette-wheel{position:absolute;inset:0;border-radius:50%;border:7px solid #e8efff;background:conic-gradient(#3977d8 0 50%,#cc4d75 50% 100%);box-shadow:inset 0 0 0 4px rgba(0,0,0,.28),0 12px 36px rgba(0,0,0,.45);transform:rotate(0deg);transition:transform var(--roulette-duration,1600ms) cubic-bezier(.12,.72,.12,1)}
+.starting-roulette-wheel::after{content:"";position:absolute;inset:37%;border-radius:50%;background:#10162a;border:3px solid #e8efff}
+.starting-roulette-wheel span{position:absolute;z-index:1;top:22%;width:44%;font-weight:800;color:white;text-shadow:0 2px 4px #000}.starting-roulette-wheel span:first-child{left:4%;transform:rotate(-45deg)}.starting-roulette-wheel span:last-child{right:4%;transform:rotate(45deg)}
+.starting-roulette-result{min-height:1.7em;margin-top:18px;font-size:1.12rem;font-weight:800;color:#ffe082}
+@media(max-width:520px){.starting-roulette-card{padding:18px}.starting-roulette-stage{width:min(72vw,250px)}}
+@media(prefers-reduced-motion:reduce){.starting-roulette-overlay,.starting-roulette-wheel{transition-duration:1ms!important}}

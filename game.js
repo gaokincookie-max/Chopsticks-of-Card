@@ -478,8 +478,9 @@ const CARD_LIBRARY = {
       rapidFire: {
         name: "乱射",
         cost: 2,
-        type: "終端",
-        text: "手札を1枚捨て、捨てた手札のコスト分のダメージを相手の手に与える。捨てたカードが「弾」ならダメージ+1。この攻撃には一部の罠を発動できる。使用後、ターン終了。",
+        type: "終端 / 銃",
+        text: "終端。このカードは「銃」として扱う。手札を1枚捨て、捨てた手札のコスト分のダメージを相手の手に与える。捨てたカードが「弾」ならダメージ+1。この攻撃には一部の罠を発動できる。",
+        gun: true,
         canPlay: (player) => state.hands[player].length > 1 && ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] > 0),
         terminal: true,
         effect: async (player) => {
@@ -521,7 +522,7 @@ const CARD_LIBRARY = {
       accelBullet: {
         name: "加速弾",
         cost: 1,
-        type: "補助",
+        type: "補助 / 弾",
         text: "このカードは「弾」として扱う。使用しても何も起きない。このカードがカードの効果で手札から捨てられたとき、カードを1枚引く。",
         bullet: true,
         canPlay: () => true,
@@ -532,7 +533,7 @@ const CARD_LIBRARY = {
       specialBullet: {
         name: "特殊弾",
         cost: 2,
-        type: "補助",
+        type: "補助 / 弾",
         text: "このカードは「弾」として扱う。使用しても何も起きない。このカードがカードの効果で手札から捨てられたとき、相手の手札をランダムに1枚捨てさせる。",
         bullet: true,
         canPlay: () => true,
@@ -543,7 +544,7 @@ const CARD_LIBRARY = {
       pierceBullet: {
         name: "貫通弾",
         cost: 3,
-        type: "補助",
+        type: "補助 / 弾",
         text: "このカードは「弾」として扱う。使用しても何も起きない。このカードがカードの効果で手札から捨てられたとき、相手の設置された罠カードをランダムに1枚捨てる。",
         bullet: true,
         canPlay: () => true,
@@ -577,22 +578,76 @@ const CARD_LIBRARY = {
         name: "再装填",
         cost: 2,
         type: "補助",
-        text: "自分の捨て札にある「乱射」をランダムに1枚手札に戻す。捨て札に「乱射」がない場合、何も起きない。",
+        text: "自分の捨て札にある「銃」カードをランダムに1枚手札に加える。捨て札に「銃」がない場合、何も起こらない。",
         canPlay: () => true,
         effect: (player) => {
           const indexes = [];
           state.discard[player].forEach((cardId, index) => {
-            if (cardId === "rapidFire") indexes.push(index);
+            if (CARD_LIBRARY[cardId]?.gun) indexes.push(index);
           });
           if (indexes.length === 0) {
-            addLog(`${handNames[player]}は「再装填」を使ったが、捨て札に乱射がなかった。`);
+            addLog(`${handNames[player]}は「再装填」を使ったが、捨て札に銃カードがなかった。`);
             return;
           }
           const picked = indexes[Math.floor(Math.random() * indexes.length)];
           const [cardId] = state.discard[player].splice(picked, 1);
           state.hands[player].push(cardId);
-          addLog(`${handNames[player]}は「再装填」で「乱射」を手札に戻した。`);
+          addLog(`${handNames[player]}は「再装填」で「${CARD_LIBRARY[cardId].name}」を手札に加えた。`);
         }
+      },
+      indiscriminateFire: {
+        name: "無差別射撃", cost: 2, type: "終端 / 銃", gun: true, terminal: true,
+        text: "終端。このカードは「銃」として扱う。手札を1枚捨て、そのカードのコストを威力とする。捨てたカードが「弾」なら威力+1。威力の回数だけ、自分と相手の0ではない手からランダムに1つ選び、その手に1本加える。対象は1回ごとに選び直す。この効果では罠は発動しない。",
+        canPlay: player => state.hands[player].length > 1,
+        effect: player => beginGunAmmoEffect(player, "indiscriminateFire")
+      },
+      shotgun: {
+        name: "ショットガン", cost: 2, type: "終端 / 銃", gun: true, terminal: true,
+        text: "終端。このカードは「銃」として扱う。手札を1枚捨て、そのカードのコストを威力とする。捨てたカードが「弾」なら威力+1。相手の0ではない両手に、それぞれ威力の半分（小数点以下切り捨て）の本数を加える。この効果では罠は発動しない。",
+        canPlay: player => state.hands[player].length > 1,
+        effect: player => beginGunAmmoEffect(player, "shotgun")
+      },
+      modulation: {
+        name: "変調", cost: 1, type: "補助",
+        text: "手札の「銃」カードを1枚選ぶ。そのカードを、選んだカードとは異なる任意のデッキに入れられる「銃」カードに変化させる。",
+        canPlay: player => getModulationSourceCandidates(player).length > 0,
+        effect: player => beginModulation(player)
+      },
+      fanning: {
+        name: "ファニング", cost: 3, type: "終端 / 銃", gun: true, terminal: true,
+        text: "終端。このカードは「銃」として扱う。自分の手札にある「弾」カードをすべて捨てる。相手の0ではない手を1つ選び、捨てた「弾」の枚数と6のうち少ない方の回数、その手に1本ずつ加える。途中で対象の手が0になった場合、相手のもう片方の手が0でなければ、残りの回数はその手に1本ずつ加える。",
+        canPlay: () => true,
+        effect: player => beginFanning(player)
+      },
+      recoveryBullet: {
+        name: "回収弾", cost: 1, type: "補助 / 弾", bullet: true,
+        text: "弾。このカードがカードの効果で手札から捨てられた時、自分の捨て札にある、このカード以外の「弾」をランダムに1枚手札に加える。",
+        canPlay: () => true, effect: player => logBulletNormalUse(player, "recoveryBullet")
+      },
+      reducedLoadBullet: {
+        name: "減装弾", cost: 2, type: "補助 / 弾", bullet: true,
+        text: "弾。このカードがカードの効果で手札から捨てられた時、自分の0ではない手のうち、本数が多い方から1本減らす。両手の本数が同じ場合はランダムに1つ選ぶ。",
+        canPlay: () => true, effect: player => logBulletNormalUse(player, "reducedLoadBullet")
+      },
+      tracerBullet: {
+        name: "曳光弾", cost: 2, type: "補助 / 弾", bullet: true,
+        text: "弾。このカードがカードの効果で手札から捨てられた時、自分の山札の上から3枚を確認し、その中に「弾」があればランダムに1枚を山札の一番上に置く。なければそのままにする。",
+        canPlay: () => true, effect: player => logBulletNormalUse(player, "tracerBullet")
+      },
+      dudBullet: {
+        name: "不発弾", cost: 3, type: "補助 / 弾", bullet: true,
+        text: "弾。このカードがカードの効果で手札から捨てられた時、このカードを捨て札から山札に戻してシャッフルする。",
+        canPlay: () => true, effect: player => logBulletNormalUse(player, "dudBullet")
+      },
+      disruptionBullet: {
+        name: "阻害弾", cost: 1, type: "補助 / 弾", bullet: true,
+        text: "弾。このカードがカードの効果で手札から捨てられた時、次の相手のターン開始時、相手はターン開始時の通常ドローを行わない。",
+        canPlay: () => true, effect: player => logBulletNormalUse(player, "disruptionBullet")
+      },
+      shatterBullet: {
+        name: "粉砕弾", cost: 1, type: "補助 / 弾", bullet: true,
+        text: "弾。このカードがカードの効果で手札から捨てられた時、自分と相手の手札をそれぞれランダムに最大2枚捨てる。",
+        canPlay: () => true, effect: player => logBulletNormalUse(player, "shatterBullet")
       },
       focusedShot: {
         name: "一点狙い",
@@ -972,7 +1027,8 @@ const CARD_LIBRARY = {
       cursedBullet: {
         name: "凶弾",
         cost: 3,
-        type: "終端",
+        type: "終端 / 銃",
+        gun: true,
         text: "自分の両手が1以上でなければ不発。選んだ自分の手で、選ばなかった自分の手を攻撃する。この攻撃で攻撃された手がちょうど5になった場合、相手の1以上の手に3本ずつ加える。この攻撃では対象変更できない。",
         canPlay: (player) => state[player].L > 0 && state[player].R > 0,
         terminal: true,
@@ -1155,6 +1211,26 @@ const CARD_LIBRARY = {
           state.pendingTerminalEnd[player] = true;
         }
       },
+      encore: { name:"アンコール",cost:1,type:"補助",text:"自分の捨て札にある「フィナーレ」をランダムに1枚山札に戻し、山札をシャッフルする。",canPlay:()=>true,effect:player=>useEncore(player) },
+      daCapo: { name:"ダ・カーポ",cost:3,type:"終端",text:"終端。残りの手札をすべて捨て、同じ枚数引く。その後、両手を1にし、手札と山札の「ダ・カーポ」をすべて捨てる。",terminal:true,canPlay:()=>true,effect:player=>useDaCapo(player) },
+      themeSetting: { name:"題目設定",cost:1,type:"特殊",text:"デッキ1枚制限。初期手札へ追加され、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与する。",protectedSpecial:true,copyExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseTheme(player) },
+      serenadeTheme: { name:"題目：セレナーデ",cost:0,type:"加護 / 題目",text:"外部効果で除去・交換されない永続題目。共鳴により演舞を成長させる。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
+      rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"外部効果で除去・交換されない永続題目。カード使用履歴により演舞を増減する。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
+      performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。Ⅰ～Ⅴのレベルを持ち、外部効果で捨てられない。",protectedSpecial:true,token:true,canPlay:()=>false },
+      fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermata(player) },
+      canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える本数と対象を記録し、次の相手ターン終了時に加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
+      quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
+      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の生存手を最低1まで1減らし、次の通常開始ドローを封じる。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
+      arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>beginArpeggio(player) },
+      wholeRest: { name:"全休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンの通常ドローと通常攻撃を封じ、手札から1枚使用後にターンを終了させる。",rondo:true,rondoFamily:"rest",token:true,canPlay:()=>true,effect:player=>useWholeRest(player) },
+      agitato: { name:"Agitato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手は、それぞれ手札をランダムに1枚捨てる。",rondo:true,rondoFamily:"agitato",canPlay:()=>true,effect:player=>useAgitato(player) },
+      furioso: { name:"Furioso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このターン、自分の手札にある「輪舞曲」カードの枚数まで通常攻撃できる。この効果で現在の通常攻撃可能回数が減ることはない。その後、「演舞」のレベルを5下げる。次の自分のターン、行動不能になる。",rondo:true,rondoFamily:"agitato",token:true,canPlay:()=>true,effect:player=>useFurioso(player) },
+      doloroso: { name:"Doloroso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選んで0にし、カードを3枚引く。",rondo:true,rondoFamily:"doloroso",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDoloroso(player) },
+      appassionato: { name:"Appassionato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。1ターンに1度。自分の0ではない手を1つ選んで0にし、このターン手札からカードをあと2枚使用できる。",rondo:true,rondoFamily:"doloroso",token:true,canPlay:player=>(state[player].L>0||state[player].R>0)&&!state.temp[player]?.appassionatoUsedThisTurn,effect:player=>useAppassionato(player) },
+      lacrimosa: { name:"Lacrimosa",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の両手が1以上の時、自分の手を1つ0にした後、相手の手を1つ0にする。",rondo:true,rondoFamily:"lacrimosa",canPlay:player=>(state[player].L>0||state[player].R>0)&&state[otherPlayer(player)].L>0&&state[otherPlayer(player)].R>0,effect:player=>useLacrimosa(player) },
+      requiem: { name:"Requiem",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の0ではない手を1つ0にし、相手の外部効果で捨てられる手札をすべて捨てる。",rondo:true,rondoFamily:"lacrimosa",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useRequiem(player) },
+      morendo: { name:"Morendo",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手の0ではない手をそれぞれランダムに1つ選び、その手を1にする。",rondo:true,rondoFamily:"morendo",canPlay:()=>true,effect:player=>useMorendo(player) },
+      grandioso: { name:"Grandioso",cost:3,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分と相手の0ではないすべての手に2本ずつ加える。",rondo:true,rondoFamily:"grandioso",terminal:true,canPlay:()=>true,effect:player=>useGrandioso(player) },
 
       deflect: {
         name: "受け流し",
@@ -1951,6 +2027,22 @@ const CARD_LIBRARY = {
       berserkerTurns: { human: 0, cpu: 0 },
       pendingEqualTradeSelf: null,
       pendingRapidFireDiscard: null,
+      pendingGunEffect: null,
+      pendingFanning: null,
+      pendingModulation: null,
+      pendingStartDrawSkip: { human: false, cpu: false },
+      selectedTheme: { human: null, cpu: null },
+      performanceLevel: { human: 0, cpu: 0 },
+      resonanceTriggeredThisTurn: { human: false, cpu: false },
+      usedRondoFamilies: { human: [], cpu: [] },
+      pendingCanonHits: [],
+      quarterRestPending: { human: 0, cpu: 0 },
+      quarterRestActive: { human: false, cpu: false },
+      wholeRestPending: { human: false, cpu: false },
+      wholeRestActive: { human: false, cpu: false },
+      pendingArpeggio: null,
+      furiosoSkipPending: { human: false, cpu: false },
+      furiosoSkipActive: { human: false, cpu: false },
       pendingSwapFirst: null,
       pendingAndanteHand: null,
       pendingBalanceTarget: null,
@@ -1976,6 +2068,10 @@ const CARD_LIBRARY = {
       animating: false,
       gameOver: false,
       matchResult: null,
+      startingPlayer: null,
+      startingPlayerDecided: false,
+      startingRouletteActive: false,
+      startingFlowToken: 0,
       lastShownResultKey: null,
       friendResultPublishing: false,
       log: [],
@@ -2012,16 +2108,35 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v137";
-    const LATEST_NEWS_ID = "v146-news-update";
+    const LATEST_NEWS_ID = "v150-starting-player-roulette";
 
     const UPDATE_NEWS = [
+      {id:"v150-starting-player-roulette",version:"v150",date:"2026-08-10",title:"対戦開始演出・フレンド戦表示を改善",summary:"先攻ルーレットとフレンド戦のホスト／ゲスト表示を追加しました。",featured:true,tags:["new","update"],items:["試合開始時に先攻ルーレットを追加","CPU戦の先攻をランダム化","friend戦でも先攻を同期してランダム決定","friend戦のプレイヤー表示をホスト／ゲストへ改善","ログやターン表示のCPU表記を整理"]},
+      {id:"v149-rondo-expansion",version:"v149",date:"2026-08-10",title:"輪舞曲をさらに拡張",summary:"新しい輪舞曲系列と演舞Lv.Ⅴの強化カードを追加しました。",featured:true,tags:["new","update"],items:["Agitato・Doloroso・Lacrimosaを追加","演舞Lv.ⅤでFurioso・Appassionato・Requiemへ強化","Morendo・Grandiosoを追加","Furiosoの連続攻撃を追加","Appassionatoの追加カード使用とRequiemの手札全破棄を追加"]},
+      {id:"v148-resonance-theme-expansion",version:"v148",date:"2026-08-10",title:"共鳴テーマを大幅拡張",summary:"題目・演舞・輪舞曲システムと共鳴関連カードを追加しました。",featured:true,tags:["new","system"],items:["題目と演舞レベルシステムを追加","輪舞曲とフェルマータ・カノン・4分休符を追加","演舞Lv.Ⅴでリタルダント・アルペジオ・全休符へ強化","アンコール・ダ・カーポを追加","v147銃カードへ守護軽減が適用されるよう修正"]},
+      {
+        id: "v147-gun-bullet-expansion",
+        version: "v147",
+        date: "2026-08-09",
+        title: "銃・弾テーマを大幅拡張",
+        summary: "「銃」カテゴリを新設し、新しい銃4枚・弾6枚と弾の連鎖処理を追加しました。",
+        featured: false,
+        tags: ["new", "system"],
+        items: [
+          "「銃」カテゴリを追加し、乱射・凶弾を銃として扱うよう変更",
+          "再装填の対象を乱射から銃カード全般へ拡張",
+          "無差別射撃・ショットガン・変調・ファニングを追加",
+          "回収弾・減装弾・曳光弾・不発弾・阻害弾・粉砕弾を追加",
+          "弾テーマの捨て札時効果と連鎖処理を整理"
+        ]
+      },
       {
         id: "v146-news-update",
         version: "v146",
         date: "2026-08-08",
         title: "お知らせを更新",
         summary: "終了した大会告知を削除し、最近のアップデート情報とNEW表示を更新しました。ゲーム内容の変更はありません。",
-        featured: true,
+        featured: false,
         tags: ["fix", "system"],
         items: [
           "大会開催予告を終了したため、大会告知を削除",
@@ -2582,6 +2697,85 @@ const CARD_LIBRARY = {
       cpu: "CPU"
     };
 
+    function getPlayerDisplayName(player,{includeYou=false,turnLabel=false}={}){
+      if(state.battleMode!=="friend")return player==="human"?"あなた":"CPU";
+      const role=player==="human"?state.friendRole:otherFriendRole();
+      const label=role==="host"?"ホスト":"ゲスト";
+      if(player==="human"&&turnLabel)return "あなた";
+      return includeYou&&player==="human"?`${label}（あなた）`:label;
+    }
+
+    function refreshPlayerDisplayNames(){
+      handNames.human=state.battleMode==="friend"?getPlayerDisplayName("human"):"あなた";
+      handNames.cpu=getPlayerDisplayName("cpu");
+      if(elements?.humanPlayerName)elements.humanPlayerName.textContent=getPlayerDisplayName("human",{includeYou:true});
+      if(elements?.cpuPlayerName)elements.cpuPlayerName.textContent=getPlayerDisplayName("cpu",{includeYou:true});
+    }
+
+    function chooseStartingPlayer(){return Math.random()<0.5?"human":"cpu";}
+    function chooseFriendStartingRole(){return Math.random()<0.5?"host":"guest";}
+    function decideFriendStartingPlayer(existingStartingPlayer=null){
+      return existingStartingPlayer==="host"||existingStartingPlayer==="guest"
+        ? existingStartingPlayer
+        : chooseFriendStartingRole();
+    }
+    function localPlayerForStartingPlayer(startingPlayer){
+      if(state.battleMode!=="friend")return startingPlayer;
+      return startingPlayer===state.friendRole?"human":"cpu";
+    }
+    function startingPlayerDisplayName(startingPlayer){
+      if(state.battleMode!=="friend")return startingPlayer==="human"?"あなた":"CPU";
+      const local=localPlayerForStartingPlayer(startingPlayer);
+      const label=startingPlayer==="host"?"ホスト":"ゲスト";
+      return local==="human"?`${label}（あなた）`:label;
+    }
+
+    async function playStartingRoulette(startingPlayer,{duration=1600,hold=650}={}){
+      const overlay=elements.startingPlayerRoulette,wheel=elements.startingRouletteWheel;
+      if(!overlay||!wheel)return;
+      state.startingRouletteActive=true;render();
+      const labels=state.battleMode==="friend"?["ホスト","ゲスト"]:["あなた","CPU"];
+      elements.startingRouletteLabelA.textContent=labels[0];elements.startingRouletteLabelB.textContent=labels[1];
+      elements.startingRouletteResult.textContent="先攻を決めています…";
+      overlay.classList.add("show");overlay.setAttribute("aria-hidden","false");
+      const firstWins=state.battleMode==="friend"?startingPlayer==="host":startingPlayer==="human";
+      wheel.style.transition="none";wheel.style.transform="rotate(0deg)";void wheel.offsetWidth;
+      wheel.style.setProperty("--roulette-duration",`${duration}ms`);wheel.style.transition="";
+      wheel.style.transform=`rotate(${1440+(firstWins?225:45)}deg)`;
+      await delay(duration+80);
+      elements.startingRouletteResult.textContent=`${startingPlayerDisplayName(startingPlayer)}が先攻！`;
+      await delay(hold);
+      overlay.classList.remove("show");overlay.setAttribute("aria-hidden","true");
+      state.startingRouletteActive=false;render();
+    }
+
+    async function beginCpuStartingFlow(forcedStartingPlayer=null,rouletteOptions={}){
+      const token=++state.startingFlowToken;
+      const startingPlayer=forcedStartingPlayer||chooseStartingPlayer();
+      state.startingPlayer=startingPlayer;state.startingPlayerDecided=true;state.turn=startingPlayer;state.startingRouletteActive=true;
+      await playStartingRoulette(startingPlayer,rouletteOptions);
+      if(token!==state.startingFlowToken||state.gameOver)return startingPlayer;
+      await startTurn(startingPlayer);
+      if(startingPlayer==="cpu"&&state.turn==="cpu"&&!state.gameOver&&state.mode==="attack"){await delay(350);await cpuTurn();}
+      return startingPlayer;
+    }
+
+    async function beginFriendStartingFlow(match,rouletteOptions={}){
+      const startingPlayer=match?.startingPlayer||match?.state?.startingPlayer;
+      if(!startingPlayer)return null;
+      state.startingPlayer=startingPlayer;state.startingPlayerDecided=true;
+      const localStartingPlayer=localPlayerForStartingPlayer(startingPlayer);
+      state.turn=localStartingPlayer;
+      const snapshot=match?.state;
+      const alreadyStarted=!!(snapshot?.host?.firstTurnStarted||snapshot?.guest?.firstTurnStarted);
+      if(alreadyStarted)return startingPlayer;
+      const token=++state.startingFlowToken;
+      await playStartingRoulette(startingPlayer,rouletteOptions);
+      if(token!==state.startingFlowToken||state.gameOver)return startingPlayer;
+      if(localStartingPlayer==="human"&&!state.firstTurnStarted.human)await startTurn("human");
+      return startingPlayer;
+    }
+
     function otherPlayer(player) {
       return player === "human" ? "cpu" : "human";
     }
@@ -2674,6 +2868,13 @@ const CARD_LIBRARY = {
       battleResultReopenBtn: document.getElementById("battleResultReopenBtn"),
       humanState: document.getElementById("humanState"),
       cpuState: document.getElementById("cpuState"),
+      humanPlayerName: document.getElementById("humanPlayerName"),
+      cpuPlayerName: document.getElementById("cpuPlayerName"),
+      startingPlayerRoulette: document.getElementById("startingPlayerRoulette"),
+      startingRouletteWheel: document.getElementById("startingRouletteWheel"),
+      startingRouletteLabelA: document.getElementById("startingRouletteLabelA"),
+      startingRouletteLabelB: document.getElementById("startingRouletteLabelB"),
+      startingRouletteResult: document.getElementById("startingRouletteResult"),
       splitBox: document.getElementById("splitBox"),
       splitLeft: document.getElementById("splitLeft"),
       splitRight: document.getElementById("splitRight"),
@@ -2959,7 +3160,7 @@ const CARD_LIBRARY = {
       await showPopup(
         player,
         "過加速",
-        `<div class="roulette-pop">${player === "cpu" ? "CPU +1 DRAW" : "+1 DRAW"}</div><div>${handNames[player]}はこのターン${draws}枚ドローします。<br>追加ドロー残り：${remaining}ターン</div>`,
+        `<div class="roulette-pop">${player === "cpu" ? `${getPlayerDisplayName(player)} +1 DRAW` : "+1 DRAW"}</div><div>${handNames[player]}はこのターン${draws}枚ドローします。<br>追加ドロー残り：${remaining}ターン</div>`,
         "accel",
         900,
         true
@@ -2970,7 +3171,7 @@ const CARD_LIBRARY = {
       await showPopup(
         player,
         "過加速の反動",
-        `<div class="roulette-pop">${player === "cpu" ? "CPU NO DRAW" : "NO DRAW"}</div><div>${handNames[player]}はこのターン開始時にカードを引けません。<br>反動残り：${remaining}ターン</div>`,
+        `<div class="roulette-pop">${player === "cpu" ? `${getPlayerDisplayName(player)} NO DRAW` : "NO DRAW"}</div><div>${handNames[player]}はこのターン開始時にカードを引けません。<br>反動残り：${remaining}ターン</div>`,
         "accel",
         900,
         true
@@ -3130,6 +3331,10 @@ const CARD_LIBRARY = {
       if (!state.costLimitNextTurn || typeof state.costLimitNextTurn !== "object") state.costLimitNextTurn = { human: null, cpu: null };
       if (!state.activeCostLimit || typeof state.activeCostLimit !== "object") state.activeCostLimit = { human: null, cpu: null };
       if (!state.firstTurnStarted || typeof state.firstTurnStarted !== "object") state.firstTurnStarted = { human: false, cpu: false };
+      if (!state.pendingStartDrawSkip || typeof state.pendingStartDrawSkip !== "object") state.pendingStartDrawSkip = { human: false, cpu: false };
+      if (!state.furiosoSkipPending || typeof state.furiosoSkipPending !== "object") state.furiosoSkipPending = { human: false, cpu: false };
+      if (!state.furiosoSkipActive || typeof state.furiosoSkipActive !== "object") state.furiosoSkipActive = { human: false, cpu: false };
+      if(!state.selectedTheme)state.selectedTheme={human:null,cpu:null};if(!state.performanceLevel)state.performanceLevel={human:0,cpu:0};if(!state.resonanceTriggeredThisTurn)state.resonanceTriggeredThisTurn={human:false,cpu:false};if(!state.usedRondoFamilies)state.usedRondoFamilies={human:[],cpu:[]};if(!state.pendingCanonHits)state.pendingCanonHits=[];if(!state.quarterRestPending)state.quarterRestPending={human:false,cpu:false};if(!state.quarterRestActive)state.quarterRestActive={human:false,cpu:false};if(!state.wholeRestPending)state.wholeRestPending={human:false,cpu:false};if(!state.wholeRestActive)state.wholeRestActive={human:false,cpu:false};
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
@@ -3176,7 +3381,9 @@ const CARD_LIBRARY = {
         costLimitNextTurn: state.costLimitNextTurn[player] ?? null,
         activeCostLimit: state.activeCostLimit[player] ?? null,
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
-        firstTurnStarted: !!state.firstTurnStarted[player]
+        firstTurnStarted: !!state.firstTurnStarted[player],
+        pendingStartDrawSkip: !!state.pendingStartDrawSkip[player]
+        ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:cloneJson(state.pendingCanonHits), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
       };
     }
 
@@ -3185,11 +3392,13 @@ const CARD_LIBRARY = {
       if (!role) return null;
       const otherRole = otherFriendRole(role);
       const snapshot = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         publisherSide: role,
         host: null,
         guest: null,
         turnSide: state.turn === "human" ? role : otherRole,
+        startingPlayer: state.startingPlayer,
+        startingPlayerDecided: !!state.startingPlayerDecided,
         turnNumber: state.turnNumber,
         gameOver: !!state.gameOver,
         result: state.matchResult ?? null,
@@ -3243,6 +3452,9 @@ const CARD_LIBRARY = {
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.pendingNoDraw[player] = Number(side.pendingNoDraw || 0);
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
+      state.pendingStartDrawSkip[player] = !!side.pendingStartDrawSkip;
+      state.furiosoSkipPending[player]=!!side.furiosoSkipPending;state.furiosoSkipActive[player]=!!side.furiosoSkipActive;
+      state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Number(side.performanceLevel)||0;state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=cloneJson(side.pendingCanonHits);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingIntemperanceCardLock[player] = !!side.pendingIntemperanceCardLock;
       state.activeIntemperanceCardLock[player] = !!side.activeIntemperanceCardLock;
@@ -3296,6 +3508,10 @@ const CARD_LIBRARY = {
           preserveOwnerOnlyMeta: publisherSide === state.friendRole
         });
         state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
+        if(snapshot.startingPlayer==="host"||snapshot.startingPlayer==="guest"){
+          state.startingPlayer=snapshot.startingPlayer;
+          state.startingPlayerDecided=true;
+        }
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.gameOver = !!snapshot.gameOver;
         state.matchResult = snapshot.result ?? state.matchResult ?? null;
@@ -3342,7 +3558,7 @@ const CARD_LIBRARY = {
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // match 全体を古いキャッシュで上書きしない。更新するフィールドだけを原子的に書く。
       await fb.updateDoc(roomRef, {
-        "match.version": 51,
+        "match.version": 150,
         "match.stateRevision": nextRevision,
         "match.state": snapshot,
         "match.result": state.matchResult ?? null,
@@ -4099,8 +4315,8 @@ const CARD_LIBRARY = {
       if (!fb) return;
       const hostDeck = shuffle(buildDeckFromSubmittedCounts(data.hostDeckCounts));
       const guestDeck = shuffle(buildDeckFromSubmittedCounts(data.guestDeckCounts));
-      const initialHost = { L: 1, R: 1, deckCounts: data.hostDeckCounts, deck: hostDeck.slice(3), hand: hostDeck.slice(0, 3), discard: [] };
-      const initialGuest = { L: 1, R: 1, deckCounts: data.guestDeckCounts, deck: guestDeck.slice(3), hand: guestDeck.slice(0, 3), discard: [] };
+      const initialHost = createOpeningSideFromShuffledDeck(hostDeck,data.hostDeckCounts);
+      const initialGuest = createOpeningSideFromShuffledDeck(guestDeck,data.guestDeckCounts);
       const emptySideState = (side) => ({
         L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
         temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, chargeCardsUsed: [] },
@@ -4110,20 +4326,25 @@ const CARD_LIBRARY = {
         costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
       });
       const createdAtMs = Date.now();
+      const startingPlayer = decideFriendStartingPlayer();
       const match = {
-        version: 49,
+        version: 150,
         matchId: `${state.friendRoomId}-${createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
         createdAtMs,
-        turnSide: "host",
+        startingPlayer,
+        startingPlayerDecided: true,
+        turnSide: startingPlayer,
         turnNumber: 1,
         host: initialHost,
         guest: initialGuest,
         stateRevision: 1,
         state: {
-          schemaVersion: 1,
+          schemaVersion: 3,
           host: emptySideState(initialHost),
           guest: emptySideState(initialGuest),
-          turnSide: "host",
+          startingPlayer,
+          startingPlayerDecided: true,
+          turnSide: startingPlayer,
           turnNumber: 1,
           gameOver: false,
           result: null,
@@ -4153,7 +4374,7 @@ const CARD_LIBRARY = {
       state.battleMode = "friend";
       state.tutorialBattleActive = false;
       state.tutorialScriptedCpuAction = false;
-      handNames.cpu = "相手";
+      refreshPlayerDisplayNames();
       state.friendMatchStarted = true;
       state.friendMatchId = getFriendMatchId(match) || String(Date.now());
       state.friendSyncRevision = Number(match.stateRevision || 0);
@@ -4199,6 +4420,8 @@ const CARD_LIBRARY = {
       state.activeCostLimit = state.activeCostLimit || { human: null, cpu: null };
       state.berserkerTurns = state.berserkerTurns || { human: 0, cpu: 0 };
       state.firstTurnStarted = state.firstTurnStarted || { human: false, cpu: false };
+      state.startingPlayer = match.startingPlayer || match.state?.startingPlayer || match.turnSide || null;
+      state.startingPlayerDecided = state.startingPlayer === "host" || state.startingPlayer === "guest";
       state.turn = match.turnSide === state.friendRole ? "human" : "cpu";
       state.turnNumber = match.turnNumber || 1;
       state.mode = "attack";
@@ -4222,6 +4445,10 @@ const CARD_LIBRARY = {
         applyFriendSideToLocal("human", snapshot[state.friendRole]);
         applyFriendSideToLocal("cpu", snapshot[otherFriendRole()]);
         state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
+        if(snapshot.startingPlayer==="host"||snapshot.startingPlayer==="guest"){
+          state.startingPlayer=snapshot.startingPlayer;
+          state.startingPlayerDecided=true;
+        }
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.gameOver = !!snapshot.gameOver;
         state.matchResult = snapshot.result ?? match.result ?? null;
@@ -4229,12 +4456,10 @@ const CARD_LIBRARY = {
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
         state.friendApplyingRemoteState = false;
       }
-      setMessage(state.gameOver ? "試合終了。" : state.turn === "human" ? "あなたの番です。CPU戦と同じ画面・カード処理を使用します。" : "相手の番です。同期を待っています。");
+      setMessage(state.gameOver ? "試合終了。" : state.turn === "human" ? "あなたの番です。" : `${getPlayerDisplayName("cpu")}の番です。同期を待っています。`);
       render();
       if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
-      if (state.turn === "human" && !state.firstTurnStarted.human) {
-        startTurn("human");
-      }
+      beginFriendStartingFlow(match).catch(error=>{console.error(error);state.startingRouletteActive=false;render();});
     }
 
     function loadRoomFromUrl() {
@@ -4831,6 +5056,8 @@ const CARD_LIBRARY = {
       state.mode = "attack";
       state.hands.human = [];
       state.hands.cpu = [];
+      moveThemeSettingToOpeningHand("human");
+      moveThemeSettingToOpeningHand("cpu");
       state.decks.human = [];
       state.decks.cpu = [];
       state.discard.human = [];
@@ -5148,7 +5375,7 @@ const CARD_LIBRARY = {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
-    function startBattleWithDifficulty(difficulty) {
+    async function startBattleWithDifficulty(difficulty) {
       if (!areBothDecksValid()) {
         const h = getDeckStats("human");
         const c = getDeckStats("cpu");
@@ -5166,9 +5393,9 @@ const CARD_LIBRARY = {
       state.cpuDifficulty = difficulty;
       elements.cpuDifficultySelect.value = difficulty;
       showScreen("battle");
-      resetGame();
       const labels = { easy: "やさしめ", standard: "標準", hard: "強め" };
-      setMessage(`CPU難易度「${labels[difficulty]}」で試合開始です。攻撃する手を選んでください。`);
+      setMessage(`CPU難易度「${labels[difficulty]}」で試合を準備しています。`);
+      await resetGame();
     }
 
 function wrapFinger(value) {
@@ -5260,6 +5487,9 @@ function wrapFinger(value) {
       }
       return deck;
     }
+    function extractThemeSettingFromOpeningDeck(deck){const index=deck.indexOf("themeSetting");if(index<0)return false;deck.splice(index,1);return true;}
+    function createOpeningSideFromShuffledDeck(deck,deckCounts){const copy=[...deck],has=extractThemeSettingFromOpeningDeck(copy);return{L:1,R:1,deckCounts,deck:copy.slice(3),hand:copy.slice(0,3).concat(has?["themeSetting"]:[]),discard:[]};}
+    function moveThemeSettingToOpeningHand(player){if(extractThemeSettingFromOpeningDeck(state.decks[player])&&!state.hands[player].includes("themeSetting"))state.hands[player].push("themeSetting");}
 
     function getDeckStats(owner = state.editingDeckOwner) {
       let count = 0;
@@ -5418,7 +5648,8 @@ function wrapFinger(value) {
       for (const cardId of Object.keys(CARD_LIBRARY)) {
         if (CARD_LIBRARY[cardId].token) continue;
         const raw = counts && Object.prototype.hasOwnProperty.call(counts, cardId) ? Number(counts[cardId]) : 0;
-        const value = Number.isFinite(raw) ? Math.max(0, Math.min(3, Math.floor(raw))) : 0;
+        const maxCopies=CARD_LIBRARY[cardId]?.maxDeckCopies||3;
+        const value = Number.isFinite(raw) ? Math.max(0, Math.min(maxCopies, Math.floor(raw))) : 0;
         fixed[cardId] = value;
       }
       return fixed;
@@ -5855,7 +6086,7 @@ function wrapFinger(value) {
               setMessage(`デッキはちょうど${DECK_MAX_COUNT}枚です。これ以上追加できません。`);
               return;
             }
-            counts[cardId] = Math.min(3, current + 1);
+            counts[cardId] = Math.min(CARD_LIBRARY[cardId]?.maxDeckCopies||3, current + 1);
           } else if (action === "minus") {
             counts[cardId] = Math.max(0, current - 1);
           }
@@ -6455,7 +6686,7 @@ function wrapFinger(value) {
     function gainCharge(player,amount,source="充電効果"){ normalizeChargeHand(player); const before=getChargeLevel(player); const gain=Math.max(0,Number(amount)||0); if(before>=10||gain<=0){ if(before>=10)addLog(`${handNames[player]}は既に充電Lv.10のため充電を得られない。`); return before; } const after=Math.min(10,before+gain); setChargeLevel(player,after); addLog(`${handNames[player]}は${source}で充電${gain}を得た（Lv.${before}→Lv.${after}）。`); return after; }
     function consumeCharge(player,amount,allowPartial=false,source="充電消費"){ const before=getChargeLevel(player); const need=Math.max(0,Number(amount)||0); if(!allowPartial&&before<need){ addLog(`${handNames[player]}の「${source}」は充電不足（必要${need}/現在${before}）で不発。`); return false; } const spent=allowPartial?Math.min(before,need):need; setChargeLevel(player,before-spent); addLog(`${handNames[player]}は${source}で充電${spent}を消費（Lv.${before}→Lv.${before-spent}）。`); return true; }
     function isProtectedChargeCard(cardId){ return chargeLevelFromId(cardId)>0; }
-    function countDiscardableHand(player){ return state.hands[player].filter(id=>!isProtectedChargeCard(id)).length; }
+    function countDiscardableHand(player){ return state.hands[player].filter(id=>!isProtectedHandCard(id)).length; }
     function canUseChargeCardDuringLightSpeed(player, cardId) {
       const card = CARD_LIBRARY[cardId];
       return !!state.temp?.[player]?.lightSpeedCircuit && !!card?.chargeCard;
@@ -6559,6 +6790,7 @@ function wrapFinger(value) {
       if (!cardId) return true;
       if (isDirectiveCard(cardId)) return true;
       if (isProtectedChargeCard(cardId)) return true;
+      if (CARD_LIBRARY[cardId]?.copyExcluded) return true;
       if (cardId === "logicAtelier") return true;
       if (source === "brawl" && cardId === "brawl") return true;
       if (source === "advanceNotice" && cardId === "advanceNotice") return true;
@@ -6590,7 +6822,8 @@ function wrapFinger(value) {
     }
 
     async function activateCopiedCardEffect(player, cardId, sourceLabel, context = {}) {
-      const card = CARD_LIBRARY[cardId];
+      const effectiveId = effectiveCardIdForPlayer(player, cardId);
+      const card = CARD_LIBRARY[effectiveId];
       if (!card || typeof card.effect !== "function") {
         addLog(`${sourceLabel}で選ばれたカードには発動できる効果がなかった。`);
         return false;
@@ -6601,6 +6834,7 @@ function wrapFinger(value) {
       const previousCopy = state.copiedEffectContext;
       state.copiedEffectContext = { sourceLabel, cardId, ...context };
       try {
+        recordRondoUse(player, effectiveId);
         await card.effect(player);
         if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
           state.pendingTerminalEnd[player] = true;
@@ -6701,7 +6935,7 @@ function wrapFinger(value) {
     function fatigue(player) {
       const discardableCards = state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
-        .filter(item => !isProtectedChargeCard(item.cardId));
+        .filter(item => !isProtectedHandCard(item.cardId));
       if (discardableCards.length > 0) {
         const picked = discardableCards[Math.floor(Math.random() * discardableCards.length)];
         const [discarded] = state.hands[player].splice(picked.index, 1);
@@ -6744,6 +6978,11 @@ function wrapFinger(value) {
         render();
         return;
       }
+      state.resonanceTriggeredThisTurn[player]=false;
+      state.quarterRestActive[player]=!!state.quarterRestPending[player]; state.quarterRestPending[player]=false;
+      state.wholeRestActive[player]=!!state.wholeRestPending[player]; state.wholeRestPending[player]=false;
+      state.furiosoSkipActive[player]=!!state.furiosoSkipPending[player]; state.furiosoSkipPending[player]=false;
+      ensureThemeAttachments(player);
       // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
       if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
       ensureOnlineStateMaps();
@@ -6783,6 +7022,9 @@ function wrapFinger(value) {
       state.pendingRepairDiscard = null;
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
+      state.pendingGunEffect = null;
+      state.pendingFanning = null;
+      state.pendingModulation = null;
       elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
       clearHighlights();
@@ -6874,6 +7116,11 @@ function wrapFinger(value) {
         draws = 0;
         addLog(`${handNames[player]}は未達成の「指令：沈黙」により、このターンの通常ドローを行わない。`);
       }
+      if (state.pendingStartDrawSkip[player]) {
+        state.pendingStartDrawSkip[player] = false;
+        if (draws > 0) draws -= 1;
+        addLog(`${handNames[player]}は「阻害弾」により、このターンの通常ドローを行わない。`);
+      }
       if ((state.pendingDirectiveBonusDraw[player] || 0) > 0) {
         draws += state.pendingDirectiveBonusDraw[player];
         addLog(`${handNames[player]}は達成した「指令：再編成」により追加で${state.pendingDirectiveBonusDraw[player]}枚引く。`);
@@ -6926,6 +7173,17 @@ function wrapFinger(value) {
       for (let i = 0; i < draws; i++) drawCard(player);
 
       await resolveAdvanceNotice(player);
+      if(state.furiosoSkipActive[player]){
+        state.furiosoSkipActive[player]=false;
+        addLog(`${handNames[player]}は「Furioso」の反動により、このターン行動不能。`);
+        render();
+        await endTurn();
+        return;
+      }
+      if(state.wholeRestActive[player]){
+        const playable=state.hands[player].some(raw=>{const id=effectiveCardIdForPlayer(player,raw),c=CARD_LIBRARY[id];try{return c&&id!=="performance"&&!isAttachmentCard(id)&&!(state.activeCostLimit[player]!==null&&c.cost>state.activeCostLimit[player])&&!state.activeIntemperanceCardLock[player]&&!(state.judgmentPrisonTurns[player]>0)&&c.canPlay(player);}catch{return false;}});
+        if(!playable){addLog(`${handNames[player]}は「全休符」により使用可能なカードがなく、ターンを終了した。`);await endTurn();return;}
+      }
 
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
         addLog(`${handNames[player]}は「懲役」により、このターンはカードを使用できない。残り${state.judgmentPrisonTurns[player]}回。`);
@@ -6997,13 +7255,17 @@ function wrapFinger(value) {
               ? "過加速の反動で、このターン開始時のドローはありません。"
               : "あなたの番です。カードを使うか罠を伏せてから、攻撃か分けるを選べます。");
       } else {
-        setMessage(state.activeIntemperanceCardLock.cpu ? "CPUは「無節制」の代償により、このターンはカードを使用できません。" : state.noSplit.cpu ? "CPUの番です。固定の効果でCPUは分けられません。" : accelerationTriggered ? `CPUは過過加速中です。このターン${draws}枚ドローしました。` : noDrawTriggered ? "CPUは過加速の反動でドローできません。" : "CPUの番です。");
+        const cpuName=getPlayerDisplayName("cpu");
+        setMessage(state.activeIntemperanceCardLock.cpu ? `${cpuName}は「無節制」の代償により、このターンはカードを使用できません。` : state.noSplit.cpu ? `${cpuName}の番です。固定の効果で分けられません。` : accelerationTriggered ? `${cpuName}は過過加速中です。このターン${draws}枚ドローしました。` : noDrawTriggered ? `${cpuName}は過加速の反動でドローできません。` : `${cpuName}の番です。`);
       }
 
       render();
     }
 
     function render() {
+      refreshPlayerDisplayNames();
+      ensureThemeAttachments("human"); ensureThemeAttachments("cpu");
+      const wrPlayer=state.turn;if(state.wholeRestActive?.[wrPlayer]&&state.temp?.[wrPlayer]?.wholeRestCardUsed&&state.mode==="attack"&&!state.animating){state.temp[wrPlayer].wholeRestCardUsed=false;setTimeout(()=>{if(state.turn===wrPlayer&&!state.gameOver)endTurn();},0);}
       ensureOnlineStateMaps();
       scheduleFriendStatePublish();
       for (const player of ["human", "cpu"]) {
@@ -7020,7 +7282,7 @@ function wrapFinger(value) {
             card.classList.remove("selected", "hit-target");
           }
 
-          if (!state.gameOver && !state.animating && state.turn === "human") {
+          if (!state.gameOver && !state.animating && !state.startingRouletteActive && state.turn === "human") {
             if (state.mode === "attack") {
               if (player === "human" && value > 0) card.classList.add("selectable");
               if (player === "cpu" && state.selectedAttackHand && value > 0) card.classList.add("selectable");
@@ -7082,9 +7344,9 @@ function wrapFinger(value) {
       }
 
       elements.humanState.textContent =
-        state.gameOver ? "" : state.turn === "human" ? "あなたの番です" : "CPUの番です";
+        state.gameOver ? "" : state.startingRouletteActive ? "先攻決定中" : state.turn === "human" ? "あなたのターン" : `${getPlayerDisplayName("cpu")}のターン`;
       elements.cpuState.textContent =
-        state.gameOver ? "" : state.turn === "cpu" ? "考え中…" : "待機中";
+        state.gameOver ? "" : state.startingRouletteActive ? "先攻決定中" : state.turn === "cpu" ? `${getPlayerDisplayName("cpu")}のターン` : "待機中";
 
       if (elements.battleRestartBtn) {
         elements.battleRestartBtn.classList.toggle("screen-hidden", state.battleMode === "friend");
@@ -7092,7 +7354,7 @@ function wrapFinger(value) {
       if (elements.battleResultReopenBtn) {
         elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
       }
-      const lock = state.animating || state.turn !== "human" || state.gameOver;
+      const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver;
       const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive;
       elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
@@ -7103,7 +7365,7 @@ function wrapFinger(value) {
 
       elements.humanDeckCount.textContent = state.decks.human.length;
       elements.cpuDeckCount.textContent = state.decks.cpu.length;
-      elements.handInfo.textContent = `あなた ${state.hands.human.length}枚 / CPU ${state.hands.cpu.length}枚`;
+      elements.handInfo.textContent = `${getPlayerDisplayName("human",{includeYou:true})} ${state.hands.human.length}枚 / ${getPlayerDisplayName("cpu")} ${state.hands.cpu.length}枚`;
       renderHumanCards();
       renderLastAction();
 
@@ -7179,7 +7441,48 @@ function wrapFinger(value) {
 
     function effectiveCardIdForPlayer(player, cardId) {
       if (cardId === "magicalChant" && (state.magicalChantCompleted?.[player] || hasCompletedMagicalBlessing(player))) return "arcanaSlave";
+      if ((state.performanceLevel?.[player] || 0) >= 5) {
+        if (cardId === "fermata") return "ritardando";
+        if (cardId === "canon") return "arpeggio";
+        if (cardId === "quarterRest") return "wholeRest";
+        if (cardId === "agitato") return "furioso";
+        if (cardId === "doloroso") return "appassionato";
+        if (cardId === "lacrimosa") return "requiem";
+      }
       return cardId;
+    }
+
+    function isProtectedHandCard(cardId) {
+      return isProtectedChargeCard(cardId) || !!CARD_LIBRARY[cardId]?.protectedSpecial;
+    }
+
+    function themeCardId(player) {
+      return state.selectedTheme?.[player] === "serenade" ? "serenadeTheme" : state.selectedTheme?.[player] === "rondo" ? "rondoTheme" : null;
+    }
+
+    function ensureThemeAttachments(player) {
+      const id = themeCardId(player);
+      state.discard[player]=state.discard[player].filter(cardId=>!CARD_LIBRARY[cardId]?.themeBlessing);
+      for (const hand of ["L", "R"]) {
+        state.traps[player][hand] = state.traps[player][hand].filter(slot => !CARD_LIBRARY[trapCardId(slot)]?.themeBlessing || trapCardId(slot) === id);
+        if (id && state[player][hand] > 0 && !state.traps[player][hand].some(slot => trapCardId(slot) === id)) state.traps[player][hand].push(id);
+      }
+    }
+
+    function getPerformanceLevel(player) { return Math.max(0, Math.min(5, Number(state.performanceLevel?.[player] || 0))); }
+    function setPerformanceLevel(player, level, reason = "") {
+      const next = Math.max(0, Math.min(5, Number(level) || 0));
+      state.performanceLevel[player] = next;
+      state.hands[player] = state.hands[player].filter(id => id !== "performance");
+      if (next > 0) state.hands[player].push("performance");
+      if (reason) addLog(`${handNames[player]}の「演舞」は${next ? `Lv.${next}` : "消滅"}（${reason}）。`);
+      render();
+      return next;
+    }
+    function changePerformanceLevel(player, delta, reason) {
+      const before = getPerformanceLevel(player);
+      const base = before || (delta > 0 ? 1 : 0);
+      return setPerformanceLevel(player, base + delta, reason);
     }
 
     function transformMagicalChantCards(player) {
@@ -7195,6 +7498,146 @@ function wrapFinger(value) {
       state.decks[player].push(cardId);
       shuffle(state.decks[player]);
       return true;
+    }
+
+    function useEncore(player) {
+      if (!returnOneCardFromDiscardToDeck(player, "finale")) addLog(`${handNames[player]}の「アンコール」は捨て札にフィナーレがなく不発。`);
+      else addLog(`${handNames[player]}は「アンコール」でフィナーレを山札へ戻してシャッフルした。`);
+    }
+
+    async function useDaCapo(player) {
+      const indexes = state.hands[player].map((id,index)=>({id,index})).filter(x=>!isProtectedHandCard(x.id)).map(x=>x.index);
+      const directCount = indexes.length;
+      await discardFixedHandCardsByEffect(player,indexes,"「ダ・カーポ」");
+      for(let i=0;i<directCount;i++) drawCard(player);
+      state[player].L=1; state[player].R=1; ensureThemeAttachments(player);
+      const handDaCapo=state.hands[player].map((id,index)=>({id,index})).filter(x=>x.id==="daCapo").map(x=>x.index);
+      await discardFixedHandCardsByEffect(player,handDaCapo,"「ダ・カーポ」");
+      for(let i=state.decks[player].length-1;i>=0;i--) if(state.decks[player][i]==="daCapo") state.discard[player].push(state.decks[player].splice(i,1)[0]);
+      state.pendingTerminalEnd[player]=true; render();
+    }
+
+    function chooseTheme(player) {
+      let theme;
+      if(player==="human") theme=confirm("題目：ロンドを選びますか？\nOK＝ロンド / キャンセル＝セレナーデ")?"rondo":"serenade";
+      else {
+        const rondos=state.hands[player].filter(id=>CARD_LIBRARY[id]?.rondo).length+state.decks[player].filter(id=>CARD_LIBRARY[id]?.rondo).length;
+        theme=rondos>=3?"rondo":"serenade";
+      }
+      state.selectedTheme[player]=theme; ensureThemeAttachments(player);
+      addLog(`${handNames[player]}は「題目：${theme==="rondo"?"ロンド":"セレナーデ"}」を選択した。`); render();
+    }
+
+    async function useFermata(player) {
+      drawCard(player);
+      const extra=player==="human"?confirm("フェルマータでもう1枚引き、ターンを終了しますか？"):state.hands[player].length<4;
+      if(extra){drawCard(player);state.pendingTerminalEnd[player]=true;}
+    }
+    function useRitardando(player){const o=otherPlayer(player);for(const h of ["L","R"])if(state[o][h]>1)state[o][h]-=1;state.pendingStartDrawSkip[o]=true;render();}
+    function useQuarterRest(player){const o=otherPlayer(player);state.quarterRestPending[o]=true;state.quarterRestPending[player]=true;}
+    function useWholeRest(player){const o=otherPlayer(player);state.wholeRestPending[o]=true;state.pendingStartDrawSkip[o]=true;}
+
+    function chooseLivingHand(player, owner, promptText) {
+      const choices=["L","R"].filter(hand=>state[owner][hand]>0);
+      if(!choices.length)return null;
+      if(player!=="human")return choices.sort((a,b)=>state[owner][a]-state[owner][b])[0];
+      if(choices.length===1)return choices[0];
+      return confirm(`${promptText}\nOK＝左手 / キャンセル＝右手`) ? "L" : "R";
+    }
+
+    async function useAgitato(player){
+      await discardRandomCards(player,1,"「Agitato」");
+      await discardRandomCards(otherPlayer(player),1,"「Agitato」");
+      render();
+    }
+
+    function useFurioso(player){
+      const rondoCount=state.hands[player].filter(raw=>CARD_LIBRARY[effectiveCardIdForPlayer(player,raw)]?.rondo).length;
+      const temp=state.temp[player];
+      temp.attackLimit=Math.max(Number(temp.attackLimit||1),rondoCount);
+      if(rondoCount===0&&Number(temp.attacksUsed||0)===0)temp.attackLimit=0;
+      temp.multiAttackSource="Furioso";
+      changePerformanceLevel(player,-5,"Furioso");
+      state.furiosoSkipPending[player]=true;
+      addLog(`${handNames[player]}は「Furioso」により通常攻撃を最大${rondoCount}回行える。次の自分のターンは行動不能。`);
+      render();
+    }
+
+    function useDoloroso(player){
+      const hand=chooseLivingHand(player,player,"Dolorosoで0にする自分の手を選んでください。");
+      if(!hand)return false;
+      state[player][hand]=0; clearBrokenTraps(player);
+      for(let i=0;i<3;i++)drawCard(player);
+      render(); return true;
+    }
+
+    function useAppassionato(player){
+      if(state.temp[player].appassionatoUsedThisTurn)return false;
+      const hand=chooseLivingHand(player,player,"Appassionatoで0にする自分の手を選んでください。");
+      if(!hand)return false;
+      state.temp[player].appassionatoUsedThisTurn=true;
+      state[player][hand]=0; clearBrokenTraps(player);
+      state.temp[player].cardExtraUses=Number(state.temp[player].cardExtraUses||0)+2;
+      render(); return true;
+    }
+
+    function useLacrimosa(player){
+      const opponent=otherPlayer(player);
+      if(!(state[player].L>0||state[player].R>0)||state[opponent].L<=0||state[opponent].R<=0)return false;
+      const ownHand=chooseLivingHand(player,player,"Lacrimosaで0にする自分の手を選んでください。");
+      if(!ownHand)return false;
+      state[player][ownHand]=0; clearBrokenTraps(player);
+      const target=chooseLivingHand(player,opponent,"Lacrimosaで0にする相手の手を選んでください。");
+      if(target){state[opponent][target]=0;clearBrokenTraps(opponent);}
+      render(); return !!target;
+    }
+
+    async function useRequiem(player){
+      const hand=chooseLivingHand(player,player,"Requiemで0にする自分の手を選んでください。");
+      if(!hand){state.pendingTerminalEnd[player]=true;return false;}
+      state[player][hand]=0; clearBrokenTraps(player);
+      const opponent=otherPlayer(player);
+      const fixedIndexes=state.hands[opponent].map((id,index)=>({id,index})).filter(item=>!isProtectedHandCard(item.id)).map(item=>item.index);
+      await discardFixedHandCardsByEffect(opponent,fixedIndexes,"「Requiem」");
+      state.pendingTerminalEnd[player]=true; render(); return true;
+    }
+
+    function useMorendo(player){
+      for(const owner of [player,otherPlayer(player)]){
+        const choices=["L","R"].filter(hand=>state[owner][hand]>0);
+        if(choices.length)state[owner][choices[Math.floor(Math.random()*choices.length)]]=1;
+        clearBrokenTraps(owner);
+      }
+      render();
+    }
+
+    async function useGrandioso(player){
+      const targets=[];
+      for(const owner of [player,otherPlayer(player)])for(const hand of ["L","R"])if(state[owner][hand]>0)targets.push({owner,hand});
+      const changes=targets.map(({owner,hand})=>{const before=state[owner][hand],amount=applyGuardBlessingReduction(owner,hand,2,"Grandioso"),total=before+amount;return{owner,hand,before,total,after:normalize(total,owner,hand)};});
+      for(const change of changes){await animateCalculation(change.owner,change.hand,change.total,change.after);state[change.owner][change.hand]=change.after;}
+      for(const owner of [player,otherPlayer(player)])clearBrokenTraps(owner);
+      state.pendingTerminalEnd[player]=true; render();
+    }
+
+    function beginArpeggio(player){
+      const alive=["L","R"].filter(h=>state[player][h]>0);if(!alive.length){state.pendingTerminalEnd[player]=true;return false;}
+      if(player==="human"){state.pendingArpeggio={player};state.mode="arpeggioSource";setMessage("アルペジオ：元にする自分の手を選んでください。");render();return true;}
+      const hand=alive.sort((a,b)=>state[player][b]-state[player][a])[0];return resolveArpeggio(player,hand,chooseCpuArpeggioSplit(player,state[player][hand]));
+    }
+    function chooseCpuArpeggioSplit(player,total){const o=otherPlayer(player);for(let l=0;l<=total;l++){if(wrapFinger(state[o].L+l)===0&&wrapFinger(state[o].R+total-l)===0)return l;}return Math.floor(total/2);}
+    async function resolveArpeggio(player,sourceHand,leftAmount){const total=state[player][sourceHand];if(total<=0||leftAmount<0||leftAmount>total)return false;const o=otherPlayer(player);const right=total-leftAmount;for(const [h,n] of [["L",leftAmount],["R",right]]){if(n<=0)continue;const reduced=applyGuardBlessingReduction(o,h,n,"アルペジオ");const sum=state[o][h]+reduced;state[o][h]=normalize(sum,o,h);}state.pendingArpeggio=null;state.mode="attack";state.pendingTerminalEnd[player]=true;clearBrokenTraps(o);render();return true;}
+
+    function recordRondoUse(player,cardId){
+      if(state.selectedTheme?.[player]!=="rondo"||cardId==="themeSetting")return;
+      const card=CARD_LIBRARY[cardId];
+      if(card?.rondo){const family=card.rondoFamily||cardId;const used=state.usedRondoFamilies[player]||[];if(used.includes(family))changePerformanceLevel(player,-1,"同じ輪舞曲系列を再使用");else{if(getPerformanceLevel(player))changePerformanceLevel(player,1,"初使用の輪舞曲");else setPerformanceLevel(player,1,"初使用の輪舞曲");used.push(family);state.usedRondoFamilies[player]=used;}}
+      else if(cardId!=="performance")changePerformanceLevel(player,-1,"非輪舞曲を使用");
+    }
+    async function resolveCanonHitsForEndingPlayer(player){
+      const due=state.pendingCanonHits.filter(x=>x.waitForPlayer===player);state.pendingCanonHits=state.pendingCanonHits.filter(x=>x.waitForPlayer!==player);
+      for(const hit of due){if(state[hit.defender][hit.targetHand]<=0){addLog("カノンは記録対象が0のため不発。");continue;}const before=state[hit.defender][hit.targetHand],total=before+hit.amount,finalValue=wrapFinger(total);await animateCalculation(hit.defender,hit.targetHand,total,finalValue);state[hit.defender][hit.targetHand]=finalValue;addLog(`カノン着弾：${before}→${total}${total>=5?`→${finalValue}`:""}`);clearBrokenTraps(hit.defender);}
+      render();
     }
 
     function ensureChantCinematicOverlay() {
@@ -7748,6 +8191,7 @@ function wrapFinger(value) {
     }
 
     async function discardHandCardByEffect(player, handIndex, reason = "") {
+      if(isProtectedHandCard(state.hands[player][handIndex])) return null;
       const [cardId] = state.hands[player].splice(handIndex, 1);
       if (!cardId) return null;
       state.discard[player].push(cardId);
@@ -7756,12 +8200,28 @@ function wrapFinger(value) {
       return cardId;
     }
 
+    async function discardFixedHandCardsByEffect(player, indexes, reason = "") {
+      const fixed = [...new Set(indexes)]
+        .filter(index => Number.isInteger(index) && index >= 0 && index < state.hands[player].length)
+        .sort((a, b) => a - b)
+        .map(index => ({ index, cardId: state.hands[player][index] }));
+      for (const item of [...fixed].sort((a, b) => b.index - a.index)) {
+        state.hands[player].splice(item.index, 1);
+      }
+      for (const item of fixed) {
+        state.discard[player].push(item.cardId);
+        if (reason) addLog(`${reason}：${handNames[player]}は「${CARD_LIBRARY[item.cardId]?.name || item.cardId}」を捨てた。`);
+      }
+      for (const item of fixed) await handleCardDiscardEffect(player, item.cardId);
+      return fixed.map(item => item.cardId);
+    }
+
     async function discardRandomCards(player,count,reason) {
       let discarded=0;
       while(discarded<count){
         const candidates = state.hands[player]
           .map((id,index)=>({id,index}))
-          .filter(item=>!isProtectedChargeCard(item.id));
+          .filter(item=>!isProtectedHandCard(item.id));
         if (!candidates.length) break;
         const picked=candidates[Math.floor(Math.random()*candidates.length)];
         const id = await discardHandCardByEffect(player, picked.index, reason);
@@ -7827,7 +8287,7 @@ function wrapFinger(value) {
       const removed = [];
       for (let i = slots.length - 1; i >= 0; i--) {
         const cardId = trapCardId(slots[i]);
-        if (!CARD_LIBRARY[cardId]?.blessing) continue;
+        if (!CARD_LIBRARY[cardId]?.blessing || CARD_LIBRARY[cardId]?.themeBlessing) continue;
         const [slot] = slots.splice(i, 1);
         const instanceId = trapInstanceId(slot);
         if (instanceId) state.revealedTrapIds.delete(instanceId);
@@ -7964,7 +8424,7 @@ function wrapFinger(value) {
       for (const hand of ["L", "R"]) {
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
-          if (predicate(cardId)) options.push({ owner, hand, index, cardId });
+          if (predicate(cardId) && !CARD_LIBRARY[cardId]?.themeBlessing) options.push({ owner, hand, index, cardId });
         });
       }
       return options;
@@ -8129,7 +8589,7 @@ function wrapFinger(value) {
     }
 
     async function discardOneCard(player, reason = "") {
-      const candidates=state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>!isProtectedChargeCard(x.cardId));
+      const candidates=state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>!isProtectedHandCard(x.cardId));
       if(!candidates.length) return null;
       const picked=candidates[Math.floor(Math.random()*candidates.length)];
       return await discardHandCardByEffect(player, picked.index, reason);
@@ -8153,7 +8613,7 @@ function wrapFinger(value) {
       const card = CARD_LIBRARY[cardId];
       if (!card?.bullet) return;
       const opponent = player === "human" ? "cpu" : "human";
-      const hasDiscardEffect = ["accelBullet", "specialBullet", "pierceBullet"].includes(cardId);
+      const hasDiscardEffect = ["accelBullet", "specialBullet", "pierceBullet", "recoveryBullet", "reducedLoadBullet", "tracerBullet", "dudBullet", "disruptionBullet", "shatterBullet"].includes(cardId);
       if (!hasDiscardEffect) return;
 
       if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
@@ -8173,7 +8633,61 @@ function wrapFinger(value) {
       } else if (cardId === "pierceBullet") {
         const removed = removeRandomTrap(opponent);
         addLog(`${handNames[player]}の「貫通弾」効果。${removed ? `${handNames[opponent]}の罠「${CARD_LIBRARY[removed].name}」を捨て札にした。` : `${handNames[opponent]}に罠はなかった。`}`);
+      } else if (cardId === "recoveryBullet") {
+        const activeIndex = state.discard[player].lastIndexOf(cardId);
+        const candidates = state.discard[player]
+          .map((id, index) => ({ id, index }))
+          .filter(item => item.index !== activeIndex && CARD_LIBRARY[item.id]?.bullet);
+        if (candidates.length) {
+          const picked = candidates[randomIndex(candidates.length)];
+          state.discard[player].splice(picked.index, 1);
+          state.hands[player].push(picked.id);
+          addLog(`${handNames[player]}の「回収弾」効果。捨て札の「${CARD_LIBRARY[picked.id].name}」を手札に加えた。`);
+        } else addLog(`${handNames[player]}の「回収弾」効果。回収できる別の弾はなかった。`);
+      } else if (cardId === "reducedLoadBullet") {
+        const alive = ["L", "R"].filter(hand => state[player][hand] > 0);
+        if (alive.length) {
+          const max = Math.max(...alive.map(hand => state[player][hand]));
+          const targets = alive.filter(hand => state[player][hand] === max);
+          const hand = targets[randomIndex(targets.length)];
+          const before = state[player][hand];
+          state[player][hand] = Math.max(0, before - 1);
+          addLog(`${handNames[player]}の「減装弾」効果。${handNames[hand]}を${before}→${state[player][hand]}。`);
+          clearBrokenTraps(player);
+        } else addLog(`${handNames[player]}の「減装弾」効果は、0ではない手がないため不発。`);
+      } else if (cardId === "tracerBullet") {
+        const count = Math.min(3, state.decks[player].length);
+        const topStart = state.decks[player].length - count;
+        const candidates = [];
+        for (let index = topStart; index < state.decks[player].length; index++) {
+          if (CARD_LIBRARY[state.decks[player][index]]?.bullet) candidates.push(index);
+        }
+        if (candidates.length) {
+          const pickedIndex = candidates[randomIndex(candidates.length)];
+          const [picked] = state.decks[player].splice(pickedIndex, 1);
+          state.decks[player].push(picked);
+          addLog(`${handNames[player]}の「曳光弾」効果。山札上${count}枚から弾を山札の一番上へ移した。`);
+        } else addLog(`${handNames[player]}の「曳光弾」効果。山札上${count}枚に弾はなく、順序を維持した。`);
+      } else if (cardId === "dudBullet") {
+        const index = state.discard[player].lastIndexOf(cardId);
+        if (index >= 0) {
+          state.discard[player].splice(index, 1);
+          state.decks[player].push(cardId);
+          shuffle(state.decks[player]);
+          addLog(`${handNames[player]}の「不発弾」効果。自身を山札へ戻してシャッフルした。`);
+        }
+      } else if (cardId === "disruptionBullet") {
+        state.pendingStartDrawSkip[opponent] = true;
+        addLog(`${handNames[player]}の「阻害弾」効果。${handNames[opponent]}の次の通常ターン開始ドローを封じた。`);
+      } else if (cardId === "shatterBullet") {
+        const own = await discardRandomCards(player, 2, "「粉砕弾」");
+        const enemy = await discardRandomCards(opponent, 2, "「粉砕弾」");
+        addLog(`${handNames[player]}の「粉砕弾」効果。${handNames[player]}は${own}枚、${handNames[opponent]}は${enemy}枚捨てた。`);
       }
+    }
+
+    function logBulletNormalUse(player, cardId) {
+      addLog(`${handNames[player]}は「${CARD_LIBRARY[cardId].name}」を通常使用した。捨て札時効果は発動しない。`);
     }
 
     function removeRandomTrap(player) {
@@ -8201,7 +8715,191 @@ function wrapFinger(value) {
         : null;
       return state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
+        .filter(item => item.index !== excludedIndex && !isProtectedHandCard(item.cardId));
+    }
+
+    function getGunAmmoCandidates(player, excludedIndex = null) {
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
         .filter(item => item.index !== excludedIndex && !isProtectedChargeCard(item.cardId));
+    }
+
+    function beginGunAmmoEffect(player, gunCardId) {
+      const excludedIndex = state.copiedEffectContext?.sourceLabel === "乱闘" && state.copiedEffectContext?.cardId === gunCardId
+        ? Number(state.copiedEffectContext.sourceHandIndex)
+        : null;
+      const candidates = getGunAmmoCandidates(player, excludedIndex);
+      if (!candidates.length) {
+        addLog(`${handNames[player]}の「${CARD_LIBRARY[gunCardId].name}」は捨てられる手札がないため不発。`);
+        state.pendingTerminalEnd[player] = true;
+        return false;
+      }
+      if (player === "human") {
+        state.pendingGunEffect = { player, gunCardId, excludedIndex };
+        state.mode = "gunAmmoDiscard";
+        setMessage(`「${CARD_LIBRARY[gunCardId].name}」：弾薬として捨てる手札を1枚選んでください。`);
+        render();
+        return true;
+      }
+      const picked = [...candidates].sort((a, b) => gunAmmoPower(b.cardId) - gunAmmoPower(a.cardId))[0];
+      return resolveGunAmmoEffect(player, gunCardId, picked.index);
+    }
+
+    function gunAmmoPower(cardId) {
+      const card = CARD_LIBRARY[cardId];
+      return (card?.cost || 0) + (card?.bullet ? 1 : 0);
+    }
+
+    async function resolveGunAmmoEffect(player, gunCardId, discardIndex) {
+      const pending = state.pendingGunEffect;
+      const excludedIndex = pending?.player === player && pending?.gunCardId === gunCardId ? pending.excludedIndex : null;
+      const selected = getGunAmmoCandidates(player, excludedIndex).find(item => item.index === discardIndex);
+      if (!selected) return false;
+      const ammoId = selected.cardId;
+      const power = gunAmmoPower(ammoId);
+      const ammoName = CARD_LIBRARY[ammoId]?.name || ammoId;
+      await discardHandCardByEffect(player, discardIndex, `「${CARD_LIBRARY[gunCardId].name}」`);
+      state.pendingGunEffect = null;
+      state.mode = "attack";
+
+      if (gunCardId === "indiscriminateFire") {
+        for (let shot = 0; shot < power; shot++) {
+          const targets = [];
+          for (const owner of [player, otherPlayer(player)]) {
+            for (const hand of ["L", "R"]) if (state[owner][hand] > 0) targets.push({ owner, hand });
+          }
+          if (!targets.length) break;
+          const target = targets[randomIndex(targets.length)];
+          await addFingersWithCalculation(target.owner, target.hand, 1, "無差別射撃");
+        }
+        addLog(`${handNames[player]}の「無差別射撃」。「${ammoName}」を捨て、威力${power}でランダム射撃した。`);
+      } else if (gunCardId === "shotgun") {
+        const amount = Math.floor(power / 2);
+        const opponent = otherPlayer(player);
+        const targets = ["L", "R"].filter(hand => state[opponent][hand] > 0);
+        for (const hand of targets) await addFingersWithCalculation(opponent, hand, amount, "ショットガン");
+        addLog(`${handNames[player]}の「ショットガン」。「${ammoName}」を捨て、威力${power}（各${amount}本）を生存している相手の手へ加えた。`);
+      }
+      state.pendingTerminalEnd[player] = true;
+      render();
+      return true;
+    }
+
+    async function chooseGunAmmoDiscard(index) {
+      if (state.mode !== "gunAmmoDiscard" || !state.pendingGunEffect) return false;
+      const { gunCardId } = state.pendingGunEffect;
+      const resolved = await resolveGunAmmoEffect("human", gunCardId, index);
+      if (!resolved) {
+        setMessage("そのカードは弾薬として捨てられません。別の手札を選んでください。");
+        return false;
+      }
+      if (state.turn === "human" && !state.gameOver) {
+        state.pendingTerminalEnd.human = false;
+        await endTurn();
+      }
+      return true;
+    }
+
+    function deckGunIds() {
+      return Object.keys(CARD_LIBRARY).filter(cardId => CARD_LIBRARY[cardId]?.gun && !CARD_LIBRARY[cardId]?.token);
+    }
+
+    function getModulationSourceCandidates(player) {
+      return state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => CARD_LIBRARY[item.cardId]?.gun && deckGunIds().some(targetId => targetId !== item.cardId));
+    }
+
+    function beginModulation(player) {
+      const candidates = getModulationSourceCandidates(player);
+      if (!candidates.length) {
+        addLog(`${handNames[player]}の「変調」は変化可能な銃が手札にないため不発。`);
+        return false;
+      }
+      if (player === "human") {
+        state.pendingModulation = { player };
+        state.mode = "modulationSource";
+        setMessage("「変調」：変化させる手札の銃カードを選んでください。");
+        render();
+        return true;
+      }
+      const source = candidates[randomIndex(candidates.length)];
+      const targets = deckGunIds().filter(id => id !== source.cardId);
+      return resolveModulation(player, source.index, targets[randomIndex(targets.length)]);
+    }
+
+    function resolveModulation(player, handIndex, targetCardId) {
+      const sourceId = state.hands[player][handIndex];
+      if (!CARD_LIBRARY[sourceId]?.gun || !deckGunIds().includes(targetCardId) || sourceId === targetCardId) return false;
+      state.hands[player][handIndex] = targetCardId;
+      state.pendingModulation = null;
+      state.mode = "attack";
+      addLog(`${handNames[player]}の「変調」により「${CARD_LIBRARY[sourceId].name}」が「${CARD_LIBRARY[targetCardId].name}」へ変化した。`);
+      render();
+      if (state.battleMode === "friend" && player === "human") scheduleFriendStatePublish();
+      return true;
+    }
+
+    function chooseModulationSource(index) {
+      if (state.mode !== "modulationSource") return false;
+      const sourceId = state.hands.human[index];
+      const targets = deckGunIds().filter(id => id !== sourceId);
+      if (!CARD_LIBRARY[sourceId]?.gun || !targets.length) return false;
+      const options = targets.map((id, i) => `${i + 1}. ${CARD_LIBRARY[id].name}`).join("\n");
+      const picked = Number(prompt(`変化先の銃を選んでください。\n${options}`, "1")) - 1;
+      if (!Number.isInteger(picked) || picked < 0 || picked >= targets.length) {
+        setMessage("「変調」は変化先が選ばれなかったため不発。");
+        state.pendingModulation = null;
+        state.mode = "attack";
+        render();
+        return false;
+      }
+      return resolveModulation("human", index, targets[picked]);
+    }
+
+    async function beginFanning(player) {
+      const bulletIndexes = state.hands[player]
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(item => CARD_LIBRARY[item.cardId]?.bullet)
+        .map(item => item.index);
+      const fixedCount = bulletIndexes.length;
+      await discardFixedHandCardsByEffect(player, bulletIndexes, "「ファニング」");
+      const shots = Math.min(fixedCount, 6);
+      const opponent = otherPlayer(player);
+      const targets = ["L", "R"].filter(hand => state[opponent][hand] > 0);
+      if (shots <= 0 || !targets.length) {
+        addLog(`${handNames[player]}の「ファニング」は弾${fixedCount}枚を捨て、${shots}回射撃した。`);
+        state.pendingTerminalEnd[player] = true;
+        return true;
+      }
+      if (player === "human") {
+        state.pendingFanning = { player, shots };
+        state.mode = "fanningTarget";
+        setMessage(`「ファニング」：${shots}回射撃する相手の0ではない手を選んでください。`);
+        render();
+        return true;
+      }
+      return resolveFanning(player, targets[randomIndex(targets.length)], shots);
+    }
+
+    async function resolveFanning(player, initialHand, shots) {
+      const opponent = otherPlayer(player);
+      let targetHand = initialHand;
+      let fired = 0;
+      for (; fired < shots; fired++) {
+        if (state[opponent][targetHand] <= 0) {
+          const alternate = otherHand(targetHand);
+          if (state[opponent][alternate] <= 0) break;
+          targetHand = alternate;
+        }
+        await addFingersWithCalculation(opponent, targetHand, 1, "ファニング");
+      }
+      state.pendingFanning = null;
+      state.mode = "attack";
+      state.pendingTerminalEnd[player] = true;
+      addLog(`${handNames[player]}の「ファニング」は${fired}回射撃した。`);
+      render();
+      return true;
     }
 
     function chooseCpuRapidFireDiscardIndex(player = "cpu") {
@@ -8685,6 +9383,8 @@ function renderLastAction() {
         const repairDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "repairDiscard";
         const calmDownDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "calmDownDiscard";
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
+        const gunAmmoDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "gunAmmoDiscard";
+        const modulationSourceMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "modulationSource";
         const cityWillMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "cityWillChoose";
         const advanceNoticeMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "advanceNoticeChoose";
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
@@ -8710,6 +9410,8 @@ function renderLastAction() {
           !repairDiscardMode &&
           !calmDownDiscardMode &&
           !rapidFireDiscardMode &&
+          !gunAmmoDiscardMode &&
+          !modulationSourceMode &&
           !cityWillMode &&
           !advanceNoticeMode &&
           !restrictedByCost &&
@@ -8720,6 +9422,8 @@ function renderLastAction() {
           !repairDiscardMode &&
           !calmDownDiscardMode &&
           !rapidFireDiscardMode &&
+          !gunAmmoDiscardMode &&
+          !modulationSourceMode &&
           !cityWillMode &&
           !advanceNoticeMode &&
           !restrictedByCost &&
@@ -8727,9 +9431,11 @@ function renderLastAction() {
           !intemperanceLocked &&
           (((baseCardActionAvailable || lightSpeedChargePlayable) && isZoneCard && !setupActive) || (setupActive && isTrap)) &&
           canSetAttachmentTarget("human", cardId);
-        const discardPlayable = repairDiscardMode && cardId !== "repair";
-        const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown";
+        const discardPlayable = repairDiscardMode && cardId !== "repair" && !isProtectedHandCard(cardId);
+        const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown" && !isProtectedHandCard(cardId);
         const rapidDiscardPlayable = rapidFireDiscardMode && getRapidFireDiscardCandidates("human").some(item => item.index === index);
+        const gunAmmoPlayable = gunAmmoDiscardMode && state.pendingGunEffect && getGunAmmoCandidates("human", state.pendingGunEffect.excludedIndex).some(item => item.index === index);
+        const modulationPlayable = modulationSourceMode && CARD_LIBRARY[cardId]?.gun && deckGunIds().some(id => id !== cardId);
         const cityWillPlayable = cityWillMode && isDirectiveCard(cardId);
         const advanceNoticePlayable = advanceNoticeMode && getAdvanceNoticeCandidates("human").some(item => item.index === index);
         const selected = state.selectedTrapCardIndex === index;
@@ -8742,12 +9448,12 @@ function renderLastAction() {
           (card.magicalEvolution ? " magical-evolution-card" : "") +
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
-          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || cityWillPlayable || advanceNoticePlayable ? " playable" : "") +
+          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || gunAmmoPlayable || modulationPlayable || cityWillPlayable || advanceNoticePlayable ? " playable" : "") +
           (selected ? " selected-card" : "") +
           (displaySettings.compactCardDescriptions ? " compact-description-card" : "");
         div.innerHTML = `
           <div class="card-title">
-            <span class="card-name">${escapeHtml(card.name)}</span>
+            <span class="card-name">${escapeHtml(cardId === "performance" ? `演舞 Lv.${getPerformanceLevel("human")}` : card.name)}</span>
           </div>
           <div class="card-label-row">
             <span class="card-type${isTrap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
@@ -8756,7 +9462,7 @@ function renderLastAction() {
           ${displaySettings.compactCardDescriptions
             ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
             : `<div class="card-text">${cardId === "magicalChant" && effectiveCardId === "magicalChant" ? `<strong>詠唱進捗：${Number(state.magicalChantProgress?.human || 0)}/3</strong><br>${escapeHtml(card.text)}` : card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
-          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : intemperanceLocked ? '<div class="used">無節制：このターン使用不可</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
+          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? '<div class="used">無節制：このターン使用不可</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
               ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
@@ -8777,6 +9483,12 @@ function renderLastAction() {
         }
         if (rapidDiscardPlayable) {
           div.addEventListener("click", () => chooseRapidFireDiscard(index));
+        }
+        if (gunAmmoPlayable) {
+          div.addEventListener("click", () => chooseGunAmmoDiscard(index));
+        }
+        if (modulationPlayable) {
+          div.addEventListener("click", () => chooseModulationSource(index));
         }
         if (cityWillPlayable) {
           div.addEventListener("click", () => transferDirective("human", index));
@@ -9167,7 +9879,7 @@ function renderLastAction() {
       if (
         !card ||
         !isAttachmentCard(cardId) ||
-        (state.temp.human.cardActionUsed && !state.temp.human.setupMode && !lightSpeedChargePlayable)
+        (state.temp.human.cardActionUsed && Number(state.temp.human.cardExtraUses||0)<=0 && !state.temp.human.setupMode && !lightSpeedChargePlayable)
       ) return;
       if (state.temp.human.setupMode && !card.trap) {
         setMessage("仕込み中に置けるのは罠カードだけです。");
@@ -9199,6 +9911,8 @@ function renderLastAction() {
     }
 
     async function setTrap(player, hand, handIndex, owner = player) {
+      if(state.startingRouletteActive)return false;
+      if(state.quarterRestActive?.[player]){if(player==="human")setMessage("4分休符により、このターンは手札からカードを使用できません。");return false;}
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
       if (!card || !isAttachmentCard(cardId)) return false;
@@ -9222,7 +9936,7 @@ function renderLastAction() {
       if (
         state[owner][hand] <= 0 ||
         state.traps[owner][hand].length >= 2 ||
-        (state.temp[player].cardActionUsed && !setupActive && !lightSpeedChargePlayable)
+        (state.temp[player].cardActionUsed && Number(state.temp[player].cardExtraUses||0)<=0 && !setupActive && !lightSpeedChargePlayable)
       ) return false;
       if (card.blessing && hasSealCurse(owner, hand)) {
         if (player === "human") setMessage("封印の呪縛により、その手には新たに加護を置けません。");
@@ -9271,6 +9985,8 @@ function renderLastAction() {
         }
       }
       triggerChemicalGeneration(player, cardId);
+      recordRondoUse(player,cardId);
+      if(state.wholeRestActive?.[player])state.temp[player].wholeRestCardUsed=true;
       render();
 
       // 罠・加護・呪縛は、対象の手を選んで設置できた後に
@@ -9396,7 +10112,10 @@ function renderLastAction() {
     }
 
     async function playCard(player, handIndex, showPopup = true) {
+      if(state.startingRouletteActive)return false;
       if (state.gameOver || state.turn !== player) return false;
+      if(state.furiosoSkipActive?.[player])return false;
+      if(state.quarterRestActive?.[player]){if(player==="human")setMessage("4分休符により、このターンは手札からカードを使用できません。");return false;}
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
         if(player==="human") setMessage("「懲役」により、このターンはカードを使用できません。");
         return false;
@@ -9501,7 +10220,9 @@ function renderLastAction() {
         await showJudgmentCinematic(player, judgmentVerdictMap[cardId]);
       }
 
+      recordRondoUse(player, cardId);
       await card.effect(player);
+      if(state.wholeRestActive?.[player]) state.temp[player].wholeRestCardUsed=true;
       triggerChemicalGeneration(player, cardId);
       checkWin();
 
@@ -9524,6 +10245,12 @@ function renderLastAction() {
           setMessage("「狙撃」：+1する相手の手を選んでください。");
         } else if (cardId === "rapidFire" && state.mode === "rapidFireDiscard") {
           setMessage("「乱射」：弾薬として捨てる手札を1枚選んでください。");
+        } else if (["indiscriminateFire", "shotgun"].includes(cardId) && state.mode === "gunAmmoDiscard") {
+          setMessage(`「${card.name}」：弾薬として捨てる手札を1枚選んでください。`);
+        } else if (cardId === "modulation" && state.mode === "modulationSource") {
+          setMessage("「変調」：変化させる手札の銃カードを選んでください。");
+        } else if (cardId === "fanning" && state.mode === "fanningTarget") {
+          setMessage(`「ファニング」：${state.pendingFanning?.shots || 0}回射撃する相手の0ではない手を選んでください。`);
         } else if (cardId === "calmDown" && state.mode === "calmDownDiscard") {
           setMessage("「落ち着ける」：捨てる手札を1枚選んでください。");
         } else if (cardId === "andante" && state.mode === "andante") {
@@ -9775,6 +10502,11 @@ async function maybeChooseManualTrap(defender, candidates, context) {
     async function resolveResonanceRewards(attacker, attackHand, resonance) {
       if (!resonance) return;
       addLog(`${handNames[attacker]}の${handNames[attackHand]}が共鳴した。`);
+      state.resonanceTriggeredThisTurn[attacker] = true;
+      if (state.selectedTheme?.[attacker] === "serenade") {
+        if (getPerformanceLevel(attacker) === 0) setPerformanceLevel(attacker, 2, "セレナーデ初回共鳴");
+        else changePerformanceLevel(attacker, 2, "セレナーデ共鳴");
+      }
 
       if (state.temp[attacker]?.allegro && !state.temp[attacker].allegroTriggered) {
         state.temp[attacker].allegroTriggered = true;
@@ -9866,6 +10598,10 @@ async function maybeChooseManualTrap(defender, candidates, context) {
     }
 
 async function attack(attacker, attackHand, defender, targetHand, options = {}) {
+      if(state.startingRouletteActive)return false;
+      if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
+      if(state.temp[attacker]?.multiAttackSource==="Furioso"&&Number(state.temp[attacker]?.attackLimit)===0&&!options.cardInternalAttack)return false;
+      if(state.wholeRestActive?.[attacker]&&!options.cardInternalAttack){if(attacker==="human")setMessage("全休符により通常攻撃行動はできません。");return false;}
       const completeAttackAttempt = async () => {
         if (options.countAttackAttempt === false) return null;
         return await completeNormalAttackAttempt(attacker);
@@ -9898,6 +10634,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const tearSharpenedSwordActive = !!state.temp[attacker]?.tearSharpenedSwordAttack;
       const goldRushActive = !!state.temp[attacker]?.goldRushAttack;
       const balanceBladeActive = !!state.temp[attacker]?.balanceBladeAttack;
+      const canonActive = !!state.temp[attacker]?.canon;
+      state.temp[attacker].canon = false;
       state.temp[attacker].frenzyAttack = false;
       state.temp[attacker].rationalPowerAttack = false;
       state.temp[attacker].selfRighteousAttack = false;
@@ -10207,6 +10945,12 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
 
+      if (canonActive) {
+        state.pendingCanonHits.push({ sourcePlayer: attacker, waitForPlayer: otherPlayer(attacker), defender, targetHand, amount: power });
+        resolvedFinal = before;
+        addLog(`${handNames[attacker]}の「カノン」は${handNames[defender]}の${handNames[targetHand]}へ加える${power}本を記録した。`);
+      }
+
       state.temp[attacker].lightningZeroAtFive = false;
       await animateCalculation(defender, targetHand, total, resolvedFinal);
 
@@ -10408,11 +11152,14 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
     }
 
 async function endTurn() {
+      if(state.startingRouletteActive)return;
   if (isTutorialBattle()) {
     freezeTutorialBattleToHumanTurn();
     return;
   }
   const endingPlayer=state.turn;
+  if(state.selectedTheme?.[endingPlayer]==="serenade"&&!state.resonanceTriggeredThisTurn?.[endingPlayer]&&getPerformanceLevel(endingPlayer)>0)changePerformanceLevel(endingPlayer,-1,"共鳴なしのターン終了");
+  if((state.personalTurnCount?.[endingPlayer]||0)===1){for(let i=state.hands[endingPlayer].length-1;i>=0;i--)if(state.hands[endingPlayer][i]==="themeSetting"){state.hands[endingPlayer].splice(i,1);state.discard[endingPlayer].push("themeSetting");addLog(`${handNames[endingPlayer]}の未使用の「題目設定」が最初のターン終了時に消滅した。`);}}
   if(state.temp[endingPlayer]?.lightSpeedCircuit){ setChargeLevel(endingPlayer,0); state.temp[endingPlayer].lightSpeedCircuit=false; addLog(`${handNames[endingPlayer]}の「光速回路」が終了し、充電が0になった。`); }
       if (checkWin()) {
         render();
@@ -10438,11 +11185,16 @@ async function endTurn() {
         return;
       }
 
+      await resolveCanonHitsForEndingPlayer(endingPlayer);
+      if (checkWin()) { render(); return; }
+
       if (state.berserkerTurns[state.turn] > 0) state.berserkerTurns[state.turn] -= 1;
       state.activeCostLimit[state.turn] = null;
       state.activeIntemperanceCardLock[state.turn] = false;
       if ((state.judgmentPrisonTurns?.[state.turn] || 0) > 0) state.judgmentPrisonTurns[state.turn] -= 1;
       state.noSplit[state.turn] = false;
+      state.quarterRestActive[state.turn]=false;
+      state.wholeRestActive[state.turn]=false;
       const next = state.turn === "human" ? "cpu" : "human";
 
       if (next === "cpu") {
@@ -10561,11 +11313,11 @@ async function endTurn() {
       if (isNewResult) {
         const view = localResultView(result);
         if (view === "win") {
-          setMessage(state.battleMode === "friend" ? "勝利！ 相手の両手を0にしました。" : "勝利！ CPUの両手を0にしました。");
+          setMessage(state.battleMode === "friend" ? `勝利！ ${getPlayerDisplayName("cpu")}の両手を0にしました。` : "勝利！ CPUの両手を0にしました。");
           addLog("あなたの勝ち！");
         } else if (view === "lose") {
           setMessage("敗北…。あなたの両手が0になりました。");
-          addLog(state.battleMode === "friend" ? "相手の勝ち。" : "CPUの勝ち。");
+          addLog(state.battleMode === "friend" ? `${getPlayerDisplayName("cpu")}の勝ち。` : "CPUの勝ち。");
         } else {
           setMessage("引き分け。両者の両手が0になりました。");
           addLog("引き分け。両者の両手が0になった。");
@@ -10636,8 +11388,9 @@ async function endTurn() {
     function cpuCanUseCardIndex(id) {
       const index = state.hands.cpu.findIndex(cardId => cardId === id);
       if (index < 0) return -1;
-      const card = CARD_LIBRARY[id];
-      if (!card || isAttachmentCard(id) || !card.canPlay("cpu")) return -1;
+      const effectiveId=effectiveCardIdForPlayer("cpu",id);
+      const card = CARD_LIBRARY[effectiveId];
+      if (!card || isAttachmentCard(effectiveId) || !card.canPlay("cpu")) return -1;
       if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return -1;
       return index;
     }
@@ -10746,7 +11499,7 @@ async function endTurn() {
       if (isTutorialBattle()) return false;
       if (state.activeIntemperanceCardLock?.cpu) return false;
       const circuitActive = !!state.temp.cpu.lightSpeedCircuit;
-      if (state.temp.cpu.cardActionUsed && !circuitActive) return false;
+      if (state.temp.cpu.cardActionUsed && Number(state.temp.cpu.cardExtraUses||0)<=0 && !circuitActive) return false;
       if (state.berserkerTurns.cpu > 0 && !state.temp.cpu.berserkerJustUsed) return false;
 
       const cfg = cpuConfig();
@@ -10811,8 +11564,21 @@ async function endTurn() {
         if (ammo) addCard("rapidFire", ammo.score + profile.shootingBias * 260, "乱射");
       }
       if (state.hands.cpu.filter(id => CARD_LIBRARY[id]?.bullet).length <= 1) addCard("bulletSupply", 210 + profile.bulletBias * 340, "弾補給");
-      if (state.discard.cpu.includes("rapidFire")) addCard("reload", 260 + profile.bulletBias * 310, "乱射回収");
+      if (state.discard.cpu.some(id => CARD_LIBRARY[id]?.gun)) addCard("reload", 260 + profile.bulletBias * 310, "銃回収");
       if (state.hands.cpu.includes("rapidFire") && !state.hands.cpu.includes("logicCrusherBullet")) addCard("focusedShot", 420 + profile.bulletBias * 360, "必殺弾");
+      if (CARD_LIBRARY.shotgun.canPlay("cpu")) addCard("shotgun", 300 + Math.max(...state.hands.cpu.map(gunAmmoPower), 0) * 80, "散弾射撃");
+      if (CARD_LIBRARY.indiscriminateFire.canPlay("cpu")) addCard("indiscriminateFire", 120 + Math.max(...state.hands.cpu.map(gunAmmoPower), 0) * 35, "無差別射撃");
+      if (state.hands.cpu.some(id => CARD_LIBRARY[id]?.bullet)) addCard("fanning", 260 + state.hands.cpu.filter(id => CARD_LIBRARY[id]?.bullet).length * 90, "連続射撃");
+      if (CARD_LIBRARY.modulation.canPlay("cpu")) addCard("modulation", 120, "銃変調");
+      addCard("themeSetting",900,"題目選択");
+      addCard("encore",state.discard.cpu.includes("finale")?400:20,"アンコール");
+      addCard("daCapo",state.cpu.L===0||state.cpu.R===0?700:130,"ダ・カーポ");
+      addCard("fermata",220,"フェルマータ"); addCard("canon",260,"カノン"); addCard("quarterRest",240,"休符");
+      addCard("agitato",190,"Agitato");
+      addCard("doloroso",state.cpu.L>0||state.cpu.R>0?260:0,"Doloroso");
+      addCard("lacrimosa",CARD_LIBRARY.lacrimosa.canPlay("cpu")?330:0,"Lacrimosa");
+      addCard("morendo",180,"Morendo");
+      addCard("grandioso",240,"Grandioso");
       if (["L", "R"].some(h => state.human[h] === 4)) addCard("snipe", wouldCpuWinByZeroing(["L", "R"].find(h => state.human[h] === 4)) ? 10000 : 560, "狙撃");
       if (CARD_LIBRARY.equalTrade.canPlay("cpu")) addCard("equalTrade", 160 + (state.human.L >= 3 || state.human.R >= 3 ? 120 : 0), "等価交換");
       if (CARD_LIBRARY.doubleDouble.canPlay("cpu")) addCard("doubleDouble", 320 + (bestNormal?.score || 0) / 4, "追加行動");
@@ -10917,7 +11683,13 @@ async function endTurn() {
       if (isTutorialBattle()) return;
       if (state.gameOver) return;
 
-      const usedAction = await chooseCpuCardAction();
+      let usedAction = await chooseCpuCardAction();
+      while(usedAction && usedAction!=="setup"&&!state.pendingTerminalEnd.cpu&&Number(state.temp.cpu.cardExtraUses||0)>0){
+        setMessage("CPUが追加のカードを使用します。");render();await delay(300);
+        const nextAction=await chooseCpuCardAction();
+        if(!nextAction)break;
+        usedAction=nextAction;
+      }
 
       if (usedAction) {
         setMessage(usedAction === "setup" ? "CPUが仕込みを終えました。" : "CPUがカード関連行動を行いました。");
@@ -10962,6 +11734,7 @@ async function endTurn() {
       const targetHand = otherHand(attackHand);
       const resolved = await attack(player, attackHand, player, targetHand, {
         countAttackAttempt: false,
+        cardInternalAttack: true,
         sourceLabel: "凶弾",
         preventTargetChange: true,
         afterResolved: async ({ total }) => {
@@ -11352,6 +12125,7 @@ async function endTurn() {
     }
 
     async function onHandClick(event) {
+      if(state.startingRouletteActive)return;
       const card = event.currentTarget;
       const owner = card.dataset.owner;
       const hand = card.dataset.hand;
@@ -11360,6 +12134,27 @@ async function endTurn() {
       if (tutorial.usingRealBattle && state.battleMode === "tutorial") tutorialAfterHandClick(owner, hand);
 
       if (state.gameOver || state.animating || state.turn !== "human") return;
+
+      if(state.mode==="arpeggioSource"){
+        if(owner!=="human"||state.human[hand]<=0){setMessage("アルペジオ：自分の0ではない手を選んでください。");return;}
+        const total=state.human[hand],left=Number(prompt(`左手へ割り振る本数を0～${total}で入力してください。`,String(Math.floor(total/2))));
+        if(!Number.isInteger(left)||left<0||left>total){setMessage("分配が不正なため選び直してください。");return;}
+        await resolveArpeggio("human",hand,left);if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();}return;
+      }
+
+      if (state.mode === "fanningTarget") {
+        if (owner !== "cpu" || state.cpu[hand] <= 0 || !state.pendingFanning) {
+          setMessage("「ファニング」：相手の0ではない手を選んでください。");
+          return;
+        }
+        const shots = state.pendingFanning.shots;
+        await resolveFanning("human", hand, shots);
+        if (!state.gameOver && state.turn === "human") {
+          state.pendingTerminalEnd.human = false;
+          await endTurn();
+        }
+        return;
+      }
 
       if (state.mode === "arcanaSlaveTarget") {
         if (owner !== "cpu" || state.cpu[hand] <= 0) {
@@ -11694,6 +12489,8 @@ async function endTurn() {
     function resetGame() {
       const humanDeck = buildDeckFromCounts("human");
       const cpuDeck = buildDeckFromCounts("cpu");
+      const humanHasThemeSetting = extractThemeSettingFromOpeningDeck(humanDeck);
+      const cpuHasThemeSetting = extractThemeSettingFromOpeningDeck(cpuDeck);
 
       state.human = { L: 1, R: 1 };
       state.cpu = { L: 1, R: 1 };
@@ -11731,6 +12528,22 @@ async function endTurn() {
       state.berserkerTurns = { human: 0, cpu: 0 };
       state.pendingEqualTradeSelf = null;
       state.pendingRapidFireDiscard = null;
+      state.pendingGunEffect = null;
+      state.pendingFanning = null;
+      state.pendingModulation = null;
+      state.pendingStartDrawSkip = { human: false, cpu: false };
+      state.selectedTheme = { human: null, cpu: null };
+      state.performanceLevel = { human: 0, cpu: 0 };
+      state.resonanceTriggeredThisTurn = { human: false, cpu: false };
+      state.usedRondoFamilies = { human: [], cpu: [] };
+      state.pendingCanonHits = [];
+      state.quarterRestPending = { human: 0, cpu: 0 };
+      state.quarterRestActive = { human: false, cpu: false };
+      state.wholeRestPending = { human: false, cpu: false };
+      state.wholeRestActive = { human: false, cpu: false };
+      state.pendingArpeggio = null;
+      state.furiosoSkipPending = { human: false, cpu: false };
+      state.furiosoSkipActive = { human: false, cpu: false };
       state.pendingSwapFirst = null;
       state.pendingChargeStun = { human: false, cpu: false };
       state.pendingChargeStunSource = { human: "", cpu: "" };
@@ -11745,6 +12558,10 @@ async function endTurn() {
       state.weaknessWait = {};
       state.highlight = null;
       state.lastAction = null;
+      state.startingFlowToken=Number(state.startingFlowToken||0)+1;
+      state.startingPlayer=null;
+      state.startingPlayerDecided=false;
+      state.startingRouletteActive=false;
       state.turn = "human";
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -11764,8 +12581,12 @@ async function endTurn() {
         drawCard("human");
         drawCard("cpu");
       }
-      startTurn("human");
+      if (humanHasThemeSetting) state.hands.human.push("themeSetting");
+      if (cpuHasThemeSetting) state.hands.cpu.push("themeSetting");
       renderDeckBuilder();
+      if(state.battleMode==="cpu"&&state.currentScreen==="battle")return beginCpuStartingFlow();
+      render();
+      return Promise.resolve(null);
     }
 
     if (elements.battleResultViewBtn) {

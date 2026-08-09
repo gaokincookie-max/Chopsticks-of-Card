@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=146">
+  <link rel="stylesheet" href="style.css?v=150">
 </head>
 <body>
   <div class="overlay" id="overlay">
@@ -558,7 +558,7 @@
       <div class="player-panel cpu">
         <div class="panel-head">
           <div>
-            <div class="name">CPU</div>
+            <div class="name" id="cpuPlayerName">CPU</div>
             <div class="state-label" id="cpuState">待機中</div>
           </div>
         </div>
@@ -583,7 +583,7 @@
       <div class="player-panel human">
         <div class="panel-head">
           <div>
-            <div class="name">あなた</div>
+            <div class="name" id="humanPlayerName">あなた</div>
             <div class="state-label" id="humanState">あなたの番です</div>
           </div>
         </div>
@@ -605,6 +605,21 @@
         </div>
       </div>
     </section>
+
+    <div class="starting-roulette-overlay" id="startingPlayerRoulette" aria-hidden="true">
+      <div class="starting-roulette-card" role="status" aria-live="polite">
+        <div class="starting-roulette-kicker">FIRST PLAYER</div>
+        <h2>先攻ルーレット</h2>
+        <div class="starting-roulette-stage">
+          <div class="starting-roulette-pointer"></div>
+          <div class="starting-roulette-wheel" id="startingRouletteWheel">
+            <span id="startingRouletteLabelA">あなた</span>
+            <span id="startingRouletteLabelB">CPU</span>
+          </div>
+        </div>
+        <div class="starting-roulette-result" id="startingRouletteResult">先攻を決めています…</div>
+      </div>
+    </div>
 
     <section class="actions battle-screen screen-hidden">
       <div class="mode-row">
@@ -699,6 +714,6 @@
     }
   </script>
 
-  <script src="game.js?v=146"></script>
+  <script src="game.js?v=150"></script>
 </body>
 </html>
