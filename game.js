@@ -2012,26 +2012,91 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v137";
-    const TOURNAMENT_ANNOUNCEMENT_STORAGE_KEY = "waribashi_card_tournament_announcement_august_2026";
-    const LATEST_NEWS_ID = "v138-tournament-announcement";
+    const LATEST_NEWS_ID = "v146-news-update";
 
     const UPDATE_NEWS = [
       {
-        id: "v138-tournament-announcement",
-        version: "EVENT",
-        date: "2026-07-25",
-        title: "割り箸カードゲーム大会 開催予告",
-        summary: "8月8日前後に大会を開催予定です。参加を希望する方は、主催者までご連絡ください。",
-        featured: false,
-        tags: ["event"],
+        id: "v146-news-update",
+        version: "v146",
+        date: "2026-08-08",
+        title: "お知らせを更新",
+        summary: "終了した大会告知を削除し、最近のアップデート情報とNEW表示を更新しました。ゲーム内容の変更はありません。",
+        featured: true,
+        tags: ["fix", "system"],
         items: [
-          "8月8日前後に、割り箸カードゲームの大会を開催予定",
-          "磨き上げたデッキで正面から勝負するも、予想外のカードで相手を混乱させるも自由",
-          "大会当日にルールを思い出すところから始める初心者・久しぶりの参加も歓迎",
-          "優勝者には主催者がサイゼリヤをご馳走する予定",
-          "優勝狙い、デッキ調整、興味本位など参加理由は不問",
-          "参加希望者は主催者まで連絡",
-          "開催日・大会形式などの詳細は後日発表"
+          "大会開催予告を終了したため、大会告知を削除",
+          "v142からv145までのアップデート情報をお知らせへ追加",
+          "お知らせのNEW表示を最新版に更新",
+          "ゲーム内容の変更はありません"
+        ]
+      },
+      {
+        id: "v145-update",
+        version: "v145",
+        date: "2026-08-08",
+        title: "捨て札・凶弾まわりを大幅整理",
+        summary: "捨て札時効果・乱射・凶弾の処理を統一し、通常攻撃関連の効果が正しく適用されるよう整理しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "カード効果で手札から捨てられた場合、疲労を除いて「捨てられた時」の効果が発動するよう処理を統一",
+          "空虚・傾いた天秤・最終判決：没収・貪欲・憎悪・幸福などのランダム手札破棄にも対応",
+          "疲労による手札破棄では、これまで通り捨て札時効果は発動しない仕様を維持",
+          "乱射のコストとして手札に残る別の乱射も捨てられるよう修正し、乱闘時はコピー元の1枚だけを除外",
+          "凶弾による攻撃を通常攻撃として扱い、攻撃力増減・加護・呪縛・防御効果などを適用",
+          "凶弾は通常攻撃として処理される一方、空間切断・友情などの攻撃回数は消費しない仕様を維持",
+          "凶弾の仕様変更に合わせて一部カードテキストを整理"
+        ]
+      },
+      {
+        id: "v144-update",
+        version: "v144",
+        date: "2026-08-08",
+        title: "乱闘・予告状の安全性を改善",
+        summary: "乱闘・予告状の安全性と、一部カードの発動条件や表記を改善しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "乱闘では通常の使用条件を無視しても、効果内の不発条件・対象・消費・代償を通常通り判定",
+          "予告状は予約時に通常の使用条件を確認し、次ターンの発動時には効果内条件を判定する仕様へ整理",
+          "対象のない解除・看破・手繰り寄せ・すりかえ・解呪などを特殊発動しても操作不能にならないよう修正",
+          "最終判決3種・等価なる断罪などの成立条件を効果発動時にも正しく判定",
+          "予告状で弾を捨てた際、「カード効果で捨てられた時」の効果も発動するよう修正",
+          "調律を特殊発動した際のCPUとプレイヤーの挙動差を修正",
+          "アンダンテ使用時に予告状・光速回路・充電・指令など無関係な状態が初期化される不具合を修正",
+          "友情の追加攻撃中に「空間切断」と表示される問題を修正",
+          "一部カードの「攻撃」表記を「通常攻撃」へ整理"
+        ]
+      },
+      {
+        id: "v143-update",
+        version: "v143",
+        date: "2026-08-08",
+        title: "複数回攻撃の処理を統一",
+        summary: "空間切断や友情など、複数回攻撃の処理を安定化しました。",
+        featured: false,
+        tags: ["fix", "system"],
+        items: [
+          "空間切断や友情など、複数回攻撃の攻撃回数処理を統一",
+          "通常命中・空振り・ねこだまし・乱舞・攻撃力0・対象消失など、結果に関係なく攻撃回数を正しく消費するよう修正",
+          "追加攻撃の終了判定を共通化",
+          "フレンド対戦で1発目の結果を2発目前に同期する処理を整理",
+          "乱舞・ゴールドラッシュなどの攻撃置換は攻撃回数を消費する一方、攻撃力上昇ではないため不変の呪縛の対象外となるよう整理",
+          "ゴールドラッシュの基本攻撃力置換が不変の呪縛で抑制される問題を修正"
+        ]
+      },
+      {
+        id: "v142-update",
+        version: "v142",
+        date: "2026-08-08",
+        title: "空間切断の追加攻撃を修正",
+        summary: "複数回攻撃が無効になった場合の攻撃回数処理を修正しました。",
+        featured: false,
+        tags: ["fix"],
+        items: [
+          "空間切断の2発目が空振りで無効化された際、さらに3発目を行えてしまう不具合を修正",
+          "無効化された攻撃も攻撃回数として正しく消費するよう変更",
+          "フレンド対戦で追加攻撃途中の状態が正しく同期されるよう調整"
         ]
       },
       {
@@ -2584,8 +2649,6 @@ const CARD_LIBRARY = {
       majorUpdateModal: document.getElementById("majorUpdateModal"),
       majorUpdateDetailBtn: document.getElementById("majorUpdateDetailBtn"),
       majorUpdateCloseBtn: document.getElementById("majorUpdateCloseBtn"),
-      tournamentAnnouncementModal: document.getElementById("tournamentAnnouncementModal"),
-      tournamentAnnouncementCloseBtn: document.getElementById("tournamentAnnouncementCloseBtn"),
       plVsCpuBtn: document.getElementById("plVsCpuBtn"),
       plVsPlBtn: document.getElementById("plVsPlBtn"),
       battleSelectBackBtn: document.getElementById("battleSelectBackBtn"),
@@ -4291,31 +4354,6 @@ const CARD_LIBRARY = {
       elements.majorUpdateModal?.classList.remove("show");
       elements.majorUpdateModal?.setAttribute("aria-hidden", "true");
       markMajorUpdateSeen();
-      showTournamentAnnouncementAfterMajorUpdate();
-    }
-
-    function shouldShowTournamentAnnouncement() {
-      try { return localStorage.getItem(TOURNAMENT_ANNOUNCEMENT_STORAGE_KEY) !== "seen"; }
-      catch { return true; }
-    }
-
-    function markTournamentAnnouncementSeen() {
-      try { localStorage.setItem(TOURNAMENT_ANNOUNCEMENT_STORAGE_KEY, "seen"); } catch {}
-    }
-
-    function openTournamentAnnouncement() {
-      elements.tournamentAnnouncementModal?.classList.add("show");
-      elements.tournamentAnnouncementModal?.setAttribute("aria-hidden", "false");
-    }
-
-    function closeTournamentAnnouncement() {
-      elements.tournamentAnnouncementModal?.classList.remove("show");
-      elements.tournamentAnnouncementModal?.setAttribute("aria-hidden", "true");
-      markTournamentAnnouncementSeen();
-    }
-
-    function showTournamentAnnouncementAfterMajorUpdate() {
-      if (shouldShowTournamentAnnouncement()) setTimeout(() => openTournamentAnnouncement(), 220);
     }
 
     function tutorialSetWelcomeSeen(value = "seen") {
@@ -4338,7 +4376,6 @@ const CARD_LIBRARY = {
 
     function showMajorUpdateAfterTutorialWelcome() {
       if (shouldShowMajorUpdate()) setTimeout(() => openMajorUpdate(), 220);
-      else showTournamentAnnouncementAfterMajorUpdate();
     }
 
     function renderTutorialChapterList() {
@@ -11908,10 +11945,6 @@ async function endTurn() {
       });
     });
     elements.majorUpdateCloseBtn?.addEventListener("click", closeMajorUpdate);
-    elements.tournamentAnnouncementCloseBtn?.addEventListener("click", closeTournamentAnnouncement);
-    elements.tournamentAnnouncementModal?.addEventListener("click", event => {
-      if (event.target === elements.tournamentAnnouncementModal) closeTournamentAnnouncement();
-    });
     elements.majorUpdateDetailBtn?.addEventListener("click", () => {
       closeMajorUpdate();
       openNews("all");
@@ -12198,7 +12231,5 @@ async function endTurn() {
       setTimeout(() => showTutorialWelcome(), 180);
     } else if (shouldShowMajorUpdate()) {
       setTimeout(() => openMajorUpdate(), 320);
-    } else if (shouldShowTournamentAnnouncement()) {
-      setTimeout(() => openTournamentAnnouncement(), 320);
     }
     loadRoomFromUrl();
