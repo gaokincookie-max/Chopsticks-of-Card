@@ -673,6 +673,11 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
     import {
+      getAuth,
+      signInAnonymously,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+    import {
       getFirestore,
       doc,
       getDoc,
@@ -692,11 +697,19 @@
       appId: "1:531867109129:web:7833c7fbaa62b97636f5d8"
     };
 
+    window.WaribashiFirebase = { ready: false, authReady: false, authUser: null, uid: null };
     try {
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
+      const auth = getAuth(app);
+      let authUser = auth.currentUser;
+      if (!authUser) authUser = (await signInAnonymously(auth)).user;
       window.WaribashiFirebase = {
         ready: true,
+        authReady: true,
+        auth,
+        authUser,
+        uid: authUser.uid,
         db,
         doc,
         getDoc,
@@ -706,14 +719,23 @@
         serverTimestamp,
         runTransaction
       };
+      onAuthStateChanged(auth, user => {
+        const api = window.WaribashiFirebase;
+        if (!api) return;
+        api.authUser = user || null;
+        api.uid = user?.uid || null;
+        api.authReady = !!user;
+        api.ready = !!user;
+        window.dispatchEvent(new CustomEvent(user ? "waribashi-auth-ready" : "waribashi-auth-signed-out"));
+      });
       window.dispatchEvent(new CustomEvent("waribashi-firebase-ready"));
     } catch (error) {
-      console.error("Firebase init failed", error);
-      window.WaribashiFirebase = { ready: false, error };
+      console.error("[FirebaseAuth] anonymous sign-in failed", error?.code, error?.message);
+      window.WaribashiFirebase = { ready: false, authReady: false, authUser: null, uid: null, error };
       window.dispatchEvent(new CustomEvent("waribashi-firebase-error"));
     }
   </script>
 
-  <script src="game.js?v=150"></script>
+  <script src="game.js?v=150-auth2"></script>
 </body>
 </html>

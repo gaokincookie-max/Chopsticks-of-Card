@@ -2083,6 +2083,10 @@ const CARD_LIBRARY = {
       friendRoomId: null,
       friendRoomUrl: null,
       friendRole: null,
+      firebaseAuthReady: false,
+      firebaseAuthUser: null,
+      firebaseUid: null,
+      firebaseAuthError: null,
       friendReady: false,
       friendUnsubscribe: null,
       friendRoomData: null,
@@ -3293,7 +3297,42 @@ const CARD_LIBRARY = {
     }
 
     function firebaseApi() {
-      return window.WaribashiFirebase && window.WaribashiFirebase.ready ? window.WaribashiFirebase : null;
+      const api=window.WaribashiFirebase;
+      if(!api?.ready||!api?.authReady||!api?.authUser||!api?.uid)return null;
+      state.firebaseAuthReady=true;
+      state.firebaseAuthUser=api.authUser;
+      state.firebaseUid=api.uid;
+      state.firebaseAuthError=null;
+      return api;
+    }
+
+    function updateFriendAuthUi() {
+      const api=window.WaribashiFirebase;
+      const ready=!!(api?.ready&&api?.authReady&&api?.authUser&&api?.uid);
+      state.firebaseAuthReady=ready;
+      state.firebaseAuthUser=ready?api.authUser:null;
+      state.firebaseUid=ready?api.uid:null;
+      state.firebaseAuthError=api?.error||null;
+      if(elements?.createRoomBtn)elements.createRoomBtn.disabled=!ready;
+      if(elements?.joinRoomBtn)elements.joinRoomBtn.disabled=!ready;
+      if(!ready){
+        if(elements?.friendReadyBtn)elements.friendReadyBtn.disabled=true;
+        if(elements?.friendUnreadyBtn)elements.friendUnreadyBtn.disabled=true;
+        if(elements?.friendStartBattleBtn)elements.friendStartBattleBtn.disabled=true;
+        if(state.currentScreen==="friendLobby"&&elements?.friendLobbyMessage){
+          elements.friendLobbyMessage.textContent=api?.error
+            ?"オンライン認証に失敗しました。しばらくしてからもう一度お試しください。"
+            :"オンライン接続を準備しています…";
+        }
+      }
+      return ready;
+    }
+
+    function friendFirestoreErrorMessage(error, fallback="オンライン通信に失敗しました。") {
+      if(error?.code==="permission-denied")return "この部屋へのアクセス権がありません。";
+      if(!state.firebaseAuthReady||error?.code?.startsWith?.("auth/"))return "オンライン認証に失敗しました。しばらくしてからもう一度お試しください。";
+      if(error?.code==="unavailable")return "通信できません。接続を確認してもう一度お試しください。";
+      return fallback;
     }
 
 
@@ -3973,6 +4012,7 @@ const CARD_LIBRARY = {
       } else {
         elements.friendReadyText.textContent = "2人そろいました。準備完了を押してください。";
       }
+      if(!state.firebaseAuthReady)updateFriendAuthUi();
     }
 
     function subscribeFriendRoom(roomId) {
@@ -4010,6 +4050,9 @@ const CARD_LIBRARY = {
         const sameStartedMatch = state.friendMatchStarted && (!state.friendMatchId || state.friendMatchId === remoteMatchId);
         if ((data?.status === "playing" || data?.status === "post-match") && remoteResult && sameStartedMatch) {
           applySyncedBattleResult(remoteResult);
+          if(state.friendRole==="host"&&data.status==="playing"&&!data.postMatch){
+            initializeFriendPostMatchAsHost(remoteResult).catch(error=>console.error("PVP post-match initialization failed",error));
+          }
         }
         const fx = data?.match?.fx;
         if (fx) handleIncomingFriendFx(fx);
@@ -4067,6 +4110,8 @@ const CARD_LIBRARY = {
         updatedAt: fb.serverTimestamp(),
         status: "waiting",
         hostJoined: true,
+        hostUid: fb.uid,
+        guestUid: null,
         guestJoined: false,
         hostReady: false,
         guestReady: false,
@@ -4092,6 +4137,7 @@ const CARD_LIBRARY = {
 
       const roomRef = fb.doc(fb.db, "rooms", roomId);
       const clientId = getFriendClientId();
+      let resolvedRole = "guest";
 
       try {
         await fb.runTransaction(fb.db, async (transaction) => {
@@ -4103,7 +4149,11 @@ const CARD_LIBRARY = {
           }
 
           const data = snapshot.data() || {};
-          const sameGuest = !!data.guestJoined && data.guestClientId === clientId;
+          if(data.hostUid===fb.uid){
+            resolvedRole="host";
+            return;
+          }
+          const sameGuest = !!data.guestJoined && data.guestUid === fb.uid;
           const roomUnavailable = ["playing", "post-match"].includes(data.status);
 
           if (roomUnavailable && !sameGuest) {
@@ -4121,10 +4171,10 @@ const CARD_LIBRARY = {
           transaction.set(roomRef, {
             updatedAt: fb.serverTimestamp(),
             guestJoined: true,
+            guestUid: fb.uid,
             guestClientId: clientId,
             guestReady: sameGuest ? !!data.guestReady : false,
-            guestLastSeen: fb.serverTimestamp(),
-            status: data.status || "waiting"
+            guestLastSeen: fb.serverTimestamp()
           }, { merge: true });
         });
       } catch (error) {
@@ -4143,8 +4193,8 @@ const CARD_LIBRARY = {
         throw error;
       }
 
-      setFriendRoomUi(roomId, "guest");
-      elements.friendLobbyMessage.textContent = "Firebase上の部屋に入室しました。";
+      setFriendRoomUi(roomId, resolvedRole);
+      elements.friendLobbyMessage.textContent = resolvedRole==="host" ? "ホストとして部屋へ再接続しました。" : "Firebase上の部屋に入室しました。";
       subscribeFriendRoom(roomId);
     }
 
@@ -4158,7 +4208,7 @@ const CARD_LIBRARY = {
         [key]: ready,
         [deckKey]: ready ? cloneValidDeckCounts(state.deckCounts.human) : null,
         updatedAt: fb.serverTimestamp(),
-        status: ready ? "ready-check" : "waiting"
+        ...(state.friendRole === "host" ? { status: ready ? "ready-check" : "waiting" } : {})
       }, { merge: true });
     }
 
@@ -4193,12 +4243,14 @@ const CARD_LIBRARY = {
       if (!fb) return;
       state.friendPostMatchChoice = choice;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      await fb.updateDoc(roomRef, {
-        [`postMatch.matchId`]: state.friendMatchId,
-        [`postMatch.${friendPostMatchChoiceKey()}`]: choice,
-        status: "post-match",
-        updatedAt: fb.serverTimestamp()
-      });
+      if(state.friendRole === "guest" && !state.friendRoomData?.postMatch){
+        elements.battleResultWait.textContent="ホストが試合結果を同期しています…";
+        return;
+      }
+      const postMatchUpdate = state.friendRole === "host"
+        ? { "postMatch.matchId": state.friendMatchId, "postMatch.hostChoice": choice, status: "post-match" }
+        : { "postMatch.guestChoice": choice };
+      await fb.updateDoc(roomRef, { ...postMatchUpdate, updatedAt: fb.serverTimestamp() });
       updateBattleResultPostMatchView({
         ...(state.friendRoomData?.postMatch || {}),
         matchId: state.friendMatchId,
@@ -5362,6 +5414,7 @@ const CARD_LIBRARY = {
       document.body.classList.toggle("battle-mode", showBattle);
       document.body.classList.toggle("tutorial-mode", showTutorial);
       if (!showBattle && elements.realTutorialOverlay) elements.realTutorialOverlay.classList.add("hidden");
+      if(showFriendLobby)updateFriendAuthUi();
 
       if (showDeck) {
         elements.deckPanel.classList.add("show");
@@ -11269,6 +11322,22 @@ async function endTurn() {
       showBattleResult(result);
     }
 
+    async function initializeFriendPostMatchAsHost(result = state.matchResult) {
+      if (state.battleMode !== "friend" || state.friendRole !== "host" || !state.friendRoomId || !state.friendMatchId || !result) return;
+      const fb = firebaseApi();
+      if (!fb) return;
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      await fb.updateDoc(roomRef, {
+        "postMatch.matchId": state.friendMatchId,
+        "postMatch.hostChoice": null,
+        "postMatch.guestChoice": null,
+        "postMatch.resolvedAction": null,
+        "postMatch.resolutionId": null,
+        status: "post-match",
+        updatedAt: fb.serverTimestamp()
+      });
+    }
+
     async function publishFriendResultNow(result) {
       if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || !result || state.friendResultPublishing) return;
       const fb = firebaseApi();
@@ -11283,19 +11352,24 @@ async function endTurn() {
         state.friendSyncRevision = nextRevision;
         state.friendLastPublishedSignature = JSON.stringify(snapshot);
         const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-        await fb.updateDoc(roomRef, {
+        const resultUpdate = {
           "match.version": 51,
           "match.stateRevision": nextRevision,
           "match.state": snapshot,
           "match.result": result,
-          "postMatch.matchId": state.friendMatchId,
-          "postMatch.hostChoice": null,
-          "postMatch.guestChoice": null,
-          "postMatch.resolvedAction": null,
-          "postMatch.resolutionId": null,
-          status: "post-match",
           updatedAt: fb.serverTimestamp()
-        });
+        };
+        if (state.friendRole === "host") {
+          Object.assign(resultUpdate, {
+            "postMatch.matchId": state.friendMatchId,
+            "postMatch.hostChoice": null,
+            "postMatch.guestChoice": null,
+            "postMatch.resolvedAction": null,
+            "postMatch.resolutionId": null,
+            status: "post-match"
+          });
+        }
+        await fb.updateDoc(roomRef, resultUpdate);
       } finally {
         state.friendResultPublishing = false;
       }
@@ -12722,17 +12796,18 @@ async function endTurn() {
     elements.plVsPlBtn.addEventListener("click", () => {
       showScreen("friendLobby");
       updateFriendLobbyView();
+      updateFriendAuthUi();
     });
     elements.battleSelectBackBtn.addEventListener("click", () => showScreen("menu"));
     elements.friendLobbyBackBtn.addEventListener("click", () => showScreen("battleSelect"));
     elements.createRoomBtn.addEventListener("click", () => createFriendRoom().catch(error => {
-      console.error(error);
-      elements.friendLobbyMessage.textContent = `部屋作成エラー：${error.message || error}`;
+      console.error("[FriendFirestore] createRoom failed",error);
+      elements.friendLobbyMessage.textContent = friendFirestoreErrorMessage(error,"部屋を作成できませんでした。");
     }));
     elements.joinRoomBtn.addEventListener("click", () => {
       joinFriendRoom(elements.roomIdInput.value).catch(error => {
-        console.error(error);
-        elements.friendLobbyMessage.textContent = `入室エラー：${error.message || error}`;
+        console.error("[FriendFirestore] joinRoom failed",error);
+        elements.friendLobbyMessage.textContent = friendFirestoreErrorMessage(error,"部屋へ入室できませんでした。");
       });
     });
     elements.friendReadyBtn.addEventListener("click", () => setFriendReady(true).catch(error => {
@@ -12747,6 +12822,11 @@ async function endTurn() {
       console.error(error);
       elements.friendLobbyMessage.textContent = `試合開始エラー：${error.message || error}`;
     }));
+    window.addEventListener("waribashi-firebase-ready",updateFriendAuthUi);
+    window.addEventListener("waribashi-auth-ready",updateFriendAuthUi);
+    window.addEventListener("waribashi-firebase-error",updateFriendAuthUi);
+    window.addEventListener("waribashi-auth-signed-out",updateFriendAuthUi);
+    updateFriendAuthUi();
     elements.copyRoomUrlBtn.addEventListener("click", async () => {
       if (!state.friendRoomUrl) return;
       try {
