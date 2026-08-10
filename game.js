@@ -1226,7 +1226,7 @@ const CARD_LIBRARY = {
       agitato: { name:"Agitato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手は、それぞれ手札をランダムに1枚捨てる。",rondo:true,rondoFamily:"agitato",canPlay:()=>true,effect:player=>useAgitato(player) },
       furioso: { name:"Furioso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このターン、自分の手札にある「輪舞曲」カードの枚数まで通常攻撃できる。この効果で現在の通常攻撃可能回数が減ることはない。その後、「演舞」のレベルを5下げる。次の自分のターン、行動不能になる。",rondo:true,rondoFamily:"agitato",token:true,canPlay:()=>true,effect:player=>useFurioso(player) },
       doloroso: { name:"Doloroso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選んで0にし、カードを3枚引く。",rondo:true,rondoFamily:"doloroso",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDoloroso(player) },
-      appassionato: { name:"Appassionato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。1ターンに1度。自分の0ではない手を1つ選んで0にし、このターン手札からカードをあと2枚使用できる。",rondo:true,rondoFamily:"doloroso",token:true,canPlay:player=>(state[player].L>0||state[player].R>0)&&!state.temp[player]?.appassionatoUsedThisTurn,effect:player=>useAppassionato(player) },
+      appassionato: { name:"Appassionato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このカードの効果は1ターンに1度しか発動できない。自分の0ではない手を1つ選んで0にし、このターン手札からカードをあと2枚使用できる。",rondo:true,rondoFamily:"doloroso",token:true,canPlay:player=>(state[player].L>0||state[player].R>0)&&!state.temp[player]?.appassionatoUsedThisTurn,effect:player=>useAppassionato(player) },
       lacrimosa: { name:"Lacrimosa",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の両手が1以上の時、自分の手を1つ0にした後、相手の手を1つ0にする。",rondo:true,rondoFamily:"lacrimosa",canPlay:player=>(state[player].L>0||state[player].R>0)&&state[otherPlayer(player)].L>0&&state[otherPlayer(player)].R>0,effect:player=>useLacrimosa(player) },
       requiem: { name:"Requiem",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の0ではない手を1つ0にし、相手の外部効果で捨てられる手札をすべて捨てる。",rondo:true,rondoFamily:"lacrimosa",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useRequiem(player) },
       morendo: { name:"Morendo",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手の0ではない手をそれぞれランダムに1つ選び、その手を1にする。",rondo:true,rondoFamily:"morendo",canPlay:()=>true,effect:player=>useMorendo(player) },
@@ -2741,7 +2741,7 @@ const CARD_LIBRARY = {
       const firstWins=state.battleMode==="friend"?startingPlayer==="host":startingPlayer==="human";
       wheel.style.transition="none";wheel.style.transform="rotate(0deg)";void wheel.offsetWidth;
       wheel.style.setProperty("--roulette-duration",`${duration}ms`);wheel.style.transition="";
-      wheel.style.transform=`rotate(${1440+(firstWins?225:45)}deg)`;
+      wheel.style.transform=`rotate(${1440+(firstWins?45:225)}deg)`;
       await delay(duration+80);
       elements.startingRouletteResult.textContent=`${startingPlayerDisplayName(startingPlayer)}が先攻！`;
       await delay(hold);
@@ -6041,6 +6041,10 @@ function wrapFinger(value) {
           const transformedId = MAGICAL_EVOLUTION_MAP[cardId];
           relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">変身後「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
         }
+        if (PERFORMANCE_LV5_EVOLUTION_MAP[cardId]) {
+          const transformedId = PERFORMANCE_LV5_EVOLUTION_MAP[cardId];
+          relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">演舞Lv.Ⅴ「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
+        }
         if (["allegro", "resonanceTuning", "crescendo", "dance", "largo", "andante", "lastMelody"].includes(cardId)) relatedButtons.push('<button class="deck-inline-info" data-info="resonance">共鳴とは？</button>');
         const relatedButton = relatedButtons.join("");
         row.innerHTML = `
@@ -7419,6 +7423,14 @@ function wrapFinger(value) {
       frenzy: "rationalPower", selfRighteousness: "justiceForEveryone",
       sacrificePower: "powerOfEveryone"
     };
+    const PERFORMANCE_LV5_EVOLUTION_MAP = Object.freeze({
+      fermata: "ritardando",
+      canon: "arpeggio",
+      quarterRest: "wholeRest",
+      agitato: "furioso",
+      doloroso: "appassionato",
+      lacrimosa: "requiem"
+    });
     function transformMagicalEvolutionCards(player) {
       const f=id=>MAGICAL_EVOLUTION_MAP[id]||id;
       state.hands[player]=state.hands[player].map(f);
@@ -7442,12 +7454,7 @@ function wrapFinger(value) {
     function effectiveCardIdForPlayer(player, cardId) {
       if (cardId === "magicalChant" && (state.magicalChantCompleted?.[player] || hasCompletedMagicalBlessing(player))) return "arcanaSlave";
       if ((state.performanceLevel?.[player] || 0) >= 5) {
-        if (cardId === "fermata") return "ritardando";
-        if (cardId === "canon") return "arpeggio";
-        if (cardId === "quarterRest") return "wholeRest";
-        if (cardId === "agitato") return "furioso";
-        if (cardId === "doloroso") return "appassionato";
-        if (cardId === "lacrimosa") return "requiem";
+        return PERFORMANCE_LV5_EVOLUTION_MAP[cardId] || cardId;
       }
       return cardId;
     }
