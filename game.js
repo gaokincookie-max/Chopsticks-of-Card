@@ -621,12 +621,12 @@ const CARD_LIBRARY = {
       },
       recoveryBullet: {
         name: "回収弾", cost: 1, type: "補助 / 弾", bullet: true,
-        text: "弾。このカードがカードの効果で手札から捨てられた時、自分の捨て札にある、このカード以外の「弾」をランダムに1枚手札に加える。",
+        text: "弾。効果で捨てられた時、自分の捨て札にある別の「弾」カードをランダムに1枚選び、山札に戻してシャッフルする。",
         canPlay: () => true, effect: player => logBulletNormalUse(player, "recoveryBullet")
       },
       reducedLoadBullet: {
         name: "減装弾", cost: 2, type: "補助 / 弾", bullet: true,
-        text: "弾。このカードがカードの効果で手札から捨てられた時、自分の0ではない手のうち、本数が多い方から1本減らす。両手の本数が同じ場合はランダムに1つ選ぶ。",
+        text: "弾。効果で捨てられた時、自分の2本以上ある手のうち、最も本数の多い手を1本減らす。対象が複数ある場合はランダムに選ぶ。",
         canPlay: () => true, effect: player => logBulletNormalUse(player, "reducedLoadBullet")
       },
       tracerBullet: {
@@ -635,7 +635,7 @@ const CARD_LIBRARY = {
         canPlay: () => true, effect: player => logBulletNormalUse(player, "tracerBullet")
       },
       dudBullet: {
-        name: "不発弾", cost: 3, type: "補助 / 弾", bullet: true,
+        name: "不発弾", cost: 0, type: "補助 / 弾", bullet: true,
         text: "弾。このカードがカードの効果で手札から捨てられた時、このカードを捨て札から山札に戻してシャッフルする。",
         canPlay: () => true, effect: player => logBulletNormalUse(player, "dudBullet")
       },
@@ -709,7 +709,7 @@ const CARD_LIBRARY = {
           let target = opponent;
 
           if (player === "human") {
-            const inspectOwn = window.confirm(
+            const inspectOwn = await showGameConfirmationText(
               "「探り」\n\n自分の山札を確認しますか？\n\nOK：自分の山札\nキャンセル：相手の山札"
             );
             target = inspectOwn ? player : opponent;
@@ -1155,7 +1155,7 @@ const CARD_LIBRARY = {
       },
       andante: {
         name: "アンダンテ",
-        cost: 1,
+        cost: 2,
         type: "補助",
         text: "自分の0でない手を1つ選ぶ。その手の本数を1増やすか1減らす。この効果で0にはできない。",
         canPlay: (player) => ["L", "R"].some(h => state[player][h] > 0),
@@ -1213,24 +1213,28 @@ const CARD_LIBRARY = {
       },
       encore: { name:"アンコール",cost:1,type:"補助",text:"自分の捨て札にある「フィナーレ」をランダムに1枚山札に戻し、山札をシャッフルする。",canPlay:()=>true,effect:player=>useEncore(player) },
       daCapo: { name:"ダ・カーポ",cost:3,type:"終端",text:"終端。残りの手札をすべて捨て、同じ枚数引く。その後、両手を1にし、手札と山札の「ダ・カーポ」をすべて捨てる。",terminal:true,canPlay:()=>true,effect:player=>useDaCapo(player) },
-      themeSetting: { name:"題目設定",cost:1,type:"特殊",text:"デッキ1枚制限。初期手札へ追加され、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与する。",protectedSpecial:true,copyExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseTheme(player) },
-      serenadeTheme: { name:"題目：セレナーデ",cost:0,type:"加護 / 題目",text:"外部効果で除去・交換されない永続題目。共鳴により演舞を成長させる。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
-      rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"外部効果で除去・交換されない永続題目。カード使用履歴により演舞を増減する。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
-      performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。Ⅰ～Ⅴのレベルを持ち、外部効果で捨てられない。",protectedSpecial:true,token:true,canPlay:()=>false },
-      fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermata(player) },
+      themeSetting: { name:"題目設定",cost:1,type:"特殊",text:"デッキ1枚制限。初期手札へ追加され、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与し、このターン手札からカードをあと1枚使用できる。演舞は最大Ⅵで、Ⅴ以上の間は一部の輪舞曲が強化される。",protectedSpecial:true,copyExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseThemeV153(player) },
+      serenadeTheme: { name:"題目：セレナーデ",cost:0,type:"加護 / 題目",text:"共鳴が発生するたび「演舞」を2上げる。自分のターン中に一度も共鳴が発生しなかった場合、ターン終了時に「演舞」を1下げる。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。外部効果で除去・交換されない。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
+      rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"初めて使用する「輪舞曲」カードで「演舞」を2上げる。使用済みの「輪舞曲」の再使用、または輪舞曲ではないカードの使用で1下げる。変化前と変化後は別カードとして数える。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
+      performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,token:true,canPlay:()=>false },
+      fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
       canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える本数と対象を記録し、次の相手ターン終了時に加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
-      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の生存手を最低1まで1減らし、次の通常開始ドローを封じる。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
-      arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>beginArpeggio(player) },
+      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。この効果では1未満にならない。次の相手ターン中、相手はカードを引くことができない。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
+      arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useArpeggioV153(player) },
       wholeRest: { name:"全休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンの通常ドローと通常攻撃を封じ、手札から1枚使用後にターンを終了させる。",rondo:true,rondoFamily:"rest",token:true,canPlay:()=>true,effect:player=>useWholeRest(player) },
       agitato: { name:"Agitato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手は、それぞれ手札をランダムに1枚捨てる。",rondo:true,rondoFamily:"agitato",canPlay:()=>true,effect:player=>useAgitato(player) },
       furioso: { name:"Furioso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このターン、自分の手札にある「輪舞曲」カードの枚数まで通常攻撃できる。この効果で現在の通常攻撃可能回数が減ることはない。その後、「演舞」のレベルを5下げる。次の自分のターン、行動不能になる。",rondo:true,rondoFamily:"agitato",token:true,canPlay:()=>true,effect:player=>useFurioso(player) },
-      doloroso: { name:"Doloroso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選んで0にし、カードを3枚引く。",rondo:true,rondoFamily:"doloroso",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDoloroso(player) },
-      appassionato: { name:"Appassionato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このカードの効果は1ターンに1度しか発動できない。自分の0ではない手を1つ選んで0にし、このターン手札からカードをあと2枚使用できる。",rondo:true,rondoFamily:"doloroso",token:true,canPlay:player=>(state[player].L>0||state[player].R>0)&&!state.temp[player]?.appassionatoUsedThisTurn,effect:player=>useAppassionato(player) },
-      lacrimosa: { name:"Lacrimosa",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の両手が1以上の時、自分の手を1つ0にした後、相手の手を1つ0にする。",rondo:true,rondoFamily:"lacrimosa",canPlay:player=>(state[player].L>0||state[player].R>0)&&state[otherPlayer(player)].L>0&&state[otherPlayer(player)].R>0,effect:player=>useLacrimosa(player) },
-      requiem: { name:"Requiem",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の0ではない手を1つ0にし、相手の外部効果で捨てられる手札をすべて捨てる。",rondo:true,rondoFamily:"lacrimosa",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useRequiem(player) },
+      doloroso: { name:"Doloroso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選んで0にし、カードを3枚引く。",rondo:true,rondoFamily:"doloroso",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDolorosoV153(player) },
+      appassionato: { name:"Appassionato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このカードの効果は1ターンに1度しか発動できない。自分の0ではない手を1つ選んで0にし、このターン手札からカードをあと2枚使用できる。",rondo:true,rondoFamily:"doloroso",token:true,canPlay:player=>(state[player].L>0||state[player].R>0)&&!state.temp[player]?.appassionatoUsedThisTurn,effect:player=>useAppassionatoV153(player) },
+      lacrimosa: { name:"Lacrimosa",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の2回目のターン以降、相手の両手が1以上の時に使用できる。自分の手を1つ0にした後、相手の手を1つ0にする。",rondo:true,rondoFamily:"lacrimosa",terminal:true,canPlay:player=>Number(state.personalTurnCount?.[player]||0)>=2&&(state[player].L>0||state[player].R>0)&&state[otherPlayer(player)].L>0&&state[otherPlayer(player)].R>0,effect:player=>useLacrimosaV153(player) },
+      requiem: { name:"Requiem",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の2回目のターン以降に使用できる。自分の0ではない手を1つ0にし、相手の外部効果で捨てられる手札をすべて捨てる。",rondo:true,rondoFamily:"lacrimosa",token:true,terminal:true,canPlay:player=>Number(state.personalTurnCount?.[player]||0)>=2&&(state[player].L>0||state[player].R>0),effect:player=>useRequiemV153(player) },
       morendo: { name:"Morendo",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手の0ではない手をそれぞれランダムに1つ選び、その手を1にする。",rondo:true,rondoFamily:"morendo",canPlay:()=>true,effect:player=>useMorendo(player) },
       grandioso: { name:"Grandioso",cost:3,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分と相手の0ではないすべての手に2本ずつ加える。",rondo:true,rondoFamily:"grandioso",terminal:true,canPlay:()=>true,effect:player=>useGrandioso(player) },
+      portamento: { name:"ポルタメント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選び、その手を1本増やす。その後、選ばなかった手が0でなければ1本減らす。",rondo:true,rondoFamily:"portamento",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>usePortamentoV153(player) },
+      dissonance: { name:"ディソナンス",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選び、その手でもう片方の自分の手を通常攻撃する。攻撃対象の手は0でもよい。共鳴は攻撃開始時の本数で判定する。",rondo:true,rondoFamily:"portamento",token:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDissonanceV153(player) },
+      presto: { name:"プレスト",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の自分の攻撃で対象に与える本数を、+1、0、-1、-2のいずれかランダムに変化させる。負の攻撃量では対象の手を減らし、0未満にはしない。",rondo:true,rondoFamily:"presto",canPlay:()=>true,effect:player=>usePresto(player) },
+      sforzando: { name:"スフォルツァント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手の0ではない手から1つ選ぶ。その手の現在の本数分、このターン、自分が攻撃で対象に与える本数を増加させる。",rondo:true,rondoFamily:"presto",token:true,canPlay:()=>true,effect:player=>useSforzandoV153(player) },
 
       deflect: {
         name: "受け流し",
@@ -1678,7 +1682,7 @@ const CARD_LIBRARY = {
         text: "手札から1枚以上、好きな枚数を選んで捨てる。相手は同じ枚数だけ手札をランダムに捨てる。",
         token: true, magicalEvolution: true,
         canPlay: (player) => state.hands[player].length > 1,
-        effect: async (player) => { await useFullHeart(player); }
+        effect: async (player) => { await useFullHeartV153(player); }
       },
       magicalChant: {
         name: "魔法少女の詠唱", cost: 2, type: "補助 / 魔法少女・詠唱",
@@ -2035,6 +2039,11 @@ const CARD_LIBRARY = {
       performanceLevel: { human: 0, cpu: 0 },
       resonanceTriggeredThisTurn: { human: false, cpu: false },
       usedRondoFamilies: { human: [], cpu: [] },
+      usedRondoCards: { human: [], cpu: [] },
+      pendingDrawLock: { human: false, cpu: false },
+      activeDrawLock: { human: false, cpu: false },
+      pendingPrestoAttack: { human: false, cpu: false },
+      sforzandoTurnBonus: { human: 0, cpu: 0 },
       pendingCanonHits: [],
       quarterRestPending: { human: 0, cpu: 0 },
       quarterRestActive: { human: false, cpu: false },
@@ -2112,9 +2121,12 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v137";
-    const LATEST_NEWS_ID = "v150-starting-player-roulette";
+    const LATEST_NEWS_ID = "v153-selection-ui";
 
     const UPDATE_NEWS = [
+      {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
+      {id:"v152-rondo-bullets-internal-attack",version:"v152",date:"2026-08-10",title:"輪舞曲・弾丸カード調整",summary:"輪舞曲と弾丸カードを調整し、内部通常攻撃の共通基盤を拡張しました。",featured:true,tags:["new","update"],items:["回収弾の回収先を山札へ変更","不発弾のコストを0へ変更し、減装弾の対象条件を調整","Lacrimosaに終端を追加","新輪舞曲「ポルタメント」「プレスト」を追加","演舞Ⅴ以上の強化形「ディソナンス」「スフォルツァント」を追加","凶弾と新カードで利用する内部通常攻撃処理を共通化"]},
+      {id:"v151-performance-rondo-rebalance",version:"v151",date:"2026-08-10",title:"題目・演舞システム再調整",summary:"題目・演舞・輪舞曲を再調整し、全休符の使用可能判定を修正しました。",featured:true,tags:["update","fix"],items:["演舞の最大値をⅥへ変更し、Ⅴ以上で強化を維持","題目：ロンドの初使用ボーナスを+2へ変更し、変化前後を別履歴化","題目設定使用後にもう1枚カードを使用可能","リタルダントを次の相手ターン中の全ドロー禁止へ強化","Lacrimosa・Requiemの使用可能ターンとAndanteのコストを調整","全休符が設置カードを使用不能と誤判定する問題を修正"]},
       {id:"v150-starting-player-roulette",version:"v150",date:"2026-08-10",title:"対戦開始演出・フレンド戦表示を改善",summary:"先攻ルーレットとフレンド戦のホスト／ゲスト表示を追加しました。",featured:true,tags:["new","update"],items:["試合開始時に先攻ルーレットを追加","CPU戦の先攻をランダム化","friend戦でも先攻を同期してランダム決定","friend戦のプレイヤー表示をホスト／ゲストへ改善","ログやターン表示のCPU表記を整理"]},
       {id:"v149-rondo-expansion",version:"v149",date:"2026-08-10",title:"輪舞曲をさらに拡張",summary:"新しい輪舞曲系列と演舞Lv.Ⅴの強化カードを追加しました。",featured:true,tags:["new","update"],items:["Agitato・Doloroso・Lacrimosaを追加","演舞Lv.ⅤでFurioso・Appassionato・Requiemへ強化","Morendo・Grandiosoを追加","Furiosoの連続攻撃を追加","Appassionatoの追加カード使用とRequiemの手札全破棄を追加"]},
       {id:"v148-resonance-theme-expansion",version:"v148",date:"2026-08-10",title:"共鳴テーマを大幅拡張",summary:"題目・演舞・輪舞曲システムと共鳴関連カードを追加しました。",featured:true,tags:["new","system"],items:["題目と演舞レベルシステムを追加","輪舞曲とフェルマータ・カノン・4分休符を追加","演舞Lv.Ⅴでリタルダント・アルペジオ・全休符へ強化","アンコール・ダ・カーポを追加","v147銃カードへ守護軽減が適用されるよう修正"]},
@@ -2888,6 +2900,16 @@ const CARD_LIBRARY = {
       andanteMinusBtn: document.getElementById("andanteMinusBtn"),
       andantePlusBtn: document.getElementById("andantePlusBtn"),
       andanteCancelBtn: document.getElementById("andanteCancelBtn"),
+      allocationBox: document.getElementById("allocationBox"),
+      allocationLabel: document.getElementById("allocationLabel"),
+      allocationLeft: document.getElementById("allocationLeft"),
+      allocationRight: document.getElementById("allocationRight"),
+      allocationConfirmBtn: document.getElementById("allocationConfirmBtn"),
+      allocationHint: document.getElementById("allocationHint"),
+      handCardSelectionBox: document.getElementById("handCardSelectionBox"),
+      handCardSelectionLabel: document.getElementById("handCardSelectionLabel"),
+      handCardSelectionConfirmBtn: document.getElementById("handCardSelectionConfirmBtn"),
+      handCardSelectionHint: document.getElementById("handCardSelectionHint"),
       attackBtn: document.getElementById("attackBtn"),
       splitBtn: document.getElementById("splitBtn"),
       drawBtn: document.getElementById("drawBtn"),
@@ -3373,7 +3395,7 @@ const CARD_LIBRARY = {
       if (!state.pendingStartDrawSkip || typeof state.pendingStartDrawSkip !== "object") state.pendingStartDrawSkip = { human: false, cpu: false };
       if (!state.furiosoSkipPending || typeof state.furiosoSkipPending !== "object") state.furiosoSkipPending = { human: false, cpu: false };
       if (!state.furiosoSkipActive || typeof state.furiosoSkipActive !== "object") state.furiosoSkipActive = { human: false, cpu: false };
-      if(!state.selectedTheme)state.selectedTheme={human:null,cpu:null};if(!state.performanceLevel)state.performanceLevel={human:0,cpu:0};if(!state.resonanceTriggeredThisTurn)state.resonanceTriggeredThisTurn={human:false,cpu:false};if(!state.usedRondoFamilies)state.usedRondoFamilies={human:[],cpu:[]};if(!state.pendingCanonHits)state.pendingCanonHits=[];if(!state.quarterRestPending)state.quarterRestPending={human:false,cpu:false};if(!state.quarterRestActive)state.quarterRestActive={human:false,cpu:false};if(!state.wholeRestPending)state.wholeRestPending={human:false,cpu:false};if(!state.wholeRestActive)state.wholeRestActive={human:false,cpu:false};
+      if(!state.selectedTheme)state.selectedTheme={human:null,cpu:null};if(!state.performanceLevel)state.performanceLevel={human:0,cpu:0};if(!state.resonanceTriggeredThisTurn)state.resonanceTriggeredThisTurn={human:false,cpu:false};if(!state.usedRondoFamilies)state.usedRondoFamilies={human:[],cpu:[]};if(!state.usedRondoCards)state.usedRondoCards={human:[],cpu:[]};if(!state.pendingDrawLock)state.pendingDrawLock={human:false,cpu:false};if(!state.activeDrawLock)state.activeDrawLock={human:false,cpu:false};if(!state.pendingPrestoAttack)state.pendingPrestoAttack={human:false,cpu:false};if(!state.sforzandoTurnBonus)state.sforzandoTurnBonus={human:0,cpu:0};if(!state.pendingCanonHits)state.pendingCanonHits=[];if(!state.quarterRestPending)state.quarterRestPending={human:false,cpu:false};if(!state.quarterRestActive)state.quarterRestActive={human:false,cpu:false};if(!state.wholeRestPending)state.wholeRestPending={human:false,cpu:false};if(!state.wholeRestActive)state.wholeRestActive={human:false,cpu:false};
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
@@ -3422,7 +3444,7 @@ const CARD_LIBRARY = {
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
         firstTurnStarted: !!state.firstTurnStarted[player],
         pendingStartDrawSkip: !!state.pendingStartDrawSkip[player]
-        ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:cloneJson(state.pendingCanonHits), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
+        ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], usedRondoCards:[...(state.usedRondoCards[player]||[])], pendingDrawLock:!!state.pendingDrawLock[player], activeDrawLock:!!state.activeDrawLock[player], pendingPrestoAttack:!!state.pendingPrestoAttack[player], sforzandoTurnBonus:Number(state.sforzandoTurnBonus[player]||0), quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:cloneJson(state.pendingCanonHits), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
       };
     }
 
@@ -3493,7 +3515,7 @@ const CARD_LIBRARY = {
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingStartDrawSkip[player] = !!side.pendingStartDrawSkip;
       state.furiosoSkipPending[player]=!!side.furiosoSkipPending;state.furiosoSkipActive[player]=!!side.furiosoSkipActive;
-      state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Number(side.performanceLevel)||0;state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=cloneJson(side.pendingCanonHits);
+      state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Math.max(0,Math.min(PERFORMANCE_MAX_LEVEL,Number(side.performanceLevel)||0));state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.usedRondoCards[player]=[...(side.usedRondoCards||[])];state.pendingDrawLock[player]=!!side.pendingDrawLock;state.activeDrawLock[player]=!!side.activeDrawLock;state.pendingPrestoAttack[player]=!!side.pendingPrestoAttack;state.sforzandoTurnBonus[player]=Math.max(0,Number(side.sforzandoTurnBonus)||0);state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=cloneJson(side.pendingCanonHits);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingIntemperanceCardLock[player] = !!side.pendingIntemperanceCardLock;
       state.activeIntemperanceCardLock[player] = !!side.activeIntemperanceCardLock;
@@ -4375,12 +4397,17 @@ const CARD_LIBRARY = {
         noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
         pendingIntemperanceCardLock: false, activeIntemperanceCardLock: false, pendingMagicalHeartDraw: 0,
         magicalChantProgress: 0, magicalChantCompleted: false,
-        costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false
+        costLimitNextTurn: null, activeCostLimit: null, berserkerTurns: 0, firstTurnStarted: false,
+        selectedTheme: null, performanceLevel: 0, resonanceTriggeredThisTurn: false,
+        pendingPrestoAttack: false, sforzandoTurnBonus: 0,
+        usedRondoFamilies: [], usedRondoCards: [], pendingDrawLock: false, activeDrawLock: false,
+        quarterRestPending: false, quarterRestActive: false, wholeRestPending: false, wholeRestActive: false,
+        pendingCanonHits: [], furiosoSkipPending: false, furiosoSkipActive: false, personalTurnCount: 0
       });
       const createdAtMs = Date.now();
       const startingPlayer = decideFriendStartingPlayer();
       const match = {
-        version: 150,
+        version: 153,
         matchId: `${state.friendRoomId}-${createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
         createdAtMs,
         startingPlayer,
@@ -4489,6 +4516,11 @@ const CARD_LIBRARY = {
       ];
       elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
+      elements.allocationBox?.classList.remove("active");
+      elements.handCardSelectionBox?.classList.remove("active");
+      pendingBoardHandSelection = null;
+      pendingHandCardSelection = null;
+      pendingNumberAllocation = null;
       clearHighlights();
       showScreen("battle");
       if (match.state) {
@@ -6096,7 +6128,7 @@ function wrapFinger(value) {
         }
         if (PERFORMANCE_LV5_EVOLUTION_MAP[cardId]) {
           const transformedId = PERFORMANCE_LV5_EVOLUTION_MAP[cardId];
-          relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">演舞Lv.Ⅴ「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
+          relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">演舞Ⅴ以上「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
         }
         if (["allegro", "resonanceTuning", "crescendo", "dance", "largo", "andante", "lastMelody"].includes(cardId)) relatedButtons.push('<button class="deck-inline-info" data-info="resonance">共鳴とは？</button>');
         const relatedButton = relatedButtons.join("");
@@ -6455,6 +6487,7 @@ function wrapFinger(value) {
     }
 
     function drawDirectiveFromDeck(player) {
+      if (state.activeDrawLock?.[player]) return false;
       const candidates = state.decks[player]
         .map((id, index) => ({ id, index }))
         .filter(x => DIRECTIVE_BASE_IDS.includes(directiveBaseId(x.id)));
@@ -6979,6 +7012,7 @@ function wrapFinger(value) {
     }
 
     function drawCard(player) {
+      if (state.activeDrawLock?.[player]) return false;
       if (state.decks[player].length > 0) {
         const cardId = state.decks[player].pop();
         state.hands[player].push(materializeDrawnCard(cardId));
@@ -7022,6 +7056,34 @@ function wrapFinger(value) {
       checkWin();
     }
 
+    function canNormallyUseHandCard(player, handIndex) {
+      if (state.startingRouletteActive || state.gameOver || state.turn !== player || state.animating) return false;
+      if (state.furiosoSkipActive?.[player] || state.quarterRestActive?.[player]) return false;
+      if ((state.judgmentPrisonTurns?.[player] || 0) > 0 || state.activeIntemperanceCardLock?.[player]) return false;
+      if (state.wholeRestActive?.[player] && state.temp?.[player]?.wholeRestCardUsed) return false;
+      const rawCardId = state.hands[player]?.[handIndex];
+      const cardId = effectiveCardIdForPlayer(player, rawCardId);
+      const card = CARD_LIBRARY[cardId];
+      if (!card || cardId === "performance") return false;
+      if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) return false;
+      const setupActive = !!state.temp[player]?.setupMode;
+      const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
+      const hasCardAllowance = !state.temp[player]?.cardActionUsed || Number(state.temp[player]?.cardExtraUses || 0) > 0 || lightSpeedChargePlayable || (setupActive && card.trap);
+      if (!hasCardAllowance || !canUseChargeCardThisTurn(player, cardId)) return false;
+      if (state.activeCostLimit?.[player] !== null && state.activeCostLimit?.[player] !== undefined && card.cost > state.activeCostLimit[player]) return false;
+      if (state.berserkerTurns?.[player] > 0 && !state.temp[player]?.berserkerJustUsed) return false;
+      if (isAttachmentCard(cardId)) {
+        if (setupActive && !card.trap) return false;
+        return canSetAttachmentTarget(player, cardId);
+      }
+      if (setupActive) return false;
+      try { return typeof card.canPlay !== "function" || !!card.canPlay(player); } catch (_) { return false; }
+    }
+
+    function getNormallyPlayableHandCards(player) {
+      return (state.hands[player] || []).map((cardId, index) => ({ cardId, index })).filter(item => canNormallyUseHandCard(player, item.index));
+    }
+
     async function startTurn(player) {
       if (isTutorialBattle()) {
         if (player === "cpu") {
@@ -7035,14 +7097,15 @@ function wrapFinger(value) {
         render();
         return;
       }
+      ensureOnlineStateMaps();
       state.resonanceTriggeredThisTurn[player]=false;
+      state.activeDrawLock[player]=!!state.pendingDrawLock[player]; state.pendingDrawLock[player]=false;
       state.quarterRestActive[player]=!!state.quarterRestPending[player]; state.quarterRestPending[player]=false;
       state.wholeRestActive[player]=!!state.wholeRestPending[player]; state.wholeRestPending[player]=false;
       state.furiosoSkipActive[player]=!!state.furiosoSkipPending[player]; state.furiosoSkipPending[player]=false;
       ensureThemeAttachments(player);
       // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
       if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
-      ensureOnlineStateMaps();
       // ターン開始時点ですでに予約されていた反動だけを「今回の反動」として確定する。
       // 予告状など、ターン開始処理の途中で新しく予約された反動は次の自分ターンまで残す。
       const chargeStunDueThisTurn = !!state.pendingChargeStun[player];
@@ -7227,6 +7290,10 @@ function wrapFinger(value) {
         await showNoDrawPopup(player, remainingNoDraw);
       }
 
+      if(state.activeDrawLock[player]){
+        draws=0;
+        addLog(`${handNames[player]}は「リタルダント」により、このターン中カードを引けない。`);
+      }
       for (let i = 0; i < draws; i++) drawCard(player);
 
       await resolveAdvanceNotice(player);
@@ -7238,7 +7305,7 @@ function wrapFinger(value) {
         return;
       }
       if(state.wholeRestActive[player]){
-        const playable=state.hands[player].some(raw=>{const id=effectiveCardIdForPlayer(player,raw),c=CARD_LIBRARY[id];try{return c&&id!=="performance"&&!isAttachmentCard(id)&&!(state.activeCostLimit[player]!==null&&c.cost>state.activeCostLimit[player])&&!state.activeIntemperanceCardLock[player]&&!(state.judgmentPrisonTurns[player]>0)&&c.canPlay(player);}catch{return false;}});
+        const playable=getNormallyPlayableHandCards(player).length>0;
         if(!playable){addLog(`${handNames[player]}は「全休符」により使用可能なカードがなく、ターンを終了した。`);await endTurn();return;}
       }
 
@@ -7340,6 +7407,9 @@ function wrapFinger(value) {
           }
 
           if (!state.gameOver && !state.animating && !state.startingRouletteActive && state.turn === "human") {
+            if (state.mode === "boardHandSelection" && pendingBoardHandSelection?.candidates.some(item => item.owner === player && item.hand === hand)) {
+              card.classList.add("trap-target");
+            }
             if (state.mode === "attack") {
               if (player === "human" && value > 0) card.classList.add("selectable");
               if (player === "cpu" && state.selectedAttackHand && value > 0) card.classList.add("selectable");
@@ -7411,7 +7481,8 @@ function wrapFinger(value) {
       if (elements.battleResultReopenBtn) {
         elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
       }
-      const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver;
+      const selectionLock = ["boardHandSelection", "handCardSelection", "numberAllocation"].includes(state.mode);
+      const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver || selectionLock;
       const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive;
       elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
@@ -7482,8 +7553,13 @@ function wrapFinger(value) {
       quarterRest: "wholeRest",
       agitato: "furioso",
       doloroso: "appassionato",
-      lacrimosa: "requiem"
+      lacrimosa: "requiem",
+      portamento: "dissonance",
+      presto: "sforzando"
     });
+    const PERFORMANCE_MAX_LEVEL = 6;
+    const PERFORMANCE_EVOLUTION_LEVEL = 5;
+    const PERFORMANCE_ROMAN_LEVELS = Object.freeze(["", "Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"]);
     function transformMagicalEvolutionCards(player) {
       const f=id=>MAGICAL_EVOLUTION_MAP[id]||id;
       state.hands[player]=state.hands[player].map(f);
@@ -7506,7 +7582,7 @@ function wrapFinger(value) {
 
     function effectiveCardIdForPlayer(player, cardId) {
       if (cardId === "magicalChant" && (state.magicalChantCompleted?.[player] || hasCompletedMagicalBlessing(player))) return "arcanaSlave";
-      if ((state.performanceLevel?.[player] || 0) >= 5) {
+      if ((state.performanceLevel?.[player] || 0) >= PERFORMANCE_EVOLUTION_LEVEL) {
         return PERFORMANCE_LV5_EVOLUTION_MAP[cardId] || cardId;
       }
       return cardId;
@@ -7529,20 +7605,20 @@ function wrapFinger(value) {
       }
     }
 
-    function getPerformanceLevel(player) { return Math.max(0, Math.min(5, Number(state.performanceLevel?.[player] || 0))); }
+    function getPerformanceLevel(player) { return Math.max(0, Math.min(PERFORMANCE_MAX_LEVEL, Number(state.performanceLevel?.[player] || 0))); }
+    function performanceLevelLabel(level) { return PERFORMANCE_ROMAN_LEVELS[Math.max(0, Math.min(PERFORMANCE_MAX_LEVEL, Number(level) || 0))] || ""; }
     function setPerformanceLevel(player, level, reason = "") {
-      const next = Math.max(0, Math.min(5, Number(level) || 0));
+      const next = Math.max(0, Math.min(PERFORMANCE_MAX_LEVEL, Number(level) || 0));
       state.performanceLevel[player] = next;
       state.hands[player] = state.hands[player].filter(id => id !== "performance");
       if (next > 0) state.hands[player].push("performance");
-      if (reason) addLog(`${handNames[player]}の「演舞」は${next ? `Lv.${next}` : "消滅"}（${reason}）。`);
+      if (reason) addLog(`${handNames[player]}の「演舞」は${next ? `演舞${performanceLevelLabel(next)}` : "消滅"}（${reason}）。`);
       render();
       return next;
     }
     function changePerformanceLevel(player, delta, reason) {
       const before = getPerformanceLevel(player);
-      const base = before || (delta > 0 ? 1 : 0);
-      return setPerformanceLevel(player, base + delta, reason);
+      return setPerformanceLevel(player, before + delta, reason);
     }
 
     function transformMagicalChantCards(player) {
@@ -7577,32 +7653,34 @@ function wrapFinger(value) {
       state.pendingTerminalEnd[player]=true; render();
     }
 
-    function chooseTheme(player) {
+    async function chooseTheme(player) {
       let theme;
-      if(player==="human") theme=confirm("題目：ロンドを選びますか？\nOK＝ロンド / キャンセル＝セレナーデ")?"rondo":"serenade";
+      if(player==="human") return chooseThemeV153(player);
       else {
         const rondos=state.hands[player].filter(id=>CARD_LIBRARY[id]?.rondo).length+state.decks[player].filter(id=>CARD_LIBRARY[id]?.rondo).length;
         theme=rondos>=3?"rondo":"serenade";
       }
       state.selectedTheme[player]=theme; ensureThemeAttachments(player);
+      state.temp[player].cardExtraUses=Number(state.temp[player].cardExtraUses||0)+1;
       addLog(`${handNames[player]}は「題目：${theme==="rondo"?"ロンド":"セレナーデ"}」を選択した。`); render();
     }
 
     async function useFermata(player) {
       drawCard(player);
-      const extra=player==="human"?confirm("フェルマータでもう1枚引き、ターンを終了しますか？"):state.hands[player].length<4;
+      const extra=player==="human"?await showGameConfirmation({title:"フェルマータ",message:"もう1枚引き、ターンを終了しますか？",confirmLabel:"もう1枚引く",cancelLabel:"このまま続ける"}):state.hands[player].length<4;
       if(extra){drawCard(player);state.pendingTerminalEnd[player]=true;}
     }
-    function useRitardando(player){const o=otherPlayer(player);for(const h of ["L","R"])if(state[o][h]>1)state[o][h]-=1;state.pendingStartDrawSkip[o]=true;render();}
+    function useRitardando(player){const o=otherPlayer(player);for(const h of ["L","R"])if(state[o][h]>1)state[o][h]-=1;state.pendingDrawLock[o]=true;render();}
     function useQuarterRest(player){const o=otherPlayer(player);state.quarterRestPending[o]=true;state.quarterRestPending[player]=true;}
     function useWholeRest(player){const o=otherPlayer(player);state.wholeRestPending[o]=true;state.pendingStartDrawSkip[o]=true;}
 
-    function chooseLivingHand(player, owner, promptText) {
+    async function chooseLivingHand(player, owner, promptText) {
       const choices=["L","R"].filter(hand=>state[owner][hand]>0);
       if(!choices.length)return null;
       if(player!=="human")return choices.sort((a,b)=>state[owner][a]-state[owner][b])[0];
       if(choices.length===1)return choices[0];
-      return confirm(`${promptText}\nOK＝左手 / キャンセル＝右手`) ? "L" : "R";
+      const selected=await beginBoardHandSelection(player,{owners:[owner],message:promptText,cpuPick:items=>items[0]});
+      return selected?.hand||null;
     }
 
     async function useAgitato(player){
@@ -7624,6 +7702,7 @@ function wrapFinger(value) {
     }
 
     function useDoloroso(player){
+      return useDolorosoV153(player);
       const hand=chooseLivingHand(player,player,"Dolorosoで0にする自分の手を選んでください。");
       if(!hand)return false;
       state[player][hand]=0; clearBrokenTraps(player);
@@ -7632,6 +7711,7 @@ function wrapFinger(value) {
     }
 
     function useAppassionato(player){
+      return useAppassionatoV153(player);
       if(state.temp[player].appassionatoUsedThisTurn)return false;
       const hand=chooseLivingHand(player,player,"Appassionatoで0にする自分の手を選んでください。");
       if(!hand)return false;
@@ -7642,6 +7722,7 @@ function wrapFinger(value) {
     }
 
     function useLacrimosa(player){
+      return useLacrimosaV153(player);
       const opponent=otherPlayer(player);
       if(!(state[player].L>0||state[player].R>0)||state[opponent].L<=0||state[opponent].R<=0)return false;
       const ownHand=chooseLivingHand(player,player,"Lacrimosaで0にする自分の手を選んでください。");
@@ -7653,6 +7734,7 @@ function wrapFinger(value) {
     }
 
     async function useRequiem(player){
+      return useRequiemV153(player);
       const hand=chooseLivingHand(player,player,"Requiemで0にする自分の手を選んでください。");
       if(!hand){state.pendingTerminalEnd[player]=true;return false;}
       state[player][hand]=0; clearBrokenTraps(player);
@@ -7680,7 +7762,68 @@ function wrapFinger(value) {
       state.pendingTerminalEnd[player]=true; render();
     }
 
+    function beginPortamento(player){
+      const choices=["L","R"].filter(hand=>state[player][hand]>0);
+      if(!choices.length)return false;
+      if(player==="human"){
+        state.pendingPortamento={player};state.mode="portamentoSource";
+        setMessage("ポルタメント：1本増やす自分の手を選んでください。");render();return true;
+      }
+      return resolvePortamento(player,choices.sort((a,b)=>state[player][b]-state[player][a])[0]);
+    }
+
+    async function resolvePortamento(player,hand){
+      if(!["L","R"].includes(hand)||state[player][hand]<=0)return false;
+      await addFingersWithCalculation(player,hand,1,"ポルタメント");
+      const other=otherHand(hand);
+      if(state[player][other]>0)state[player][other]=Math.max(0,state[player][other]-1);
+      clearBrokenTraps(player);state.pendingPortamento=null;state.mode="attack";render();return true;
+    }
+
+    function beginDissonance(player){
+      const choices=["L","R"].filter(hand=>state[player][hand]>0);
+      if(!choices.length)return false;
+      if(player==="human"){
+        state.pendingDissonance={player};state.mode="dissonanceSource";
+        setMessage("ディソナンス：通常攻撃に使う自分の手を選んでください。");render();return true;
+      }
+      return resolveDissonance(player,choices.sort((a,b)=>state[player][b]-state[player][a])[0]);
+    }
+
+    async function resolveDissonance(player,attackHand){
+      if(!["L","R"].includes(attackHand)||state[player][attackHand]<=0)return false;
+      state.pendingDissonance=null;state.mode="attack";
+      return await resolveInternalNormalAttack({attackerPlayer:player,attackerHand:attackHand,targetPlayer:player,targetHand:otherHand(attackHand),allowZeroTarget:true,sourceCardId:"dissonance"});
+    }
+
+    function usePresto(player){
+      state.pendingPrestoAttack[player]=true;
+      addLog(`${handNames[player]}の次の攻撃に「プレスト」が適用される。`);
+      return true;
+    }
+
+    function beginSforzando(player){
+      const candidates=[];
+      for(const owner of [player,otherPlayer(player)])for(const hand of ["L","R"])if(state[owner][hand]>0)candidates.push({owner,hand});
+      if(!candidates.length)return false;
+      if(player==="human"){
+        state.pendingSforzando={player};state.mode="sforzandoTarget";
+        setMessage("スフォルツァント：攻撃増加量にする0ではない手を選んでください。");render();return true;
+      }
+      candidates.sort((a,b)=>state[b.owner][b.hand]-state[a.owner][a.hand]);
+      return resolveSforzando(player,candidates[0].owner,candidates[0].hand);
+    }
+
+    function resolveSforzando(player,owner,hand){
+      if(![player,otherPlayer(player)].includes(owner)||!["L","R"].includes(hand)||state[owner][hand]<=0)return false;
+      const bonus=state[owner][hand];
+      state.sforzandoTurnBonus[player]=bonus;state.pendingSforzando=null;state.mode="attack";
+      addLog(`${handNames[player]}の「スフォルツァント」。このターンの攻撃で与える本数+${bonus}。`);
+      render();return true;
+    }
+
     function beginArpeggio(player){
+      return useArpeggioV153(player);
       const alive=["L","R"].filter(h=>state[player][h]>0);if(!alive.length){state.pendingTerminalEnd[player]=true;return false;}
       if(player==="human"){state.pendingArpeggio={player};state.mode="arpeggioSource";setMessage("アルペジオ：元にする自分の手を選んでください。");render();return true;}
       const hand=alive.sort((a,b)=>state[player][b]-state[player][a])[0];return resolveArpeggio(player,hand,chooseCpuArpeggioSplit(player,state[player][hand]));
@@ -7691,12 +7834,12 @@ function wrapFinger(value) {
     function recordRondoUse(player,cardId){
       if(state.selectedTheme?.[player]!=="rondo"||cardId==="themeSetting")return;
       const card=CARD_LIBRARY[cardId];
-      if(card?.rondo){const family=card.rondoFamily||cardId;const used=state.usedRondoFamilies[player]||[];if(used.includes(family))changePerformanceLevel(player,-1,"同じ輪舞曲系列を再使用");else{if(getPerformanceLevel(player))changePerformanceLevel(player,1,"初使用の輪舞曲");else setPerformanceLevel(player,1,"初使用の輪舞曲");used.push(family);state.usedRondoFamilies[player]=used;}}
+      if(card?.rondo){const used=state.usedRondoCards[player]||[];if(used.includes(cardId))changePerformanceLevel(player,-1,"使用済みの輪舞曲を再使用");else{changePerformanceLevel(player,2,"初使用の輪舞曲");used.push(cardId);state.usedRondoCards[player]=used;}}
       else if(cardId!=="performance")changePerformanceLevel(player,-1,"非輪舞曲を使用");
     }
     async function resolveCanonHitsForEndingPlayer(player){
       const due=state.pendingCanonHits.filter(x=>x.waitForPlayer===player);state.pendingCanonHits=state.pendingCanonHits.filter(x=>x.waitForPlayer!==player);
-      for(const hit of due){if(state[hit.defender][hit.targetHand]<=0){addLog("カノンは記録対象が0のため不発。");continue;}const before=state[hit.defender][hit.targetHand],total=before+hit.amount,finalValue=wrapFinger(total);await animateCalculation(hit.defender,hit.targetHand,total,finalValue);state[hit.defender][hit.targetHand]=finalValue;addLog(`カノン着弾：${before}→${total}${total>=5?`→${finalValue}`:""}`);clearBrokenTraps(hit.defender);}
+      for(const hit of due){if(state[hit.defender][hit.targetHand]<=0){addLog("カノンは記録対象が0のため不発。");continue;}const before=state[hit.defender][hit.targetHand],total=before+hit.amount,finalValue=hit.amount<0?Math.max(0,total):wrapFinger(total);await animateCalculation(hit.defender,hit.targetHand,total,finalValue);state[hit.defender][hit.targetHand]=finalValue;addLog(`カノン着弾：${before}→${total}${total>=5||total<0?`→${finalValue}`:""}`);clearBrokenTraps(hit.defender);}
       render();
     }
 
@@ -8010,6 +8153,310 @@ function wrapFinger(value) {
       });
     }
 
+    function gameChoiceCardHtml(item) {
+      const base = CARD_LIBRARY[item.id] || {};
+      const name = item.name || base.name || item.id || "選択肢";
+      const type = item.type || base.type || "選択";
+      const cost = item.cost ?? base.cost ?? "-";
+      const text = item.text || base.text || "";
+      return `<button type="button" class="magical-choice-card" data-key="${escapeHtml(String(item.key))}">
+        <span class="magical-choice-name">${escapeHtml(name)}</span>
+        <span class="magical-choice-type">${escapeHtml(type)}</span>
+        <span class="magical-choice-cost">コスト ${escapeHtml(cost)}</span>
+        <span class="magical-choice-text">${escapeHtml(text)}</span>
+      </button>`;
+    }
+
+    function showGameChoicePanel({ title, message, choices }) {
+      const items = choices.map((choice, index) => ({ ...choice, key: String(choice.key ?? choice.value ?? index) }));
+      return new Promise(resolve => {
+        const overlay = ensureMagicalChoiceOverlay();
+        overlay.querySelector("h2").textContent = title;
+        overlay.querySelector(".magical-choice-guide").textContent = message;
+        const list = overlay.querySelector(".magical-choice-list");
+        list.innerHTML = items.map(gameChoiceCardHtml).join("");
+        overlay.querySelector(".magical-choice-actions").innerHTML = "";
+        overlay.classList.add("show");
+        list.querySelectorAll(".magical-choice-card").forEach(button => {
+          button.addEventListener("click", () => {
+            overlay.classList.remove("show");
+            resolve(items.find(item => item.key === button.dataset.key));
+          }, { once: true });
+        });
+      });
+    }
+
+    async function showGameConfirmation({ title, message, confirmLabel, cancelLabel }) {
+      const chosen = await showGameChoicePanel({
+        title,
+        message,
+        choices: [
+          { key: "confirm", name: confirmLabel, type: "決定", text: message },
+          { key: "cancel", name: cancelLabel, type: "選択", text: "追加の効果を行わず、そのまま進めます。" }
+        ]
+      });
+      return chosen?.key === "confirm";
+    }
+
+    function showGameConfirmationText(message) {
+      return showGameConfirmation({ title: "選択", message, confirmLabel: "自分を選ぶ", cancelLabel: "相手を選ぶ" });
+    }
+
+    let pendingBoardHandSelection = null;
+    let pendingHandCardSelection = null;
+    let pendingNumberAllocation = null;
+
+    function beginBoardHandSelection(player, { owners = [player], allowZero = false, minimum = allowZero ? 0 : 1, message = "手を選んでください。", cpuPick = null } = {}) {
+      const candidates = [];
+      for (const owner of owners) for (const hand of ["L", "R"]) {
+        const value = Number(state[owner]?.[hand] || 0);
+        if ((allowZero || value > 0) && value >= minimum) candidates.push({ owner, hand, value });
+      }
+      if (!candidates.length) return Promise.resolve(null);
+      if (player !== "human") return Promise.resolve(cpuPick ? cpuPick(candidates) : candidates[0]);
+      return new Promise(resolve => {
+        pendingBoardHandSelection = { candidates, resolve };
+        state.mode = "boardHandSelection";
+        setMessage(message);
+        render();
+      });
+    }
+
+    function finishBoardHandSelection(owner, hand) {
+      const pending = pendingBoardHandSelection;
+      const selected = pending?.candidates.find(item => item.owner === owner && item.hand === hand);
+      if (!pending || !selected) return false;
+      pendingBoardHandSelection = null;
+      state.mode = "attack";
+      pending.resolve(selected);
+      render();
+      return true;
+    }
+
+    function updateHandCardSelectionUi() {
+      const pending = pendingHandCardSelection;
+      if (!pending) return;
+      const count = pending.selected.size;
+      elements.handCardSelectionConfirmBtn.disabled = count < pending.min || count > pending.max;
+      elements.handCardSelectionHint.textContent = `${count}枚選択中（${pending.min}～${pending.max}枚）`;
+    }
+
+    function beginHandCardSelection({ min = 1, max = 1, filter = () => true, message = "手札からカードを選んでください。" } = {}) {
+      const eligible = state.hands.human.map((id, index) => ({ id, index })).filter(item => filter(item.id, item.index));
+      if (eligible.length < min) return Promise.resolve([]);
+      return new Promise(resolve => {
+        pendingHandCardSelection = { min, max: Math.min(max, eligible.length), eligible: new Set(eligible.map(item => item.index)), selected: new Set(), resolve };
+        state.mode = "handCardSelection";
+        elements.handCardSelectionLabel.textContent = message;
+        elements.handCardSelectionBox.classList.add("active");
+        updateHandCardSelectionUi();
+        render();
+      });
+    }
+
+    function toggleHandCardSelection(index) {
+      const pending = pendingHandCardSelection;
+      if (!pending?.eligible.has(index)) return false;
+      if (pending.selected.has(index)) pending.selected.delete(index);
+      else if (pending.selected.size < pending.max) pending.selected.add(index);
+      updateHandCardSelectionUi();
+      renderHumanCards();
+      return true;
+    }
+
+    function finishHandCardSelection() {
+      const pending = pendingHandCardSelection;
+      if (!pending || pending.selected.size < pending.min || pending.selected.size > pending.max) return false;
+      const result = [...pending.selected].sort((a, b) => a - b);
+      pendingHandCardSelection = null;
+      elements.handCardSelectionBox.classList.remove("active");
+      state.mode = "attack";
+      pending.resolve(result);
+      render();
+      return true;
+    }
+
+    function showNumberAllocation({ title, total }) {
+      return new Promise(resolve => {
+        pendingNumberAllocation = { total, resolve };
+        state.mode = "numberAllocation";
+        elements.allocationLabel.textContent = title;
+        elements.allocationLeft.innerHTML = "";
+        elements.allocationRight.innerHTML = "";
+        for (let value = 0; value <= total; value++) {
+          elements.allocationLeft.appendChild(new Option(String(value), String(value)));
+          elements.allocationRight.appendChild(new Option(String(total - value), String(total - value)));
+        }
+        const initial = Math.floor(total / 2);
+        elements.allocationLeft.value = String(initial);
+        elements.allocationRight.value = String(total - initial);
+        elements.allocationHint.textContent = `合計 ${total} / ${total}`;
+        elements.allocationBox.classList.add("active");
+        render();
+      });
+    }
+
+    function syncNumberAllocation(source) {
+      if (!pendingNumberAllocation) return;
+      const total = pendingNumberAllocation.total;
+      if (source === "left") elements.allocationRight.value = String(total - Number(elements.allocationLeft.value));
+      else elements.allocationLeft.value = String(total - Number(elements.allocationRight.value));
+      elements.allocationHint.textContent = `合計 ${total} / ${total}`;
+    }
+
+    function finishNumberAllocation() {
+      const pending = pendingNumberAllocation;
+      if (!pending) return false;
+      const left = Number(elements.allocationLeft.value);
+      const right = Number(elements.allocationRight.value);
+      if (!Number.isInteger(left) || !Number.isInteger(right) || left + right !== pending.total) return false;
+      pendingNumberAllocation = null;
+      elements.allocationBox.classList.remove("active");
+      state.mode = "attack";
+      pending.resolve({ left, right });
+      render();
+      return true;
+    }
+
+    async function chooseThemeV153(player) {
+      let theme;
+      if (player === "human") {
+        const chosen = await showGameChoicePanel({
+          title: "題目を選択",
+          message: "この試合で使用する題目を選んでください。",
+          choices: [
+            { key: "serenade", id: "serenadeTheme" },
+            { key: "rondo", id: "rondoTheme" }
+          ]
+        });
+        theme = chosen?.key === "rondo" ? "rondo" : "serenade";
+      } else {
+        const rondos = state.hands[player].filter(id => CARD_LIBRARY[id]?.rondo).length + state.decks[player].filter(id => CARD_LIBRARY[id]?.rondo).length;
+        theme = rondos >= 3 ? "rondo" : "serenade";
+      }
+      state.selectedTheme[player] = theme;
+      ensureThemeAttachments(player);
+      state.temp[player].cardExtraUses = Number(state.temp[player].cardExtraUses || 0) + 1;
+      addLog(`${handNames[player]}は「題目：${theme === "rondo" ? "ロンド" : "セレナーデ"}」を選択した。`);
+      render();
+      return true;
+    }
+
+    async function useFermataV153(player) {
+      drawCard(player);
+      const extra = player === "human"
+        ? await showGameConfirmation({ title: "フェルマータ", message: "もう1枚引き、ターンを終了しますか？", confirmLabel: "もう1枚引く", cancelLabel: "このまま続ける" })
+        : state.hands[player].length < 4;
+      if (extra) {
+        drawCard(player);
+        state.pendingTerminalEnd[player] = true;
+      }
+      return true;
+    }
+
+    async function useDolorosoV153(player) {
+      const selected = await beginBoardHandSelection(player, { owners: [player], message: "Doloroso：0にする自分の手を選んでください。", cpuPick: items => [...items].sort((a,b)=>a.value-b.value)[0] });
+      if (!selected) return false;
+      state[player][selected.hand] = 0;
+      clearBrokenTraps(player);
+      for (let i = 0; i < 3; i++) drawCard(player);
+      render();
+      return true;
+    }
+
+    async function useAppassionatoV153(player) {
+      if (state.temp[player].appassionatoUsedThisTurn) return false;
+      const selected = await beginBoardHandSelection(player, { owners: [player], message: "Appassionato：0にする自分の手を選んでください。", cpuPick: items => [...items].sort((a,b)=>a.value-b.value)[0] });
+      if (!selected) return false;
+      state.temp[player].appassionatoUsedThisTurn = true;
+      state[player][selected.hand] = 0;
+      clearBrokenTraps(player);
+      state.temp[player].cardExtraUses = Number(state.temp[player].cardExtraUses || 0) + 2;
+      render();
+      return true;
+    }
+
+    async function useLacrimosaV153(player) {
+      const opponent = otherPlayer(player);
+      if (!(state[player].L > 0 || state[player].R > 0) || state[opponent].L <= 0 || state[opponent].R <= 0) return false;
+      const own = await beginBoardHandSelection(player, { owners: [player], message: "Lacrimosa：0にする自分の手を選んでください。", cpuPick: items => items[0] });
+      if (!own) return false;
+      state[player][own.hand] = 0;
+      clearBrokenTraps(player);
+      const target = await beginBoardHandSelection(player, { owners: [opponent], message: "Lacrimosa：0にする相手の手を選んでください。", cpuPick: items => [...items].sort((a,b)=>b.value-a.value)[0] });
+      if (!target) return false;
+      state[opponent][target.hand] = 0;
+      clearBrokenTraps(opponent);
+      render();
+      return true;
+    }
+
+    async function useRequiemV153(player) {
+      const selected = await beginBoardHandSelection(player, { owners: [player], message: "Requiem：0にする自分の手を選んでください。", cpuPick: items => items[0] });
+      if (!selected) {
+        state.pendingTerminalEnd[player] = true;
+        return false;
+      }
+      state[player][selected.hand] = 0;
+      clearBrokenTraps(player);
+      const opponent = otherPlayer(player);
+      const fixedIndexes = state.hands[opponent].map((id,index)=>({id,index})).filter(item=>!isProtectedHandCard(item.id)).map(item=>item.index);
+      await discardFixedHandCardsByEffect(opponent, fixedIndexes, "「Requiem」");
+      state.pendingTerminalEnd[player] = true;
+      render();
+      return true;
+    }
+
+    async function usePortamentoV153(player) {
+      const selected = await beginBoardHandSelection(player, { owners: [player], message: "ポルタメント：増やす自分の手を選んでください。", cpuPick: items => [...items].sort((a,b)=>b.value-a.value)[0] });
+      return selected ? resolvePortamento(player, selected.hand) : false;
+    }
+
+    async function useDissonanceV153(player) {
+      const selected = await beginBoardHandSelection(player, { owners: [player], message: "ディソナンス：攻撃に使う自分の手を選んでください。", cpuPick: items => [...items].sort((a,b)=>b.value-a.value)[0] });
+      return selected ? resolveDissonance(player, selected.hand) : false;
+    }
+
+    async function useSforzandoV153(player) {
+      const selected = await beginBoardHandSelection(player, { owners: [player, otherPlayer(player)], message: "スフォルツァント：参照する0ではない手を選んでください。", cpuPick: items => [...items].sort((a,b)=>b.value-a.value)[0] });
+      return selected ? resolveSforzando(player, selected.owner, selected.hand) : false;
+    }
+
+    async function useArpeggioV153(player) {
+      const source = await beginBoardHandSelection(player, { owners: [player], message: "アルペジオ：元にする自分の手を選んでください。", cpuPick: items => [...items].sort((a,b)=>b.value-a.value)[0] });
+      if (!source) return false;
+      let left;
+      if (player === "human") {
+        const allocation = await showNumberAllocation({ title: `アルペジオ：${source.value}本を相手の左右へ割り振ってください。`, total: source.value });
+        left = allocation.left;
+      } else {
+        const opponent = otherPlayer(player);
+        const winning = Array.from({length: source.value + 1}, (_, value) => value).find(value => normalize(state[opponent].L + value, opponent, "L") === 0 && normalize(state[opponent].R + source.value - value, opponent, "R") === 0);
+        left = winning ?? Math.floor(source.value / 2);
+      }
+      return resolveArpeggio(player, source.hand, left);
+    }
+
+    async function useFullHeartV153(player) {
+      if (!state.hands[player].length) return false;
+      let indexes;
+      if (player === "human") {
+        indexes = await beginHandCardSelection({
+          min: 1,
+          max: state.hands.human.length,
+          filter: id => !isProtectedHandCard(id),
+          message: "満ちる心：捨てる手札を選び、決定してください。"
+        });
+      } else {
+        indexes = state.hands[player].map((_, index) => index).filter(index => !isProtectedHandCard(state.hands[player][index])).slice(0, Math.max(1, Math.ceil(state.hands[player].length / 2)));
+      }
+      if (!indexes.length) return false;
+      const count = indexes.length;
+      for (const index of [...indexes].sort((a,b)=>b-a)) await discardHandCardByEffect(player, index);
+      await discardRandomCards(otherPlayer(player), count, "「満ちる心」");
+      return true;
+    }
+
     function chooseMultipleMagicalCards(title, guide, items, minimum = 1) {
       return new Promise(resolve => {
         const overlay = ensureMagicalChoiceOverlay();
@@ -8136,7 +8583,7 @@ function wrapFinger(value) {
     async function useFadedCreed(player){const c=["L","R"].filter(h=>state[player][h]>0);if(!c.length)return false;await addFingersWithCalculation(player,c[randomIndex(c.length)],1,"色褪せた信条");state.temp[player].fadedCreedGuard=true;}
     function beginBetrayedHeart(player){state.temp[player].betrayedHeartPenalty=true;if(player==="human"){state.mode="magicalBetrayedHeart";setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");}else{const c=["L","R"].filter(h=>state[player][h]>0);if(c.length)addFingersWithCalculation(player,c[randomIndex(c.length)],1,"裏切られた心");}}
     async function useEmptyHeart(player){const n=state.hands[player].length;while(state.hands[player].length)await discardHandCardByEffect(player,0);state.pendingMagicalHeartDraw=state.pendingMagicalHeartDraw||{human:0,cpu:0};state.pendingMagicalHeartDraw[player]=(state.pendingMagicalHeartDraw[player]||0)+n;}
-    async function useFullHeart(player){if(!state.hands[player].length)return false;let idx=[];if(player==="human"){const raw=prompt(state.hands[player].map((id,i)=>`${i+1}. ${CARD_LIBRARY[id]?.name||id}`).join("\n"),"1");idx=[...new Set(String(raw||"").split(",").map(x=>Number(x.trim())-1).filter(i=>i>=0&&i<state.hands[player].length))];}else idx=state.hands[player].map((_,i)=>i).slice(0,Math.max(1,Math.ceil(state.hands[player].length/2)));if(!idx.length)return false;idx.sort((a,b)=>b-a);for(const i of idx)await discardHandCardByEffect(player,i);await discardRandomCards(otherPlayer(player),idx.length,"「満ちる心」");return true;}
+    async function useFullHeart(player){return useFullHeartV153(player);}
     const MAGICAL_CORE_MAP = {
       magicalHatred: "magicalLove",
       magicalDespair: "magicalJustice",
@@ -8701,20 +9148,21 @@ function wrapFinger(value) {
         if (candidates.length) {
           const picked = candidates[randomIndex(candidates.length)];
           state.discard[player].splice(picked.index, 1);
-          state.hands[player].push(picked.id);
-          addLog(`${handNames[player]}の「回収弾」効果。捨て札の「${CARD_LIBRARY[picked.id].name}」を手札に加えた。`);
+          state.decks[player].push(picked.id);
+          shuffle(state.decks[player]);
+          addLog(`${handNames[player]}の「回収弾」効果。捨て札の「${CARD_LIBRARY[picked.id].name}」を山札へ戻してシャッフルした。`);
         } else addLog(`${handNames[player]}の「回収弾」効果。回収できる別の弾はなかった。`);
       } else if (cardId === "reducedLoadBullet") {
-        const alive = ["L", "R"].filter(hand => state[player][hand] > 0);
-        if (alive.length) {
-          const max = Math.max(...alive.map(hand => state[player][hand]));
-          const targets = alive.filter(hand => state[player][hand] === max);
+        const eligible = ["L", "R"].filter(hand => state[player][hand] >= 2);
+        if (eligible.length) {
+          const max = Math.max(...eligible.map(hand => state[player][hand]));
+          const targets = eligible.filter(hand => state[player][hand] === max);
           const hand = targets[randomIndex(targets.length)];
           const before = state[player][hand];
           state[player][hand] = Math.max(0, before - 1);
           addLog(`${handNames[player]}の「減装弾」効果。${handNames[hand]}を${before}→${state[player][hand]}。`);
           clearBrokenTraps(player);
-        } else addLog(`${handNames[player]}の「減装弾」効果は、0ではない手がないため不発。`);
+        } else addLog(`${handNames[player]}の「減装弾」効果は、2本以上ある手がないため不発。`);
       } else if (cardId === "tracerBullet") {
         const count = Math.min(3, state.decks[player].length);
         const topStart = state.decks[player].length - count;
@@ -8906,7 +9354,7 @@ function wrapFinger(value) {
       const targets = deckGunIds().filter(id => id !== sourceId);
       if (!CARD_LIBRARY[sourceId]?.gun || !targets.length) return false;
       const options = targets.map((id, i) => `${i + 1}. ${CARD_LIBRARY[id].name}`).join("\n");
-      const picked = Number(prompt(`変化先の銃を選んでください。\n${options}`, "1")) - 1;
+      return chooseModulationSourceV153(index);
       if (!Number.isInteger(picked) || picked < 0 || picked >= targets.length) {
         setMessage("「変調」は変化先が選ばれなかったため不発。");
         state.pendingModulation = null;
@@ -8915,6 +9363,19 @@ function wrapFinger(value) {
         return false;
       }
       return resolveModulation("human", index, targets[picked]);
+    }
+
+    async function chooseModulationSourceV153(index) {
+      if (state.mode !== "modulationSource") return false;
+      const sourceId = state.hands.human[index];
+      const targets = deckGunIds().filter(id => id !== sourceId);
+      if (!CARD_LIBRARY[sourceId]?.gun || !targets.length) return false;
+      const chosen = await showGameChoicePanel({
+        title: "変調：変化先を選択",
+        message: `「${CARD_LIBRARY[sourceId].name}」とは異なる銃を選んでください。`,
+        choices: targets.map(id => ({ key: id, id }))
+      });
+      return chosen ? resolveModulation("human", index, chosen.key) : false;
     }
 
     async function beginFanning(player) {
@@ -9445,6 +9906,8 @@ function renderLastAction() {
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
         const gunAmmoDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "gunAmmoDiscard";
         const modulationSourceMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "modulationSource";
+        const handCardSelectionMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "handCardSelection";
+        const boardOrNumberSelectionMode = state.mode === "boardHandSelection" || state.mode === "numberAllocation";
         const cityWillMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "cityWillChoose";
         const advanceNoticeMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "advanceNoticeChoose";
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
@@ -9472,6 +9935,8 @@ function renderLastAction() {
           !rapidFireDiscardMode &&
           !gunAmmoDiscardMode &&
           !modulationSourceMode &&
+          !handCardSelectionMode &&
+          !boardOrNumberSelectionMode &&
           !cityWillMode &&
           !advanceNoticeMode &&
           !restrictedByCost &&
@@ -9484,6 +9949,8 @@ function renderLastAction() {
           !rapidFireDiscardMode &&
           !gunAmmoDiscardMode &&
           !modulationSourceMode &&
+          !handCardSelectionMode &&
+          !boardOrNumberSelectionMode &&
           !cityWillMode &&
           !advanceNoticeMode &&
           !restrictedByCost &&
@@ -9496,6 +9963,8 @@ function renderLastAction() {
         const rapidDiscardPlayable = rapidFireDiscardMode && getRapidFireDiscardCandidates("human").some(item => item.index === index);
         const gunAmmoPlayable = gunAmmoDiscardMode && state.pendingGunEffect && getGunAmmoCandidates("human", state.pendingGunEffect.excludedIndex).some(item => item.index === index);
         const modulationPlayable = modulationSourceMode && CARD_LIBRARY[cardId]?.gun && deckGunIds().some(id => id !== cardId);
+        const handCardSelectable = handCardSelectionMode && !!pendingHandCardSelection?.eligible.has(index);
+        const handCardSelected = handCardSelectionMode && !!pendingHandCardSelection?.selected.has(index);
         const cityWillPlayable = cityWillMode && isDirectiveCard(cardId);
         const advanceNoticePlayable = advanceNoticeMode && getAdvanceNoticeCandidates("human").some(item => item.index === index);
         const selected = state.selectedTrapCardIndex === index;
@@ -9508,12 +9977,12 @@ function renderLastAction() {
           (card.magicalEvolution ? " magical-evolution-card" : "") +
           (normalPlayable ? " playable" : "") +
           (trapPlayable ? " trap-playable" : "") +
-          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || gunAmmoPlayable || modulationPlayable || cityWillPlayable || advanceNoticePlayable ? " playable" : "") +
-          (selected ? " selected-card" : "") +
+          (discardPlayable || calmDiscardPlayable || rapidDiscardPlayable || gunAmmoPlayable || modulationPlayable || cityWillPlayable || advanceNoticePlayable || handCardSelectable ? " playable" : "") +
+          (selected || handCardSelected ? " selected-card" : "") +
           (displaySettings.compactCardDescriptions ? " compact-description-card" : "");
         div.innerHTML = `
           <div class="card-title">
-            <span class="card-name">${escapeHtml(cardId === "performance" ? `演舞 Lv.${getPerformanceLevel("human")}` : card.name)}</span>
+            <span class="card-name">${escapeHtml(cardId === "performance" ? `演舞${performanceLevelLabel(getPerformanceLevel("human"))}` : card.name)}</span>
           </div>
           <div class="card-label-row">
             <span class="card-type${isTrap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
@@ -9548,7 +10017,10 @@ function renderLastAction() {
           div.addEventListener("click", () => chooseGunAmmoDiscard(index));
         }
         if (modulationPlayable) {
-          div.addEventListener("click", () => chooseModulationSource(index));
+          div.addEventListener("click", () => chooseModulationSourceV153(index));
+        }
+        if (handCardSelectable) {
+          div.addEventListener("click", () => toggleHandCardSelection(index));
         }
         if (cityWillPlayable) {
           div.addEventListener("click", () => transferDirective("human", index));
@@ -10548,7 +11020,12 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 
     function isResonanceAttack(attacker, attackHand, defender, targetHand) {
       if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
-      return Math.abs(state[attacker][attackHand] - state[defender][targetHand]) <= resonanceThreshold(attacker, attackHand);
+      return isResonanceAttackAtStart(attacker, attackHand, state[attacker][attackHand], state[defender][targetHand]);
+    }
+
+    function isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower) {
+      if (attackStartPower <= 0 || targetStartPower <= 0) return false;
+      return Math.abs(attackStartPower - targetStartPower) <= resonanceThreshold(attacker, attackHand);
     }
 
     function resonanceAttackBonus(attacker, attackHand, resonance, immutable = false) {
@@ -10657,6 +11134,18 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       return { completedAttacks, attackLimit, hasRemainingAttack };
     }
 
+    async function resolveInternalNormalAttack({attackerPlayer,attackerHand,targetPlayer,targetHand,allowZeroTarget=false,sourceCardId=null,afterResolved=null}) {
+      return await attack(attackerPlayer,attackerHand,targetPlayer,targetHand,{
+        countAttackAttempt:false,
+        cardInternalAttack:true,
+        allowZeroTarget,
+        sourceCardId,
+        sourceLabel:CARD_LIBRARY[sourceCardId]?.name||"内部通常攻撃",
+        preventTargetChange:true,
+        afterResolved
+      });
+    }
+
 async function attack(attacker, attackHand, defender, targetHand, options = {}) {
       if(state.startingRouletteActive)return false;
       if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
@@ -10671,7 +11160,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         freezeTutorialBattleToHumanTurn();
         return false;
       }
-      if (!isAlive(attacker, attackHand) || !isAlive(defender, targetHand)) return false;
+      if (!isAlive(attacker, attackHand) || (!options.allowZeroTarget && !isAlive(defender, targetHand))) return false;
 
       if (!options.preventTargetChange && hasAttachment(attacker, attackHand, "magicalWrath")) {
         const candidates = [
@@ -10719,6 +11208,16 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
 
+      const attackStartPower = state[attacker][attackHand];
+      let targetStartPower = state[defender][targetHand];
+      const prestoModifier = state.pendingPrestoAttack?.[attacker]
+        ? [1, 0, -1, -2][randomIndex(4)]
+        : null;
+      if (prestoModifier !== null) {
+        state.pendingPrestoAttack[attacker] = false;
+        addLog(`プレスト：攻撃補正 ${prestoModifier > 0 ? "+" : ""}${prestoModifier}`);
+      }
+
       state.animating = true;
       render();
 
@@ -10753,9 +11252,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const dischargeBonus=immutable ? 0 : (hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0);
       const balanceBladeBonus = immutable || !balanceBladeActive || !isBalanced(attacker) ? 0 : 2;
       const danceActive = !!state.temp[attacker]?.dance;
-      let resonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
+      let resonance = !danceActive && isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus);
+      const sforzandoBonus = immutable ? 0 : Number(state.sforzandoTurnBonus?.[attacker] || 0);
+      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus + sforzandoBonus);
       state.temp[attacker].attackBonus = 0;
       const immutableBlockedIncrease = immutable && (
         positiveCardBonus > 0 ||
@@ -10771,6 +11271,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         (state.temp[attacker].dimensionalSlashBonus||0) > 0 ||
         (hasAttachment(attacker,attackHand,"dischargeBlessing") && getChargeLevel(attacker)>=10) ||
         frenzyActive || rationalPowerActive || selfRighteousActive || justiceForEveryoneActive || balanceBladeActive ||
+        Number(state.sforzandoTurnBonus?.[attacker] || 0) > 0 ||
         (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo")))
       );
       if (immutableBlockedIncrease) {
@@ -10787,6 +11288,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、攻撃力+2。`);
       if (balanceBladeBonus) addLog(`${handNames[attacker]}の「均衡の刃」により、攻撃力+2。`);
       if (justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、攻撃力+1。`);
+      if (sforzandoBonus) addLog(`${handNames[attacker]}の「スフォルツァント」により、攻撃で与える本数+${sforzandoBonus}。`);
       if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
       if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
       if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
@@ -10888,7 +11390,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       if (trapResult.targetHand) {
         targetHand = trapResult.targetHand;
-        const redirectedResonance = !danceActive && isResonanceAttack(attacker, attackHand, defender, targetHand);
+        targetStartPower = state[defender][targetHand];
+        const redirectedResonance = !danceActive && isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
         const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, immutable);
         if (redirectedBonus !== resonanceBonus) {
           power = Math.max(1, power + redirectedBonus - resonanceBonus);
@@ -10930,6 +11433,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         addLog(`${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}により、攻撃力+${duelSurgeBonus}。`);
       }
+      if (prestoModifier !== null) {
+        power += prestoModifier;
+        context = { defender, targetHand, attacker, attackHand, incomingPower: power };
+      }
 
       if (trapResult.cancelAttack) {
         if (state.temp[attacker].lightningZeroAtFive) {
@@ -10948,7 +11455,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
-      if (!isAlive(defender, targetHand)) {
+      if (!options.allowZeroTarget && !isAlive(defender, targetHand)) {
         addLog(`攻撃対象が0になっていたため、攻撃は失敗した。`);
         state.animating = false;
         clearHighlights();
@@ -10973,7 +11480,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
-      if (power <= 0) {
+      if (power <= 0 && prestoModifier === null) {
         addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
         state.animating = false;
         clearHighlights();
@@ -10983,13 +11490,16 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
       const before = state[defender][targetHand];
       const total = before + power;
-      const overflowWouldApply = total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
-      const guardWouldApply = total >= 5 && !overflowWouldApply && state.temp[defender].guard;
+      const reducingAttack = power < 0;
+      const overflowWouldApply = !reducingAttack && total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
+      const guardWouldApply = !reducingAttack && total >= 5 && !overflowWouldApply && state.temp[defender].guard;
       const lightningZeroActive = !!state.temp[attacker].lightningZeroAtFive;
       const berserkerZeroActive = state.berserkerTurns[attacker] > 0;
       let resolvedFinal;
 
-      if (berserkerZeroActive && total >= 7) {
+      if (reducingAttack) {
+        resolvedFinal = Math.max(0, total);
+      } else if (berserkerZeroActive && total >= 7) {
         resolvedFinal = 0;
         addLog(`「バーサーカー」により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過処理をせず0になった。`);
       } else if (defender === otherPlayer(attacker) && hasMagicalCourage(attacker) && total >= 7) {
@@ -11255,6 +11765,8 @@ async function endTurn() {
       state.noSplit[state.turn] = false;
       state.quarterRestActive[state.turn]=false;
       state.wholeRestActive[state.turn]=false;
+      state.activeDrawLock[state.turn]=false;
+      state.sforzandoTurnBonus[state.turn]=0;
       const next = state.turn === "human" ? "cpu" : "human";
 
       if (next === "cpu") {
@@ -11660,6 +12172,8 @@ async function endTurn() {
       addCard("lacrimosa",CARD_LIBRARY.lacrimosa.canPlay("cpu")?330:0,"Lacrimosa");
       addCard("morendo",180,"Morendo");
       addCard("grandioso",240,"Grandioso");
+      addCard("portamento",220,"ポルタメント");
+      addCard("presto",260,"プレスト");
       if (["L", "R"].some(h => state.human[h] === 4)) addCard("snipe", wouldCpuWinByZeroing(["L", "R"].find(h => state.human[h] === 4)) ? 10000 : 560, "狙撃");
       if (CARD_LIBRARY.equalTrade.canPlay("cpu")) addCard("equalTrade", 160 + (state.human.L >= 3 || state.human.R >= 3 ? 120 : 0), "等価交換");
       if (CARD_LIBRARY.doubleDouble.canPlay("cpu")) addCard("doubleDouble", 320 + (bestNormal?.score || 0) / 4, "追加行動");
@@ -11813,11 +12327,12 @@ async function endTurn() {
       if (state[player][attackHand] <= 0) return false;
 
       const targetHand = otherHand(attackHand);
-      const resolved = await attack(player, attackHand, player, targetHand, {
-        countAttackAttempt: false,
-        cardInternalAttack: true,
-        sourceLabel: "凶弾",
-        preventTargetChange: true,
+      const resolved = await resolveInternalNormalAttack({
+        attackerPlayer: player,
+        attackerHand: attackHand,
+        targetPlayer: player,
+        targetHand,
+        sourceCardId: "cursedBullet",
         afterResolved: async ({ total }) => {
           if (total === 5) await resolveCursedBulletBonus(player);
         }
@@ -12216,9 +12731,29 @@ async function endTurn() {
 
       if (state.gameOver || state.animating || state.turn !== "human") return;
 
+      if (state.mode === "boardHandSelection") {
+        if (!finishBoardHandSelection(owner, hand)) setMessage("ハイライトされた手を選んでください。");
+        return;
+      }
+
+      if(state.mode==="portamentoSource"){
+        if(owner!=="human"||state.human[hand]<=0){setMessage("ポルタメント：自分の0ではない手を選んでください。");return;}
+        await resolvePortamento("human",hand);return;
+      }
+
+      if(state.mode==="dissonanceSource"){
+        if(owner!=="human"||state.human[hand]<=0){setMessage("ディソナンス：攻撃に使う自分の0ではない手を選んでください。");return;}
+        await resolveDissonance("human",hand);return;
+      }
+
+      if(state.mode==="sforzandoTarget"){
+        if(!["human","cpu"].includes(owner)||state[owner][hand]<=0){setMessage("スフォルツァント：0ではない手を選んでください。");return;}
+        resolveSforzando("human",owner,hand);return;
+      }
+
       if(state.mode==="arpeggioSource"){
         if(owner!=="human"||state.human[hand]<=0){setMessage("アルペジオ：自分の0ではない手を選んでください。");return;}
-        const total=state.human[hand],left=Number(prompt(`左手へ割り振る本数を0～${total}で入力してください。`,String(Math.floor(total/2))));
+        const total=state.human[hand],allocation=await showNumberAllocation({title:`アルペジオ：${total}本を相手の左右へ割り振ってください。`,total}),left=allocation.left;
         if(!Number.isInteger(left)||left<0||left>total){setMessage("分配が不正なため選び直してください。");return;}
         await resolveArpeggio("human",hand,left);if(!state.gameOver){state.pendingTerminalEnd.human=false;await endTurn();}return;
       }
@@ -12617,6 +13152,11 @@ async function endTurn() {
       state.performanceLevel = { human: 0, cpu: 0 };
       state.resonanceTriggeredThisTurn = { human: false, cpu: false };
       state.usedRondoFamilies = { human: [], cpu: [] };
+      state.usedRondoCards = { human: [], cpu: [] };
+      state.pendingDrawLock = { human: false, cpu: false };
+      state.activeDrawLock = { human: false, cpu: false };
+      state.pendingPrestoAttack = { human: false, cpu: false };
+      state.sforzandoTurnBonus = { human: 0, cpu: 0 };
       state.pendingCanonHits = [];
       state.quarterRestPending = { human: 0, cpu: 0 };
       state.quarterRestActive = { human: false, cpu: false };
@@ -12992,6 +13532,10 @@ async function endTurn() {
 
     elements.splitLeft.addEventListener("change", () => syncSplitSelects("left"));
     elements.splitRight.addEventListener("change", () => syncSplitSelects("right"));
+    elements.allocationLeft.addEventListener("change", () => syncNumberAllocation("left"));
+    elements.allocationRight.addEventListener("change", () => syncNumberAllocation("right"));
+    elements.allocationConfirmBtn.addEventListener("click", finishNumberAllocation);
+    elements.handCardSelectionConfirmBtn.addEventListener("click", finishHandCardSelection);
 
     elements.confirmSplitBtn.addEventListener("click", async () => {
       if (tutorial.usingRealBattle && state.battleMode === "tutorial" && tutorial.expected === "confirmSplit") {
@@ -13041,9 +13585,9 @@ async function endTurn() {
       setMessage(`${state.editingDeckOwner === "human" ? "あなた用" : "CPU用"}デッキを初期状態に戻しました。`);
     });
 
-    elements.clearDeckBtn.addEventListener("click", () => {
+    elements.clearDeckBtn.addEventListener("click", async () => {
       const label = state.editingDeckOwner === "human" ? "あなた用" : "CPU用";
-      if (!window.confirm(`${label}デッキを空にしますか？ 保存スロットの内容は消えません。`)) return;
+      if (!await showGameConfirmation({title:"デッキを空にする",message:`${label}デッキを空にしますか？ 保存スロットの内容は消えません。`,confirmLabel:"空にする",cancelLabel:"変更しない"})) return;
       state.deckCounts[state.editingDeckOwner] = cloneValidDeckCounts({});
       persistCurrentDecks();
       renderDeckBuilder();
