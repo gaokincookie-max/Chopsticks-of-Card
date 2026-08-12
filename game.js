@@ -2146,7 +2146,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v155-directive-deus-vult";
 
     const UPDATE_NEWS = [
-      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTを宣告後にhitが進む演出順へ改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","指令関連のオンライン同期・UIを改善"]},
+      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンの遅延着弾を共通本数処理へ統合し、0の手も復活可能に変更","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
       {id:"v152-rondo-bullets-internal-attack",version:"v152",date:"2026-08-10",title:"輪舞曲・弾丸カード調整",summary:"輪舞曲と弾丸カードを調整し、内部通常攻撃の共通基盤を拡張しました。",featured:true,tags:["new","update"],items:["回収弾の回収先を山札へ変更","不発弾のコストを0へ変更し、減装弾の対象条件を調整","Lacrimosaに終端を追加","新輪舞曲「ポルタメント」「プレスト」を追加","演舞Ⅴ以上の強化形「ディソナンス」「スフォルツァント」を追加","凶弾と新カードで利用する内部通常攻撃処理を共通化"]},
@@ -2941,6 +2941,7 @@ const CARD_LIBRARY = {
       resetBtn: document.getElementById("resetBtn"),
       confirmSplitBtn: document.getElementById("confirmSplitBtn"),
       humanCards: document.getElementById("humanCards"),
+      directiveClearBadge: document.getElementById("directiveClearBadge"),
       humanDeckCount: document.getElementById("humanDeckCount"),
       cpuDeckCount: document.getElementById("cpuDeckCount"),
       handInfo: document.getElementById("handInfo"),
@@ -3090,6 +3091,25 @@ const CARD_LIBRARY = {
       ,directiveReformSuccess:{title:"指令：再編成",text:name=>`${name}はこのターン、最初の「分ける」の後も行動を続けられます。`,accent:"restriction-quarter-rest"}
       ,directiveAnnihilation:{title:"指令：殲滅",text:name=>`${name}はこのターン、自分の効果で相手の手が7以上になった時、その手を0にします。`,accent:"restriction-appassionato"}
     });
+
+    function cardUseLockRestrictionType(player) {
+      const source = state.activeCardUseLockSource?.[player] || "intemperance";
+      return source === "appassionato" ? "appassionato" : source === "directiveSilence" ? "directiveSilence" : "intemperance";
+    }
+
+    function getCardUseLockDisplayText(player) {
+      if (!state.activeIntemperanceCardLock?.[player]) return "";
+      const type = cardUseLockRestrictionType(player);
+      if (type === "appassionato") return "Appassionato：このターン使用不可";
+      if (type === "directiveSilence") return "指令：沈黙：このターン使用不可";
+      return "無節制：このターン使用不可";
+    }
+
+    function getCardUseLockMessage(player) {
+      const type = cardUseLockRestrictionType(player);
+      const source = type === "appassionato" ? "Appassionatoの反動" : type === "directiveSilence" ? "未達成の「指令：沈黙」" : "「無節制」の代償";
+      return `${getPlayerDisplayName(player, { includeYou: state.battleMode === "friend" })}は${source}により、このターンはカードを使用できません。`;
+    }
 
     async function showTurnRestrictionPopup({ targetPlayer, restrictionType, broadcast = true }) {
       const config = TURN_RESTRICTIONS[restrictionType];
@@ -3506,7 +3526,7 @@ const CARD_LIBRARY = {
         magicalChantCompleted: !!state.magicalChantCompleted?.[player],
         pendingAdvanceNotice: cloneJson(state.pendingAdvanceNotice?.[player] || []),
         activeDirectiveBlessing: Number(state.activeDirectiveBlessing?.[player]) || 0,
-        directiveTotalClears:Number(state.directiveTotalClears?.[player]||0),naturalFaithUses:Number(state.naturalFaithUses?.[player]||0),divineProofUsed:!!state.divineProofUsed?.[player],pendingDeusVult:!!state.pendingDeusVult?.[player],pendingDirectiveHandAttackModifier:cloneJson(state.pendingDirectiveHandAttackModifier?.[player]||{L:0,R:0}),pendingDirectiveNextAttackModifier:Number(state.pendingDirectiveNextAttackModifier?.[player]||0),pendingDirectiveReformContinue:!!state.pendingDirectiveReformContinue?.[player],activeDirectiveReformContinue:!!state.activeDirectiveReformContinue?.[player],pendingDirectiveNoSplit:!!state.pendingDirectiveNoSplit?.[player],pendingDirectiveAnnihilation:!!state.pendingDirectiveAnnihilation?.[player],activeDirectiveAnnihilation:!!state.activeDirectiveAnnihilation?.[player],pendingDirectiveAttackLimitDelta:Number(state.pendingDirectiveAttackLimitDelta?.[player]||0),
+        directiveTotalClears:Number(state.directiveTotalClears?.[player]||0),naturalFaithUses:Number(state.naturalFaithUses?.[player]||0),divineProofUsed:!!state.divineProofUsed?.[player],pendingDeusVult:!!state.pendingDeusVult?.[player],pendingDirectiveDraw:Number(state.pendingDirectiveDraw?.[player]||0),pendingDirectiveNoDraw:Number(state.pendingDirectiveNoDraw?.[player]||0),pendingDirectiveBonusDraw:Number(state.pendingDirectiveBonusDraw?.[player]||0),lastDirectiveClearCount:Number(state.lastDirectiveClearCount?.[player]||0),pendingDirectiveHandAttackModifier:cloneJson(state.pendingDirectiveHandAttackModifier?.[player]||{L:0,R:0}),pendingDirectiveNextAttackModifier:Number(state.pendingDirectiveNextAttackModifier?.[player]||0),pendingDirectiveReformContinue:!!state.pendingDirectiveReformContinue?.[player],activeDirectiveReformContinue:!!state.activeDirectiveReformContinue?.[player],pendingDirectiveNoSplit:!!state.pendingDirectiveNoSplit?.[player],pendingDirectiveAnnihilation:!!state.pendingDirectiveAnnihilation?.[player],activeDirectiveAnnihilation:!!state.activeDirectiveAnnihilation?.[player],pendingDirectiveAttackLimitDelta:Number(state.pendingDirectiveAttackLimitDelta?.[player]||0),
         pendingChargeStun: !!state.pendingChargeStun?.[player],
         pendingChargeStunSource: String(state.pendingChargeStunSource?.[player] || ""),
         lightSpeedCircuitUsed: !!state.lightSpeedCircuitUsed?.[player],
@@ -3603,7 +3623,7 @@ const CARD_LIBRARY = {
       if (state.magicalChantCompleted[player]) transformMagicalChantCards(player);
       state.pendingAdvanceNotice[player] = cloneJson(side.pendingAdvanceNotice || []);
       state.activeDirectiveBlessing[player] = Number(side.activeDirectiveBlessing) || 0;
-      state.directiveTotalClears[player]=Number(side.directiveTotalClears)||0;state.naturalFaithUses[player]=Number(side.naturalFaithUses)||0;state.divineProofUsed[player]=!!side.divineProofUsed;state.pendingDeusVult[player]=!!side.pendingDeusVult;state.pendingDirectiveHandAttackModifier[player]=cloneJson(side.pendingDirectiveHandAttackModifier||{L:0,R:0});state.pendingDirectiveNextAttackModifier[player]=Number(side.pendingDirectiveNextAttackModifier)||0;state.pendingDirectiveReformContinue[player]=!!side.pendingDirectiveReformContinue;state.activeDirectiveReformContinue[player]=!!side.activeDirectiveReformContinue;state.pendingDirectiveNoSplit[player]=!!side.pendingDirectiveNoSplit;state.pendingDirectiveAnnihilation[player]=!!side.pendingDirectiveAnnihilation;state.activeDirectiveAnnihilation[player]=!!side.activeDirectiveAnnihilation;state.pendingDirectiveAttackLimitDelta[player]=Number(side.pendingDirectiveAttackLimitDelta)||0;
+      state.directiveTotalClears[player]=Number(side.directiveTotalClears)||0;state.naturalFaithUses[player]=Number(side.naturalFaithUses)||0;state.divineProofUsed[player]=!!side.divineProofUsed;state.pendingDeusVult[player]=!!side.pendingDeusVult;state.pendingDirectiveDraw[player]=Number(side.pendingDirectiveDraw)||0;state.pendingDirectiveNoDraw[player]=Number(side.pendingDirectiveNoDraw)||0;state.pendingDirectiveBonusDraw[player]=Number(side.pendingDirectiveBonusDraw)||0;state.lastDirectiveClearCount[player]=Number(side.lastDirectiveClearCount)||0;state.pendingDirectiveHandAttackModifier[player]=cloneJson(side.pendingDirectiveHandAttackModifier||{L:0,R:0});state.pendingDirectiveNextAttackModifier[player]=Number(side.pendingDirectiveNextAttackModifier)||0;state.pendingDirectiveReformContinue[player]=!!side.pendingDirectiveReformContinue;state.activeDirectiveReformContinue[player]=!!side.activeDirectiveReformContinue;state.pendingDirectiveNoSplit[player]=!!side.pendingDirectiveNoSplit;state.pendingDirectiveAnnihilation[player]=!!side.pendingDirectiveAnnihilation;state.activeDirectiveAnnihilation[player]=!!side.activeDirectiveAnnihilation;state.pendingDirectiveAttackLimitDelta[player]=Number(side.pendingDirectiveAttackLimitDelta)||0;
       if (preserveOwnerOnlyMeta) {
         state.pendingChargeStun[player] = ownedPendingChargeStun;
         state.pendingChargeStunSource[player] = ownedPendingChargeStunSource;
@@ -4496,7 +4516,10 @@ const CARD_LIBRARY = {
         pendingPrestoAttack: false, sforzandoTurnBonus: 0,
         usedRondoFamilies: [], usedRondoCards: [], pendingDrawLock: false, activeDrawLock: false,
         quarterRestPending: false, quarterRestActive: false, wholeRestPending: false, wholeRestActive: false,
-        pendingCanonHits: [], furiosoSkipPending: false, furiosoSkipActive: false, personalTurnCount: 0
+        pendingCanonHits: [], furiosoSkipPending: false, furiosoSkipActive: false, personalTurnCount: 0,
+        directiveTotalClears:0,naturalFaithUses:0,divineProofUsed:false,pendingDeusVult:false,
+        pendingDirectiveDraw:0,pendingDirectiveNoDraw:0,pendingDirectiveBonusDraw:0,lastDirectiveClearCount:0,activeDirectiveBlessing:0,
+        pendingDirectiveHandAttackModifier:{L:0,R:0},pendingDirectiveNextAttackModifier:0,pendingDirectiveReformContinue:false,activeDirectiveReformContinue:false,pendingDirectiveNoSplit:false,pendingDirectiveAnnihilation:false,activeDirectiveAnnihilation:false,pendingDirectiveAttackLimitDelta:0
       });
       const createdAtMs = Date.now();
       const startingPlayer = decideFriendStartingPlayer();
@@ -4582,9 +4605,7 @@ const CARD_LIBRARY = {
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
-      state.pendingDirectiveDraw={human:0,cpu:0};state.pendingDirectiveNoDraw={human:0,cpu:0};state.pendingDirectiveBonusDraw={human:0,cpu:0};state.lastDirectiveClearCount={human:0,cpu:0};state.activeDirectiveBlessing={human:0,cpu:0};
-      state.directiveTotalClears={human:0,cpu:0};state.naturalFaithUses={human:0,cpu:0};state.divineProofUsed={human:false,cpu:false};state.pendingDeusVult={human:false,cpu:false};
-      state.pendingDirectiveHandAttackModifier={human:{L:0,R:0},cpu:{L:0,R:0}};state.pendingDirectiveNextAttackModifier={human:0,cpu:0};state.pendingDirectiveReformContinue={human:false,cpu:false};state.activeDirectiveReformContinue={human:false,cpu:false};state.pendingDirectiveNoSplit={human:false,cpu:false};state.pendingDirectiveAnnihilation={human:false,cpu:false};state.activeDirectiveAnnihilation={human:false,cpu:false};state.pendingDirectiveAttackLimitDelta={human:0,cpu:0};
+      resetDirectiveMatchState();
       state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
@@ -6315,6 +6336,12 @@ function wrapFinger(value) {
 
     const DIRECTIVE_BASE_IDS = ["directiveAttack", "directiveTarget", "directiveSilence", "directiveReform", "directiveAnnihilation", "directiveCombo", "directiveConstant"];
 
+    function resetDirectiveMatchState() {
+      state.pendingDirectiveDraw={human:0,cpu:0};state.pendingDirectiveNoDraw={human:0,cpu:0};state.pendingDirectiveBonusDraw={human:0,cpu:0};state.lastDirectiveClearCount={human:0,cpu:0};state.activeDirectiveBlessing={human:0,cpu:0};
+      state.directiveTotalClears={human:0,cpu:0};state.naturalFaithUses={human:0,cpu:0};state.divineProofUsed={human:false,cpu:false};state.pendingDeusVult={human:false,cpu:false};
+      state.pendingDirectiveHandAttackModifier={human:{L:0,R:0},cpu:{L:0,R:0}};state.pendingDirectiveNextAttackModifier={human:0,cpu:0};state.pendingDirectiveReformContinue={human:false,cpu:false};state.activeDirectiveReformContinue={human:false,cpu:false};state.pendingDirectiveNoSplit={human:false,cpu:false};state.pendingDirectiveAnnihilation={human:false,cpu:false};state.activeDirectiveAnnihilation={human:false,cpu:false};state.pendingDirectiveAttackLimitDelta={human:0,cpu:0};
+    }
+
     function isDirectiveCard(cardId) {
       return !!CARD_LIBRARY[cardId]?.directive;
     }
@@ -6694,14 +6721,17 @@ function wrapFinger(value) {
     function ensureDeusVultOverlay(){let el=document.getElementById("deusVultFx");if(!el){el=document.createElement("div");el.id="deusVultFx";el.className="deus-vult-fx";el.innerHTML='<div class="deus-vult-sub">神がそれを望まれる</div><div class="deus-vult-title">DEUS VULT</div><div class="deus-vult-line"></div>';document.body.appendChild(el);}return el;}
     function emitDeusVultPhase(phase,detail={}){document.dispatchEvent(new CustomEvent("deus-vult-phase",{detail:{phase,...detail}}));}
     async function beginDeusVultFx(){const el=ensureDeusVultOverlay();emitDeusVultPhase("start");el.classList.add("show");await delay(420);emitDeusVultPhase("title");await delay(480);}
-    async function pulseDeusVultHit(target,index){const local=target.player||target.playerSide;const handEl=local==="human"?elements[`human${target.hand}`]:elements[`cpu${target.hand}`];emitDeusVultPhase("hit",{index,target:{player:local,hand:target.hand}});handEl?.classList.add("deus-vult-hit");await delay(120);handEl?.classList.remove("deus-vult-hit");}
-    async function endDeusVultFx(){await delay(360);ensureDeusVultOverlay().classList.remove("show");emitDeusVultPhase("end");await delay(220);}
-    async function showDeusVultFx(targets=[]){await beginDeusVultFx();for(let i=0;i<targets.length;i++){await pulseDeusVultHit(targets[i],i);await delay(180);}await endDeusVultFx();}
+    async function pulseDeusVultHit(target,index){const local=target.player||target.playerSide;const handEl=local==="human"?elements[`human${target.hand}`]:elements[`cpu${target.hand}`];emitDeusVultPhase("hit",{index,target:{player:local,hand:target.hand}});handEl?.classList.add("deus-vult-hit");await delay(180);handEl?.classList.remove("deus-vult-hit");}
+    function deusVultHitInterval(hitCount){return hitCount<=5?650:hitCount<=10?575:475;}
+    async function endDeusVultFx(){await delay(360);ensureDeusVultOverlay().classList.remove("show");emitDeusVultPhase("overlay-end");await delay(400);}
+    async function showDeusVultFx(targets=[]){await beginDeusVultFx();await endDeusVultFx();const interval=deusVultHitInterval(targets.length);for(let i=0;i<targets.length;i++){await pulseDeusVultHit(targets[i],i);await delay(interval);}emitDeusVultPhase("end");}
     async function useDeusVult(player){
       const total=Number(state.directiveTotalClears[player]||0);const hits=Math.floor(total/2);const targets=[];
       await beginDeusVultFx();
-      for(let i=0;i<hits;i++){const candidates=[];for(const owner of [player,otherPlayer(player)])for(const hand of ["L","R"])if(state[owner][hand]>0)candidates.push({player:owner,hand});if(!candidates.length)break;const picked=candidates[Math.floor(Math.random()*candidates.length)];targets.push(picked);await pulseDeusVultHit(picked,i);await addFingersWithCalculation(picked.player,picked.hand,1,"DEUS VULT");await delay(180);if(checkWin())break;}
       await endDeusVultFx();
+      const interval=deusVultHitInterval(hits);
+      for(let i=0;i<hits;i++){const candidates=[];for(const owner of [player,otherPlayer(player)])for(const hand of ["L","R"])if(state[owner][hand]>0)candidates.push({player:owner,hand});if(!candidates.length)break;const picked=candidates[Math.floor(Math.random()*candidates.length)];targets.push(picked);await pulseDeusVultHit(picked,i);await addFingersWithCalculation(picked.player,picked.hand,1,"DEUS VULT");await delay(interval);if(checkWin())break;}
+      emitDeusVultPhase("end");
       if(state.battleMode==="friend"&&!state.friendApplyingRemoteState)await emitFriendFx("deusVult",{sourceSide:friendSideForLocalPlayer(player),totalClears:total,targets:targets.map(t=>({playerSide:friendSideForLocalPlayer(t.player),hand:t.hand}))}).catch(error=>console.error("PVP DEUS VULT fx failed",error));
       state.pendingTerminalEnd[player]=true;return true;
     }
@@ -7364,7 +7394,7 @@ function wrapFinger(value) {
       if (state.activeIntemperanceCardLock[player]) {
         await showTurnRestrictionPopup({
           targetPlayer: player,
-          restrictionType: state.activeCardUseLockSource[player] === "appassionato" ? "appassionato" : state.activeCardUseLockSource[player] === "directiveSilence" ? "directiveSilence" : "intemperance"
+          restrictionType: cardUseLockRestrictionType(player)
         });
       }
       if(state.noSplit[player])await showTurnRestrictionPopup({targetPlayer:player,restrictionType:"directiveReform"});
@@ -7529,8 +7559,9 @@ function wrapFinger(value) {
       }
 
       if (state.activeIntemperanceCardLock[player]) {
-        addLog(`${handNames[player]}は「無節制」の代償により、このターンはカードを使用できない。`);
-        setMessage(`${handNames[player]}は「無節制」の代償で、このターンはカードを使用できません。`);
+        const lockMessage = getCardUseLockMessage(player);
+        addLog(lockMessage);
+        setMessage(lockMessage);
         render();
       }
 
@@ -7576,7 +7607,7 @@ function wrapFinger(value) {
 
       if (player === "human") {
         setMessage(state.activeIntemperanceCardLock.human
-          ? "あなたの番です。「無節制」の代償により、このターンはカードを使用できません。"
+          ? getCardUseLockMessage("human")
           : state.noSplit.human
             ? "あなたの番です。固定の効果で、このターンは分けるを選べません。"
           : accelerationTriggered
@@ -7586,7 +7617,7 @@ function wrapFinger(value) {
               : "あなたの番です。カードを使うか罠を伏せてから、攻撃か分けるを選べます。");
       } else {
         const cpuName=getPlayerDisplayName("cpu");
-        setMessage(state.activeIntemperanceCardLock.cpu ? `${cpuName}は「無節制」の代償により、このターンはカードを使用できません。` : state.noSplit.cpu ? `${cpuName}の番です。固定の効果で分けられません。` : accelerationTriggered ? `${cpuName}は過過加速中です。このターン${draws}枚ドローしました。` : noDrawTriggered ? `${cpuName}は過加速の反動でドローできません。` : `${cpuName}の番です。`);
+        setMessage(state.activeIntemperanceCardLock.cpu ? getCardUseLockMessage("cpu") : state.noSplit.cpu ? `${cpuName}の番です。固定の効果で分けられません。` : accelerationTriggered ? `${cpuName}は過過加速中です。このターン${draws}枚ドローしました。` : noDrawTriggered ? `${cpuName}は過加速の反動でドローできません。` : `${cpuName}の番です。`);
       }
 
       render();
@@ -8042,11 +8073,16 @@ function wrapFinger(value) {
       const card=CARD_LIBRARY[cardId];
       if(card?.rondo){const used=state.usedRondoCards[player]||[];if(used.includes(cardId))changePerformanceLevel(player,-1,"使用済みの輪舞曲を再使用");else{changePerformanceLevel(player,2,"初使用の輪舞曲");used.push(cardId);state.usedRondoCards[player]=used;}}
       else if(cardId!=="performance")changePerformanceLevel(player,-1,"非輪舞曲を使用");
+      render();
     }
     async function resolveCanonHitsForEndingPlayer(player){
       const due=state.pendingCanonHits.filter(x=>x.waitForPlayer===player);state.pendingCanonHits=state.pendingCanonHits.filter(x=>x.waitForPlayer!==player);
-      for(const hit of due){if(state[hit.defender][hit.targetHand]<=0){addLog("カノンは記録対象が0のため不発。");continue;}const before=state[hit.defender][hit.targetHand],total=before+hit.amount,finalValue=hit.amount<0?Math.max(0,total):wrapFinger(total);await animateCalculation(hit.defender,hit.targetHand,total,finalValue);state[hit.defender][hit.targetHand]=finalValue;addLog(`カノン着弾：${before}→${total}${total>=5||total<0?`→${finalValue}`:""}`);clearBrokenTraps(hit.defender);}
+      for(const hit of due) await addFingersWithCalculation(hit.defender,hit.targetHand,hit.amount,"カノン",false,{allowZeroTarget:true,sourcePlayer:hit.sourcePlayer});
       render();
+    }
+
+    function hasCanonHitsDueForEndingPlayer(player) {
+      return state.pendingCanonHits.some(hit => hit.waitForPlayer === player);
     }
 
     function ensureChantCinematicOverlay() {
@@ -10110,6 +10146,11 @@ function renderLastAction() {
       normalizeDirectiveCardsInHand("human");
       normalizeChargeHand("human");
       elements.humanCards.innerHTML = "";
+      const directiveClears = Math.max(0, Number(state.directiveTotalClears?.human || 0));
+      if (elements.directiveClearBadge) {
+        elements.directiveClearBadge.hidden = directiveClears < 1;
+        elements.directiveClearBadge.textContent = directiveClears > 0 ? `CLEAR ×${directiveClears}` : "";
+      }
 
       if (state.hands.human.length === 0) {
         elements.humanCards.innerHTML = `<p class="small">手札はありません。</p>`;
@@ -10191,6 +10232,11 @@ function renderLastAction() {
         const performanceEvolved =
           getPerformanceLevel("human") >= PERFORMANCE_EVOLUTION_LEVEL &&
           PERFORMANCE_LV5_EVOLUTION_MAP[cardId] === effectiveCardId;
+        const rondoUnused =
+          state.selectedTheme?.human === "rondo" &&
+          !!card?.rondo &&
+          effectiveCardId !== "performance" &&
+          !(state.usedRondoCards?.human || []).includes(effectiveCardId);
         const selected = state.selectedTrapCardIndex === index;
         const div = document.createElement("div");
         div.className =
@@ -10206,6 +10252,7 @@ function renderLastAction() {
           (selected || handCardSelected ? " selected-card" : "") +
           (displaySettings.compactCardDescriptions ? " compact-description-card" : "");
         div.innerHTML = `
+          ${rondoUnused ? '<span class="rondo-unused-mark" aria-label="未使用の輪舞曲" title="初使用の輪舞曲">♪</span>' : ''}
           <div class="card-title">
             <span class="card-name">${escapeHtml(cardId === "performance" ? `演舞${performanceLevelLabel(getPerformanceLevel("human"))}` : card.name)}</span>
           </div>
@@ -10216,7 +10263,7 @@ function renderLastAction() {
           ${displaySettings.compactCardDescriptions
             ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
             : `<div class="card-text">${cardId === "magicalChant" && effectiveCardId === "magicalChant" ? `<strong>詠唱進捗：${Number(state.magicalChantProgress?.human || 0)}/3</strong><br>${escapeHtml(card.text)}` : card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
-          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? '<div class="used">無節制：このターン使用不可</div>' : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
+          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
               ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
@@ -10879,8 +10926,9 @@ function renderLastAction() {
       }
       if (state.activeIntemperanceCardLock?.[player]) {
         if (player === "human") {
-          setMessage("「無節制」の代償により、このターンはカードを使用できません。");
-          await showPopup(player, "無節制の代償", "このターンはカードを使用できません。", "intemperance-lock", 900, true);
+          const restriction = TURN_RESTRICTIONS[cardUseLockRestrictionType(player)];
+          setMessage(getCardUseLockMessage(player));
+          await showPopup(player, restriction.title, restriction.text(getPlayerDisplayName(player, { includeYou: state.battleMode === "friend" })), "intemperance-lock", 900, true);
         }
         return false;
       }
@@ -10979,6 +11027,7 @@ function renderLastAction() {
 
       recordRondoUse(player, cardId);
       await card.effect(player);
+      if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") state.pendingTerminalEnd[player] = true;
       if(state.wholeRestActive?.[player]) state.temp[player].wholeRestCardUsed=true;
       triggerChemicalGeneration(player, cardId);
       checkWin();
@@ -11231,12 +11280,12 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       return result;
     }
 
-        async function addFingersWithCalculation(player, hand, amount, sourceLabel, ignoreGuard = false) {
-      if (amount <= 0 || state[player][hand] <= 0) return false;
+        async function addFingersWithCalculation(player, hand, amount, sourceLabel, ignoreGuard = false, options = {}) {
+      if (amount <= 0 || (!options.allowZeroTarget && state[player][hand] <= 0)) return false;
       const actual = ignoreGuard ? Math.max(1, amount) : applyGuardBlessingReduction(player, hand, amount, sourceLabel);
       const before = state[player][hand];
       const total = before + actual;
-      const directiveActor=state.turn;
+      const directiveActor=options.sourcePlayer || state.turn;
       const annihilationActive=!!state.activeDirectiveAnnihilation?.[directiveActor]&&player===otherPlayer(directiveActor);
       const finalValue=annihilationActive&&total>=7?0:normalize(total,player,hand);
       await animateCalculation(player, hand, total, finalValue);
@@ -11978,7 +12027,7 @@ async function endTurn() {
   if(state.selectedTheme?.[endingPlayer]==="serenade"&&!state.resonanceTriggeredThisTurn?.[endingPlayer]&&getPerformanceLevel(endingPlayer)>0)changePerformanceLevel(endingPlayer,-1,"共鳴なしのターン終了");
   if((state.personalTurnCount?.[endingPlayer]||0)===1){for(let i=state.hands[endingPlayer].length-1;i>=0;i--)if(state.hands[endingPlayer][i]==="themeSetting"){state.hands[endingPlayer].splice(i,1);state.discard[endingPlayer].push("themeSetting");addLog(`${handNames[endingPlayer]}の未使用の「題目設定」が最初のターン終了時に消滅した。`);}}
   if(state.temp[endingPlayer]?.lightSpeedCircuit){ setChargeLevel(endingPlayer,0); state.temp[endingPlayer].lightSpeedCircuit=false; addLog(`${handNames[endingPlayer]}の「光速回路」が終了し、充電が0になった。`); }
-      if (checkWin()) {
+      if (!hasCanonHitsDueForEndingPlayer(endingPlayer) && checkWin()) {
         render();
         return;
       }
@@ -11991,13 +12040,13 @@ async function endTurn() {
       elements.andanteBox?.classList.remove("active");
 
       await resolveDirectives(state.turn);
-      if (checkWin()) {
+      if (!hasCanonHitsDueForEndingPlayer(endingPlayer) && checkWin()) {
         render();
         return;
       }
 
       await resolveEndTurnCurses(state.turn);
-      if (checkWin()) {
+      if (!hasCanonHitsDueForEndingPlayer(endingPlayer) && checkWin()) {
         render();
         return;
       }
@@ -13453,9 +13502,7 @@ async function endTurn() {
       state.energyBarrier = { human: 0, cpu: 0 };
       state.pendingChargeTarget = null;
       state.pendingAdvanceNotice = { human: [], cpu: [] };
-      state.pendingDirectiveDraw={human:0,cpu:0};state.pendingDirectiveNoDraw={human:0,cpu:0};state.pendingDirectiveBonusDraw={human:0,cpu:0};state.lastDirectiveClearCount={human:0,cpu:0};state.activeDirectiveBlessing={human:0,cpu:0};
-      state.directiveTotalClears={human:0,cpu:0};state.naturalFaithUses={human:0,cpu:0};state.divineProofUsed={human:false,cpu:false};state.pendingDeusVult={human:false,cpu:false};
-      state.pendingDirectiveHandAttackModifier={human:{L:0,R:0},cpu:{L:0,R:0}};state.pendingDirectiveNextAttackModifier={human:0,cpu:0};state.pendingDirectiveReformContinue={human:false,cpu:false};state.activeDirectiveReformContinue={human:false,cpu:false};state.pendingDirectiveNoSplit={human:false,cpu:false};state.pendingDirectiveAnnihilation={human:false,cpu:false};state.activeDirectiveAnnihilation={human:false,cpu:false};state.pendingDirectiveAttackLimitDelta={human:0,cpu:0};
+      resetDirectiveMatchState();
       state.lightSpeedCircuitUsed = { human: false, cpu: false };
       state.pendingAndanteHand = null;
       state.pendingBalanceTarget = null;
