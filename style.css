@@ -3312,6 +3312,34 @@ body.tutorial-split-only #cpuR {
 .magical-happiness{--magic-bg:#fff0a8;--magic-glow:#ffd84b;color:#785d00!important}
 .magical-courage{--magic-bg:#d7f5df;--magic-glow:#5cdb8b;color:#21683c!important}
 
+/* v154: 演舞Ⅴ以上で強化中の輪舞曲 */
+.game-card.performance-evolved-card {
+  border-color: rgba(151, 231, 255, .95) !important;
+  box-shadow: 0 0 0 1px rgba(211, 248, 255, .7), 0 0 12px rgba(91, 210, 244, .55), 0 0 22px rgba(117, 222, 255, .2) !important;
+}
+
+.popup-card.turn-restriction {
+  border-color: var(--restriction-accent, #9edfff);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.18), 0 0 24px color-mix(in srgb, var(--restriction-accent, #9edfff) 55%, transparent);
+}
+.popup-card[data-restriction-accent="restriction-intemperance"] { --restriction-accent: #a879e8; }
+.popup-card[data-restriction-accent="restriction-appassionato"] { --restriction-accent: #c83e54; }
+.popup-card[data-restriction-accent="restriction-quarter-rest"] { --restriction-accent: #91aeca; }
+.popup-card[data-restriction-accent="restriction-whole-rest"] { --restriction-accent: #d8f4ff; }
+.popup-card[data-restriction-accent="restriction-prison"] { --restriction-accent: #6d7280; }
+.popup-card[data-restriction-accent="restriction-furioso"] { --restriction-accent: #f07745; }
+.popup-card[data-restriction-accent="restriction-berserker"] { --restriction-accent: #d93a3a; }
+
+/* v155: DEUS VULT — 静かな宣告 */
+.deus-vult-fx{position:fixed;inset:0;z-index:285;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,9,10,.94);color:#f8f7f1;opacity:0;pointer-events:none;transition:opacity .65s ease;filter:saturate(.65)}
+.deus-vult-fx.show{opacity:1}
+.deus-vult-sub{font-size:clamp(13px,2vw,20px);letter-spacing:.28em;color:#ddd7c2;margin-bottom:20px}
+.deus-vult-title{font-family:Georgia,"Times New Roman",serif;font-size:clamp(42px,9vw,104px);font-weight:500;letter-spacing:.13em;text-shadow:0 0 14px rgba(247,239,202,.22)}
+.deus-vult-line{width:min(62vw,620px);height:1px;margin-top:24px;background:linear-gradient(90deg,transparent,#e9dfb8,transparent);transform:scaleX(0);transition:transform .8s ease .35s}
+.deus-vult-fx.show .deus-vult-line{transform:scaleX(1)}
+.hand.deus-vult-hit,.hand-btn.deus-vult-hit{animation:deusVultPulse .18s ease-out}
+@keyframes deusVultPulse{50%{filter:brightness(1.8);box-shadow:0 0 18px rgba(255,247,211,.85)}}
+
 
 /* v101: brighter magical transformation */
 .magical-transform-fx {
