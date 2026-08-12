@@ -2024,6 +2024,7 @@ const CARD_LIBRARY = {
       revealedTrapIds: new Set(),
       noSplit: { human: false, cpu: false },
       extraActions: { human: 0, cpu: 0 },
+      activeExtraAction: { human: false, cpu: false },
       pendingAcceleration: { human: 0, cpu: 0 },
       activeAcceleration: { human: 0, cpu: 0 },
       pendingTerminalEnd: { human: false, cpu: false },
@@ -2146,7 +2147,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v155-directive-deus-vult";
 
     const UPDATE_NEWS = [
-      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
+      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","ダブルダブルの追加行動で2回目の攻撃ができず、乱闘経由で進行不能になる場合がある問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
       {id:"v152-rondo-bullets-internal-attack",version:"v152",date:"2026-08-10",title:"輪舞曲・弾丸カード調整",summary:"輪舞曲と弾丸カードを調整し、内部通常攻撃の共通基盤を拡張しました。",featured:true,tags:["new","update"],items:["回収弾の回収先を山札へ変更","不発弾のコストを0へ変更し、減装弾の対象条件を調整","Lacrimosaに終端を追加","新輪舞曲「ポルタメント」「プレスト」を追加","演舞Ⅴ以上の強化形「ディソナンス」「スフォルツァント」を追加","凶弾と新カードで利用する内部通常攻撃処理を共通化"]},
@@ -3452,6 +3453,7 @@ const CARD_LIBRARY = {
       if (!state.berserkerTurns || typeof state.berserkerTurns !== "object") state.berserkerTurns = { ...pairDefaults };
       if (!state.noSplit || typeof state.noSplit !== "object") state.noSplit = { human: false, cpu: false };
       if (!state.pendingTerminalEnd || typeof state.pendingTerminalEnd !== "object") state.pendingTerminalEnd = { human: false, cpu: false };
+      if (!state.activeExtraAction || typeof state.activeExtraAction !== "object") state.activeExtraAction = { human: false, cpu: false };
       if (!state.pendingIntemperanceCardLock || typeof state.pendingIntemperanceCardLock !== "object") state.pendingIntemperanceCardLock = { human: false, cpu: false };
       if (!state.activeIntemperanceCardLock || typeof state.activeIntemperanceCardLock !== "object") state.activeIntemperanceCardLock = { human: false, cpu: false };
       if (!state.pendingCardUseLockSource || typeof state.pendingCardUseLockSource !== "object") state.pendingCardUseLockSource = { human: "", cpu: "" };
@@ -3509,6 +3511,7 @@ const CARD_LIBRARY = {
         temp: cloneJson(state.temp[player]),
         noSplit: !!state.noSplit[player],
         extraActions: Number(state.extraActions[player] || 0),
+        activeExtraAction: !!state.activeExtraAction[player],
         pendingAcceleration: Number(state.pendingAcceleration[player] || 0),
         activeAcceleration: Number(state.activeAcceleration[player] || 0),
         pendingNoDraw: Number(state.pendingNoDraw?.[player] || 0),
@@ -3600,6 +3603,7 @@ const CARD_LIBRARY = {
       }
       state.noSplit[player] = !!side.noSplit;
       state.extraActions[player] = Number(side.extraActions || 0);
+      state.activeExtraAction[player] = !!side.activeExtraAction;
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
       state.activeAcceleration[player] = Number(side.activeAcceleration || 0);
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
@@ -7279,10 +7283,11 @@ function wrapFinger(value) {
     }
 
     function shouldAutoEndTurnForNoActions(player) {
+      if (state.activeExtraAction?.[player] || Number(state.extraActions?.[player] || 0) > 0) return false;
       const temp=state.temp?.[player]||{};
       const attackLimit=Math.max(0,Number(temp.attackLimit??1));
       const attacksUsed=Math.max(0,Number(temp.attacksUsed||0));
-      const hasNormalAttack=!state.wholeRestActive?.[player]&&Math.max(0,attackLimit-attacksUsed)>0;
+      const hasNormalAttack=canUseNormalAttackAction(player)&&Math.max(0,attackLimit-attacksUsed)>0;
       return !hasNormalAttack&&getNormallyPlayableHandCards(player).length===0;
     }
 
@@ -7379,6 +7384,7 @@ function wrapFinger(value) {
       clearHighlights();
 
       state.pendingTerminalEnd[player] = false;
+      state.activeExtraAction[player] = false;
       state.activeIntemperanceCardLock[player] = !!state.pendingIntemperanceCardLock[player];
       state.activeCardUseLockSource[player] = state.activeIntemperanceCardLock[player]
         ? (state.pendingCardUseLockSource[player] || "intemperance")
@@ -7721,7 +7727,7 @@ function wrapFinger(value) {
       const selectionLock = ["boardHandSelection", "handCardSelection", "numberAllocation"].includes(state.mode);
       const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver || selectionLock;
       const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
-      elements.attackBtn.disabled = lock || setupActive;
+      elements.attackBtn.disabled = lock || setupActive || !canUseNormalAttackAction("human");
       elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
       elements.drawBtn.disabled = lock || setupActive;
       elements.cancelBtn.disabled = lock && !setupActive;
@@ -10557,6 +10563,32 @@ function renderLastAction() {
       return getSplitOptions("human").length > 0;
     }
 
+    function isNormalAttackActionForbidden(player) {
+      return !!state.wholeRestActive?.[player] ||
+        !!state.furiosoSkipActive?.[player] ||
+        (state.temp[player]?.multiAttackSource === "Furioso" && Number(state.temp[player]?.attackLimit) === 0);
+    }
+
+    function canUseNormalAttackAction(player) {
+      if (isNormalAttackActionForbidden(player)) return false;
+      if (!["L", "R"].some(hand => isAlive(player, hand))) return false;
+      if (!["L", "R"].some(hand => isAlive(otherPlayer(player), hand))) return false;
+      const temp = state.temp[player] || {};
+      return Number(temp.attacksUsed || 0) < Number(temp.attackLimit ?? 1) || !!state.activeExtraAction?.[player];
+    }
+
+    function canUseSplitAction(player) {
+      return !state.noSplit?.[player] && Number(state.berserkerTurns?.[player] || 0) <= 0 && getSplitOptions(player).length > 0;
+    }
+
+    function consumeActiveExtraAction(player) {
+      if (!state.activeExtraAction?.[player]) return false;
+      state.activeExtraAction[player] = false;
+      state.extraActions[player] = Math.max(0, Number(state.extraActions[player] || 0) - 1);
+      if (state.temp?.[player]) state.temp[player].extraActionJustConsumed = true;
+      return true;
+    }
+
     function getSplitOptions(player) {
       const total = state[player].L + state[player].R;
       const currentL = state[player].L;
@@ -11400,13 +11432,19 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 
     async function completeNormalAttackAttempt(attacker) {
       const attackerTemp = state.temp[attacker];
+      const usedExtraAction = !!state.activeExtraAction?.[attacker];
+      if (usedExtraAction) {
+        state.activeExtraAction[attacker] = false;
+        state.extraActions[attacker] = Math.max(0, Number(state.extraActions[attacker] || 0) - 1);
+        attackerTemp.extraActionJustConsumed = true;
+      }
       attackerTemp.attacksUsed = Number(attackerTemp.attacksUsed || 0) + 1;
 
       const completedAttacks = attackerTemp.attacksUsed;
       const attackLimit = Math.max(0, Number(attackerTemp.attackLimit ?? 1));
       const hasRemainingAttack = completedAttacks < attackLimit;
 
-      if (!hasRemainingAttack) {
+      if (!hasRemainingAttack || usedExtraAction) {
         state.pendingTerminalEnd[attacker] = true;
       }
 
@@ -11446,6 +11484,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 
 async function attack(attacker, attackHand, defender, targetHand, options = {}) {
       if(state.startingRouletteActive)return false;
+      if(!options.cardInternalAttack&&!canUseNormalAttackAction(attacker)){if(attacker==="human")setMessage("このターンは通常攻撃できません。");return false;}
       if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
       if(state.temp[attacker]?.multiAttackSource==="Furioso"&&Number(state.temp[attacker]?.attackLimit)===0&&!options.cardInternalAttack)return false;
       if(state.wholeRestActive?.[attacker]&&!options.cardInternalAttack){if(attacker==="human")setMessage("全休符により通常攻撃行動はできません。");return false;}
@@ -12019,6 +12058,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
       state[player].L = left;
       state[player].R = right;
+      const usedExtraAction = consumeActiveExtraAction(player);
+      if (usedExtraAction) state.pendingTerminalEnd[player] = true;
       if (state.temp[player]?.directiveActions) state.temp[player].directiveActions.splitUsed = true;
       addLog(`${handNames[player]}が分ける。${before} → ${left}-${right}`);
       clearBrokenTraps(player);
@@ -12063,6 +12104,8 @@ async function endTurn() {
     return;
   }
   const endingPlayer=state.turn;
+  state.activeExtraAction[endingPlayer]=false;
+  state.extraActions[endingPlayer]=0;
   if(state.selectedTheme?.[endingPlayer]==="serenade"&&!state.resonanceTriggeredThisTurn?.[endingPlayer]&&getPerformanceLevel(endingPlayer)>0)changePerformanceLevel(endingPlayer,-1,"共鳴なしのターン終了");
   if((state.personalTurnCount?.[endingPlayer]||0)===1){for(let i=state.hands[endingPlayer].length-1;i>=0;i--)if(state.hands[endingPlayer][i]==="themeSetting"){state.hands[endingPlayer].splice(i,1);state.discard[endingPlayer].push("themeSetting");addLog(`${handNames[endingPlayer]}の未使用の「題目設定」が最初のターン終了時に消滅した。`);}}
   if(state.temp[endingPlayer]?.lightSpeedCircuit){ setChargeLevel(endingPlayer,0); state.temp[endingPlayer].lightSpeedCircuit=false; addLog(`${handNames[endingPlayer]}の「光速回路」が終了し、充電が0になった。`); }
@@ -12560,7 +12603,7 @@ async function endTurn() {
     function chooseCpuMove() {
       const cfg = cpuConfig();
       const attacks = [];
-      const normalAttackAvailable=Number(state.temp.cpu?.attacksUsed||0)<Number(state.temp.cpu?.attackLimit??1);
+      const normalAttackAvailable=canUseNormalAttackAction("cpu");
       for (const a of (normalAttackAvailable?["L", "R"]:[]).filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
           const immutable = hasImmutableCurse("cpu", a);
@@ -12910,8 +12953,10 @@ async function endTurn() {
       const player = state.turn;
       const attackLimit = Number(state.temp[player]?.attackLimit ?? 1);
       const attacksUsed = state.temp[player]?.attacksUsed || 0;
+      const extraActionJustConsumed = !!state.temp[player]?.extraActionJustConsumed;
+      state.temp[player].extraActionJustConsumed = false;
 
-      if(state.activeDirectiveReformContinue?.[player]&&state.temp[player]?.directiveActions?.splitUsed&&!checkWin()){
+      if(!extraActionJustConsumed&&state.activeDirectiveReformContinue?.[player]&&state.temp[player]?.directiveActions?.splitUsed&&!checkWin()){
         state.activeDirectiveReformContinue[player]=false;
         state.mode="attack";
         elements.splitBox.classList.remove("active");
@@ -12920,7 +12965,7 @@ async function endTurn() {
         return;
       }
 
-      if (
+      if (!extraActionJustConsumed &&
         attackLimit > 1 &&
         attacksUsed > 0 &&
         attacksUsed < attackLimit &&
@@ -12962,13 +13007,20 @@ async function endTurn() {
       }
 
       if (state.extraActions[state.turn] > 0 && !checkWin()) {
-        state.extraActions[state.turn] -= 1;
+        state.activeExtraAction[state.turn] = true;
+        state.pendingTerminalEnd[state.turn] = false;
         state.selectedAttackHand = null;
         state.mode = "attack";
         elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
         setMessage(`${handNames[state.turn]}は追加行動できます。もう一度、攻撃か分けるを選んでください。`);
         render();
+        if (!canUseNormalAttackAction(state.turn) && !canUseSplitAction(state.turn)) {
+          addLog(`${handNames[state.turn]}は追加行動を行える選択肢がないため、追加行動を終了した。`);
+          consumeActiveExtraAction(state.turn);
+          await endTurn();
+          return;
+        }
         if (state.turn === "cpu") {
           await delay(500);
           await cpuExtraAction();
@@ -13427,7 +13479,7 @@ async function endTurn() {
       if (state.mode !== "attack") return;
 
       if (owner === "human") {
-        if(Number(state.temp.human?.attacksUsed||0)>=Number(state.temp.human?.attackLimit??1)){
+        if(!canUseNormalAttackAction("human")){
           setMessage("このターンは通常攻撃できません。");
           return;
         }
@@ -13493,6 +13545,7 @@ async function endTurn() {
       state.revealedTrapIds = new Set();
       state.noSplit = { human: false, cpu: false };
       state.extraActions = { human: 0, cpu: 0 };
+      state.activeExtraAction = { human: false, cpu: false };
       state.pendingAcceleration = { human: 0, cpu: 0 };
       state.activeAcceleration = { human: 0, cpu: 0 };
       state.pendingNoDraw = { human: 0, cpu: 0 };
