@@ -896,7 +896,7 @@ const CARD_LIBRARY = {
       },
       directiveTarget: {
         name: "指令：対象指定",
-        cost: 2,
+        cost: 1,
         type: "指令 / 使用不可",
         text: "このカードは使用できない。引いた時に攻撃する手と攻撃対象の手を指定する。ターン終了時、指定された組み合わせで攻撃していれば達成：カードを1枚引く。未達成：指定された自分の攻撃元の手に1本加える。内部通常攻撃も達成判定に含む。",
         directive: true,
@@ -918,9 +918,9 @@ const CARD_LIBRARY = {
         directive: true,
         canPlay: () => false
       },
-      directiveAnnihilation: { name:"指令：殲滅",cost:2,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に、自分の攻撃またはカード効果によって相手の手を1つ以上0にしていれば達成。達成：次の自分ターン中、自分の効果で相手の手が7以上になった時0にする。未達成：次の自分の攻撃で加える本数-1。",directive:true,canPlay:()=>false },
-      directiveCombo: { name:"指令：連撃",cost:2,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に2回以上攻撃していれば達成。内部通常攻撃も含む。達成：次の自分ターンの通常攻撃可能回数+1。未達成：次の自分ターンの通常攻撃可能回数-1（最低0）。",directive:true,canPlay:()=>false },
-      directiveConstant: { name:"指令：定数",cost:2,type:"指令 / 使用不可",text:"このカードは使用できない。引いた時に1～4を指定する。ターン終了時、相手のどちらかの手が指定値なら達成：カードを2枚引く。未達成：相手の0ではないランダムな手を指定値へ1近づける。",directive:true,canPlay:()=>false },
+      directiveAnnihilation: { name:"指令：殲滅",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に、自分の攻撃またはカード効果によって相手の手を1つ以上0にしていれば達成。達成：次の自分ターン中、自分の効果で相手の手が7以上になった時0にする。未達成：次の自分の攻撃で加える本数-1。",directive:true,canPlay:()=>false },
+      directiveCombo: { name:"指令：連撃",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に2回以上攻撃していれば達成。内部通常攻撃も含む。達成：次の自分ターンの通常攻撃可能回数+1。未達成：次の自分ターンの通常攻撃可能回数-1（最低0）。",directive:true,canPlay:()=>false },
+      directiveConstant: { name:"指令：定数",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。引いた時に1～4を指定する。ターン終了時、相手のどちらかの手が指定値なら達成：カードを2枚引く。未達成：相手の0ではないランダムな手を指定値へ1近づける。",directive:true,canPlay:()=>false },
       reinterpretation: { name:"再解釈",cost:1,type:"補助",text:"自分の手札にあるランダムな指定内容を持つ「指令」を1枚選ぶ。その指令の指定内容を一度だけ引き直す。",canPlay:player=>getReinterpretationCandidates(player).length>0,effect:player=>useReinterpretation(player) },
       naturalFaith: { name:"当然の信心",cost:2,type:"補助",text:"この試合中に達成した「指令」が5つ以上なら使用できる。このターン、自分の「指令」はすべて達成したものとして扱う。このカードを使用するたび、この試合中のこのカードの使用条件に必要な指令達成数を5増やす。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=5*(Number(state.naturalFaithUses?.[player]||0)+1),effect:player=>useNaturalFaith(player) },
       divineProof: { name:"神意の証明",cost:3,type:"補助",text:"この試合中に達成した「指令」が10以上なら使用できる。次の自分のターン開始時、「DEUS VULT」を1枚手札に加える。その後、自分の手札と山札にある「神意の証明」をすべて捨てる。この効果は1試合に1度しか発動できない。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=10&&!state.divineProofUsed?.[player],effect:player=>useDivineProof(player) },
@@ -1227,7 +1227,7 @@ const CARD_LIBRARY = {
       fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
       canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える本数と対象を記録し、次の相手ターン終了時に加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
-      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。この効果では1未満にならない。次の相手ターン中、相手はカードを引くことができない。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
+      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。最低0。次の相手ターン中、相手はカードを引くことができない。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
       arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useArpeggioV153(player) },
       wholeRest: { name:"全休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンの通常ドローと通常攻撃を封じ、手札から1枚使用後にターンを終了させる。",rondo:true,rondoFamily:"rest",token:true,canPlay:()=>true,effect:player=>useWholeRest(player) },
       agitato: { name:"Agitato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手は、それぞれ手札をランダムに1枚捨てる。",rondo:true,rondoFamily:"agitato",canPlay:()=>true,effect:player=>useAgitato(player) },
@@ -2146,7 +2146,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v155-directive-deus-vult";
 
     const UPDATE_NEWS = [
-      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTを宣告後にhitが進む演出順へ改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","指令関連のオンライン同期・UIを改善"]},
+      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTを宣告後にhitが進む演出順へ改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
       {id:"v152-rondo-bullets-internal-attack",version:"v152",date:"2026-08-10",title:"輪舞曲・弾丸カード調整",summary:"輪舞曲と弾丸カードを調整し、内部通常攻撃の共通基盤を拡張しました。",featured:true,tags:["new","update"],items:["回収弾の回収先を山札へ変更","不発弾のコストを0へ変更し、減装弾の対象条件を調整","Lacrimosaに終端を追加","新輪舞曲「ポルタメント」「プレスト」を追加","演舞Ⅴ以上の強化形「ディソナンス」「スフォルツァント」を追加","凶弾と新カードで利用する内部通常攻撃処理を共通化"]},
@@ -6335,6 +6335,7 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
+            cost: 1,
             name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
             text: `指定：${directiveHandLabel(hand)}手で攻撃。達成：その手の次の通常攻撃+1。未達成：その手の次の通常攻撃-1。`,
             directive: true,
@@ -6352,6 +6353,7 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveTarget,
+            cost: 1,
             name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
             text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を攻撃。達成：1枚引く。未達成：指定された自分の手に1本加える。`,
             directive: true,
@@ -6365,7 +6367,7 @@ function wrapFinger(value) {
       if (baseId === "directiveConstant") {
         const value = 1 + Math.floor(Math.random() * 4);
         const id = `directiveConstant_${value}${reinterpreted ? "_re" : ""}`;
-        if (!CARD_LIBRARY[id]) CARD_LIBRARY[id] = { ...CARD_LIBRARY.directiveConstant, name:`指令：定数［${value}］`, text:`指定：${value}。相手のどちらかの手が${value}なら達成：2枚引く。未達成：相手の生存手を${value}へ1近づける。`, directive:true,directiveBase:"directiveConstant",directiveData:{value,reinterpreted},token:true };
+        if (!CARD_LIBRARY[id]) CARD_LIBRARY[id] = { ...CARD_LIBRARY.directiveConstant, cost:1, name:`指令：定数［${value}］`, text:`指定：${value}。相手のどちらかの手が${value}なら達成：2枚引く。未達成：相手の生存手を${value}へ1近づける。`, directive:true,directiveBase:"directiveConstant",directiveData:{value,reinterpreted},token:true };
         return id;
       }
       return baseId;
@@ -6407,6 +6409,7 @@ function wrapFinger(value) {
         if (!CARD_LIBRARY[id]) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
+            cost: 1,
             name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
             text: `指定：${directiveHandLabel(hand)}手で攻撃。内部通常攻撃も可。達成：その手の次の通常攻撃+1。未達成：その手の次の通常攻撃-1。`,
             directive: true,
@@ -6422,6 +6425,7 @@ function wrapFinger(value) {
           if (!CARD_LIBRARY[id]) {
             CARD_LIBRARY[id] = {
               ...CARD_LIBRARY.directiveTarget,
+              cost: 1,
               name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
               text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を攻撃。内部通常攻撃も可。達成：1枚引く。未達成：指定された自分の手に1本加える。`,
               directive: true,
@@ -7872,7 +7876,7 @@ function wrapFinger(value) {
       const extra=player==="human"?await showGameConfirmation({title:"フェルマータ",message:"もう1枚引き、ターンを終了しますか？",confirmLabel:"もう1枚引く",cancelLabel:"このまま続ける"}):state.hands[player].length<4;
       if(extra){drawCard(player);state.pendingTerminalEnd[player]=true;}
     }
-    function useRitardando(player){const o=otherPlayer(player);for(const h of ["L","R"])if(state[o][h]>1)state[o][h]-=1;state.pendingDrawLock[o]=true;render();}
+    function useRitardando(player){const o=otherPlayer(player);for(const h of ["L","R"]){const before=state[o][h];if(before<=0)continue;state[o][h]=Math.max(0,before-1);if(state[o][h]===0)markDirectiveOpponentZero(player,o,before);}clearBrokenTraps(o);state.pendingDrawLock[o]=true;render();}
     function useQuarterRest(player){const o=otherPlayer(player);state.quarterRestPending[o]=true;state.quarterRestPending[player]=true;}
     function useWholeRest(player){const o=otherPlayer(player);state.wholeRestPending[o]=true;state.pendingStartDrawSkip[o]=true;}
 
