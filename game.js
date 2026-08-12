@@ -1225,7 +1225,7 @@ const CARD_LIBRARY = {
       rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"初めて使用する「輪舞曲」カードで「演舞」を2上げる。使用済みの「輪舞曲」の再使用、または輪舞曲ではないカードの使用で1下げる。変化前と変化後は別カードとして数える。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
       performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,token:true,canPlay:()=>false },
       fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
-      canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える本数と対象を記録し、次の相手ターン終了時に加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
+      canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃では罠を発動させず、対象と最終的に加える本数を記録する。その攻撃では本数を変化させず、次の相手ターン終了時、記録対象が0でなければ記録した本数を加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
       ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。最低0。次の相手ターン中、相手はカードを引くことができない。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
       arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useArpeggioV153(player) },
@@ -2146,7 +2146,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v155-directive-deus-vult";
 
     const UPDATE_NEWS = [
-      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンの遅延着弾を共通本数処理へ統合し、0の手も復活可能に変更","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
+      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
       {id:"v152-rondo-bullets-internal-attack",version:"v152",date:"2026-08-10",title:"輪舞曲・弾丸カード調整",summary:"輪舞曲と弾丸カードを調整し、内部通常攻撃の共通基盤を拡張しました。",featured:true,tags:["new","update"],items:["回収弾の回収先を山札へ変更","不発弾のコストを0へ変更し、減装弾の対象条件を調整","Lacrimosaに終端を追加","新輪舞曲「ポルタメント」「プレスト」を追加","演舞Ⅴ以上の強化形「ディソナンス」「スフォルツァント」を追加","凶弾と新カードで利用する内部通常攻撃処理を共通化"]},
@@ -8075,9 +8075,25 @@ function wrapFinger(value) {
       else if(cardId!=="performance")changePerformanceLevel(player,-1,"非輪舞曲を使用");
       render();
     }
+    async function applyResolvedFingerAddition(targetPlayer,targetHand,amount,sourceLabel="確定済み加算"){
+      if(state[targetPlayer][targetHand]<=0)return false;
+      const before=state[targetPlayer][targetHand];
+      const numericAmount=Number(amount)||0;
+      const total=before+numericAmount;
+      const finalValue=numericAmount<0?Math.max(0,total):wrapFinger(total);
+      await animateCalculation(targetPlayer,targetHand,total,finalValue);
+      state[targetPlayer][targetHand]=finalValue;
+      addLog(`${sourceLabel}：${handNames[targetPlayer]}の${handNames[targetHand]} ${before}→${total}${numericAmount>=0&&total>=5?`→${finalValue}`:""}。`);
+      clearBrokenTraps(targetPlayer);
+      render();
+      return true;
+    }
     async function resolveCanonHitsForEndingPlayer(player){
       const due=state.pendingCanonHits.filter(x=>x.waitForPlayer===player);state.pendingCanonHits=state.pendingCanonHits.filter(x=>x.waitForPlayer!==player);
-      for(const hit of due) await addFingersWithCalculation(hit.defender,hit.targetHand,hit.amount,"カノン",false,{allowZeroTarget:true,sourcePlayer:hit.sourcePlayer});
+      for(const hit of due){
+        if(state[hit.defender][hit.targetHand]<=0){addLog(`${handNames[hit.sourcePlayer]}の「カノン」は記録対象が0のため不発。`);continue;}
+        await applyResolvedFingerAddition(hit.defender,hit.targetHand,hit.amount,"カノン");
+      }
       render();
     }
 
@@ -11649,7 +11665,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       await animateAttackIntent(attacker, attackHand, defender, targetHand);
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
-      if (ignoresDefenderBoard || (defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
+      if (canonActive) {
+        addLog("「カノン」により、この通常攻撃では罠は発動しない。");
+      } else if (ignoresDefenderBoard || (defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
         addLog(state.temp[attacker].electromagneticAttack
           ? `${handNames[attacker]}の「電磁攻撃」により、相手の罠は発動しない。`
           : `${handNames[attacker]}の「強行突破」により、攻撃中の相手側の罠は発動できない。`);
@@ -11772,11 +11790,38 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
+      // 雷撃の3状態は同じ「次の攻撃」に属する。カノンも成立した通常攻撃なので、
+      // bonusだけをamountへ反映して残りを次の攻撃へ持ち越さない。
+      // ただし盤面結果を計算しないため、Lv.10の特殊0化そのものは発動させない。
+      if (canonActive) {
+        state.temp[attacker].lightningZeroAtFive = false;
+        state.temp[attacker].lightningNoChargeGain = false;
+      }
+
       if (power <= 0 && prestoModifier === null) {
         addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
         state.animating = false;
         clearHighlights();
         render();
+        await completeAttackAttempt();
+        return true;
+      }
+
+      // カノンは攻撃量と対象が確定した時点で結果だけを予約する。
+      // 実際の盤面を変更しないため、normalize・特殊0化・身構え・E=mc²などの
+      // 「本数を反映した結果」に依存する処理へは進まない。
+      if(canonActive){
+        if(power!==0){
+          state.pendingCanonHits.push({sourcePlayer:attacker,waitForPlayer:otherPlayer(attacker),defender,targetHand,amount:power});
+          addLog(`${handNames[attacker]}の「カノン」は${handNames[defender]}の${handNames[targetHand]}へ加える${power}本を記録した。`);
+        }else addLog(`${handNames[attacker]}の「カノン」は最終的に加える本数が0のため記録されなかった。`);
+        setLastAction(attacker,"カノン",`${handNames[attackHand]}による通常攻撃の対象と最終加算量${power}本を記録した。`,"card");
+        await resolveResonanceRewards(attacker,attackHand,resonance);
+        state.animating=false;
+        clearHighlights();
+        render();
+        if(state.battleMode==="friend"&&attacker==="human")await forcePublishFriendStateNow("canon result recorded");
+        if(checkWin()){render();await completeAttackAttempt();return true;}
         await completeAttackAttempt();
         return true;
       }
@@ -11810,17 +11855,11 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
 
-      if (canonActive) {
-        state.pendingCanonHits.push({ sourcePlayer: attacker, waitForPlayer: otherPlayer(attacker), defender, targetHand, amount: power });
-        resolvedFinal = before;
-        addLog(`${handNames[attacker]}の「カノン」は${handNames[defender]}の${handNames[targetHand]}へ加える${power}本を記録した。`);
-      }
-
       state.temp[attacker].lightningZeroAtFive = false;
-      await animateCalculation(defender, targetHand, total, resolvedFinal);
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
       resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃");
+      await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
       if(defender===otherPlayer(attacker)&&before>0&&resolvedFinal===0)state.temp[attacker].opponentZeroedThisTurn=true;
       if (guardWouldApply) state.temp[defender].guard = false;
@@ -11835,8 +11874,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           const afterResult = await triggerTrap(defender, chosenAfterManual, afterContext);
           trapUsed = true;
           if (afterResult.stopAtFour) {
-            state[defender][targetHand] = 4;
             resolvedFinal = 4;
+            state[defender][targetHand] = 4;
           }
         } else {
           const afterAuto = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "after", false, afterContext);
@@ -11853,11 +11892,11 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         `${handNames[attacker]}の${handNames[attackHand]}${basePower}本` +
         `${bonus > 0 ? `+${bonus}` : bonus < 0 ? `${bonus}` : ""}${berserkerBonus ? `+${berserkerBonus}` : ""}${blessingBonus ? `+${blessingBonus}` : ""}${recklessBonus ? `+${recklessBonus}` : ""}${resonanceBonus ? `+${resonanceBonus}` : ""}${cursePenalty ? `${cursePenalty}` : ""}${power !== Math.max(1, basePower + bonus + berserkerBonus + blessingBonus + recklessBonus + resonanceBonus + cursePenalty) ? `→${power}` : ""}で、` +
         `${handNames[defender]}の${handNames[targetHand]}を攻撃。` +
-        `${before}→${total}${total >= 5 ? `→${state[defender][targetHand]}` : ""}`
+        `${before}→${total}${total >= 5 ? `→${resolvedFinal}` : ""}`
       );
 
       const finalTargetWasOpponent = defender === otherPlayer(attacker);
-      const finalTargetWasZero = finalTargetWasOpponent && state[defender][targetHand] === 0;
+      const finalTargetWasZero = finalTargetWasOpponent && resolvedFinal === 0;
 
       if (selfRighteousActive && !finalTargetWasZero && state[attacker][attackHand] > 0) {
         await addFingersWithCalculation(attacker, attackHand, 2, "独善の反動");
@@ -11906,7 +11945,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
       if (typeof options.afterResolved === "function") {
-        await options.afterResolved({ attacker, attackHand, defender, targetHand, power, total, finalValue: state[defender][targetHand] });
+        await options.afterResolved({ attacker, attackHand, defender, targetHand, power, total, finalValue: resolvedFinal });
       }
 
       // オンラインでは最終攻撃結果を勝敗通知より先に送る。
@@ -11936,7 +11975,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         if (hasAttachment(attacker, attackHand, "mechanicalGeneration")) {
           gainCharge(attacker, power, "力学発電");
         }
-        if (state[defender][targetHand] === 0 && hasAttachment(attacker, attackHand, "bioticE")) {
+        if (resolvedFinal === 0 && hasAttachment(attacker, attackHand, "bioticE")) {
           gainCharge(attacker, power * 2, "バイオティックE");
         }
       } else if (damageChargeBlocked) {
