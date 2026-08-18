@@ -1976,7 +1976,7 @@ const CARD_LIBRARY = {
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
-      harpoonEmbed: { name:"銛を埋める",cost:1,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"このターンの次の通常攻撃後、その攻撃が命中し、最終的な攻撃対象の手が0でなく、設置ゾーンに空きがあるなら、その手に自分の「銛」をつける。",canPlay:()=>true,effect:(p)=>{state.temp[p].harpoonEmbed=true;} },
+      harpoonEmbed: { name:"銛を埋める",cost:1,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"このターンの次の通常攻撃の直前、最終的な攻撃対象の手の罠・加護・呪縛ゾーンに空きがあるなら、その手に自分の「銛」をつける。",canPlay:()=>true,effect:(p)=>{state.temp[p].harpoonEmbed=true;} },
       harpoon: { name:"銛",cost:0,type:"呪縛 / 生成カード・黄針",curse:true,token:true,harpoonTheme:true,text:"この手へ通常攻撃が命中するたび「銛-振動」を1増やす。そのターン最初の命中時のみ攻撃したプレイヤーは1枚引く。回収時、振動分を現在の付着先へ加える。" },
       harpoonThrow: { name:"銛投擲",cost:2,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、自分の「銛」をつける。設置ゾーンが埋まっている場合、ランダムに1枚を捨ててからつける。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>await chooseAndAttachHarpoon(p,true) },
       harpoonRecover: { name:"銛回収",cost:1,type:"終端 / 補助・黄針",terminal:true,harpoonTheme:true,text:"終端。自分が付与した銛を回収する。加算前の本数と実際に加える本数の合計が7以上なら、その手を0にする。",canPlay:p=>!!findOwnedHarpoon(p),effect:async p=>await recoverHarpoon(p,{sourceLabel:"銛回収",zeroAtSeven:true}) },
@@ -2159,7 +2159,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v156-harpoon-theme";
 
     const UPDATE_NEWS = [
-      {id:"v156-harpoon-theme",version:"v156",date:"2026-08-18",title:"新テーマ「黄針が刻む振動の果て」",summary:"銛を打ち込み、攻撃で振動を育てて回収する新テーマを追加しました。",featured:true,tags:["new","update"],items:["新カード9枚と生成カード「銛」を追加","銛付きの手へ通常攻撃を命中させると「銛-振動」が増加","そのターン最初の命中時に攻撃したプレイヤーが1枚ドロー","銛を回収すると蓄積した振動を現在の付着先へ一気に加算","移動しても振動を保持し、解呪など回収以外の除去では振動は発動しない"]},
+      {id:"v156-harpoon-theme",version:"v156",date:"2026-08-18",title:"新テーマ「黄針が刻む振動の果て」",summary:"銛を打ち込み、攻撃で振動を育てて回収する新テーマを追加しました。",featured:true,tags:["new","update","fix"],items:["新カード9枚と生成カード「銛」を追加","銛付きの手へ通常攻撃を命中させると「銛-振動」が増加","そのターン最初の命中時に攻撃したプレイヤーが1枚ドロー","銛を回収すると蓄積した振動を現在の付着先へ一気に加算","移動しても振動を保持し、解呪など回収以外の除去では振動は発動しない","「銛を埋める」を次の通常攻撃直前、対象変更後の最終対象へ付与するよう強化","friend戦で銛の所有者が反転する問題を修正し、回収演出を強化"]},
       {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","ダブルダブルの追加行動で2回目の攻撃ができず、乱闘経由で進行不能になる場合がある問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
@@ -3514,12 +3514,34 @@ const CARD_LIBRARY = {
       }
     }
 
+    function serializeFriendTraps(player) {
+      const traps = cloneJson(state.traps[player]);
+      if (!state.friendRole) return traps;
+      for (const hand of ["L", "R"]) for (const slot of traps[hand] || []) {
+        if (trapCardId(slot) !== "harpoon" || typeof slot !== "object") continue;
+        slot.ownerSide = friendSideForLocalPlayer(slot.owner);
+        delete slot.owner;
+      }
+      return traps;
+    }
+
+    function deserializeFriendTraps(rawTraps) {
+      const traps = cloneJson(rawTraps || { L: [], R: [] });
+      for (const hand of ["L", "R"]) for (const slot of traps[hand] || []) {
+        if (trapCardId(slot) !== "harpoon" || typeof slot !== "object") continue;
+        const canonicalOwner = slot.ownerSide || (["host", "guest"].includes(slot.owner) ? slot.owner : null);
+        if (canonicalOwner) slot.owner = localPlayerForFriendSide(canonicalOwner);
+        delete slot.ownerSide;
+      }
+      return traps;
+    }
+
     function serializeFriendSide(player) {
       ensureOnlineStateMaps();
       return {
         L: state[player].L,
         R: state[player].R,
-        traps: cloneJson(state.traps[player]),
+        traps: serializeFriendTraps(player),
         deck: [...state.decks[player]],
         hand: [...state.hands[player]],
         discard: [...state.discard[player]],
@@ -3605,7 +3627,7 @@ const CARD_LIBRARY = {
       const ownedCheapBatteryDecay = Number(state.cheapBatteryDecay?.[player]) || 0;
       const ownedEnergyBarrier = Number(state.energyBarrier?.[player]) || 0;
       state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
-      state.traps[player] = cloneJson(side.traps || { L: [], R: [] });
+      state.traps[player] = deserializeFriendTraps(side.traps);
       state.decks[player] = [...(side.deck || [])];
       state.hands[player] = [...(side.hand || [])];
       state.discard[player] = [...(side.discard || [])];
@@ -3844,6 +3866,11 @@ const CARD_LIBRARY = {
           await showMagicalChantStage(player, stage);
           if (payload.completed) await showMagicalChantComplete(player);
         }
+        return;
+      }
+      if(fx.type==="harpoonRecover"){
+        const player=localPlayerForFriendSide(payload.targetSide);
+        if(player&&["L","R"].includes(payload.hand)) await showHarpoonRecoveryFx(player,payload.hand,payload.vibration);
         return;
       }
       if(fx.type==="deusVult"){
@@ -7850,13 +7877,30 @@ function wrapFinger(value) {
       state.discard[player].splice(picked.index,1);state.decks[player].push(picked.id);shuffle(state.decks[player]);
       addLog(`${handNames[player]}は「${CARD_LIBRARY[picked.id].name}」を山札へ戻してシャッフルした。`);return true;
     }
+    async function showHarpoonRecoveryFx(player,hand,vibration){
+      const handElement=document.getElementById(`${player}${hand}`);
+      if(!handElement)return;
+      const slots=[...handElement.querySelectorAll(".harpoon-slot")];
+      const value=document.createElement("div");
+      value.className="harpoon-recovery-value";
+      value.textContent=`銛-振動:${Math.max(0,Number(vibration)||0)}`;
+      handElement.appendChild(value);
+      handElement.classList.add("harpoon-recovering");
+      slots.forEach(slot=>slot.classList.add("harpoon-recovering"));
+      await delay(300);
+      handElement.classList.add("harpoon-recovery-burst");
+      await delay(110);
+      handElement.classList.remove("harpoon-recovering","harpoon-recovery-burst");
+      slots.forEach(slot=>slot.classList.remove("harpoon-recovering"));
+      value.remove();
+    }
     async function recoverHarpoon(owner,{sourceLabel="銛回収",zeroAtSeven=false}={}){
       const info=findOwnedHarpoon(owner); if(!info){addLog(`「${sourceLabel}」は銛がなく不発。`);return {recovered:false,zeroed:false};}
       const vibration=Math.max(0,Number(info.slot.vibration)||0), before=state[info.player][info.hand];
-      const handElement=document.getElementById(`${info.player}${info.hand}`);
-      handElement?.classList.add("harpoon-recovering");
-      await delay(260);
-      handElement?.classList.remove("harpoon-recovering");
+      if(state.battleMode==="friend"&&!state.friendApplyingRemoteState){
+        await emitFriendFx("harpoonRecover",{targetSide:friendSideForLocalPlayer(info.player),hand:info.hand,vibration,sourceLabel});
+      }
+      await showHarpoonRecoveryFx(info.player,info.hand,vibration);
       state.traps[info.player][info.hand].splice(info.index,1);
       let zeroed=false;
       if(vibration>0&&before>0){
@@ -7873,7 +7917,6 @@ function wrapFinger(value) {
         if(info.slot.lastDrawTurnKey!==harpoonTurnKey()){info.slot.lastDrawTurnKey=harpoonTurnKey();drawCard(attacker);addLog(`${handNames[attacker]}は銛への初回命中で1枚引いた。`);}
       }
       if(isInternal)return;
-      if(state.temp[attacker].harpoonEmbed){state.temp[attacker].harpoonEmbed=false;if(state[defender][targetHand]>0)attachHarpoon(attacker,defender,targetHand);}
       const own=findOwnedHarpoonAt(attacker,defender,targetHand);
       if(state.temp[attacker].harpoonResonance){state.temp[attacker].harpoonResonance=false;if(own&&resonance){own.slot.vibration+=3;addLog(`「銛共鳴」により銛-振動+3。`);}}
       if(state.temp[attacker].doubleCarveHarpoon){
@@ -7881,6 +7924,11 @@ function wrapFinger(value) {
         if(own&&state[attacker][attackHand]>0&&state[defender][targetHand]>0) await resolveInternalNormalAttack({attackerPlayer:attacker,attackerHand:attackHand,targetPlayer:defender,targetHand,sourceCardId:"doubleCarveHarpoon"});
       }
       render();
+    }
+    function resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal=false}={}){
+      if(isInternal||!state.temp[attacker]?.harpoonEmbed)return false;
+      state.temp[attacker].harpoonEmbed=false;
+      return attachHarpoon(attacker,defender,targetHand);
     }
 
     const MAGICAL_EVOLUTION_MAP = {
@@ -11861,6 +11909,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
         await animateAttackIntent(attacker, attackHand, defender, targetHand);
       }
+
+      // 「銛を埋める」は対象変更後・攻撃結果確定前に最終対象へ付与する。
+      // この後に空振り等で無効化されても、付与済みの銛は残る。
+      resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
 
       if (tearSharpenedSwordActive) {
         discardAllBlessingsFromHand(defender, targetHand, "「涙で研ぎ澄まされた剣」");

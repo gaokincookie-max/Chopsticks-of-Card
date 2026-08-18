@@ -4369,12 +4369,36 @@ body.tutorial-split-only #cpuR {
   box-shadow: 0 0 9px rgba(246, 211, 92, .24);
   color: #fff3b3;
 }
-.harpoon-slot.harpoon-recovering, .hand.harpoon-recovering { animation: harpoon-recover .42s ease-in-out 2; }
-@keyframes harpoon-recover {
-  0%,100% { transform: translate(0,0); box-shadow: 0 0 8px rgba(246,211,92,.25); }
-  35% { transform: translate(-2px,1px); box-shadow: 0 0 16px rgba(255,226,113,.58); }
-  70% { transform: translate(2px,-1px); }
+.harpoon-slot.harpoon-recovering {
+  position: relative;
+  z-index: 4;
+  animation: harpoon-recover .34s ease-in-out infinite;
+  filter: brightness(1.35) drop-shadow(0 0 7px rgba(255,226,113,.9));
 }
+.hand.harpoon-recovering {
+  z-index: 3;
+  animation: harpoon-hand-glow .42s ease-in-out alternate infinite;
+}
+@keyframes harpoon-recover {
+  0%,100% { transform: translate(0,0) scale(1); box-shadow: 0 0 10px rgba(246,211,92,.35); }
+  20% { transform: translate(-2px,1px) scale(1.015); }
+  42% { transform: translate(2px,-1px) scale(1.03); box-shadow: 0 0 24px rgba(255,226,113,.92),0 0 38px rgba(224,169,35,.48); }
+  64% { transform: translate(-1px,-1px) scale(1.02); }
+  82% { transform: translate(1px,1px) scale(1.01); }
+}
+@keyframes harpoon-hand-glow {
+  from { box-shadow: 0 0 10px rgba(246,211,92,.2); }
+  to { box-shadow: 0 0 28px rgba(255,226,113,.58), inset 0 0 16px rgba(255,222,91,.14); }
+}
+.hand.harpoon-recovery-burst { box-shadow: 0 0 38px rgba(255,238,155,.85),0 0 64px rgba(224,169,35,.45) !important; }
+.harpoon-recovery-value {
+  position:absolute; z-index:8; left:50%; top:50%; transform:translate(-50%,-50%);
+  padding:5px 10px; border:1px solid rgba(255,240,166,.9); border-radius:999px;
+  color:#fff8c9; background:rgba(48,37,5,.9); font-weight:900; white-space:nowrap;
+  text-shadow:0 0 8px #ffd95a; box-shadow:0 0 20px rgba(255,218,78,.68);
+  animation:harpoon-value-focus .41s ease-out both;
+}
+@keyframes harpoon-value-focus { from{opacity:.25;transform:translate(-50%,-50%) scale(.82)} to{opacity:1;transform:translate(-50%,-50%) scale(1.12)} }
 .harpoon-release-card { border-color: rgba(246,211,92,.55); background: linear-gradient(145deg,#17170f,#28230f 58%,#111); }
 .harpoon-release-bg { position:absolute; inset:0; overflow:hidden; opacity:.42; pointer-events:none; }
 .harpoon-needle { position:absolute; width:5px; height:72%; left:50%; top:8%; background:linear-gradient(#fff8c9,#e5b82f); transform:rotate(24deg); box-shadow:0 0 18px rgba(246,211,92,.65); }
