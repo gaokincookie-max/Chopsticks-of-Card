@@ -4364,3 +4364,21 @@ body.tutorial-split-only #cpuR {
 .starting-roulette-result{min-height:1.7em;margin-top:18px;font-size:1.12rem;font-weight:800;color:#ffe082}
 @media(max-width:520px){.starting-roulette-card{padding:18px}.starting-roulette-stage{width:min(72vw,250px)}}
 @media(prefers-reduced-motion:reduce){.starting-roulette-overlay,.starting-roulette-wheel{transition-duration:1ms!important}}
+.harpoon-slot {
+  border-color: rgba(246, 211, 92, .78) !important;
+  box-shadow: 0 0 9px rgba(246, 211, 92, .24);
+  color: #fff3b3;
+}
+.harpoon-slot.harpoon-recovering, .hand.harpoon-recovering { animation: harpoon-recover .42s ease-in-out 2; }
+@keyframes harpoon-recover {
+  0%,100% { transform: translate(0,0); box-shadow: 0 0 8px rgba(246,211,92,.25); }
+  35% { transform: translate(-2px,1px); box-shadow: 0 0 16px rgba(255,226,113,.58); }
+  70% { transform: translate(2px,-1px); }
+}
+.harpoon-release-card { border-color: rgba(246,211,92,.55); background: linear-gradient(145deg,#17170f,#28230f 58%,#111); }
+.harpoon-release-bg { position:absolute; inset:0; overflow:hidden; opacity:.42; pointer-events:none; }
+.harpoon-needle { position:absolute; width:5px; height:72%; left:50%; top:8%; background:linear-gradient(#fff8c9,#e5b82f); transform:rotate(24deg); box-shadow:0 0 18px rgba(246,211,92,.65); }
+.harpoon-wave { position:absolute; width:180px; height:180px; left:calc(50% - 90px); top:calc(50% - 90px); border:1px solid rgba(255,226,113,.36); border-radius:50%; }
+.harpoon-wave.wave-two { transform:scale(1.55); opacity:.55; }
+.harpoon-release-bg i { position:absolute; width:4px; height:4px; border-radius:50%; background:#ffe67f; box-shadow:0 0 10px #ffe67f; }
+.harpoon-release-bg i:nth-of-type(1){left:25%;top:25%}.harpoon-release-bg i:nth-of-type(2){right:22%;top:42%}.harpoon-release-bg i:nth-of-type(3){left:38%;bottom:18%}

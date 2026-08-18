@@ -1975,7 +1975,17 @@ const CARD_LIBRARY = {
         text: "相手の手に表向きで置く。この手には新たに加護を置けない。すでに置かれている加護は残る。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
-      }
+      },
+      harpoonEmbed: { name:"銛を埋める",cost:1,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"このターンの次の通常攻撃後、その攻撃が命中し、最終的な攻撃対象の手が0でなく、設置ゾーンに空きがあるなら、その手に自分の「銛」をつける。",canPlay:()=>true,effect:(p)=>{state.temp[p].harpoonEmbed=true;} },
+      harpoon: { name:"銛",cost:0,type:"呪縛 / 生成カード・黄針",curse:true,token:true,harpoonTheme:true,text:"この手へ通常攻撃が命中するたび「銛-振動」を1増やす。そのターン最初の命中時のみ攻撃したプレイヤーは1枚引く。回収時、振動分を現在の付着先へ加える。" },
+      harpoonThrow: { name:"銛投擲",cost:2,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、自分の「銛」をつける。設置ゾーンが埋まっている場合、ランダムに1枚を捨ててからつける。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>await chooseAndAttachHarpoon(p,true) },
+      harpoonRecover: { name:"銛回収",cost:1,type:"終端 / 補助・黄針",terminal:true,harpoonTheme:true,text:"終端。自分が付与した銛を回収する。加算前の本数と実際に加える本数の合計が7以上なら、その手を0にする。",canPlay:p=>!!findOwnedHarpoon(p),effect:async p=>await recoverHarpoon(p,{sourceLabel:"銛回収",zeroAtSeven:true}) },
+      harpoonReuse: { name:"銛の再利用",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"自分の捨て札から、銛を付与する効果を持つカードをランダムに1枚山札へ戻し、山札をシャッフルする。",canPlay:()=>true,effect:p=>reuseHarpoonCard(p) },
+      strikeBack: { name:"打ち返す",cost:2,type:"罠 / 黄針",trap:true,manual:true,harpoonTheme:true,text:"この手が、自分の銛がついている相手の手から通常攻撃された時に発動できる。その銛を回収し、この攻撃で受ける本数を1減らす。",triggerTiming:"before",canTrigger:c=>!!findOwnedHarpoonAt(c.defender,c.attacker,c.attackHand),trigger:async c=>{await recoverHarpoon(c.defender,{sourceLabel:"打ち返す"});return{powerDelta:-1,allowZeroPower:true};} },
+      yellowWaspNeedle: { name:"黄蜂針",cost:3,type:"補助 / 黄針",harpoonTheme:true,text:"次の自分のターン開始時、自分が付与した銛を回収する。この回収によって相手の手を0にしたなら、カードを2枚引く。",canPlay:()=>true,effect:p=>{state.pendingYellowWaspNeedle[p]=true;} },
+      gungnir: { name:"グングニル",cost:3,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、設置ゾーンに空きがあるなら自分の「銛」をつける。このターン終了時、自分が付与した銛を回収する。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>{await chooseAndAttachHarpoon(p,false);state.pendingGungnirRecovery[p]=true;} },
+      doubleCarveHarpoon: { name:"二連削-銛",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"このターンの次の通常攻撃が、自分の銛がついている手へ命中したなら、解決後、同じ攻撃手で同じ手をもう一度通常攻撃する。",canPlay:()=>true,effect:p=>{state.temp[p].doubleCarveHarpoon=true;} },
+      harpoonResonance: { name:"銛共鳴",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"このターンの次の通常攻撃が、自分の銛がついている手へ命中し、その攻撃で共鳴したなら、その銛の振動を3増やす。",canPlay:()=>true,effect:p=>{state.temp[p].harpoonResonance=true;} }
     };
 
         const DECK_MIN_COUNT = 20;
@@ -2056,6 +2066,8 @@ const CARD_LIBRARY = {
       pendingPrestoAttack: { human: false, cpu: false },
       sforzandoTurnBonus: { human: 0, cpu: 0 },
       pendingCanonHits: [],
+      pendingYellowWaspNeedle: { human: false, cpu: false },
+      pendingGungnirRecovery: { human: false, cpu: false },
       quarterRestPending: { human: 0, cpu: 0 },
       quarterRestActive: { human: false, cpu: false },
       wholeRestPending: { human: false, cpu: false },
@@ -2143,10 +2155,11 @@ const CARD_LIBRARY = {
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
-    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v137";
-    const LATEST_NEWS_ID = "v155-directive-deus-vult";
+    const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
+    const LATEST_NEWS_ID = "v156-harpoon-theme";
 
     const UPDATE_NEWS = [
+      {id:"v156-harpoon-theme",version:"v156",date:"2026-08-18",title:"新テーマ「黄針が刻む振動の果て」",summary:"銛を打ち込み、攻撃で振動を育てて回収する新テーマを追加しました。",featured:true,tags:["new","update"],items:["新カード9枚と生成カード「銛」を追加","銛付きの手へ通常攻撃を命中させると「銛-振動」が増加","そのターン最初の命中時に攻撃したプレイヤーが1枚ドロー","銛を回収すると蓄積した振動を現在の付着先へ一気に加算","移動しても振動を保持し、解呪など回収以外の除去では振動は発動しない"]},
       {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","ダブルダブルの追加行動で2回目の攻撃ができず、乱闘経由で進行不能になる場合がある問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
@@ -3470,6 +3483,8 @@ const CARD_LIBRARY = {
       if (!state.naturalFaithUses) state.naturalFaithUses = { human: 0, cpu: 0 };
       if (!state.divineProofUsed) state.divineProofUsed = { human: false, cpu: false };
       if (!state.pendingDeusVult) state.pendingDeusVult = { human: false, cpu: false };
+      if (!state.pendingYellowWaspNeedle) state.pendingYellowWaspNeedle = { human:false,cpu:false };
+      if (!state.pendingGungnirRecovery) state.pendingGungnirRecovery = { human:false,cpu:false };
       if (!state.pendingDirectiveHandAttackModifier) state.pendingDirectiveHandAttackModifier = { human:{L:0,R:0}, cpu:{L:0,R:0} };
       if (!state.pendingDirectiveNextAttackModifier) state.pendingDirectiveNextAttackModifier = { human:0,cpu:0 };
       if (!state.pendingDirectiveReformContinue) state.pendingDirectiveReformContinue = { human:false,cpu:false };
@@ -3539,7 +3554,9 @@ const CARD_LIBRARY = {
         activeCostLimit: state.activeCostLimit[player] ?? null,
         berserkerTurns: Number(state.berserkerTurns[player] || 0),
         firstTurnStarted: !!state.firstTurnStarted[player],
-        pendingStartDrawSkip: !!state.pendingStartDrawSkip[player]
+        pendingStartDrawSkip: !!state.pendingStartDrawSkip[player],
+        pendingYellowWaspNeedle: !!state.pendingYellowWaspNeedle[player],
+        pendingGungnirRecovery: !!state.pendingGungnirRecovery[player]
         ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], usedRondoCards:[...(state.usedRondoCards[player]||[])], pendingDrawLock:!!state.pendingDrawLock[player], activeDrawLock:!!state.activeDrawLock[player], pendingPrestoAttack:!!state.pendingPrestoAttack[player], sforzandoTurnBonus:Number(state.sforzandoTurnBonus[player]||0), quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:cloneJson(state.pendingCanonHits), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
       };
     }
@@ -3611,6 +3628,8 @@ const CARD_LIBRARY = {
       state.pendingNoDraw[player] = Number(side.pendingNoDraw || 0);
       state.activeNoDraw[player] = Number(side.activeNoDraw || 0);
       state.pendingStartDrawSkip[player] = !!side.pendingStartDrawSkip;
+      state.pendingYellowWaspNeedle[player] = !!side.pendingYellowWaspNeedle;
+      state.pendingGungnirRecovery[player] = !!side.pendingGungnirRecovery;
       state.furiosoSkipPending[player]=!!side.furiosoSkipPending;state.furiosoSkipActive[player]=!!side.furiosoSkipActive;
       state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Math.max(0,Math.min(PERFORMANCE_MAX_LEVEL,Number(side.performanceLevel)||0));state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.usedRondoCards[player]=[...(side.usedRondoCards||[])];state.pendingDrawLock[player]=!!side.pendingDrawLock;state.activeDrawLock[player]=!!side.activeDrawLock;state.pendingPrestoAttack[player]=!!side.pendingPrestoAttack;state.sforzandoTurnBonus[player]=Math.max(0,Number(side.sforzandoTurnBonus)||0);state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=cloneJson(side.pendingCanonHits);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
@@ -6255,6 +6274,7 @@ function wrapFinger(value) {
           relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">演舞Ⅴ以上「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
         }
         if (["allegro", "resonanceTuning", "crescendo", "dance", "largo", "andante", "lastMelody"].includes(cardId)) relatedButtons.push('<button class="deck-inline-info" data-info="resonance">共鳴とは？</button>');
+        if (card.harpoonTheme && cardId !== "harpoon") relatedButtons.push('<button class="deck-inline-info" data-info="harpoon">銛とは？</button>');
         const relatedButton = relatedButtons.join("");
         row.innerHTML = `
           <div>
@@ -7357,6 +7377,12 @@ function wrapFinger(value) {
       state.turn = player;
       state.mode = "attack";
       state.selectedAttackHand = null;
+      if(state.pendingYellowWaspNeedle?.[player]){
+        state.pendingYellowWaspNeedle[player]=false;
+        const result=await recoverHarpoon(player,{sourceLabel:"黄蜂針"});
+        if(result.zeroed&&result.targetPlayer===otherPlayer(player)){drawCard(player);drawCard(player);addLog(`「黄蜂針」の回収で相手の手を0にしたため、${handNames[player]}は2枚引いた。`);}
+        if(checkWin())return;
+      }
       const reservedExecutions = Number(state.pendingAppealExecution?.[player] || 0);
       if (reservedExecutions > 0) {
         for (let i = 0; i < reservedExecutions; i++) state.hands[player].push("execution");
@@ -7744,7 +7770,7 @@ function wrapFinger(value) {
       updateSplitOptions();
     }
 
-    function makeTrapInstance(cardId) {
+    function makeTrapInstance(cardId, owner = null) {
       const instance = {
         id: `trap_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         cardId
@@ -7754,6 +7780,11 @@ function wrapFinger(value) {
         instance.level = 0;
         instance.duelTargetOwner = null;
         instance.duelTargetHand = null;
+      }
+      if (cardId === "harpoon") {
+        instance.owner = owner;
+        instance.vibration = 0;
+        instance.lastDrawTurnKey = "";
       }
       return instance;
     }
@@ -7781,6 +7812,75 @@ function wrapFinger(value) {
     function isAttachmentCard(cardId) {
       const card = CARD_LIBRARY[cardId];
       return !!(card?.trap || card?.blessing || card?.curse);
+    }
+
+    function harpoonTurnKey() { return `${state.turnNumber}:${state.turn}:${state.personalTurnCount?.[state.turn] || 0}`; }
+    function allHarpoons() {
+      const found=[];
+      for(const player of ["human","cpu"]) for(const hand of ["L","R"]) state.traps[player][hand].forEach((slot,index)=>{
+        if(trapCardId(slot)==="harpoon") found.push({player,hand,index,slot});
+      });
+      return found;
+    }
+    function findOwnedHarpoon(owner){ return allHarpoons().find(x=>x.slot?.owner===owner)||null; }
+    function findOwnedHarpoonAt(owner,player,hand){ return allHarpoons().find(x=>x.player===player&&x.hand===hand&&x.slot?.owner===owner)||null; }
+    function attachHarpoon(owner,targetPlayer,targetHand,{replaceRandom=false}={}){
+      if(findOwnedHarpoon(owner)||state[targetPlayer][targetHand]<=0) return false;
+      const slots=state.traps[targetPlayer][targetHand];
+      if(slots.length>=2){
+        if(!replaceRandom)return false;
+        const index=Math.floor(Math.random()*slots.length), removed=slots.splice(index,1)[0], id=trapCardId(removed);
+        if(id!=="harpoon") state.discard[targetPlayer].push(id);
+        addLog(`「銛投擲」により${handNames[targetPlayer]}の${handNames[targetHand]}の設置カード1枚が捨てられた。`);
+      }
+      slots.push(makeTrapInstance("harpoon",owner));
+      addLog(`${handNames[owner]}の「銛」が${handNames[targetPlayer]}の${handNames[targetHand]}についた。`);
+      render(); return true;
+    }
+    async function chooseAndAttachHarpoon(owner,replaceRandom){
+      if(findOwnedHarpoon(owner)){addLog(`${handNames[owner]}はすでに自分の銛を場に出しているため、新たな銛付与だけ不発。`);return false;}
+      const target=otherPlayer(owner);
+      const choice=await beginBoardHandSelection(owner,{owners:[target],allowZero:false,message:"銛をつける相手の手を選んでください。",cpuPick:cs=>cs[Math.floor(Math.random()*cs.length)]});
+      if(choice) attachHarpoon(owner,choice.owner,choice.hand,{replaceRandom});
+    }
+    function reuseHarpoonCard(player){
+      const candidates=state.discard[player].map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.harpoonAttach&&x.id!=="harpoon");
+      if(!candidates.length){addLog("「銛の再利用」は対象がなく不発。");return false;}
+      const picked=candidates[Math.floor(Math.random()*candidates.length)];
+      state.discard[player].splice(picked.index,1);state.decks[player].push(picked.id);shuffle(state.decks[player]);
+      addLog(`${handNames[player]}は「${CARD_LIBRARY[picked.id].name}」を山札へ戻してシャッフルした。`);return true;
+    }
+    async function recoverHarpoon(owner,{sourceLabel="銛回収",zeroAtSeven=false}={}){
+      const info=findOwnedHarpoon(owner); if(!info){addLog(`「${sourceLabel}」は銛がなく不発。`);return {recovered:false,zeroed:false};}
+      const vibration=Math.max(0,Number(info.slot.vibration)||0), before=state[info.player][info.hand];
+      const handElement=document.getElementById(`${info.player}${info.hand}`);
+      handElement?.classList.add("harpoon-recovering");
+      await delay(260);
+      handElement?.classList.remove("harpoon-recovering");
+      state.traps[info.player][info.hand].splice(info.index,1);
+      let zeroed=false;
+      if(vibration>0&&before>0){
+        await addFingersWithCalculation(info.player,info.hand,vibration,sourceLabel,false,{sourcePlayer:owner,zeroAtSeven});
+        zeroed=before>0&&state[info.player][info.hand]===0;
+      }
+      addLog(`${handNames[owner]}は${handNames[info.player]}の${handNames[info.hand]}から「銛-振動:${vibration}」を回収した。`);
+      render(); return {recovered:true,zeroed,targetPlayer:info.player,targetHand:info.hand};
+    }
+    async function resolveHarpoonAttackHit(attacker,attackHand,defender,targetHand,{resonance=false,isInternal=false}={}){
+      const hits=allHarpoons().filter(x=>x.player===defender&&x.hand===targetHand);
+      for(const info of hits){
+        info.slot.vibration=Math.max(0,Number(info.slot.vibration)||0)+1;
+        if(info.slot.lastDrawTurnKey!==harpoonTurnKey()){info.slot.lastDrawTurnKey=harpoonTurnKey();drawCard(attacker);addLog(`${handNames[attacker]}は銛への初回命中で1枚引いた。`);}
+      }
+      if(isInternal)return;
+      if(state.temp[attacker].harpoonEmbed){state.temp[attacker].harpoonEmbed=false;if(state[defender][targetHand]>0)attachHarpoon(attacker,defender,targetHand);}
+      const own=findOwnedHarpoonAt(attacker,defender,targetHand);
+      if(state.temp[attacker].harpoonResonance){state.temp[attacker].harpoonResonance=false;if(own&&resonance){own.slot.vibration+=3;addLog(`「銛共鳴」により銛-振動+3。`);}}
+      if(state.temp[attacker].doubleCarveHarpoon){
+        state.temp[attacker].doubleCarveHarpoon=false;
+        if(own&&state[attacker][attackHand]>0&&state[defender][targetHand]>0) await resolveInternalNormalAttack({attackerPlayer:attacker,attackerHand:attackHand,targetPlayer:defender,targetHand,sourceCardId:"doubleCarveHarpoon"});
+      }
+      render();
     }
 
     const MAGICAL_EVOLUTION_MAP = {
@@ -9950,7 +10050,9 @@ function wrapFinger(value) {
           `記録対象：${target}\n現在の効果：与える本数+${stats.attack} / 受ける本数-${stats.defense}\n` +
           `同じ対象を攻撃するとLv.${Math.min(5, level + 1)}。別の対象を攻撃するとLv.1。最大Lv.5。`;
       } else {
-        elements.attachmentDetailText.textContent = card.text;
+        elements.attachmentDetailText.textContent = cardId === "harpoon"
+          ? `${card.text}\n\n【銛とは】\n銛は設置ゾーンへ置く生成呪縛です。通常攻撃が最終的に命中するたび振動+1、同じターンの最初の命中時だけ攻撃側が1枚引きます。移動しても状態を保持し、回収時だけ現在位置へ振動分を加えます。解呪など通常除去では振動は発動せず、各プレイヤーは自分の銛を1本まで所有できます。`
+          : card.text;
       }
       elements.attachmentDetailModal.classList.add("show");
     }
@@ -9997,9 +10099,10 @@ function wrapFinger(value) {
             (card?.blessing ? " blessing-slot" : "") +
             (card?.magicalTransformed ? ` magical-transformed-slot magical-${card.magicalColor}` : "") +
             (card?.curse ? " curse-slot" : "") +
+            (cardId === "harpoon" ? " harpoon-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
           const kindInfo = attachmentKindInfo(card, { publiclyRevealed });
-          const displayName = cardId === "duelSurge" ? `${card.name} Lv.${Number(slot?.level) || 0}` : card.name;
+          const displayName = cardId === "duelSurge" ? `${card.name} Lv.${Number(slot?.level) || 0}` : cardId === "harpoon" ? `銛-振動:${Math.max(0,Number(slot?.vibration)||0)}` : card.name;
           div.textContent = hidden ? `伏せ${i + 1}` : `${kindInfo.symbol} ${displayName}`;
           div.title = hidden ? "伏せカード" : `${kindInfo.label}「${displayName}」：${card.text}`;
 
@@ -11335,7 +11438,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       const total = before + actual;
       const directiveActor=options.sourcePlayer || state.turn;
       const annihilationActive=!!state.activeDirectiveAnnihilation?.[directiveActor]&&player===otherPlayer(directiveActor);
-      const finalValue=annihilationActive&&total>=7?0:normalize(total,player,hand);
+      const finalValue=(options.zeroAtSeven&&total>=7)||annihilationActive&&total>=7?0:normalize(total,player,hand);
       await animateCalculation(player, hand, total, finalValue);
       state[player][hand] = finalValue;
       if(player===otherPlayer(directiveActor)&&before>0&&finalValue===0&&state.temp?.[directiveActor])state.temp[directiveActor].opponentZeroedThisTurn=true;
@@ -11730,7 +11833,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (typeof trapResult.powerDelta === "number") {
         const oldPower = power;
         const appliedPowerDelta = immutable && trapResult.powerDelta > 0 ? 0 : trapResult.powerDelta;
-        power = Math.max(1, power + appliedPowerDelta);
+        power = Math.max(trapResult.allowZeroPower ? 0 : 1, power + appliedPowerDelta);
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         if (immutable && trapResult.powerDelta > 0) {
           addLog(`「不変の呪縛」により、カード効果による攻撃力+${trapResult.powerDelta}を無効化した。`);
@@ -11837,7 +11940,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         state.temp[attacker].lightningNoChargeGain = false;
       }
 
-      if (power <= 0 && prestoModifier === null) {
+      if (power <= 0 && prestoModifier === null && state.temp[defender]?.knightCreed) {
         addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
         state.animating = false;
         clearHighlights();
@@ -11856,6 +11959,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }else addLog(`${handNames[attacker]}の「カノン」は最終的に加える本数が0のため記録されなかった。`);
         setLastAction(attacker,"カノン",`${handNames[attackHand]}による通常攻撃の対象と最終加算量${power}本を記録した。`,"card");
         await resolveResonanceRewards(attacker,attackHand,resonance);
+        await resolveHarpoonAttackHit(attacker,attackHand,defender,targetHand,{resonance,isInternal:!!options.cardInternalAttack});
         state.animating=false;
         clearHighlights();
         render();
@@ -11983,6 +12087,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
+      await resolveHarpoonAttackHit(attacker,attackHand,defender,targetHand,{resonance,isInternal:!!options.cardInternalAttack});
       if (typeof options.afterResolved === "function") {
         await options.afterResolved({ attacker, attackHand, defender, targetHand, power, total, finalValue: resolvedFinal });
       }
@@ -12104,6 +12209,11 @@ async function endTurn() {
     return;
   }
   const endingPlayer=state.turn;
+  if(state.pendingGungnirRecovery?.[endingPlayer]){
+    state.pendingGungnirRecovery[endingPlayer]=false;
+    await recoverHarpoon(endingPlayer,{sourceLabel:"グングニル"});
+    if(checkWin()){render();return;}
+  }
   state.activeExtraAction[endingPlayer]=false;
   state.extraActions[endingPlayer]=0;
   if(state.selectedTheme?.[endingPlayer]==="serenade"&&!state.resonanceTriggeredThisTurn?.[endingPlayer]&&getPerformanceLevel(endingPlayer)>0)changePerformanceLevel(endingPlayer,-1,"共鳴なしのターン終了");
@@ -13580,6 +13690,8 @@ async function endTurn() {
       state.pendingPrestoAttack = { human: false, cpu: false };
       state.sforzandoTurnBonus = { human: 0, cpu: 0 };
       state.pendingCanonHits = [];
+      state.pendingYellowWaspNeedle = { human:false,cpu:false };
+      state.pendingGungnirRecovery = { human:false,cpu:false };
       state.quarterRestPending = { human: 0, cpu: 0 };
       state.quarterRestActive = { human: false, cpu: false };
       state.wholeRestPending = { human: false, cpu: false };
