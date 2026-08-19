@@ -36,7 +36,7 @@ const CARD_LIBRARY = {
         name: "軽打",
         cost: 1,
         type: "補助",
-        text: "このターン、次の通常攻撃で攻撃する手の本数を-1して扱う。ただし攻撃力は1未満にならない。",
+        text: "このターン、次の通常攻撃で加える本数-1。ただし1未満にならない。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].attackBonus -= 1;
@@ -113,7 +113,7 @@ const CARD_LIBRARY = {
       },
       lightningStrike: {
         name: "雷撃", cost: 1, type: "補助 / 充電", chargeCard: true,
-        text: "充電5を消費。使用前の充電4につき、次の通常攻撃で与える本数+1。使用前がLv.10なら、その通常攻撃で超過計算前の合計が5以上になった時、あまりを計算せず0にする。充電不足なら不発。",
+        text: "充電5を消費。使用前の充電4につき、次の通常攻撃で加える本数+1。使用前がLv.10なら、その通常攻撃で超過計算前の合計が5以上になった時、あまりを計算せず0にする。充電不足なら不発。",
         canPlay: () => true,
         effect: (player) => {
           const before = getChargeLevel(player);
@@ -141,12 +141,12 @@ const CARD_LIBRARY = {
       },
       dischargeBlessing: {
         name: "放電の加護", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
-        text: "自分の充電5につき受ける本数-1。充電Lv.10なら、この手が与える本数+1。",
+        text: "自分の充電5につきこの手が受ける本数-1。充電Lv.10なら、この手の通常攻撃で加える本数+1。",
         canPlay: (player) => canPlaceAttachment(player,player)
       },
       synapseMotion: {
         name: "シナプス運動", cost: 2, type: "補助 / 充電", chargeCard: true,
-        text: "次の通常攻撃で与える本数+1。充電を4得る。", canPlay: () => true,
+        text: "次の通常攻撃で加える本数+1。充電を4得る。", canPlay: () => true,
         effect: (player) => { state.temp[player].synapseBonus=(state.temp[player].synapseBonus||0)+1; gainCharge(player,4,"シナプス運動"); }
       },
       lightSpeedCircuit: {
@@ -271,7 +271,7 @@ const CARD_LIBRARY = {
 
       dimensionalSlash: {
         name: "空間切断", cost: 3, type: "補助 / 充電", chargeCard: true,
-        text: "この効果は1ターンに1度しか発動できない。すでにこのターン発動している場合は不発。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で与える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
+        text: "この効果は1ターンに1度しか発動できない。すでにこのターン発動している場合は不発。充電5未満なら不発。充電5以上10未満なら充電5を消費し、自分の手を1つ0にして発動。充電10なら充電5を消費し、手を失わず発動。このターンの通常攻撃で加える本数+1。通常攻撃を2回行える。1回目の後は攻撃だけを選べる。",
         canPlay: (player) => !state.temp[player].dimensionalSlashUsed,
         effect: async (player) => {
           if (state.temp[player].dimensionalSlashUsed) {
@@ -350,7 +350,7 @@ const CARD_LIBRARY = {
         name: "決闘高潮",
         cost: 3,
         type: "加護",
-        text: "この加護が付いた手で同じ手を連続して通常攻撃するとLvが上がる。別の手を攻撃するとLv1になる。最大Lv5。Lvに応じて与える本数増加・受ける本数軽減を得る。別の自分の手による攻撃では変化しない。",
+        text: "この加護が付いた手で同じ手を連続して通常攻撃するとLvが上がる。別の手を攻撃するとLv1になる。最大Lv5。Lvに応じて通常攻撃で加える本数の増加・受ける本数の軽減を得る。別の自分の手による攻撃では変化しない。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -890,7 +890,7 @@ const CARD_LIBRARY = {
         name: "指令：指定攻撃",
         cost: 1,
         type: "指令 / 使用不可",
-        text: "このカードは使用できない。引いた時に右手か左手を指定する。ターン終了時、指定された手で攻撃していれば達成：その手の次の通常攻撃で加える本数+1。未達成：その手の次の通常攻撃で加える本数-1。内部通常攻撃も達成判定に含む。",
+        text: "このカードは使用できない。引いた時に右手か左手を指定する。ターン終了時、指定された手で通常攻撃していれば達成：その手の次の通常攻撃で加える本数+1。未達成：その手の次の通常攻撃で加える本数-1。",
         directive: true,
         canPlay: () => false
       },
@@ -898,7 +898,7 @@ const CARD_LIBRARY = {
         name: "指令：対象指定",
         cost: 1,
         type: "指令 / 使用不可",
-        text: "このカードは使用できない。引いた時に攻撃する手と攻撃対象の手を指定する。ターン終了時、指定された組み合わせで攻撃していれば達成：カードを1枚引く。未達成：指定された自分の攻撃元の手に1本加える。内部通常攻撃も達成判定に含む。",
+        text: "このカードは使用できない。引いた時に攻撃する手と攻撃対象の手を指定する。ターン終了時、指定された組み合わせで通常攻撃していれば達成：カードを1枚引く。未達成：指定された自分の攻撃元の手に1本加える。",
         directive: true,
         canPlay: () => false
       },
@@ -918,8 +918,8 @@ const CARD_LIBRARY = {
         directive: true,
         canPlay: () => false
       },
-      directiveAnnihilation: { name:"指令：殲滅",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に、自分の攻撃またはカード効果によって相手の手を1つ以上0にしていれば達成。達成：次の自分ターン中、自分の効果で相手の手が7以上になった時0にする。未達成：次の自分の攻撃で加える本数-1。",directive:true,canPlay:()=>false },
-      directiveCombo: { name:"指令：連撃",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に2回以上攻撃していれば達成。内部通常攻撃も含む。達成：次の自分ターンの通常攻撃可能回数+1。未達成：次の自分ターンの通常攻撃可能回数-1（最低0）。",directive:true,canPlay:()=>false },
+      directiveAnnihilation: { name:"指令：殲滅",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に、自分の攻撃またはカード効果によって相手の手を1つ以上0にしていれば達成。達成：次の自分ターン中、自分の効果で相手の手が7以上になった時0にする。未達成：次の自分の通常攻撃で加える本数-1。",directive:true,canPlay:()=>false },
+      directiveCombo: { name:"指令：連撃",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に通常攻撃を2回以上行っていれば達成。達成：次の自分ターンの通常攻撃可能回数+1。未達成：次の自分ターンの通常攻撃可能回数-1（最低0）。",directive:true,canPlay:()=>false },
       directiveConstant: { name:"指令：定数",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。引いた時に1～4を指定する。ターン終了時、相手のどちらかの手が指定値なら達成：カードを2枚引く。未達成：相手の0ではないランダムな手を指定値へ1近づける。",directive:true,canPlay:()=>false },
       reinterpretation: { name:"再解釈",cost:1,type:"補助",text:"自分の手札にあるランダムな指定内容を持つ「指令」を1枚選ぶ。その指令の指定内容を一度だけ引き直す。",canPlay:player=>getReinterpretationCandidates(player).length>0,effect:player=>useReinterpretation(player) },
       naturalFaith: { name:"当然の信心",cost:2,type:"補助",text:"この試合中に達成した「指令」が5つ以上なら使用できる。このターン、自分の「指令」はすべて達成したものとして扱う。このカードを使用するたび、この試合中のこのカードの使用条件に必要な指令達成数を5増やす。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=5*(Number(state.naturalFaithUses?.[player]||0)+1),effect:player=>useNaturalFaith(player) },
@@ -1036,7 +1036,7 @@ const CARD_LIBRARY = {
         cost: 3,
         type: "終端 / 銃",
         gun: true,
-        text: "自分の両手が1以上でなければ不発。選んだ自分の手で、選ばなかった自分の手を攻撃する。この攻撃で攻撃された手がちょうど5になった場合、相手の1以上の手に3本ずつ加える。この攻撃では対象変更できない。",
+        text: "自分の両手が1以上でなければ不発。自分の手を1つ選ぶ。その手で、もう片方の自分の手を通常攻撃する。この通常攻撃で攻撃対象の手をちょうど5にした場合、相手の1以上の手に3本ずつ加える。この通常攻撃では対象変更できない。",
         canPlay: (player) => state[player].L > 0 && state[player].R > 0,
         terminal: true,
         effect: async (player) => {
@@ -1076,7 +1076,7 @@ const CARD_LIBRARY = {
         name: "バーサーカー",
         cost: 3,
         type: "補助",
-        text: "このターンと次の自分のターン、自分はカード使用・罠設置・分けるができない。その間、自分の攻撃力を+2する。さらに、その攻撃で対象の手が7以上になったとき、超過処理をせず0にする。",
+        text: "このターンと次の自分のターン、自分はカード使用・罠設置・分けるができない。その間、自分の通常攻撃で加える本数+2。さらに、その通常攻撃で対象の手が7以上になったとき、超過処理をせず0にする。",
         canPlay: () => true,
         effect: (player) => {
           state.berserkerTurns[player] = Math.max(state.berserkerTurns[player], 2);
@@ -1134,18 +1134,18 @@ const CARD_LIBRARY = {
         name: "クレッシェンド",
         cost: 3,
         type: "補助",
-        text: "このターン、自分の共鳴攻撃の攻撃力+2。",
+        text: "このターン、自分の共鳴した通常攻撃で加える本数+2。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].crescendo = true;
-          addLog(`${handNames[player]}は「クレッシェンド」を使った。このターン、共鳴攻撃の攻撃力+2。`);
+          addLog(`${handNames[player]}は「クレッシェンド」を使った。このターン、共鳴した通常攻撃で加える本数+2。`);
         }
       },
       dance: {
         name: "乱舞",
         cost: 2,
         type: "補助",
-        text: "このターン、次の自分の通常攻撃ではダメージを与えない。代わりに、攻撃対象の手の本数を攻撃した手と同じ本数にする。",
+        text: "このターン、次の自分の攻撃行動を置換攻撃にする。攻撃対象の手の本数を、攻撃した手と同じ本数にする。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].dance = true;
@@ -1156,7 +1156,7 @@ const CARD_LIBRARY = {
         name: "ラルゴ",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手の攻撃が共鳴する場合、その攻撃の攻撃力+1。さらに、この手で共鳴を発生させたときカードを1枚引く。",
+        text: "自分の手に表向きで置く。この手の通常攻撃が共鳴する場合、その通常攻撃で加える本数+1。さらに、この手で共鳴を発生させたときカードを1枚引く。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1225,7 +1225,7 @@ const CARD_LIBRARY = {
       rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"初めて使用する「輪舞曲」カードで「演舞」を2上げる。使用済みの「輪舞曲」の再使用、または輪舞曲ではないカードの使用で1下げる。変化前と変化後は別カードとして数える。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
       performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,token:true,canPlay:()=>false },
       fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
-      canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃では罠を発動させず、対象と最終的に加える本数を記録する。その攻撃では本数を変化させず、次の相手ターン終了時、記録対象が0でなければ記録した本数を加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
+      canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える最終的な本数と最終対象を記録し、その攻撃で実際に加える本数を0にする。次の相手ターン終了時、記録対象が0でなければ記録した本数を加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
       ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。最低0。次の相手ターン中、相手はカードを引くことができない。",rondo:true,rondoFamily:"fermata",token:true,canPlay:()=>true,effect:player=>useRitardando(player) },
       arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useArpeggioV153(player) },
@@ -1240,8 +1240,8 @@ const CARD_LIBRARY = {
       grandioso: { name:"Grandioso",cost:3,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分と相手の0ではないすべての手に2本ずつ加える。",rondo:true,rondoFamily:"grandioso",terminal:true,canPlay:()=>true,effect:player=>useGrandioso(player) },
       portamento: { name:"ポルタメント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選び、その手を1本増やす。その後、選ばなかった手が0でなければ1本減らす。",rondo:true,rondoFamily:"portamento",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>usePortamentoV153(player) },
       dissonance: { name:"ディソナンス",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選び、その手でもう片方の自分の手を通常攻撃する。攻撃対象の手は0でもよい。共鳴は攻撃開始時の本数で判定する。",rondo:true,rondoFamily:"portamento",token:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDissonanceV153(player) },
-      presto: { name:"プレスト",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の自分の攻撃で対象に与える本数を、+1、0、-1、-2のいずれかランダムに変化させる。負の攻撃量では対象の手を減らし、0未満にはしない。",rondo:true,rondoFamily:"presto",canPlay:()=>true,effect:player=>usePresto(player) },
-      sforzando: { name:"スフォルツァント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手の0ではない手から1つ選ぶ。その手の現在の本数分、このターン、自分が攻撃で対象に与える本数を増加させる。",rondo:true,rondoFamily:"presto",token:true,canPlay:()=>true,effect:player=>useSforzandoV153(player) },
+      presto: { name:"プレスト",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の自分の通常攻撃で加える本数を、+1、0、-1、-2のいずれかランダムに変化させる。負の値では対象の手を減らし、0未満にはしない。",rondo:true,rondoFamily:"presto",canPlay:()=>true,effect:player=>usePresto(player) },
+      sforzando: { name:"スフォルツァント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手の0ではない手から1つ選ぶ。その手の現在の本数分、このターン、自分の通常攻撃で加える本数を増加させる。",rondo:true,rondoFamily:"presto",token:true,canPlay:()=>true,effect:player=>useSforzandoV153(player) },
 
       deflect: {
         name: "受け流し",
@@ -1312,7 +1312,7 @@ const CARD_LIBRARY = {
         name: "ぬかるみ",
         cost: 2,
         type: "罠",
-        text: "【攻撃判定前・自動】この手が攻撃対象になったとき、その攻撃の攻撃力を-1する。ただし攻撃力は1未満にならない。",
+        text: "【攻撃判定前・自動】この手が攻撃対象になったとき、その攻撃で加える本数-1。ただし1未満にならない。乱舞には発動しない。",
         trap: true,
         manual: false,
         triggerTiming: "before",
@@ -1320,7 +1320,7 @@ const CARD_LIBRARY = {
           return placedHand === targetHand && incomingPower > 1;
         },
         trigger: () => {
-          addLog("罠「ぬかるみ」により、攻撃力が-1された。");
+          addLog("罠「ぬかるみ」により、この攻撃で加える本数-1。");
           return { powerDelta: -1 };
         }
       },
@@ -1349,7 +1349,7 @@ const CARD_LIBRARY = {
         name: "茨",
         cost: 2,
         type: "罠",
-        text: "【攻撃判定後・自動】この手が攻撃された後、攻撃してきた相手の手に1本加える。この手が0になっても発動する。",
+        text: "【攻撃判定後・自動】この手が攻撃された後、攻撃してきた手に1本加える。この手が0になっても発動する。",
         trap: true,
         manual: false,
         triggerTiming: "after",
@@ -1371,7 +1371,7 @@ const CARD_LIBRARY = {
         name: "反撃",
         cost: 2,
         type: "罠",
-        text: "【攻撃判定後・手動】この手が攻撃された後、この手が0でなければ発動できる。攻撃してきた相手の手に、この手の本数を加える。",
+        text: "【攻撃判定後・手動】この手が攻撃された後、この手が0でなければ発動できる。攻撃してきた手に、この手の本数を加える。",
         trap: true,
         manual: true,
         triggerTiming: "after",
@@ -1394,7 +1394,7 @@ const CARD_LIBRARY = {
         name: "スワンプマン",
         cost: 3,
         type: "罠",
-        text: "【攻撃判定後・手動】この手が攻撃された後、攻撃計算後のこの手が0でなければ発動できる。この手と、攻撃してきた相手の手の本数を入れ替える。",
+        text: "【攻撃判定後・手動】この手が攻撃された後、攻撃計算後のこの手が0でなければ発動できる。この手と、攻撃してきた手の本数を入れ替える。",
         trap: true,
         manual: true,
         triggerTiming: "after",
@@ -1505,7 +1505,7 @@ const CARD_LIBRARY = {
         name: "力の加護",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手で通常攻撃するとき、攻撃力+1。手が0になったら捨て札に置く。",
+        text: "自分の手に表向きで置く。この手の通常攻撃で加える本数+1。手が0になったら捨て札に置く。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1529,7 +1529,7 @@ const CARD_LIBRARY = {
         name: "成長",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手で攻撃し、相手の手の合計がちょうど5になったとき、カードを1枚引く。",
+        text: "自分の手に表向きで置く。この手で通常攻撃したとき、攻撃対象を5にしたならカードを1枚引く。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1537,7 +1537,7 @@ const CARD_LIBRARY = {
         name: "捨て身",
         cost: 3,
         type: "加護",
-        text: "自分の手に表向きで置く。この手で通常攻撃するとき攻撃力+2。通常攻撃した後、この手に1本加える。",
+        text: "自分の手に表向きで置く。この手の通常攻撃で加える本数+2。通常攻撃した後、この手に1本加える。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1551,7 +1551,7 @@ const CARD_LIBRARY = {
       },
       magicalHatred: {
         name: "憎悪", cost: 2, type: "加護 / 魔法少女",
-        text: "自分の手に表向きで置く。この手で通常攻撃するとき攻撃力+1。通常攻撃するたび手札をランダムに1枚捨てる。虚無で「愛」へ変化する。",
+        text: "自分の手に表向きで置く。この手の通常攻撃で加える本数+1。通常攻撃するたび手札をランダムに1枚捨てる。虚無で「愛」へ変化する。",
         blessing: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1569,13 +1569,13 @@ const CARD_LIBRARY = {
       },
       magicalWrath: {
         name: "憤怒", cost: 2, type: "加護 / 魔法少女",
-        text: "自分のターン開始時、追加でカードを1枚引く。この手で攻撃すると、攻撃対象が攻撃した手以外の生存している手からランダムに決まる。虚無で「勇気」へ変化する。",
+        text: "自分のターン開始時、追加でカードを1枚引く。この手で通常攻撃すると、攻撃対象が攻撃した手以外の生存している手からランダムに決まる。虚無で「勇気」へ変化する。",
         blessing: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       magicalLove: {
         name: "愛", cost: 2, type: "加護 / 魔法少女・変身後",
-        text: "この手で通常攻撃するとき攻撃力+1。通常攻撃時、自分のもう片方が4なら-1、1か2なら+1する。疲弊による本数変化を受けない。",
+        text: "この手の通常攻撃で加える本数+1。通常攻撃時、自分のもう片方が4なら-1、1か2なら+1する。疲弊による本数変化を受けない。",
         blessing: true, token: true, magicalTransformed: true, magicalColor: "love",
         canPlay: () => false
       },
@@ -1593,7 +1593,7 @@ const CARD_LIBRARY = {
       },
       magicalCourage: {
         name: "勇気", cost: 2, type: "加護 / 魔法少女・変身後",
-        text: "この手で通常攻撃するとき攻撃力+1。相手の手が7以上になった場合、超過計算をせず0にする。疲弊による本数変化を受けない。",
+        text: "この手の通常攻撃で加える本数+1。「勇気」が自分の場にある間、自分の通常攻撃で相手の手を7以上にした場合、超過処理を行わず0にする。疲弊による本数変化を受けない。",
         blessing: true, token: true, magicalTransformed: true, magicalColor: "courage",
         canPlay: () => false
       },
@@ -1667,7 +1667,7 @@ const CARD_LIBRARY = {
       },
       betrayedHeart: {
         name: "裏切られた心", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "自分の手を1つ選び、1本加える。このターン、自分の攻撃で相手へ加える本数を-1する（最低1）。",
+        text: "自分の手を1つ選び、1本加える。このターン、自分の通常攻撃で加える本数-1（最低1）。",
         magicalEvolutionBase: true,
         canPlay: (player) => ["L","R"].some(h => state[player][h] > 0),
         effect: (player) => beginBetrayedHeart(player)
@@ -1708,7 +1708,7 @@ const CARD_LIBRARY = {
       },
       frenzy: {
         name: "狂乱", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "次の通常攻撃で与える本数+2。その通常攻撃の対象は、相手の生存している手と自分のもう片方の生存している手からランダムに選ばれる。",
+        text: "次の通常攻撃で加える本数+2。その通常攻撃の対象は、相手の生存している手と自分のもう片方の生存している手からランダムに選ばれる。",
         magicalEvolutionBase: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1718,7 +1718,7 @@ const CARD_LIBRARY = {
       },
       rationalPower: {
         name: "理性ある力", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の通常攻撃で与える本数+1。相手の手を攻撃したとき、もう片方の相手の手にも同じ本数を与える。追加効果では罠・共鳴・攻撃時効果は発動しない。",
+        text: "次の通常攻撃で加える本数+1。相手の手を通常攻撃したとき、相手のもう片方の手にも同じ本数を加える。追加効果では罠・共鳴・攻撃時効果は発動しない。",
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1728,27 +1728,27 @@ const CARD_LIBRARY = {
       },
       selfRighteousness: {
         name: "独善", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "次の通常攻撃で与える本数+2。その通常攻撃で相手の手を0にできなかった場合、自分の攻撃した手に2本加える。対象が変更された場合は変更後の対象で判定する。",
+        text: "次の通常攻撃で加える本数+2。その通常攻撃で攻撃対象の手を0にできなかった場合、自分の攻撃した手に2本加える。対象が変更された場合は変更後の対象で判定する。",
         magicalEvolutionBase: true,
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].selfRighteousAttack = true;
-          addLog(`${handNames[player]}は「独善」を使用。次の攻撃+2。相手の手を0にできなければ反動を受ける。`);
+          addLog(`${handNames[player]}は「独善」を使用。次の通常攻撃で加える本数+2。攻撃対象を0にできなければ反動を受ける。`);
         }
       },
       justiceForEveryone: {
         name: "みんなのための正義", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の通常攻撃で与える本数+1。その通常攻撃で相手の手を0にした場合、自分のもう片方の手を1にする。0の手も対象になる。対象が変更された場合は変更後の対象で判定する。",
+        text: "次の通常攻撃で加える本数+1。その通常攻撃で攻撃対象の手を0にした場合、自分のもう片方の手を1にする。0の手も対象になる。対象が変更された場合は変更後の対象で判定する。",
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].justiceForEveryoneAttack = true;
-          addLog(`${handNames[player]}は「みんなのための正義」を使用。次の攻撃+1。相手の手を0にすれば、もう片方の手を1にする。`);
+          addLog(`${handNames[player]}は「みんなのための正義」を使用。次の通常攻撃で加える本数+1。攻撃対象を0にすれば、もう片方の手を1にする。`);
         }
       },
       villainMark: {
         name: "悪党の印", cost: 2, type: "呪縛 / 魔法少女",
-        text: "相手の手に表向きで置く。この手を攻撃したとき、与える本数+1し、カードを1枚引く。1ターンに何度でも発動する。",
+        text: "相手の手に表向きで置く。この手が通常攻撃されたとき、その通常攻撃で加える本数+1し、攻撃したプレイヤーはカードを1枚引く。1ターンに何度でも発動する。",
         curse: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, otherPlayer(player))
       },
@@ -1764,7 +1764,7 @@ const CARD_LIBRARY = {
       },
       goldRush: {
         name: "ゴールドラッシュ", cost: 2, type: "補助 / 魔法少女",
-        text: "次の通常攻撃で与える基本本数を、攻撃時の自分の手札枚数にする。ほかの攻撃力増減はその後に適用する。",
+        text: "次の通常攻撃で加える本数を、攻撃時の自分の手札枚数に置換する。この置換値には通常攻撃で加える本数への増減を適用しない。",
         magicalCore: true,
         canPlay: () => true,
         effect: (player) => {
@@ -1791,20 +1791,20 @@ const CARD_LIBRARY = {
       },
       sacrificePower: {
         name: "犠牲の力", cost: 2, type: "補助 / 魔法少女・感情変化",
-        text: "自分の手に付いている加護を1枚以上、好きな数だけ選んで捨てる。次の通常攻撃で、捨てた加護の数だけ与える本数を増やす。",
+        text: "自分の手に付いている加護を1枚以上、好きな数だけ選んで捨てる。次の通常攻撃で、捨てた加護の数だけ加える本数を増やす。",
         magicalEvolutionBase: true,
         canPlay: (player) => countOwnBlessings(player) > 0,
         effect: async (player) => { await useSacrificePower(player); }
       },
       powerOfEveryone: {
         name: "みんなの力で", cost: 2, type: "補助 / 魔法少女・変身後",
-        text: "次の通常攻撃で、攻撃時に自分の両手に付いている加護の合計数だけ与える本数を増やす。",
+        text: "次の通常攻撃で、攻撃時に自分の両手に付いている加護の合計数だけ加える本数を増やす。",
         token: true, magicalEvolution: true,
         canPlay: () => true,
         effect: (player) => {
           const bonus = countOwnBlessings(player);
           state.temp[player].attackBonus = Number(state.temp[player].attackBonus || 0) + bonus;
-          addLog(`${handNames[player]}は「みんなの力で」を使用。場の加護${bonus}枚分、次の攻撃力を+${bonus}した。`);
+          addLog(`${handNames[player]}は「みんなの力で」を使用。場の加護${bonus}枚分、次の通常攻撃で加える本数+${bonus}。`);
         }
       },
       magicalVoid: {
@@ -1832,9 +1832,9 @@ const CARD_LIBRARY = {
 
       balanceBlade: {
         name: "均衡の刃", cost: 1, type: "補助 / 天秤",
-        text: "次の通常攻撃時、自分の両手の本数が等しいなら、与える本数+2。",
+        text: "次の通常攻撃時、自分の両手の本数が等しいなら、加える本数+2。",
         canPlay: () => true,
-        effect: (player) => { state.temp[player].balanceBladeAttack = true; addLog(`${handNames[player]}は「均衡の刃」を構えた。次の攻撃時に均衡なら攻撃力+2。`); }
+        effect: (player) => { state.temp[player].balanceBladeAttack = true; addLog(`${handNames[player]}は「均衡の刃」を構えた。次の通常攻撃時に均衡なら加える本数+2。`); }
       },
       tuning: {
         name: "調律", cost: 2, type: "補助 / 天秤",
@@ -1932,7 +1932,7 @@ const CARD_LIBRARY = {
         name: "鈍重の呪縛",
         cost: 2,
         type: "呪縛",
-        text: "相手の手に表向きで置く。この手で通常攻撃するとき、攻撃力-1。ただし最低1。手が0になったら捨て札に置く。",
+        text: "相手の手に表向きで置く。この手の通常攻撃で加える本数-1。ただし最低1。手が0になったら捨て札に置く。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -1964,7 +1964,7 @@ const CARD_LIBRARY = {
         name: "不変の呪縛",
         cost: 2,
         type: "呪縛",
-        text: "相手の手に表向きで置く。この手の通常攻撃は、カード効果による与える本数の増加を受けない。カードによる直接の本数追加には影響しない。",
+        text: "相手の手に表向きで置く。この手が通常攻撃される時、その通常攻撃で加える本数への増減をすべて無効化する。攻撃置換、受ける本数の補正、カードによる直接の本数追加には影響しない。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -1981,7 +1981,7 @@ const CARD_LIBRARY = {
       harpoonThrow: { name:"銛投擲",cost:2,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、自分の「銛」をつける。設置ゾーンが埋まっている場合、ランダムに1枚を捨ててからつける。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>await chooseAndAttachHarpoon(p,true) },
       harpoonRecover: { name:"銛回収",cost:1,type:"終端 / 補助・黄針",terminal:true,harpoonTheme:true,text:"終端。自分が付与した銛を回収する。加算前の本数と実際に加える本数の合計が7以上なら、その手を0にする。",canPlay:p=>!!findOwnedHarpoon(p),effect:async p=>await recoverHarpoon(p,{sourceLabel:"銛回収",zeroAtSeven:true}) },
       harpoonReuse: { name:"銛の再利用",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"自分の捨て札から、銛を付与する効果を持つカードをランダムに1枚山札へ戻し、山札をシャッフルする。",canPlay:()=>true,effect:p=>reuseHarpoonCard(p) },
-      strikeBack: { name:"打ち返す",cost:2,type:"罠 / 黄針",trap:true,manual:true,harpoonTheme:true,text:"この手が、自分の銛がついている相手の手から通常攻撃された時に発動できる。その銛を回収し、この攻撃で受ける本数を1減らす。",triggerTiming:"before",canTrigger:c=>!!findOwnedHarpoonAt(c.defender,c.attacker,c.attackHand),trigger:async c=>{await recoverHarpoon(c.defender,{sourceLabel:"打ち返す"});return{powerDelta:-1,allowZeroPower:true};} },
+      strikeBack: { name:"打ち返す",cost:2,type:"罠 / 黄針",trap:true,manual:true,harpoonTheme:true,text:"この手が、自分の銛がついている手から通常攻撃された時に発動できる。その銛を回収し、この攻撃で受ける本数を1減らす。",triggerTiming:"before",canTrigger:c=>!!findOwnedHarpoonAt(c.defender,c.attacker,c.attackHand),trigger:async c=>{await recoverHarpoon(c.defender,{sourceLabel:"打ち返す"});return{powerDelta:-1,allowZeroPower:true};} },
       yellowWaspNeedle: { name:"黄蜂針",cost:3,type:"補助 / 黄針",harpoonTheme:true,text:"次の自分のターン開始時、自分が付与した銛を回収する。この回収によって相手の手を0にしたなら、カードを2枚引く。",canPlay:()=>true,effect:p=>{state.pendingYellowWaspNeedle[p]=true;} },
       gungnir: { name:"グングニル",cost:3,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、設置ゾーンに空きがあるなら自分の「銛」をつける。このターン終了時、自分が付与した銛を回収する。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>{await chooseAndAttachHarpoon(p,false);state.pendingGungnirRecovery[p]=true;} },
       doubleCarveHarpoon: { name:"二連削-銛",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"このターンの次の通常攻撃が、自分の銛がついている手へ命中したなら、解決後、同じ攻撃手で同じ手をもう一度通常攻撃する。",canPlay:()=>true,effect:p=>{state.temp[p].doubleCarveHarpoon=true;} },
@@ -2156,9 +2156,13 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v156-harpoon-theme";
+    const LATEST_NEWS_ID = "v158b-dance-canon";
 
     const UPDATE_NEWS = [
+      {id:"v158b-dance-canon",version:"v158b",date:"2026-08-19",title:"乱舞とカノンの攻撃処理を整理",summary:"乱舞を置換攻撃として通常攻撃から分離し、カノンを通常攻撃の遅延出力として簡略化しました。",featured:true,tags:["fix"],items:["乱舞は攻撃行動を消費する置換攻撃となり、通常攻撃履歴・通常攻撃限定効果には含まれないよう変更","乱舞でも対象変更・攻撃無効・攻撃後反応の罠は有効、ぬかるみ等の本数補正は不成立","カノン攻撃でも罠・不変・守護等を通常どおり処理し、最終対象と本来加える本数を保存","カノンのその場の加算は0、遅延出力時に対象が0なら不発"]},
+      {id:"v158a-dance-after-traps",version:"v158a",date:"2026-08-19",title:"乱舞の罠処理を修正",summary:"乱舞の攻撃後罠を共通処理へ統合しました。",featured:true,tags:["fix"],items:["乱舞で囮・茨・反撃・スワンプマンなどの攻撃後罠を処理","1攻撃1罠を維持し、ぬかるみは乱舞では発動・消費しない","攻撃置換で本数補正が適用されない場合のログ表示を修正"]},
+      {id:"v158-normal-attack-wording",version:"v158",date:"2026-08-19",title:"通常攻撃ルールとカード本文を整理",summary:"「攻撃」と「通常攻撃」の表記、一部カードの対象条件、成長と乱舞の処理を調整しました。",featured:true,tags:["update","fix"],items:["通常攻撃は発生経路を問わず同じルールで扱い、自分の手への通常攻撃にも対応","カード本文の攻撃力表記を、加える本数・受ける本数が分かる表現へ整理","成長を、攻撃対象が5になった瞬間に5→0より先に1枚引く効果へ変更","独善・みんなのための正義・悪党の印などの通常攻撃対象条件を整理","乱舞を攻撃結果置換として明確化し、ぬかるみが発動・消費されないよう変更"]},
+      {id:"v157-attack-trap-core",version:"v157",date:"2026-08-19",title:"攻撃・罠の共通仕様を整理",summary:"通常攻撃力、不変の呪縛、攻撃置換、乱射と罠の相互作用を統一しました。",featured:true,tags:["update","fix"],items:["攻撃を通常攻撃とカード攻撃に分類し、乱射を罠対応カード攻撃として整理","通常攻撃力を素の攻撃力・攻撃力補正・最終攻撃力・受ける本数に分離","不変の呪縛は正負すべての攻撃力補正を無効化し、防御側の軽減には干渉しない仕様へ変更","乱舞・ゴールドラッシュなどの攻撃置換へ攻撃力補正を加えないよう統一","1回の攻撃につき罠1枚、手動罠優先、手動不使用時のみ自動罠という共通仕様を明文化","指令：連撃失敗の攻撃回数減少が次の自分ターンだけで消費されるよう同期処理を修正"]},
       {id:"v156-harpoon-theme",version:"v156",date:"2026-08-18",title:"新テーマ「黄針が刻む振動の果て」",summary:"銛を打ち込み、攻撃で振動を育てて回収する新テーマを追加しました。",featured:true,tags:["new","update","fix"],items:["新カード9枚と生成カード「銛」を追加","銛付きの手へ通常攻撃を命中させると「銛-振動」が増加","そのターン最初の命中時に攻撃したプレイヤーが1枚ドロー","銛を回収すると蓄積した振動を現在の付着先へ一気に加算","移動しても振動を保持し、解呪など回収以外の除去では振動は発動しない","「銛を埋める」を次の通常攻撃直前、対象変更後の最終対象へ付与するよう強化","friend戦で銛の所有者が反転する問題を修正し、回収演出を強化"]},
       {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","ダブルダブルの追加行動で2回目の攻撃ができず、乱闘経由で進行不能になる場合がある問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
       {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
@@ -2706,13 +2710,13 @@ const CARD_LIBRARY = {
 
     const TUTORIAL_CARD_INFO = {
       inspiration: { name: "ひらめき", type: "補助", text: "カードを1枚引く。" },
-      strongHit: { name: "強打", type: "攻撃補助", text: "このターン、次の攻撃で与える本数を＋1する。" },
-      lightHit: { name: "軽打", type: "攻撃補助", text: "このターン、次の攻撃で与える本数を1減らす。" },
+      strongHit: { name: "強打", type: "攻撃補助", text: "このターン、次の通常攻撃で加える本数+1。" },
+      lightHit: { name: "軽打", type: "攻撃補助", text: "このターン、次の通常攻撃で加える本数-1。" },
       pass: { name: "パス", type: "終端", text: "このカードを使うと、ただちにターンを終了する。" },
       miss: { name: "空振り", type: "罠・手動", text: "攻撃された時、発動するか選び、その攻撃を無効にする。" },
       thorns: { name: "茨", type: "罠・自動", text: "攻撃された時に自動発動し、攻撃した相手の手に＋1する。" },
-      powerBlessing: { name: "力の加護", type: "加護", text: "この手で与える本数を＋1する。発動後も場に残る。" },
-      sluggishCurse: { name: "鈍重の呪縛", type: "呪縛", text: "この手で攻撃する時、与える本数を1減らす。相手の手に付ける。" }
+      powerBlessing: { name: "力の加護", type: "加護", text: "この手の通常攻撃で加える本数+1。発動後も場に残る。" },
+      sluggishCurse: { name: "鈍重の呪縛", type: "呪縛", text: "この手の通常攻撃で加える本数-1。相手の手に付ける。" }
     };
 
     let tutorial = {
@@ -3536,6 +3540,26 @@ const CARD_LIBRARY = {
       return traps;
     }
 
+    function serializeFriendCanonHits() {
+      const hits = cloneJson(state.pendingCanonHits || []);
+      if (!state.friendRole) return hits;
+      return hits.map(hit => {
+        const canonical = {...hit, sourceSide:friendSideForLocalPlayer(hit.sourcePlayer), waitForSide:friendSideForLocalPlayer(hit.waitForPlayer), defenderSide:friendSideForLocalPlayer(hit.defender)};
+        delete canonical.sourcePlayer; delete canonical.waitForPlayer; delete canonical.defender;
+        return canonical;
+      });
+    }
+
+    function deserializeFriendCanonHits(rawHits) {
+      const hits = cloneJson(rawHits || []);
+      if (!state.friendRole) return hits;
+      return hits.map(hit => {
+        const local = {...hit, sourcePlayer:localPlayerForFriendSide(hit.sourceSide)||hit.sourcePlayer, waitForPlayer:localPlayerForFriendSide(hit.waitForSide)||hit.waitForPlayer, defender:localPlayerForFriendSide(hit.defenderSide)||hit.defender};
+        delete local.sourceSide; delete local.waitForSide; delete local.defenderSide;
+        return local;
+      });
+    }
+
     function serializeFriendSide(player) {
       ensureOnlineStateMaps();
       return {
@@ -3579,7 +3603,7 @@ const CARD_LIBRARY = {
         pendingStartDrawSkip: !!state.pendingStartDrawSkip[player],
         pendingYellowWaspNeedle: !!state.pendingYellowWaspNeedle[player],
         pendingGungnirRecovery: !!state.pendingGungnirRecovery[player]
-        ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], usedRondoCards:[...(state.usedRondoCards[player]||[])], pendingDrawLock:!!state.pendingDrawLock[player], activeDrawLock:!!state.activeDrawLock[player], pendingPrestoAttack:!!state.pendingPrestoAttack[player], sforzandoTurnBonus:Number(state.sforzandoTurnBonus[player]||0), quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:cloneJson(state.pendingCanonHits), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
+        ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], usedRondoCards:[...(state.usedRondoCards[player]||[])], pendingDrawLock:!!state.pendingDrawLock[player], activeDrawLock:!!state.activeDrawLock[player], pendingPrestoAttack:!!state.pendingPrestoAttack[player], sforzandoTurnBonus:Number(state.sforzandoTurnBonus[player]||0), quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:serializeFriendCanonHits(), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
       };
     }
 
@@ -3653,7 +3677,7 @@ const CARD_LIBRARY = {
       state.pendingYellowWaspNeedle[player] = !!side.pendingYellowWaspNeedle;
       state.pendingGungnirRecovery[player] = !!side.pendingGungnirRecovery;
       state.furiosoSkipPending[player]=!!side.furiosoSkipPending;state.furiosoSkipActive[player]=!!side.furiosoSkipActive;
-      state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Math.max(0,Math.min(PERFORMANCE_MAX_LEVEL,Number(side.performanceLevel)||0));state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.usedRondoCards[player]=[...(side.usedRondoCards||[])];state.pendingDrawLock[player]=!!side.pendingDrawLock;state.activeDrawLock[player]=!!side.activeDrawLock;state.pendingPrestoAttack[player]=!!side.pendingPrestoAttack;state.sforzandoTurnBonus[player]=Math.max(0,Number(side.sforzandoTurnBonus)||0);state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=cloneJson(side.pendingCanonHits);
+      state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Math.max(0,Math.min(PERFORMANCE_MAX_LEVEL,Number(side.performanceLevel)||0));state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.usedRondoCards[player]=[...(side.usedRondoCards||[])];state.pendingDrawLock[player]=!!side.pendingDrawLock;state.activeDrawLock[player]=!!side.activeDrawLock;state.pendingPrestoAttack[player]=!!side.pendingPrestoAttack;state.sforzandoTurnBonus[player]=Math.max(0,Number(side.sforzandoTurnBonus)||0);state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=deserializeFriendCanonHits(side.pendingCanonHits);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingIntemperanceCardLock[player] = !!side.pendingIntemperanceCardLock;
       state.activeIntemperanceCardLock[player] = !!side.activeIntemperanceCardLock;
@@ -3739,7 +3763,14 @@ const CARD_LIBRARY = {
       }
 
       if (!state.gameOver && previousTurn !== "human" && state.turn === "human") {
+        const pendingAttackDeltaBeforeStart = Number(state.pendingDirectiveAttackLimitDelta?.human || 0);
+        const turnBeforeStart = state.turn;
         await startTurn("human");
+        // remote apply終了後にstartTurnを実行する。連撃失敗のdelta消費や、
+        // attackLimit=0による即時auto-endでstateが進んだ場合も必ずroomへ返す。
+        if (pendingAttackDeltaBeforeStart !== Number(state.pendingDirectiveAttackLimitDelta?.human || 0) || turnBeforeStart !== state.turn) {
+          await forcePublishFriendStateNow("directive combo penalty consumed");
+        }
       } else if (!state.gameOver) {
         setMessage(state.turn === "human" ? "あなたの番です。" : "相手の番です。同期を待っています。");
         render();
@@ -6148,7 +6179,7 @@ function wrapFinger(value) {
           <p>攻撃対象が自分の手でも判定されます。「凶弾」で自分のもう片方の手を攻撃した場合も、本数条件を満たせば共鳴します。</p>
           <p>「共鳴調節」が付いている攻撃手は、本数差が<strong>1以下</strong>でも共鳴します。</p>
           <p>受け流し・注目などで攻撃対象が変わった場合は、<strong>変更後の対象</strong>との本数で判定します。</p>
-          <p>「乱舞」で本数を揃えた結果は、その攻撃自身の共鳴には数えません。</p>`
+          <p>「乱舞」は通常攻撃ではない置換攻撃のため、共鳴判定を行いません。</p>`
       }
     };
 
@@ -6489,7 +6520,7 @@ function wrapFinger(value) {
             ...CARD_LIBRARY.directiveAttack,
             cost: 1,
             name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
-            text: `指定：${directiveHandLabel(hand)}手で攻撃。内部通常攻撃も可。達成：その手の次の通常攻撃+1。未達成：その手の次の通常攻撃-1。`,
+            text: `指定：${directiveHandLabel(hand)}手で通常攻撃。達成：その手の次の通常攻撃で加える本数+1。未達成：その手の次の通常攻撃で加える本数-1。`,
             directive: true,
             directiveBase: "directiveAttack",
             directiveData: { attackHand: hand },
@@ -6505,7 +6536,7 @@ function wrapFinger(value) {
               ...CARD_LIBRARY.directiveTarget,
               cost: 1,
               name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
-              text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を攻撃。内部通常攻撃も可。達成：1枚引く。未達成：指定された自分の手に1本加える。`,
+              text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を通常攻撃。達成：1枚引く。未達成：指定された自分の手に1本加える。`,
               directive: true,
               directiveBase: "directiveTarget",
               directiveData: { attackHand, targetHand },
@@ -7105,7 +7136,7 @@ function wrapFinger(value) {
         Math.max(2, state.temp[player].attackLimit || 1);
       state.temp[player].multiAttackSource = "空間切断";
       state.mode = "attack";
-      setMessage("「空間切断」：このターン、通常攻撃で与える本数+1。通常攻撃を2回まで行えます。");
+      setMessage("「空間切断」：このターン、通常攻撃で加える本数+1。通常攻撃を2回まで行えます。");
       render();
 
       if (state.battleMode === "friend" && player === "human") {
@@ -7916,7 +7947,6 @@ function wrapFinger(value) {
         info.slot.vibration=Math.max(0,Number(info.slot.vibration)||0)+1;
         if(info.slot.lastDrawTurnKey!==harpoonTurnKey()){info.slot.lastDrawTurnKey=harpoonTurnKey();drawCard(attacker);addLog(`${handNames[attacker]}は銛への初回命中で1枚引いた。`);}
       }
-      if(isInternal)return;
       const own=findOwnedHarpoonAt(attacker,defender,targetHand);
       if(state.temp[attacker].harpoonResonance){state.temp[attacker].harpoonResonance=false;if(own&&resonance){own.slot.vibration+=3;addLog(`「銛共鳴」により銛-振動+3。`);}}
       if(state.temp[attacker].doubleCarveHarpoon){
@@ -7926,7 +7956,7 @@ function wrapFinger(value) {
       render();
     }
     function resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal=false}={}){
-      if(isInternal||!state.temp[attacker]?.harpoonEmbed)return false;
+      if(!state.temp[attacker]?.harpoonEmbed)return false;
       state.temp[attacker].harpoonEmbed=false;
       return attachHarpoon(attacker,defender,targetHand);
     }
@@ -8209,7 +8239,7 @@ function wrapFinger(value) {
       if(![player,otherPlayer(player)].includes(owner)||!["L","R"].includes(hand)||state[owner][hand]<=0)return false;
       const bonus=state[owner][hand];
       state.sforzandoTurnBonus[player]=bonus;state.pendingSforzando=null;state.mode="attack";
-      addLog(`${handNames[player]}の「スフォルツァント」。このターンの攻撃で与える本数+${bonus}。`);
+      addLog(`${handNames[player]}の「スフォルツァント」。このターンの通常攻撃で加える本数+${bonus}。`);
       render();return true;
     }
 
@@ -8997,7 +9027,7 @@ function wrapFinger(value) {
         });
       }
       state.temp[player].attackBonus = Number(state.temp[player].attackBonus || 0) + selected.length;
-      addLog(`${handNames[player]}は「犠牲の力」で加護を${selected.length}枚捨て、次の攻撃力を+${selected.length}した。`);
+      addLog(`${handNames[player]}は「犠牲の力」で加護を${selected.length}枚捨て、次の通常攻撃で加える本数+${selected.length}。`);
       render();
       return true;
     }
@@ -10207,7 +10237,7 @@ function renderLastAction() {
           <span class="directive-hand">${escapeHtml(directiveHandLabel(data.attackHand))}</span>
           <span class="directive-action">手で攻撃</span>
         </div>
-        <div class="directive-note">通常攻撃・内部通常攻撃で達成可能</div>${reinterpreted}
+        <div class="directive-note">通常攻撃で達成可能</div>${reinterpreted}
         <div class="directive-result"><strong>達成</strong> 次の指定手の攻撃+1</div>
         <div class="directive-result fail"><strong>未達成</strong> 次の指定手の攻撃-1</div>`;
       }
@@ -10219,7 +10249,7 @@ function renderLastAction() {
           <span class="directive-arrow">→</span>
           <span class="directive-target">${escapeHtml(directiveHandLabel(data.targetHand))}手</span>
         </div>
-        <div class="directive-note">通常攻撃・内部通常攻撃で達成可能</div>${reinterpreted}
+        <div class="directive-note">通常攻撃で達成可能</div>${reinterpreted}
         <div class="directive-result"><strong>達成</strong> 1枚引く</div>
         <div class="directive-result fail"><strong>未達成</strong> 指定した自分の手+1</div>`;
       }
@@ -11561,11 +11591,6 @@ async function maybeChooseManualTrap(defender, candidates, context) {
         return;
       }
 
-      if (hasAttachment(attacker, attackHand, "growthBlessing") && attackTotal === 5) {
-        drawCard(attacker);
-        addLog(`${handNames[attacker]}の「成長」により、カードを1枚引いた。`);
-      }
-
       if (defender === otherPlayer(attacker) && hasAttachment(attacker, attackHand, "ricochetBlessing")) {
         const other = otherHand(targetHand);
         const rawDamage = Math.floor(state[attacker][attackHand] / 2);
@@ -11579,6 +11604,37 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       if (hasAttachment(attacker, attackHand, "recklessBlessing") && state[attacker][attackHand] > 0) {
         await addFingersWithCalculation(attacker, attackHand, 1, "捨て身の反動");
       }
+    }
+
+    function resolveGrowthBeforeFiveToZero(attacker, attackHand, result) {
+      if (result !== 5 || !hasAttachment(attacker, attackHand, "growthBlessing")) return false;
+      drawCard(attacker);
+      addLog(`${handNames[attacker]}は「成長」によりカードを1枚引いた。`);
+      return true;
+    }
+
+    async function resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower,attackTotal,resolvedFinal,trapUsed,ignoresDefenderBoard}) {
+      if (trapUsed || ignoresDefenderBoard || (defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
+        return {trapUsed,resolvedFinal};
+      }
+      const afterContext = {defender,targetHand,attacker,attackHand,incomingPower,attackTotal,resolvedFinal};
+      const afterManual = getTriggerTraps(defender,targetHand,attacker,attackHand,incomingPower,"after",true,afterContext);
+      const chosenAfterManual = await maybeChooseManualTrap(defender,afterManual,afterContext);
+      if (chosenAfterManual) {
+        const afterResult = await triggerTrap(defender,chosenAfterManual,afterContext);
+        trapUsed = true;
+        if (afterResult.stopAtFour) {
+          resolvedFinal = 4;
+          state[defender][targetHand] = 4;
+        }
+      } else {
+        const afterAuto = getTriggerTraps(defender,targetHand,attacker,attackHand,incomingPower,"after",false,afterContext);
+        if (afterAuto.length > 0) {
+          await triggerTrap(defender,afterAuto[0],afterContext);
+          trapUsed = true;
+        }
+      }
+      return {trapUsed,resolvedFinal};
     }
 
     async function completeNormalAttackAttempt(attacker) {
@@ -11664,24 +11720,31 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
 
-      state.temp[attacker].attacksOccurredThisTurn=Number(state.temp[attacker].attacksOccurredThisTurn||0)+1;
+      const danceActive = !!state.temp[attacker]?.dance;
+      // 乱舞は攻撃行動枠を使う「置換攻撃」であり、通常攻撃の履歴・予約を消費しない。
+      if (danceActive) state.temp[attacker].dance = false;
+      if (!danceActive) {
+        state.temp[attacker].attacksOccurredThisTurn=Number(state.temp[attacker].attacksOccurredThisTurn||0)+1;
+      }
 
-      const frenzyActive = !!state.temp[attacker]?.frenzyAttack;
-      const rationalPowerActive = !!state.temp[attacker]?.rationalPowerAttack;
-      const selfRighteousActive = !!state.temp[attacker]?.selfRighteousAttack;
-      const justiceForEveryoneActive = !!state.temp[attacker]?.justiceForEveryoneAttack;
-      const tearSharpenedSwordActive = !!state.temp[attacker]?.tearSharpenedSwordAttack;
-      const goldRushActive = !!state.temp[attacker]?.goldRushAttack;
-      const balanceBladeActive = !!state.temp[attacker]?.balanceBladeAttack;
-      const canonActive = !!state.temp[attacker]?.canon;
-      state.temp[attacker].canon = false;
-      state.temp[attacker].frenzyAttack = false;
-      state.temp[attacker].rationalPowerAttack = false;
-      state.temp[attacker].selfRighteousAttack = false;
-      state.temp[attacker].justiceForEveryoneAttack = false;
-      state.temp[attacker].tearSharpenedSwordAttack = false;
-      state.temp[attacker].goldRushAttack = false;
-      state.temp[attacker].balanceBladeAttack = false;
+      const frenzyActive = !danceActive && !!state.temp[attacker]?.frenzyAttack;
+      const rationalPowerActive = !danceActive && !!state.temp[attacker]?.rationalPowerAttack;
+      const selfRighteousActive = !danceActive && !!state.temp[attacker]?.selfRighteousAttack;
+      const justiceForEveryoneActive = !danceActive && !!state.temp[attacker]?.justiceForEveryoneAttack;
+      const tearSharpenedSwordActive = !danceActive && !!state.temp[attacker]?.tearSharpenedSwordAttack;
+      const goldRushActive = !danceActive && !!state.temp[attacker]?.goldRushAttack;
+      const balanceBladeActive = !danceActive && !!state.temp[attacker]?.balanceBladeAttack;
+      const canonActive = !danceActive && !!state.temp[attacker]?.canon;
+      if (!danceActive) {
+        state.temp[attacker].canon = false;
+        state.temp[attacker].frenzyAttack = false;
+        state.temp[attacker].rationalPowerAttack = false;
+        state.temp[attacker].selfRighteousAttack = false;
+        state.temp[attacker].justiceForEveryoneAttack = false;
+        state.temp[attacker].tearSharpenedSwordAttack = false;
+        state.temp[attacker].goldRushAttack = false;
+        state.temp[attacker].balanceBladeAttack = false;
+      }
 
       if (frenzyActive && !options.preventTargetChange) {
         const originalOpponent = otherPlayer(attacker);
@@ -11700,7 +11763,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       const attackStartPower = state[attacker][attackHand];
       let targetStartPower = state[defender][targetHand];
-      const prestoModifier = state.pendingPrestoAttack?.[attacker]
+      const prestoModifier = !danceActive && state.pendingPrestoAttack?.[attacker]
         ? [1, 0, -1, -2][randomIndex(4)]
         : null;
       if (prestoModifier !== null) {
@@ -11711,124 +11774,97 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       state.animating = true;
       render();
 
+      /*
+       * ATTACK CORE RULE:
+       * 通常攻撃力 = basePower + attackModifier。
+       * 不変の呪縛は、攻撃される手に対するattackModifierを正負とも0にする。
+       * ゴールドラッシュは通常攻撃の加算量置換。乱舞は通常攻撃ではない置換攻撃。
+       * どちらもattackModifierを使用せず、乱舞はreceivedAmountも使用しない。
+       * 防御側の軽減・増加は、その後のreceivedAmountとして別に処理する。
+       */
       const normalBasePower = state[attacker][attackHand];
-      const immutable = hasImmutableCurse(attacker, attackHand);
-      // 不変の呪縛は「カードによる通常攻撃の数値的な増加」を無効化する。
-      // ゴールドラッシュは攻撃力上昇ではなく基本本数の置換なので対象外。
+      let immutable = hasImmutableCurse(defender, targetHand);
       const goldRushBase = state.hands[attacker].length;
       const basePower = goldRushActive ? goldRushBase : normalBasePower;
+      const attackReplacementKind = danceActive ? "result" : goldRushActive ? "amount" : null;
+      const isAttackReplacement = attackReplacementKind !== null;
       const rawBonus = state.temp[attacker].attackBonus || 0;
       const pendingDirectiveHandBonus=Number(state.pendingDirectiveHandAttackModifier?.[attacker]?.[attackHand]||0);
       const pendingDirectiveNextBonus=Number(state.pendingDirectiveNextAttackModifier?.[attacker]||0);
-      const directiveHandBonus=immutable?Math.min(0,pendingDirectiveHandBonus):pendingDirectiveHandBonus;
-      const directiveNextBonus=immutable?Math.min(0,pendingDirectiveNextBonus):pendingDirectiveNextBonus;
-      state.pendingDirectiveHandAttackModifier[attacker][attackHand]=0;
-      state.pendingDirectiveNextAttackModifier[attacker]=0;
-      const positiveCardBonus = Math.max(0, rawBonus);
-      const negativeCardBonus = Math.min(0, rawBonus);
-      const bonus = immutable ? negativeCardBonus : rawBonus;
-      const berserkerBonus = immutable ? 0 : (state.berserkerTurns[attacker] > 0 ? 2 : 0);
-      const magicalAttackBonus = immutable ? 0 : (
+      const directiveHandBonus=pendingDirectiveHandBonus;
+      const directiveNextBonus=pendingDirectiveNextBonus;
+      if (!danceActive) {
+        state.pendingDirectiveHandAttackModifier[attacker][attackHand]=0;
+        state.pendingDirectiveNextAttackModifier[attacker]=0;
+      }
+      const bonus = rawBonus;
+      const berserkerBonus = state.berserkerTurns[attacker] > 0 ? 2 : 0;
+      const magicalAttackBonus = (
         hasAttachment(attacker, attackHand, "magicalHatred") ||
         hasAttachment(attacker, attackHand, "magicalLove") ||
         hasAttachment(attacker, attackHand, "magicalCourage") ? 1 : 0
       );
-      const blessingBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0);
-      const willBladeBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "willBlade") ? (state.lastDirectiveClearCount?.[attacker] || 0) : 0);
-      const recklessBonus = immutable ? 0 : (hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0);
+      const blessingBonus = hasAttachment(attacker, attackHand, "powerBlessing") ? 1 : 0;
+      const willBladeBonus = hasAttachment(attacker, attackHand, "willBlade") ? (state.lastDirectiveClearCount?.[attacker] || 0) : 0;
+      const recklessBonus = hasAttachment(attacker, attackHand, "recklessBlessing") ? 2 : 0;
       const cursePenalty = hasAttachment(attacker, attackHand, "slowCurse") ? -1 : 0;
       let duelSurgeBonus = 0;
-      const lightningBonus=immutable ? 0 : (state.temp[attacker].lightningBonus||0);
-      const synapseBonus=immutable ? 0 : (state.temp[attacker].synapseBonus||0);
-      const dimensionalSlashBonus=immutable ? 0 : (state.temp[attacker].dimensionalSlashBonus||0);
-      const frenzyBonus = immutable || !frenzyActive ? 0 : 2;
-      const rationalPowerBonus = immutable || !rationalPowerActive ? 0 : 1;
-      const selfRighteousBonus = immutable || !selfRighteousActive ? 0 : 2;
-      const justiceForEveryoneBonus = immutable || !justiceForEveryoneActive ? 0 : 1;
-      const dischargeBonus=immutable ? 0 : (hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0);
-      const balanceBladeBonus = immutable || !balanceBladeActive || !isBalanced(attacker) ? 0 : 2;
-      const danceActive = !!state.temp[attacker]?.dance;
+      const lightningBonus=state.temp[attacker].lightningBonus||0;
+      const synapseBonus=state.temp[attacker].synapseBonus||0;
+      const dimensionalSlashBonus=state.temp[attacker].dimensionalSlashBonus||0;
+      const frenzyBonus = frenzyActive ? 2 : 0;
+      const rationalPowerBonus = rationalPowerActive ? 1 : 0;
+      const selfRighteousBonus = selfRighteousActive ? 2 : 0;
+      const justiceForEveryoneBonus = justiceForEveryoneActive ? 1 : 0;
+      const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
+      const balanceBladeBonus = balanceBladeActive && isBalanced(attacker) ? 2 : 0;
+      // 攻撃結果置換でも共鳴した事実は成立し得る。加算ボーナスだけを置換結果へ反映しない。
       let resonance = !danceActive && isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
-      let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, immutable);
-      const sforzandoBonus = immutable ? 0 : Number(state.sforzandoTurnBonus?.[attacker] || 0);
-      let power = Math.max(goldRushActive ? 0 : 1, basePower + bonus + directiveHandBonus + directiveNextBonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus + sforzandoBonus);
-      state.temp[attacker].attackBonus = 0;
-      const immutableBlockedIncrease = immutable && (
-        positiveCardBonus > 0 ||
-        pendingDirectiveHandBonus > 0 || pendingDirectiveNextBonus > 0 ||
-        state.berserkerTurns[attacker] > 0 ||
-        hasAttachment(attacker, attackHand, "powerBlessing") ||
-        hasAttachment(attacker, attackHand, "recklessBlessing") ||
-        hasAttachment(attacker, attackHand, "magicalHatred") ||
-        hasAttachment(attacker, attackHand, "magicalLove") ||
-        hasAttachment(attacker, attackHand, "magicalCourage") ||
-        hasAttachment(attacker, attackHand, "willBlade") ||
-        (state.temp[attacker].lightningBonus||0) > 0 ||
-        (state.temp[attacker].synapseBonus||0) > 0 ||
-        (state.temp[attacker].dimensionalSlashBonus||0) > 0 ||
-        (hasAttachment(attacker,attackHand,"dischargeBlessing") && getChargeLevel(attacker)>=10) ||
-        frenzyActive || rationalPowerActive || selfRighteousActive || justiceForEveryoneActive || balanceBladeActive ||
-        Number(state.sforzandoTurnBonus?.[attacker] || 0) > 0 ||
-        (resonance && (state.temp[attacker]?.crescendo || hasAttachment(attacker, attackHand, "largo")))
-      );
-      if (immutableBlockedIncrease) {
-        addLog(`${handNames[attacker]}の${handNames[attackHand]}は「不変の呪縛」により、カード効果による与える本数の増加を受けない。`);
+      let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, false);
+      const sforzandoBonus = Number(state.sforzandoTurnBonus?.[attacker] || 0);
+      const betrayedHeartPenalty = state.temp[attacker]?.betrayedHeartPenalty ? -1 : 0;
+      const prestoAttackModifier = prestoModifier ?? 0;
+      let trapPowerDelta = 0;
+      const calculateAttackModifier = () => bonus + directiveHandBonus + directiveNextBonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus + sforzandoBonus + betrayedHeartPenalty + prestoAttackModifier + trapPowerDelta;
+      const calculateFinalAttackPower = () => {
+        const modifier = calculateAttackModifier();
+        const modifiersBlocked = immutable || isAttackReplacement;
+        const appliedPresto = modifiersBlocked ? 0 : prestoAttackModifier;
+        const modifierBeforePresto = modifiersBlocked ? 0 : modifier - prestoAttackModifier;
+        return {
+          attackModifier: modifiersBlocked ? 0 : modifier,
+          // 既存プレストは最低1処理後に加算され、負の攻撃量にもなり得る。
+          finalAttackPower: Math.max(goldRushActive ? 0 : 1, basePower + modifierBeforePresto) + appliedPresto
+        };
+      };
+      let attackPowerResult = calculateFinalAttackPower();
+      let power = attackPowerResult.finalAttackPower;
+      if (!danceActive) state.temp[attacker].attackBonus = 0;
+      if (isAttackReplacement && calculateAttackModifier() !== 0) {
+        addLog(`攻撃置換中のため、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}は適用されない。`);
+      } else if (immutable && calculateAttackModifier() !== 0) {
+        addLog(`${handNames[defender]}の${handNames[targetHand]}の「不変の呪縛」により、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}を無効化した。`);
       }
-      if (blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、攻撃力+1。`);
-      if (magicalAttackBonus) addLog(`${handNames[attacker]}の魔法少女加護により、攻撃力+1。`);
-      if (recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、攻撃力+2。`);
-      if (willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、攻撃力+${willBladeBonus}。`);
-      if (dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、攻撃力+${dimensionalSlashBonus}。`);
+      const attackModifierLogsApply = !immutable && !isAttackReplacement;
+      if (attackModifierLogsApply && blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、通常攻撃で加える本数+1。`);
+      if (attackModifierLogsApply && magicalAttackBonus) addLog(`${handNames[attacker]}の魔法少女加護により、通常攻撃で加える本数+1。`);
+      if (attackModifierLogsApply && recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、通常攻撃で加える本数+2。`);
+      if (attackModifierLogsApply && willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、通常攻撃で加える本数+${willBladeBonus}。`);
+      if (attackModifierLogsApply && dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、通常攻撃で加える本数+${dimensionalSlashBonus}。`);
       if (goldRushActive) addLog(`${handNames[attacker]}の「ゴールドラッシュ」により、攻撃の基本本数が手札枚数の${basePower}になった。`);
-      if (frenzyBonus) addLog(`${handNames[attacker]}の「狂乱」により、攻撃力+2。`);
-      if (rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、攻撃力+1。`);
-      if (selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、攻撃力+2。`);
-      if (balanceBladeBonus) addLog(`${handNames[attacker]}の「均衡の刃」により、攻撃力+2。`);
-      if (justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、攻撃力+1。`);
-      if (sforzandoBonus) addLog(`${handNames[attacker]}の「スフォルツァント」により、攻撃で与える本数+${sforzandoBonus}。`);
-      if(directiveHandBonus||directiveNextBonus)addLog(`${handNames[attacker]}の指令効果により、攻撃で与える本数${directiveHandBonus+directiveNextBonus>=0?"+":""}${directiveHandBonus+directiveNextBonus}。`);
-      if (resonance && state.temp[attacker]?.crescendo && !immutable) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴攻撃の攻撃力+2。`);
-      if (resonance && hasAttachment(attacker, attackHand, "largo") && !immutable) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴攻撃の攻撃力+1。`);
-      if (cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、攻撃力-1。`);
+      if (attackModifierLogsApply && frenzyBonus) addLog(`${handNames[attacker]}の「狂乱」により、通常攻撃で加える本数+2。`);
+      if (attackModifierLogsApply && rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、通常攻撃で加える本数+1。`);
+      if (attackModifierLogsApply && selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、通常攻撃で加える本数+2。`);
+      if (attackModifierLogsApply && balanceBladeBonus) addLog(`${handNames[attacker]}の「均衡の刃」により、通常攻撃で加える本数+2。`);
+      if (attackModifierLogsApply && justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、通常攻撃で加える本数+1。`);
+      if (attackModifierLogsApply && sforzandoBonus) addLog(`${handNames[attacker]}の「スフォルツァント」により、通常攻撃で加える本数+${sforzandoBonus}。`);
+      if(attackModifierLogsApply&&(directiveHandBonus||directiveNextBonus))addLog(`${handNames[attacker]}の指令効果により、通常攻撃で加える本数${directiveHandBonus+directiveNextBonus>=0?"+":""}${directiveHandBonus+directiveNextBonus}。`);
+      if (attackModifierLogsApply && resonance && state.temp[attacker]?.crescendo) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴した通常攻撃で加える本数+2。`);
+      if (attackModifierLogsApply && resonance && hasAttachment(attacker, attackHand, "largo")) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴した通常攻撃で加える本数+1。`);
+      if (attackModifierLogsApply && cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、通常攻撃で加える本数-1。`);
       const ignoresDefenderBoard = defender === otherPlayer(attacker) && ignoresOpponentBoardEffects(attacker);
       if (ignoresDefenderBoard) {
         addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
-      } else {
-        if (state.temp[attacker]?.betrayedHeartPenalty) {
-          power = Math.max(1, power - 1);
-          addLog(`${handNames[attacker]}の「裏切られた心」により、与える本数-1。`);
-        }
-        if (state.temp[defender]?.knightCreed) {
-          power = 0;
-        } else {
-          if (state.temp[defender]?.fadedCreedGuard) {
-            power = Math.max(1, power - 1);
-            addLog(`${handNames[defender]}の「色褪せた信条」により、受ける本数-1。`);
-          }
-          power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
-        }
-        if (hasAttachment(defender,targetHand,"scalesBlessing")) {
-          const beforeScale=power;
-          if (isBalanced(defender)) {
-            power = Math.max(0,power-2);
-          } else if (!immutable) {
-            power += 1;
-          }
-          if (immutable && !isBalanced(defender)) {
-            addLog(`${handNames[defender]}の「天秤の加護」による受ける本数+1は「不変の呪縛」で無効。`);
-          } else {
-            addLog(`${handNames[defender]}の「天秤の加護」により、受ける本数が${beforeScale}→${power}。`);
-          }
-        }
-        if (hasAttachment(defender,targetHand,"magicalDespair")) {
-          const beforeDespair = power;
-          power=Math.max(0,power-1);
-          addLog(`${handNames[defender]}の「絶望」により、受ける本数が${beforeDespair}→${power}になった。`);
-        }
-        if (hasMagicalJustice(defender)) {
-          power=Math.max(1,power-2);
-          addLog(`${handNames[defender]}の「正義」により、受ける本数-2。`);
-        }
       }
 
       let context = { defender, targetHand, attacker, attackHand, incomingPower: power };
@@ -11855,22 +11891,20 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       await animateAttackIntent(attacker, attackHand, defender, targetHand);
 
       // 攻撃判定前：対象変更・無効化など。強行突破中はここを封じる。
-      if (canonActive) {
-        addLog("「カノン」により、この通常攻撃では罠は発動しない。");
-      } else if (ignoresDefenderBoard || (defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
+      if (ignoresDefenderBoard || (defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
         addLog(state.temp[attacker].electromagneticAttack
           ? `${handNames[attacker]}の「電磁攻撃」により、相手の罠は発動しない。`
           : `${handNames[attacker]}の「強行突破」により、攻撃中の相手側の罠は発動できない。`);
       } else {
         const beforeManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", true)
-          .filter(info => !options.preventTargetChange || !["deflect", "attention"].includes(info.cardId));
+          .filter(info => (!options.preventTargetChange || !["deflect", "attention"].includes(info.cardId)) && !(danceActive && info.cardId === "puddleTrap"));
         const chosenBeforeManual = await maybeChooseManualTrap(defender, beforeManual, context);
         if (chosenBeforeManual) {
           trapResult = await triggerTrap(defender, chosenBeforeManual, context);
           trapUsed = true;
         } else {
           const beforeAuto = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "before", false)
-            .filter(info => !options.preventTargetChange || !["deflect", "attention"].includes(info.cardId));
+            .filter(info => (!options.preventTargetChange || !["deflect", "attention"].includes(info.cardId)) && !(danceActive && info.cardId === "puddleTrap"));
           if (beforeAuto.length > 0) {
             trapResult = await triggerTrap(defender, beforeAuto[0], context);
             trapUsed = true;
@@ -11880,24 +11914,25 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       if (typeof trapResult.powerDelta === "number") {
         const oldPower = power;
-        const appliedPowerDelta = immutable && trapResult.powerDelta > 0 ? 0 : trapResult.powerDelta;
-        power = Math.max(trapResult.allowZeroPower ? 0 : 1, power + appliedPowerDelta);
+        trapPowerDelta += trapResult.powerDelta;
+        attackPowerResult = calculateFinalAttackPower();
+        power = Math.max(trapResult.allowZeroPower ? 0 : 1, attackPowerResult.finalAttackPower);
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
-        if (immutable && trapResult.powerDelta > 0) {
-          addLog(`「不変の呪縛」により、カード効果による攻撃力+${trapResult.powerDelta}を無効化した。`);
-        } else if (oldPower !== power) addLog(`攻撃力が${oldPower}→${power}になった。`);
+        if (immutable || isAttackReplacement) {
+          addLog(`${isAttackReplacement ? "攻撃置換" : "「不変の呪縛」"}により、罠による加える本数への増減${trapResult.powerDelta >= 0 ? "+" : ""}${trapResult.powerDelta}を無効化した。`);
+        } else if (oldPower !== power) addLog(`この攻撃で加える本数が${oldPower}→${power}になった。`);
       }
 
       if (trapResult.targetHand) {
         targetHand = trapResult.targetHand;
         targetStartPower = state[defender][targetHand];
         const redirectedResonance = !danceActive && isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
-        const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, immutable);
-        if (redirectedBonus !== resonanceBonus) {
-          power = Math.max(1, power + redirectedBonus - resonanceBonus);
-          resonanceBonus = redirectedBonus;
-        }
+        const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, false);
+        resonanceBonus = redirectedBonus;
         resonance = redirectedResonance;
+        immutable = hasImmutableCurse(defender, targetHand);
+        attackPowerResult = calculateFinalAttackPower();
+        power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         if (state.battleMode === "friend" && attacker === "human") {
           emitFriendFx("attack", {
@@ -11912,38 +11947,45 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       // 「銛を埋める」は対象変更後・攻撃結果確定前に最終対象へ付与する。
       // この後に空振り等で無効化されても、付与済みの銛は残る。
-      resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
+      if (!danceActive) resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
 
       if (tearSharpenedSwordActive) {
         discardAllBlessingsFromHand(defender, targetHand, "「涙で研ぎ澄まされた剣」");
         render();
       }
 
-      if (defender === otherPlayer(attacker) && hasAttachment(defender, targetHand, "villainMark")) {
-        if (!immutable) power += 1;
+      if (!danceActive && hasAttachment(defender, targetHand, "villainMark")) {
+        trapPowerDelta += 1;
+        attackPowerResult = calculateFinalAttackPower();
+        power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         drawCard(attacker);
-        addLog(immutable
-          ? `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」の攻撃力+1は「不変の呪縛」で無効。${handNames[attacker]}はカードを1枚引いた。`
-          : `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」により、攻撃力+1。${handNames[attacker]}はカードを1枚引いた。`);
+        const villainMarkReason = isAttackReplacement
+          ? "攻撃置換のため適用されない"
+          : immutable ? "「不変の呪縛」により無効" : "適用";
+        addLog(villainMarkReason === "適用"
+          ? `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」により、通常攻撃で加える本数+1。${handNames[attacker]}はカードを1枚引いた。`
+          : `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」による加える本数+1は${villainMarkReason}。${handNames[attacker]}はカードを1枚引いた。`);
       }
 
-      recordDirectiveAttack(attacker, attackHand, defender, targetHand);
-      state.temp[attacker].lightningBonus=0; state.temp[attacker].synapseBonus=0;
-      const duelUpdate = updateDuelSurge(attacker, attackHand, defender, targetHand);
-      if (duelUpdate.bonus > 0 && !immutable) {
-        duelSurgeBonus = duelUpdate.bonus;
-        power += duelSurgeBonus;
-        context = { defender, targetHand, attacker, attackHand, incomingPower: power };
-        addLog(`${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}により、攻撃力+${duelSurgeBonus}。`);
+      if (!danceActive) recordDirectiveAttack(attacker, attackHand, defender, targetHand);
+      if (!danceActive) {
+        state.temp[attacker].lightningBonus=0;
+        state.temp[attacker].synapseBonus=0;
       }
-      if (prestoModifier !== null) {
-        power += prestoModifier;
+      const duelUpdate = !danceActive ? updateDuelSurge(attacker, attackHand, defender, targetHand) : { bonus: 0, level: 0 };
+      if (duelUpdate.bonus > 0) {
+        duelSurgeBonus = duelUpdate.bonus;
+        attackPowerResult = calculateFinalAttackPower();
+        power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
+        addLog((immutable || isAttackReplacement)
+          ? `${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}による加える本数+${duelSurgeBonus}は${isAttackReplacement ? "攻撃置換のため適用されない" : "「不変の呪縛」により無効"}。`
+          : `${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}により、通常攻撃で加える本数+${duelSurgeBonus}。`);
       }
 
       if (trapResult.cancelAttack) {
-        if (state.temp[attacker].lightningZeroAtFive) {
+        if (!danceActive && state.temp[attacker].lightningZeroAtFive) {
           state.temp[attacker].lightningZeroAtFive = false;
           state.temp[attacker].lightningNoChargeGain = false;
           addLog(`「雷撃」の充電Lv.10効果は、攻撃が無効になったため消費された。`);
@@ -11951,7 +11993,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         addLog(`${handNames[attacker]}の攻撃は無効になった。`);
         setLastAction(attacker, "攻撃", "攻撃は無効になりました。", "action");
 
-        state.temp[attacker].lightningNoChargeGain = false;
+        if (!danceActive) state.temp[attacker].lightningNoChargeGain = false;
         state.animating = false;
         clearHighlights();
         render();
@@ -11968,12 +12010,16 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
-      if (state.temp[attacker]?.dance) {
-        state.temp[attacker].dance = false;
+      if (danceActive) {
         const before = state[defender][targetHand];
         const matched = state[attacker][attackHand];
-        state[defender][targetHand] = matched;
-        addLog(`${handNames[attacker]}の「乱舞」により、ダメージは発生せず、${handNames[defender]}の${handNames[targetHand]}を${before}→${matched}に揃えた。`);
+        let resolvedFinal = wrapFinger(matched);
+        state[defender][targetHand] = resolvedFinal;
+        state.lastAttackContext = {attackKind:"replacement",attacker,sourceHand:attackHand,defender,targetHand,basePower:null,attackModifier:null,finalAttackPower:null,receivedAmount:null,isAttackReplacement:true,attackReplacementKind:"result",isNormalAttack:false,isCardAttack:false};
+        addLog(`${handNames[attacker]}の「乱舞」により、ダメージは発生せず、${handNames[defender]}の${handNames[targetHand]}を${before}→${matched}${matched!==resolvedFinal?`→${resolvedFinal}`:""}に変更した。`);
+        const afterTrapResult = await resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower:0,attackTotal:matched,resolvedFinal,trapUsed,ignoresDefenderBoard});
+        trapUsed = afterTrapResult.trapUsed;
+        resolvedFinal = afterTrapResult.resolvedFinal;
         setLastAction(attacker, "乱舞", `${handNames[attackHand]}と${handNames[defender]}の${handNames[targetHand]}の本数を揃えた。`, "card");
         clearBrokenTraps(defender);
         clearBrokenTraps(attacker);
@@ -11984,13 +12030,38 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
-      // 雷撃の3状態は同じ「次の攻撃」に属する。カノンも成立した通常攻撃なので、
-      // bonusだけをamountへ反映して残りを次の攻撃へ持ち越さない。
-      // ただし盤面結果を計算しないため、Lv.10の特殊0化そのものは発動させない。
-      if (canonActive) {
-        state.temp[attacker].lightningZeroAtFive = false;
-        state.temp[attacker].lightningNoChargeGain = false;
+      // finalAttackPower確定後、防御側の「受ける本数」補正を適用する。
+      // 不変の呪縛はこのreceivedAmountレイヤーには干渉しない。
+      attackPowerResult = calculateFinalAttackPower();
+      power = attackPowerResult.finalAttackPower;
+      const finalAttackPower = power;
+      if (!ignoresDefenderBoard && power > 0) {
+        if (state.temp[defender]?.knightCreed) {
+          power = 0;
+        } else {
+          if (state.temp[defender]?.fadedCreedGuard) {
+            power = Math.max(1, power - 1);
+            addLog(`${handNames[defender]}の「色褪せた信条」により、受ける本数-1。`);
+          }
+          power = applyGuardBlessingReduction(defender, targetHand, power, "攻撃");
+        }
+        if (hasAttachment(defender,targetHand,"scalesBlessing")) {
+          const beforeScale=power;
+          power = isBalanced(defender) ? Math.max(0,power-2) : power+1;
+          addLog(`${handNames[defender]}の「天秤の加護」により、受ける本数が${beforeScale}→${power}。`);
+        }
+        if (hasAttachment(defender,targetHand,"magicalDespair")) {
+          const beforeDespair = power;
+          power=Math.max(0,power-1);
+          addLog(`${handNames[defender]}の「絶望」により、受ける本数が${beforeDespair}→${power}になった。`);
+        }
+        if (hasMagicalJustice(defender)) {
+          power=Math.max(1,power-2);
+          addLog(`${handNames[defender]}の「正義」により、受ける本数-2。`);
+        }
       }
+      const receivedAmount = power;
+      state.lastAttackContext = {attackKind:"normal",attacker,sourceHand:attackHand,defender,targetHand,basePower,attackModifier:attackPowerResult.attackModifier,finalAttackPower,receivedAmount,appliedAmount:canonActive?0:receivedAmount,canonActive,isAttackReplacement,attackReplacementKind,isNormalAttack:true,isCardAttack:false};
 
       if (power <= 0 && prestoModifier === null && state.temp[defender]?.knightCreed) {
         addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
@@ -12001,24 +12072,16 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
-      // カノンは攻撃量と対象が確定した時点で結果だけを予約する。
-      // 実際の盤面を変更しないため、normalize・特殊0化・身構え・E=mc²などの
-      // 「本数を反映した結果」に依存する処理へは進まない。
+      // カノンは通常攻撃を最後まで成立させる。罠・補正後の「本来加える本数」と
+      // 最終対象を保存し、この攻撃で盤面へ実際に加える本数だけを0にする。
       if(canonActive){
         if(power!==0){
           state.pendingCanonHits.push({sourcePlayer:attacker,waitForPlayer:otherPlayer(attacker),defender,targetHand,amount:power});
-          addLog(`${handNames[attacker]}の「カノン」は${handNames[defender]}の${handNames[targetHand]}へ加える${power}本を記録した。`);
-        }else addLog(`${handNames[attacker]}の「カノン」は最終的に加える本数が0のため記録されなかった。`);
-        setLastAction(attacker,"カノン",`${handNames[attackHand]}による通常攻撃の対象と最終加算量${power}本を記録した。`,"card");
-        await resolveResonanceRewards(attacker,attackHand,resonance);
-        await resolveHarpoonAttackHit(attacker,attackHand,defender,targetHand,{resonance,isInternal:!!options.cardInternalAttack});
-        state.animating=false;
-        clearHighlights();
-        render();
-        if(state.battleMode==="friend"&&attacker==="human")await forcePublishFriendStateNow("canon result recorded");
-        if(checkWin()){render();await completeAttackAttempt();return true;}
-        await completeAttackAttempt();
-        return true;
+          addLog(`${handNames[attacker]}の「カノン」は${handNames[defender]}の${handNames[targetHand]}へ本来加える${power}本を記録した。この攻撃で実際に加える本数は0。`);
+        }else{
+          addLog(`${handNames[attacker]}の「カノン」は本来加える本数が0のため記録されなかった。`);
+        }
+        power=0;
       }
       const before = state[defender][targetHand];
       const total = before + power;
@@ -12050,6 +12113,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
 
+      // 成長は通常攻撃のraw resultが5になった瞬間、5→0などの盤面結果処理より先に発動する。
+      resolveGrowthBeforeFiveToZero(attacker,attackHand,total);
+
       state.temp[attacker].lightningZeroAtFive = false;
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
@@ -12060,26 +12126,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (guardWouldApply) state.temp[defender].guard = false;
       render();
 
-      // 攻撃判定後：囮、踏み止まりなど。
-      if (!trapUsed && !ignoresDefenderBoard && !(defender === otherPlayer(attacker) && state.temp[attacker].electromagneticAttack)) {
-        const afterContext = { ...context, attackTotal: total, resolvedFinal };
-        const afterManual = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "after", true, afterContext);
-        const chosenAfterManual = await maybeChooseManualTrap(defender, afterManual, afterContext);
-        if (chosenAfterManual) {
-          const afterResult = await triggerTrap(defender, chosenAfterManual, afterContext);
-          trapUsed = true;
-          if (afterResult.stopAtFour) {
-            resolvedFinal = 4;
-            state[defender][targetHand] = 4;
-          }
-        } else {
-          const afterAuto = getTriggerTraps(defender, targetHand, attacker, attackHand, power, "after", false, afterContext);
-          if (afterAuto.length > 0) {
-            await triggerTrap(defender, afterAuto[0], afterContext);
-            trapUsed = true;
-          }
-        }
-      }
+      // 攻撃判定後：囮、踏み止まりなど。攻撃結果置換も同じ1攻撃1罠処理を使う。
+      const afterTrapResult = await resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower:power,attackTotal:total,resolvedFinal,trapUsed,ignoresDefenderBoard});
+      trapUsed = afterTrapResult.trapUsed;
+      resolvedFinal = afterTrapResult.resolvedFinal;
 
       setLastAction(attacker, "攻撃", `${handNames[attackHand]}で${handNames[defender]}の${handNames[targetHand]}を攻撃。`, "action");
 
@@ -12091,7 +12141,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       );
 
       const finalTargetWasOpponent = defender === otherPlayer(attacker);
-      const finalTargetWasZero = finalTargetWasOpponent && resolvedFinal === 0;
+      const finalTargetWasZero = resolvedFinal === 0;
 
       if (selfRighteousActive && !finalTargetWasZero && state[attacker][attackHand] > 0) {
         await addFingersWithCalculation(attacker, attackHand, 2, "独善の反動");
@@ -12535,12 +12585,18 @@ async function endTurn() {
       return state.human[otherHand(hand)] === 0;
     }
 
+    function estimateCpuNormalAttackPower(attackHand,targetHand,extraBonus=0) {
+      const immutable=hasImmutableCurse("human",targetHand);
+      const modifier=state.temp.cpu.attackBonus+extraBonus+(state.berserkerTurns.cpu>0?2:0)+(hasAttachment("cpu",attackHand,"powerBlessing")?1:0)+(hasAttachment("cpu",attackHand,"recklessBlessing")?2:0)-(hasAttachment("cpu",attackHand,"slowCurse")?1:0);
+      const finalAttackPower=Math.max(1,state.cpu[attackHand]+(immutable?0:modifier));
+      return Math.max(1,finalAttackPower-(hasAttachment("human",targetHand,"guardBlessing")?1:0));
+    }
+
     function cpuBestAttackScoreAfterBonus(extraBonus = 0) {
       let best = null;
       for (const a of ["L", "R"].filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
-          const immutable = hasImmutableCurse("cpu", a);
-          const power = Math.max(1, state.cpu[a] + (immutable ? Math.min(0, state.temp.cpu.attackBonus + extraBonus) : state.temp.cpu.attackBonus + extraBonus) + (immutable ? 0 : (state.berserkerTurns.cpu > 0 ? 2 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "recklessBlessing") ? 2 : 0)) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
+          const power = estimateCpuNormalAttackPower(a,t,extraBonus);
           const attackTotal = state.human[t] + power;
           const result = state.berserkerTurns.cpu > 0 && attackTotal >= 7 ? 0 : wrapFinger(attackTotal);
           let score = 20 + state.human[t] * 8 + state.cpu[a] * 2;
@@ -12768,8 +12824,7 @@ async function endTurn() {
       const normalAttackAvailable=canUseNormalAttackAction("cpu");
       for (const a of (normalAttackAvailable?["L", "R"]:[]).filter(h => isAlive("cpu", h))) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
-          const immutable = hasImmutableCurse("cpu", a);
-          const power = Math.max(1, state.cpu[a] + (immutable ? Math.min(0, state.temp.cpu.attackBonus) : state.temp.cpu.attackBonus) + (immutable ? 0 : (state.berserkerTurns.cpu > 0 ? 2 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "powerBlessing") ? 1 : 0)) + (immutable ? 0 : (hasAttachment("cpu", a, "recklessBlessing") ? 2 : 0)) - (hasAttachment("cpu", a, "slowCurse") ? 1 : 0) - (hasAttachment("human", t, "guardBlessing") ? 1 : 0));
+          const power = estimateCpuNormalAttackPower(a,t);
           const attackTotal = state.human[t] + power;
           const result = state.berserkerTurns.cpu > 0 && attackTotal >= 7 ? 0 : wrapFinger(attackTotal);
           let score = 25 + state.human[t] * 8 + state.cpu[a] * 3;
@@ -12965,7 +13020,6 @@ async function endTurn() {
       }
 
       let damage = (ammo.cost || 0) + (ammo.bullet ? 1 : 0);
-      damage = applyGuardBlessingReduction(defender, targetHand, damage, "乱射");
       if (damage <= 0) {
         addLog(`${handNames[player]}は「乱射」で「${ammo.name}」を捨てたが、ダメージは0だった。`);
         state.pendingTerminalEnd[player] = true;
@@ -13017,6 +13071,12 @@ async function endTurn() {
         render();
         return true;
       }
+
+      // 乱射はsourceHandを持たないカード攻撃。対象変更後の最終対象に対して
+      // receivedAmount（守護など）を計算し、罠はこの1撃につき1枚までとする。
+      const finalAttackPower = damage;
+      damage = applyGuardBlessingReduction(defender, targetHand, damage, "乱射");
+      state.lastAttackContext = {attackKind:"card",attacker:player,sourceHand:null,defender,targetHand,basePower:(ammo.cost||0)+(ammo.bullet?1:0),attackModifier:finalAttackPower-((ammo.cost||0)+(ammo.bullet?1:0)),finalAttackPower,receivedAmount:damage,isAttackReplacement:false,isNormalAttack:false,isCardAttack:true,sourceCardId:"rapidFire"};
 
       const before = state[defender][targetHand];
       const total = before + damage;
@@ -13414,7 +13474,7 @@ async function endTurn() {
         }
         await addFingersWithCalculation("human", hand, 1, "裏切られた心");
         state.mode = "attack";
-        setMessage("「裏切られた心」：手を1本増やしました。このターン、与える本数-1。");
+        setMessage("「裏切られた心」：手を1本増やしました。このターン、通常攻撃で加える本数-1。");
         render();
         await forcePublishFriendStateNow("betrayed heart");
         return;
