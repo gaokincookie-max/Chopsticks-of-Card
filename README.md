@@ -1,4 +1,25 @@
-# 割り箸カードゲーム v158b
+# 割り箸カードゲーム v159b
+
+## v159b player tags / symmetric friends
+
+- `displayName`は重複可能ですが、5桁tagは全アカウントで一意です。公開IDは引き続き`displayName#tag`、内部主キーはFirebase UIDです。
+- `playerTags/{tag}`をプロフィールと同じtransactionで作成し、双方をSecurity Rulesの`getAfter()`で相互必須にします。SHA予約方式は使用しません。
+- friend承認は双方のfriend document作成とpending申請削除を同一batchへ要求します。解除・block時も双方friend documentの同時削除を要求します。
+
+## v159a social security fixes
+
+- クライアントは自分の`blocked`だけを読み、逆方向blockはSecurity Rules内だけで判定します。
+- friend作成はpending申請の受信者だけに許可し、申請送信者による自己承認を拒否します。friend削除は従来どおりpairのどちらからでも可能です。
+- friendRequest、friends、battleInviteの複製表示情報を`users/{uid}`の公開プロフィールと照合します。
+- battleInviteの期限はFirestore Timestampの`expiresAt`だけを正本とし、作成時は最大61秒、承認時は未期限切れであることをRulesでも検査します。
+
+## v159 アカウント・フレンド
+
+- 従来どおり匿名認証ですぐ遊べます。Googleまたはメール／パスワードを追加すると、現在の匿名ユーザーへcredentialをlinkしてUIDとゲームデータを引き継ぎます。ログアウト後は新しい匿名認証へ戻ります。
+- 公開プロフィールは`表示名#5桁タグ`です。表示名は重複可能、5桁タグは全アカウントで一意です。メールアドレスはFirestoreへ保存せず、`playerTags/{tag}`をprofileと同じtransactionで確保します。
+- `users/{uid}/friends`、`friendRequests`、`users/{uid}/blocked`でフレンド申請・承認・拒否・解除・ブロックを管理します。ブロック中は申請・招待・フレンド化を許可しません。
+- フレンド対戦招待は60秒有効です。承認transactionでroom IDを一度だけ確定し、送信者が既存`rooms`を作成、受信者が同じroomへ参加します。二重承認や重複room作成を防止します。
+- 公開するのはUID・公開ID・表示名・装飾用IDだけです。認証メール、パスワード、credentialはUIやFirestoreの公開プロフィールへ含めません。
 
 ## ATTACK / TRAP CORE RULES
 
@@ -81,7 +102,7 @@
 3. 内容をレビューして「公開」を押します（このリポジトリから自動デプロイはしません）。
 4. 別ブラウザセッションから入室し、ready・試合開始・先攻ルーレット・再戦を再確認します。
 
-本番Rules公開後、匿名Auth未対応または旧書き込み形式のキャッシュはFirestoreへ接続できません。v158bでは`game.js?v=158b`と`style.css?v=158b`を使用します。新しいHTML・JavaScript・CSSの配信を確認してからRulesを公開してください。
+本番Rules公開後、匿名Auth未対応または旧書き込み形式のキャッシュはFirestoreへ接続できません。v159bでは`game.js?v=159b`と`style.css?v=159b`を使用します。新しいHTML・JavaScript・CSSの配信を確認してからRulesを公開してください。
 
 基本の本数処理は5本で0になり、5を超えた場合は超過分を引き継ぎます（6→1、7→2）。
 

@@ -4,9 +4,71 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=158b">
+  <link rel="stylesheet" href="style.css?v=159b">
 </head>
 <body>
+  <div class="account-actions" id="accountActions" aria-live="polite">
+    <span class="account-loading" id="accountLoading">認証確認中…</span>
+    <button id="loginOpenBtn" hidden>ログイン</button>
+    <button id="socialFriendsOpenBtn" hidden>フレンド<span class="social-badge" id="socialRequestBadge" hidden>0</span></button>
+    <button id="accountOpenBtn" hidden>アカウント</button>
+  </div>
+
+  <div class="social-modal" id="authModal" aria-hidden="true">
+    <div class="social-dialog auth-dialog">
+      <button class="social-close" id="authCloseBtn" aria-label="閉じる">×</button>
+      <div class="menu-kicker">ACCOUNT</div><h2>ログイン</h2>
+      <div class="social-tabs"><button id="authLoginTab" class="active">ログイン</button><button id="authRegisterTab">新規作成</button></div>
+      <div id="authLoginPane">
+        <button class="google-auth-btn wide-btn" id="googleLoginBtn">Googleでログイン</button>
+        <label>メールアドレス<input id="loginEmailInput" type="email" autocomplete="email"></label>
+        <label>パスワード<input id="loginPasswordInput" type="password" autocomplete="current-password"></label>
+        <button id="emailLoginBtn" class="wide-btn">ログイン</button>
+      </div>
+      <div id="authRegisterPane" hidden>
+        <label>プレイヤー名<input id="registerNameInput" maxlength="20" autocomplete="nickname"></label>
+        <label>メールアドレス<input id="registerEmailInput" type="email" autocomplete="email"></label>
+        <label>パスワード<input id="registerPasswordInput" type="password" autocomplete="new-password"></label>
+        <label>パスワード確認<input id="registerPasswordConfirmInput" type="password" autocomplete="new-password"></label>
+        <button id="emailRegisterBtn" class="wide-btn">アカウントを作成</button>
+        <button class="google-auth-btn secondary wide-btn" id="googleRegisterBtn">Googleでアカウント作成</button>
+      </div>
+      <p class="social-message" id="authMessage"></p>
+    </div>
+  </div>
+
+  <div class="social-modal" id="profileSetupModal" aria-hidden="true">
+    <div class="social-dialog"><div class="menu-kicker">PROFILE</div><h2>プレイヤー名を設定</h2>
+      <p class="small">1～20文字。名前の後ろへ自動で5桁のタグを割り当てます。</p>
+      <label>プレイヤー名<input id="profileSetupNameInput" maxlength="20" autocomplete="nickname"></label>
+      <button id="profileSetupSaveBtn" class="wide-btn">プロフィールを作成</button><p class="social-message" id="profileSetupMessage"></p>
+    </div>
+  </div>
+
+  <div class="social-modal" id="accountModal" aria-hidden="true"><div class="social-dialog">
+    <button class="social-close" id="accountCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">MY ACCOUNT</div><h2 id="accountPublicId">アカウント</h2>
+    <dl class="account-detail"><dt>プレイヤー名</dt><dd id="accountDisplayName">-</dd><dt>ログイン方法</dt><dd id="accountProvider">-</dd><dt>アカウント作成日</dt><dd id="accountCreatedAt">-</dd></dl>
+    <button id="blockedListBtn" class="secondary wide-btn">ブロック中のプレイヤー</button><div id="blockedList" class="social-list" hidden></div>
+    <button id="logoutBtn" class="danger wide-btn">ログアウト</button><p class="social-message" id="accountMessage"></p>
+  </div></div>
+
+  <aside class="social-friends-panel" id="socialFriendsPanel" aria-hidden="true">
+    <div class="social-panel-head"><div><div class="menu-kicker">SOCIAL</div><h2>フレンド</h2></div><button id="socialFriendsCloseBtn" class="secondary">閉じる</button></div>
+    <div class="social-tabs"><button data-social-tab="friends" class="active">フレンド</button><button data-social-tab="requests">申請 <span id="requestTabCount"></span></button><button data-social-tab="add">追加</button></div>
+    <div class="social-tab-pane" data-social-pane="friends"><div id="socialFriendsList" class="social-list"></div></div>
+    <div class="social-tab-pane" data-social-pane="requests" hidden><h3>受信申請</h3><div id="incomingRequestsList" class="social-list"></div><h3>送信中</h3><div id="outgoingRequestsList" class="social-list"></div></div>
+    <div class="social-tab-pane" data-social-pane="add" hidden><label>プレイヤーID<input id="playerSearchInput" placeholder="Karera#04821"></label><button id="playerSearchBtn" class="wide-btn">検索</button><div id="playerSearchResult" class="social-list"></div></div>
+    <p class="social-message" id="socialMessage"></p>
+  </aside>
+
+  <div class="social-modal" id="publicProfileModal" aria-hidden="true"><div class="social-dialog">
+    <button class="social-close" id="publicProfileCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PUBLIC PROFILE</div><h2 id="publicProfileId">-</h2><p id="publicProfileName"></p>
+    <div class="social-action-stack"><button id="battleInviteBtn">対戦を申し込む</button><button id="removeFriendBtn" class="secondary">フレンド解除</button><button id="blockPlayerBtn" class="danger">ブロック</button></div><p class="social-message" id="publicProfileMessage"></p>
+  </div></div>
+
+  <div class="social-modal" id="socialConfirmModal" aria-hidden="true"><div class="social-dialog compact-dialog"><h2 id="socialConfirmTitle">確認</h2><p id="socialConfirmText"></p><div class="social-confirm-actions"><button id="socialConfirmOkBtn" class="danger">実行</button><button id="socialConfirmCancelBtn" class="secondary">キャンセル</button></div></div></div>
+
+  <div class="battle-invite-toast" id="battleInviteToast" aria-hidden="true"><strong id="battleInviteToastTitle">対戦招待</strong><p id="battleInviteToastText"></p><div><button id="acceptBattleInviteBtn">対戦する</button><button id="declineBattleInviteBtn" class="secondary">断る</button></div><small id="battleInviteCountdown"></small></div>
   <div class="overlay" id="overlay">
     <div class="popup-card" id="popupCard">
       <div class="popup-user" id="popupUser"></div>
@@ -694,7 +756,15 @@
     import {
       getAuth,
       signInAnonymously,
-      onAuthStateChanged
+      onAuthStateChanged,
+      GoogleAuthProvider,
+      EmailAuthProvider,
+      linkWithPopup,
+      signInWithPopup,
+      signInWithCredential,
+      linkWithCredential,
+      signInWithEmailAndPassword,
+      signOut
     } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
     import {
       getFirestore,
@@ -704,7 +774,15 @@
       updateDoc,
       onSnapshot,
       serverTimestamp,
-      runTransaction
+      runTransaction,
+      collection,
+      query,
+      where,
+      getDocs,
+      writeBatch,
+      deleteDoc,
+      Timestamp,
+      limit
     } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -736,7 +814,24 @@
         updateDoc,
         onSnapshot,
         serverTimestamp,
-        runTransaction
+        runTransaction,
+        collection,
+        query,
+        where,
+        getDocs,
+        writeBatch,
+        deleteDoc,
+        Timestamp,
+        limit,
+        GoogleAuthProvider,
+        EmailAuthProvider,
+        linkWithPopup,
+        signInWithPopup,
+        signInWithCredential,
+        linkWithCredential,
+        signInWithEmailAndPassword,
+        signOut,
+        signInAnonymously
       };
       onAuthStateChanged(auth, user => {
         const api = window.WaribashiFirebase;
@@ -745,6 +840,7 @@
         api.uid = user?.uid || null;
         api.authReady = !!user;
         api.ready = !!user;
+        window.dispatchEvent(new CustomEvent("waribashi-auth-changed", { detail:{ user:user||null } }));
         window.dispatchEvent(new CustomEvent(user ? "waribashi-auth-ready" : "waribashi-auth-signed-out"));
       });
       window.dispatchEvent(new CustomEvent("waribashi-firebase-ready"));
@@ -755,6 +851,6 @@
     }
   </script>
 
-  <script src="game.js?v=158b"></script>
+  <script src="game.js?v=159b"></script>
 </body>
 </html>

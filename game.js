@@ -2150,15 +2150,28 @@ const CARD_LIBRARY = {
       friendPostMatchChoice: null,
       friendPostMatchResolutionId: null,
       friendPostMatchResolving: false,
-      friendDeckEditReturnToLobby: false
+      friendDeckEditReturnToLobby: false,
+      socialProfile: null,
+      socialFriends: [],
+      socialIncomingRequests: [],
+      socialOutgoingRequests: [],
+      socialCurrentProfile: null,
+      socialListenerUnsubs: [],
+      socialInviteUnsubs: [],
+      socialInviteToastId: null,
+      socialInviteTimer: null,
+      socialHandledAcceptedInvites: new Set()
     };
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v158b-dance-canon";
+    const LATEST_NEWS_ID = "v159b-player-tags";
 
     const UPDATE_NEWS = [
+      {id:"v159b-player-tags",version:"v159b",date:"2026-08-20",title:"プレイヤーIDとフレンド整合性を強化",summary:"5桁タグの一意予約とフレンド関係の原子性を改善しました。",featured:true,tags:["fix"],items:["5桁タグを全アカウントで一意に予約するplayerTags方式へ変更","プロフィールとタグ予約を同一transactionで相互検証","フレンドの双方作成・双方削除をSecurity Rulesでも同一commitに強制"]},
+      {id:"v159a-social-security",version:"v159a",date:"2026-08-20",title:"アカウント・フレンド機能の安全性を改善",summary:"フレンド申請・ブロック・対戦招待の権限と期限処理を修正しました。",featured:true,tags:["fix"],items:["他プレイヤーのブロック情報をクライアントが読まない構造へ修正","フレンド申請は受信者だけが承認できるようSecurity Rulesを強化","申請・フレンド・対戦招待の表示情報偽装を防止","対戦招待の有効期限をFirestore Timestampへ統一"]},
+      {id:"v159-account-friends",version:"v159",date:"2026-08-20",title:"アカウント・フレンド機能を追加",summary:"Google／メールアカウント、プレイヤーID検索、フレンド申請、対戦招待を追加しました。",featured:true,tags:["new","system"],items:["匿名のまま遊べる従来仕様を維持し、Googleまたはメールでデータを引き継いだアカウントを作成可能","プレイヤー名と5桁タグからなる公開IDでフレンドを検索","フレンド申請・承認・拒否・解除・ブロックに対応","フレンドへ60秒間有効な対戦招待を送り、承認後は既存のオンライン対戦へ自動接続"]},
       {id:"v158b-dance-canon",version:"v158b",date:"2026-08-19",title:"乱舞とカノンの攻撃処理を整理",summary:"乱舞を置換攻撃として通常攻撃から分離し、カノンを通常攻撃の遅延出力として簡略化しました。",featured:true,tags:["fix"],items:["乱舞は攻撃行動を消費する置換攻撃となり、通常攻撃履歴・通常攻撃限定効果には含まれないよう変更","乱舞でも対象変更・攻撃無効・攻撃後反応の罠は有効、ぬかるみ等の本数補正は不成立","カノン攻撃でも罠・不変・守護等を通常どおり処理し、最終対象と本来加える本数を保存","カノンのその場の加算は0、遅延出力時に対象が0なら不発"]},
       {id:"v158a-dance-after-traps",version:"v158a",date:"2026-08-19",title:"乱舞の罠処理を修正",summary:"乱舞の攻撃後罠を共通処理へ統合しました。",featured:true,tags:["fix"],items:["乱舞で囮・茨・反撃・スワンプマンなどの攻撃後罠を処理","1攻撃1罠を維持し、ぬかるみは乱舞では発動・消費しない","攻撃置換で本数補正が適用されない場合のログ表示を修正"]},
       {id:"v158-normal-attack-wording",version:"v158",date:"2026-08-19",title:"通常攻撃ルールとカード本文を整理",summary:"「攻撃」と「通常攻撃」の表記、一部カードの対象条件、成長と乱舞の処理を調整しました。",featured:true,tags:["update","fix"],items:["通常攻撃は発生経路を問わず同じルールで扱い、自分の手への通常攻撃にも対応","カード本文の攻撃力表記を、加える本数・受ける本数が分かる表現へ整理","成長を、攻撃対象が5になった瞬間に5→0より先に1枚引く効果へ変更","独善・みんなのための正義・悪党の印などの通常攻撃対象条件を整理","乱舞を攻撃結果置換として明確化し、ぬかるみが発動・消費されないよう変更"]},
@@ -3451,6 +3464,209 @@ const CARD_LIBRARY = {
       return fallback;
     }
 
+    /* ACCOUNT / SOCIAL RULE:
+     * Anonymous Auth remains the default. A permanent account links the current
+     * anonymous credential where possible. Public identity never contains email;
+     * displayName#tag is reserved atomically in playerTags using the five-digit tag.
+     */
+    const socialEl = id => document.getElementById(id);
+    const socialOpen = id => { const el=socialEl(id); if(el){el.classList.add("show");el.setAttribute("aria-hidden","false");} };
+    const socialClose = id => { const el=socialEl(id); if(el){el.classList.remove("show");el.setAttribute("aria-hidden","true");} };
+    const socialMessage = (id,text="") => { const el=socialEl(id); if(el)el.textContent=text; };
+    const isFormalAccount = user => !!user && !user.isAnonymous;
+    const socialRequestId = (fromUid,toUid) => `${fromUid}_${toUid}`;
+    const socialProfileFields = profile => ({uid:profile.uid,displayName:profile.displayName,tag:profile.tag,publicId:profile.publicId});
+    const socialTimestampMillis = value => value?.toMillis?.() || Number(value?.seconds||0)*1000 || Number(value||0);
+    const normalizePlayerName = value => String(value||"").normalize("NFKC").trim();
+    const normalizePublicId = value => String(value||"").normalize("NFKC").trim().toLocaleLowerCase("ja-JP");
+    function validatePlayerName(value){
+      const name=normalizePlayerName(value);
+      if(name.length<1||name.length>20||/[\r\n\u0000-\u001f\u007f]/.test(name))throw new Error("プレイヤー名は1～20文字で入力してください。");
+      return name;
+    }
+    function makePlayerTag(){
+      const values=new Uint32Array(1);crypto.getRandomValues(values);
+      return String(values[0]%100000).padStart(5,"0");
+    }
+    function firebaseAuthErrorMessage(error){
+      const messages={
+        "auth/invalid-email":"メールアドレスの形式を確認してください。","auth/invalid-credential":"メールアドレスまたはパスワードが違います。",
+        "auth/email-already-in-use":"このメールアドレスはすでに使用されています。","auth/weak-password":"パスワードは6文字以上にしてください。",
+        "auth/popup-closed-by-user":"Googleログインがキャンセルされました。","auth/network-request-failed":"通信できません。接続を確認してください。"
+      };
+      return messages[error?.code]||error?.message||"処理に失敗しました。";
+    }
+    function socialOperationError(error,operation){
+      if(error?.code!=="permission-denied")return firebaseAuthErrorMessage(error);
+      if(operation==="request")return "このプレイヤーには現在申請できません。";
+      if(operation==="invite")return "このプレイヤーには現在対戦を申し込めません。";
+      if(operation==="accept")return "フレンド申請の承認に失敗しました。状態が更新されている可能性があります。";
+      return "状態が更新されています。もう一度お試しください。";
+    }
+    function cleanupSocialListeners(){
+      [...state.socialListenerUnsubs,...state.socialInviteUnsubs].forEach(unsub=>{try{unsub?.();}catch(_){}});
+      state.socialListenerUnsubs=[];state.socialInviteUnsubs=[];
+      if(state.socialInviteTimer)clearInterval(state.socialInviteTimer);
+      state.socialInviteTimer=null;state.socialInviteToastId=null;
+    }
+    async function createSocialProfile(displayName,user=window.WaribashiFirebase?.authUser){
+      const fb=firebaseApi();if(!fb||!isFormalAccount(user))throw new Error("正式アカウントへログインしてください。");
+      const name=validatePlayerName(displayName);
+      for(let attempt=0;attempt<30;attempt+=1){
+        const tag=makePlayerTag(), publicId=`${name}#${tag}`;
+        try{
+          const profile=await fb.runTransaction(fb.db,async transaction=>{
+            const userRef=fb.doc(fb.db,"users",user.uid), tagRef=fb.doc(fb.db,"playerTags",tag);
+            const [userSnap,tagSnap]=await Promise.all([transaction.get(userRef),transaction.get(tagRef)]);
+            if(userSnap.exists())return {uid:user.uid,...userSnap.data()};
+            if(tagSnap.exists()){const error=new Error("PLAYER_TAG_TAKEN");error.code="PLAYER_TAG_TAKEN";throw error;}
+            const publicProfile={uid:user.uid,displayName:name,tag,publicId,createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp(),lastLoginAt:fb.serverTimestamp(),bannerId:"",titleId:""};
+            transaction.set(tagRef,{uid:user.uid,tag,displayName:name,publicId,createdAt:fb.serverTimestamp()});
+            transaction.set(userRef,publicProfile);return {...publicProfile,createdAt:Date.now()};
+          });
+          state.socialProfile=profile;return profile;
+        }catch(error){if(error?.code!=="PLAYER_TAG_TAKEN"&&error?.message!=="PLAYER_TAG_TAKEN")throw error;}
+      }
+      throw new Error("プレイヤーIDの作成に失敗しました。もう一度お試しください。");
+    }
+    async function loadSocialProfile(user=window.WaribashiFirebase?.authUser){
+      if(!isFormalAccount(user)){state.socialProfile=null;renderSocialAccountUi();cleanupSocialListeners();return null;}
+      const fb=firebaseApi();if(!fb)return null;
+      const snap=await fb.getDoc(fb.doc(fb.db,"users",user.uid));
+      if(!snap.exists()){state.socialProfile=null;renderSocialAccountUi();socialOpen("profileSetupModal");return null;}
+      state.socialProfile={uid:user.uid,...snap.data()};
+      await fb.setDoc(fb.doc(fb.db,"users",user.uid),{lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()},{merge:true});
+      renderSocialAccountUi();subscribeSocialData();return state.socialProfile;
+    }
+    function authProviderLabel(user){
+      const ids=(user?.providerData||[]).map(item=>item.providerId);
+      if(ids.includes("google.com"))return "Google";if(ids.includes("password"))return "メールアドレス";return user?.isAnonymous?"ゲスト":"アカウント";
+    }
+    function renderSocialAccountUi(){
+      const user=window.WaribashiFirebase?.authUser, formal=isFormalAccount(user), profile=state.socialProfile;
+      if(socialEl("accountLoading"))socialEl("accountLoading").hidden=!!user;
+      if(socialEl("loginOpenBtn"))socialEl("loginOpenBtn").hidden=!user||formal;
+      if(socialEl("accountOpenBtn"))socialEl("accountOpenBtn").hidden=!formal;
+      if(socialEl("socialFriendsOpenBtn"))socialEl("socialFriendsOpenBtn").hidden=!formal||!profile;
+      if(profile){socialEl("accountPublicId").textContent=profile.publicId;socialEl("accountDisplayName").textContent=profile.displayName;}
+      if(socialEl("accountProvider"))socialEl("accountProvider").textContent=authProviderLabel(user);
+      if(socialEl("accountCreatedAt"))socialEl("accountCreatedAt").textContent=profile?.createdAt?new Date(socialTimestampMillis(profile.createdAt)).toLocaleDateString("ja-JP"):"-";
+      renderSocialLists();
+    }
+    async function loginWithGoogle(){
+      const fb=window.WaribashiFirebase;if(!fb?.auth)throw new Error("認証を準備しています。");
+      const provider=new fb.GoogleAuthProvider();let result;
+      try{result=fb.auth.currentUser?.isAnonymous?await fb.linkWithPopup(fb.auth.currentUser,provider):await fb.signInWithPopup(fb.auth,provider);}
+      catch(error){
+        const credential=error?.credential||fb.GoogleAuthProvider.credentialFromError?.(error);
+        if(["auth/credential-already-in-use","auth/account-exists-with-different-credential"].includes(error?.code)&&credential)result=await fb.signInWithCredential(fb.auth,credential);else throw error;
+      }
+      socialClose("authModal");await loadSocialProfile(result.user);return result.user;
+    }
+    async function registerWithEmail(){
+      const fb=window.WaribashiFirebase, name=validatePlayerName(socialEl("registerNameInput").value);
+      const email=socialEl("registerEmailInput").value.trim(),password=socialEl("registerPasswordInput").value,confirmation=socialEl("registerPasswordConfirmInput").value;
+      if(password!==confirmation)throw new Error("確認用パスワードが一致しません。");
+      const credential=fb.EmailAuthProvider.credential(email,password);
+      const result=fb.auth.currentUser?.isAnonymous?await fb.linkWithCredential(fb.auth.currentUser,credential):await fb.signInWithCredential(fb.auth,credential);
+      await createSocialProfile(name,result.user);socialClose("authModal");renderSocialAccountUi();subscribeSocialData();
+    }
+    async function searchPlayerByPublicId(publicId){
+      const fb=firebaseApi();if(!fb||!state.socialProfile)throw new Error("アカウントへログインしてください。");
+      const input=String(publicId||"").normalize("NFKC").trim();if(!/^.+#[0-9]{5}$/u.test(input))throw new Error("プレイヤーIDを 名前#5桁 で入力してください。");
+      const tag=input.slice(-5),reservation=await fb.getDoc(fb.doc(fb.db,"playerTags",tag));if(!reservation.exists())return null;
+      const data=reservation.data();if(normalizePublicId(data.publicId)!==normalizePublicId(input))return null;
+      const snap=await fb.getDoc(fb.doc(fb.db,"users",data.uid));return snap.exists()?{uid:data.uid,...snap.data()}:null;
+    }
+    async function isBlockedByMe(targetUid){
+      const fb=firebaseApi(),me=state.socialProfile;if(!fb||!me)return false;
+      return (await fb.getDoc(fb.doc(fb.db,"users",me.uid,"blocked",targetUid))).exists();
+    }
+    async function sendFriendRequest(target){
+      const fb=firebaseApi(),me=state.socialProfile;if(!me||!target)throw new Error("プレイヤーが見つかりません。");
+      if(me.uid===target.uid)throw new Error("自分自身へ申請は送れません。");
+      if(await isBlockedByMe(target.uid))throw new Error("このプレイヤーには現在申請できません。");
+      if(state.socialFriends.some(item=>item.uid===target.uid))throw new Error("すでにフレンドです。");
+      const sameRef=fb.doc(fb.db,"friendRequests",socialRequestId(me.uid,target.uid)), reverseRef=fb.doc(fb.db,"friendRequests",socialRequestId(target.uid,me.uid));
+      const [same,reverse]=await Promise.all([fb.getDoc(sameRef),fb.getDoc(reverseRef)]);
+      if(same.exists())throw new Error("すでに申請を送信しています。");if(reverse.exists())throw new Error("相手から申請が届いています。申請タブから承認してください。");
+      await fb.setDoc(sameRef,{fromUid:me.uid,toUid:target.uid,fromPublicId:me.publicId,toPublicId:target.publicId,fromDisplayName:me.displayName,toDisplayName:target.displayName,status:"pending",createdAt:fb.serverTimestamp()});
+    }
+    async function acceptFriendRequest(request){
+      const fb=firebaseApi(),me=state.socialProfile;if(!me||request.toUid!==me.uid)throw new Error("申請を承認できません。");
+      if(await isBlockedByMe(request.fromUid))throw new Error("このフレンド申請は利用できません。");
+      const batch=fb.writeBatch(fb.db);
+      batch.set(fb.doc(fb.db,"users",me.uid,"friends",request.fromUid),{uid:request.fromUid,publicId:request.fromPublicId,displayName:request.fromDisplayName,createdAt:fb.serverTimestamp()});
+      batch.set(fb.doc(fb.db,"users",request.fromUid,"friends",me.uid),{uid:me.uid,publicId:me.publicId,displayName:me.displayName,createdAt:fb.serverTimestamp()});
+      batch.delete(fb.doc(fb.db,"friendRequests",socialRequestId(request.fromUid,me.uid)));await batch.commit();
+    }
+    async function rejectFriendRequest(request){const fb=firebaseApi();await fb.deleteDoc(fb.doc(fb.db,"friendRequests",socialRequestId(request.fromUid,request.toUid)));}
+    async function removeSocialFriend(target){
+      const fb=firebaseApi(),me=state.socialProfile,batch=fb.writeBatch(fb.db);batch.delete(fb.doc(fb.db,"users",me.uid,"friends",target.uid));batch.delete(fb.doc(fb.db,"users",target.uid,"friends",me.uid));await batch.commit();
+    }
+    async function blockSocialPlayer(target){
+      const fb=firebaseApi(),me=state.socialProfile,batch=fb.writeBatch(fb.db);
+      batch.set(fb.doc(fb.db,"users",me.uid,"blocked",target.uid),{uid:target.uid,publicId:target.publicId,displayName:target.displayName,createdAt:fb.serverTimestamp()});
+      [["users",me.uid,"friends",target.uid],["users",target.uid,"friends",me.uid],["friendRequests",socialRequestId(me.uid,target.uid)],["friendRequests",socialRequestId(target.uid,me.uid)],["battleInvites",socialRequestId(me.uid,target.uid)],["battleInvites",socialRequestId(target.uid,me.uid)]].forEach(path=>batch.delete(fb.doc(fb.db,...path)));await batch.commit();
+    }
+    function docsFromSnapshot(snapshot){return snapshot.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));}
+    function subscribeSocialData(){
+      cleanupSocialListeners();const fb=firebaseApi(),me=state.socialProfile;if(!fb||!me)return;
+      const watch=(ref,callback)=>state.socialListenerUnsubs.push(fb.onSnapshot(ref,snap=>{callback(docsFromSnapshot(snap));renderSocialLists();},error=>console.error("[Social] listener",error)));
+      watch(fb.collection(fb.db,"users",me.uid,"friends"),items=>state.socialFriends=items);
+      watch(fb.query(fb.collection(fb.db,"friendRequests"),fb.where("toUid","==",me.uid)),items=>state.socialIncomingRequests=items.filter(item=>item.status==="pending"));
+      watch(fb.query(fb.collection(fb.db,"friendRequests"),fb.where("fromUid","==",me.uid)),items=>state.socialOutgoingRequests=items.filter(item=>item.status==="pending"));
+      const incoming=fb.query(fb.collection(fb.db,"battleInvites"),fb.where("toUid","==",me.uid));
+      const outgoing=fb.query(fb.collection(fb.db,"battleInvites"),fb.where("fromUid","==",me.uid));
+      state.socialInviteUnsubs.push(fb.onSnapshot(incoming,snap=>handleIncomingBattleInvites(docsFromSnapshot(snap)),error=>console.error("[Invite] incoming",error)));
+      state.socialInviteUnsubs.push(fb.onSnapshot(outgoing,snap=>handleOutgoingBattleInvites(docsFromSnapshot(snap)),error=>console.error("[Invite] outgoing",error)));
+    }
+    function socialListRow(label,buttons){return `<div class="social-list-item"><span class="social-id">${escapeHtml(label)}</span><span class="social-list-actions">${buttons}</span></div>`;}
+    function renderSocialLists(){
+      const badge=state.socialIncomingRequests.length;if(socialEl("socialRequestBadge")){socialEl("socialRequestBadge").hidden=!badge;socialEl("socialRequestBadge").textContent=String(badge);}if(socialEl("requestTabCount"))socialEl("requestTabCount").textContent=badge?`(${badge})`:"";
+      if(socialEl("socialFriendsList"))socialEl("socialFriendsList").innerHTML=state.socialFriends.length?state.socialFriends.map(item=>socialListRow(item.publicId,`<button data-social-profile="${item.uid}">詳細</button>`)).join(""):"<p>フレンドはいません。</p>";
+      if(socialEl("incomingRequestsList"))socialEl("incomingRequestsList").innerHTML=state.socialIncomingRequests.length?state.socialIncomingRequests.map(item=>socialListRow(item.fromPublicId,`<button data-request-accept="${item.id}">承認</button><button class="secondary" data-request-reject="${item.id}">拒否</button>`)).join(""):"<p>受信申請はありません。</p>";
+      if(socialEl("outgoingRequestsList"))socialEl("outgoingRequestsList").innerHTML=state.socialOutgoingRequests.length?state.socialOutgoingRequests.map(item=>socialListRow(item.toPublicId,"送信中")).join(""):"<p>送信中の申請はありません。</p>";
+    }
+    function openSocialProfile(target){
+      state.socialCurrentProfile=target;socialEl("publicProfileId").textContent=target.publicId;socialEl("publicProfileName").textContent=target.displayName;
+      const friend=state.socialFriends.some(item=>item.uid===target.uid);socialEl("battleInviteBtn").hidden=!friend;socialEl("removeFriendBtn").hidden=!friend;socialOpen("publicProfileModal");
+    }
+    function requestSocialConfirmation(title,text){
+      socialEl("socialConfirmTitle").textContent=title;socialEl("socialConfirmText").textContent=text;socialOpen("socialConfirmModal");
+      return new Promise(resolve=>{const ok=socialEl("socialConfirmOkBtn"),cancel=socialEl("socialConfirmCancelBtn");const finish=value=>{ok.removeEventListener("click",accept);cancel.removeEventListener("click",decline);socialClose("socialConfirmModal");resolve(value);};const accept=()=>finish(true),decline=()=>finish(false);ok.addEventListener("click",accept);cancel.addEventListener("click",decline);});
+    }
+    async function sendBattleInvite(target){
+      const fb=firebaseApi(),me=state.socialProfile;if(!state.socialFriends.some(item=>item.uid===target.uid))throw new Error("フレンドにのみ対戦を申し込めます。");
+      if(await isBlockedByMe(target.uid))throw new Error("このプレイヤーには現在対戦を申し込めません。");
+      const forward=fb.doc(fb.db,"battleInvites",socialRequestId(me.uid,target.uid)),reverse=fb.doc(fb.db,"battleInvites",socialRequestId(target.uid,me.uid)),now=Date.now();
+      const [a,b]=await Promise.all([fb.getDoc(forward),fb.getDoc(reverse)]);if([a,b].some(s=>s.exists()&&s.data().status==="pending"&&socialTimestampMillis(s.data().expiresAt)>now))throw new Error("すでに有効な対戦招待があります。");
+      await fb.setDoc(forward,{fromUid:me.uid,toUid:target.uid,fromPublicId:me.publicId,toPublicId:target.publicId,status:"pending",createdAt:fb.serverTimestamp(),expiresAt:fb.Timestamp.fromMillis(now+60000),roomId:null});
+    }
+    function hideBattleInviteToast(){socialClose("battleInviteToast");state.socialInviteToastId=null;if(state.socialInviteTimer)clearInterval(state.socialInviteTimer);state.socialInviteTimer=null;}
+    function handleIncomingBattleInvites(invites){
+      const now=Date.now();const accepted=invites.find(item=>item.status==="accepted"&&item.roomId);if(accepted){enterAcceptedSocialInvite(accepted);return;}
+      const invite=invites.find(item=>item.status==="pending"&&socialTimestampMillis(item.expiresAt)>now);if(!invite){hideBattleInviteToast();return;}
+      state.socialInviteToastId=invite.id;socialEl("battleInviteToastText").textContent=`${invite.fromPublicId} から対戦招待が届きました。`;socialOpen("battleInviteToast");
+      if(state.socialInviteTimer)clearInterval(state.socialInviteTimer);const tick=()=>{const remaining=Math.max(0,Math.ceil((socialTimestampMillis(invite.expiresAt)-Date.now())/1000));socialEl("battleInviteCountdown").textContent=`残り ${remaining} 秒`;if(!remaining)hideBattleInviteToast();};tick();state.socialInviteTimer=setInterval(tick,250);
+    }
+    function handleOutgoingBattleInvites(invites){invites.filter(item=>item.status==="accepted"&&item.roomId).forEach(enterAcceptedSocialInvite);}
+    async function acceptBattleInvite(){
+      const fb=firebaseApi(),id=state.socialInviteToastId;if(!id)return;const ref=fb.doc(fb.db,"battleInvites",id);
+      const before=await fb.getDoc(ref);if(!before.exists())throw new Error("招待が見つかりません。");if(await isBlockedByMe(before.data().fromUid))throw new Error("この対戦招待は利用できません。");
+      const invite=await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(ref);if(!snap.exists())throw new Error("招待が見つかりません。");const data=snap.data();if(data.status!=="pending"||socialTimestampMillis(data.expiresAt)<=Date.now())throw new Error("招待の有効期限が切れています。");const roomId=data.roomId||makeRoomId();transaction.update(ref,{status:"accepted",acceptedAt:fb.serverTimestamp(),roomId});return {id,...data,status:"accepted",roomId};});
+      hideBattleInviteToast();await enterAcceptedSocialInvite(invite);
+    }
+    async function renderBlockedPlayers(){
+      const fb=firebaseApi(),me=state.socialProfile;if(!fb||!me)return;const snap=await fb.getDocs(fb.collection(fb.db,"users",me.uid,"blocked")),items=docsFromSnapshot(snap),list=socialEl("blockedList");
+      list.hidden=false;list.innerHTML=items.length?items.map(item=>socialListRow(item.publicId,`<button class="secondary" data-unblock="${item.uid}">解除</button>`)).join(""):"<p class=\"social-empty\">ブロック中のプレイヤーはいません。</p>";
+    }
+    async function declineBattleInvite(){const fb=firebaseApi(),id=state.socialInviteToastId;if(!id)return;await fb.updateDoc(fb.doc(fb.db,"battleInvites",id),{status:"declined",respondedAt:fb.serverTimestamp()});hideBattleInviteToast();}
+    async function enterAcceptedSocialInvite(invite){
+      const fb=firebaseApi();if(!fb||state.socialHandledAcceptedInvites.has(invite.id)||state.friendMatchStarted)return;state.socialHandledAcceptedInvites.add(invite.id);
+      showScreen("friendLobby");try{if(fb.uid===invite.fromUid)await createFriendRoomWithId(invite.roomId,"対戦招待が承認されました。対戦準備をしてください。");else{for(let count=0;count<8;count+=1){await new Promise(resolve=>setTimeout(resolve,count?500:100));const snap=await fb.getDoc(fb.doc(fb.db,"rooms",invite.roomId));if(snap.exists()){await joinFriendRoom(invite.roomId);return;}}throw new Error("対戦ルームの作成を待っています。もう一度お試しください。");}}catch(error){state.socialHandledAcceptedInvites.delete(invite.id);socialMessage("socialMessage",firebaseAuthErrorMessage(error));}
+    }
+
 
     function otherFriendRole(role = state.friendRole) {
       return role === "host" ? "guest" : "host";
@@ -4313,31 +4529,29 @@ const CARD_LIBRARY = {
       });
     }
 
-    async function createFriendRoom() {
+    async function createFriendRoomWithId(roomId,successMessage="Firebaseに部屋を作成しました。URLをコピーして友達に送ってください。") {
       const fb = firebaseApi();
       if (!fb) {
         elements.friendLobbyMessage.textContent = "Firebaseの読み込み中です。数秒待ってからもう一度押してください。";
         return;
       }
-      const roomId = makeRoomId();
       setFriendRoomUi(roomId, "host");
       const roomRef = fb.doc(fb.db, "rooms", roomId);
-      await fb.setDoc(roomRef, {
-        createdAt: fb.serverTimestamp(),
-        updatedAt: fb.serverTimestamp(),
-        status: "waiting",
-        hostJoined: true,
-        hostUid: fb.uid,
-        guestUid: null,
-        guestJoined: false,
-        hostReady: false,
-        guestReady: false,
-        hostClientId: getFriendClientId(),
-        hostLastSeen: fb.serverTimestamp()
+      await fb.runTransaction(fb.db,async transaction=>{
+        const existing=await transaction.get(roomRef);
+        if(existing.exists()){
+          if(existing.data().hostUid!==fb.uid)throw new Error("この対戦ルームを作成できません。");
+          return;
+        }
+        transaction.set(roomRef,{createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp(),status:"waiting",hostJoined:true,hostUid:fb.uid,guestUid:null,guestJoined:false,hostReady:false,guestReady:false,hostClientId:getFriendClientId(),hostLastSeen:fb.serverTimestamp()});
       });
-      elements.friendLobbyMessage.textContent = "Firebaseに部屋を作成しました。URLをコピーして友達に送ってください。";
+      elements.friendLobbyMessage.textContent = successMessage;
       subscribeFriendRoom(roomId);
       updateFriendLobbyView({ hostJoined: true, guestJoined: false, hostReady: false, guestReady: false, status: "waiting" });
+    }
+
+    async function createFriendRoom() {
+      return createFriendRoomWithId(makeRoomId());
     }
 
     async function joinFriendRoom(roomIdRaw) {
@@ -14009,11 +14223,42 @@ async function endTurn() {
       console.error(error);
       elements.friendLobbyMessage.textContent = `試合開始エラー：${error.message || error}`;
     }));
-    window.addEventListener("waribashi-firebase-ready",updateFriendAuthUi);
-    window.addEventListener("waribashi-auth-ready",updateFriendAuthUi);
+    socialEl("loginOpenBtn")?.addEventListener("click",()=>socialOpen("authModal"));
+    socialEl("authCloseBtn")?.addEventListener("click",()=>socialClose("authModal"));
+    socialEl("accountOpenBtn")?.addEventListener("click",()=>socialOpen("accountModal"));
+    socialEl("accountCloseBtn")?.addEventListener("click",()=>socialClose("accountModal"));
+    socialEl("socialFriendsOpenBtn")?.addEventListener("click",()=>socialOpen("socialFriendsPanel"));
+    socialEl("socialFriendsCloseBtn")?.addEventListener("click",()=>socialClose("socialFriendsPanel"));
+    socialEl("publicProfileCloseBtn")?.addEventListener("click",()=>socialClose("publicProfileModal"));
+    document.querySelectorAll("[data-social-tab]").forEach(button=>button.addEventListener("click",()=>{
+      document.querySelectorAll("[data-social-tab]").forEach(item=>item.classList.toggle("active",item===button));
+      document.querySelectorAll("[data-social-pane]").forEach(pane=>pane.hidden=pane.dataset.socialPane!==button.dataset.socialTab);
+    }));
+    function switchAuthPane(register){socialEl("authLoginPane").hidden=register;socialEl("authRegisterPane").hidden=!register;socialEl("authLoginTab").classList.toggle("active",!register);socialEl("authRegisterTab").classList.toggle("active",register);socialMessage("authMessage","");}
+    socialEl("authLoginTab")?.addEventListener("click",()=>switchAuthPane(false));socialEl("authRegisterTab")?.addEventListener("click",()=>switchAuthPane(true));
+    ["googleLoginBtn","googleRegisterBtn"].forEach(id=>socialEl(id)?.addEventListener("click",()=>loginWithGoogle().catch(error=>socialMessage("authMessage",firebaseAuthErrorMessage(error)))));
+    socialEl("emailLoginBtn")?.addEventListener("click",async()=>{try{const fb=window.WaribashiFirebase;await fb.signInWithEmailAndPassword(fb.auth,socialEl("loginEmailInput").value.trim(),socialEl("loginPasswordInput").value);socialClose("authModal");await loadSocialProfile();}catch(error){socialMessage("authMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("emailRegisterBtn")?.addEventListener("click",()=>registerWithEmail().catch(error=>socialMessage("authMessage",firebaseAuthErrorMessage(error))));
+    socialEl("profileSetupSaveBtn")?.addEventListener("click",async()=>{try{await createSocialProfile(socialEl("profileSetupNameInput").value);socialClose("profileSetupModal");renderSocialAccountUi();subscribeSocialData();}catch(error){socialMessage("profileSetupMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("logoutBtn")?.addEventListener("click",async()=>{try{const fb=window.WaribashiFirebase;cleanupSocialListeners();state.socialProfile=null;socialClose("accountModal");await fb.signOut(fb.auth);await fb.signInAnonymously(fb.auth);renderSocialAccountUi();}catch(error){socialMessage("accountMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("blockedListBtn")?.addEventListener("click",()=>renderBlockedPlayers().catch(error=>socialMessage("accountMessage",firebaseAuthErrorMessage(error))));
+    socialEl("blockedList")?.addEventListener("click",async event=>{const uid=event.target.dataset.unblock;if(!uid)return;try{const fb=firebaseApi();await fb.deleteDoc(fb.doc(fb.db,"users",state.socialProfile.uid,"blocked",uid));await renderBlockedPlayers();}catch(error){socialMessage("accountMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("playerSearchBtn")?.addEventListener("click",async()=>{try{const profile=await searchPlayerByPublicId(socialEl("playerSearchInput").value);socialEl("playerSearchResult").innerHTML=profile?socialListRow(profile.publicId,`<button data-search-add="${profile.uid}">申請する</button>`):"<p class=\"social-empty\">該当するプレイヤーはいません。</p>";state.socialCurrentProfile=profile;socialMessage("socialMessage","");}catch(error){socialMessage("socialMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("socialFriendsPanel")?.addEventListener("click",async event=>{let operation="request";try{const profileUid=event.target.dataset.socialProfile;if(profileUid){const friend=state.socialFriends.find(item=>item.uid===profileUid);if(friend)openSocialProfile(friend);return;}const addUid=event.target.dataset.searchAdd;if(addUid){await sendFriendRequest(state.socialCurrentProfile);socialMessage("socialMessage","フレンド申請を送りました。");event.target.disabled=true;return;}const acceptId=event.target.dataset.requestAccept;if(acceptId){operation="accept";const request=state.socialIncomingRequests.find(item=>item.id===acceptId);if(request)await acceptFriendRequest(request);return;}const rejectId=event.target.dataset.requestReject;if(rejectId){const request=state.socialIncomingRequests.find(item=>item.id===rejectId);if(request)await rejectFriendRequest(request);}}catch(error){socialMessage("socialMessage",socialOperationError(error,operation));}});
+    socialEl("battleInviteBtn")?.addEventListener("click",()=>sendBattleInvite(state.socialCurrentProfile).then(()=>{socialMessage("publicProfileMessage","対戦招待を送りました。60秒間有効です。");}).catch(error=>socialMessage("publicProfileMessage",socialOperationError(error,"invite"))));
+    socialEl("removeFriendBtn")?.addEventListener("click",async()=>{if(!await requestSocialConfirmation("フレンド解除",`${state.socialCurrentProfile.publicId} をフレンドから解除しますか？`))return;removeSocialFriend(state.socialCurrentProfile).then(()=>socialClose("publicProfileModal")).catch(error=>socialMessage("publicProfileMessage",firebaseAuthErrorMessage(error)));});
+    socialEl("blockPlayerBtn")?.addEventListener("click",async()=>{if(!await requestSocialConfirmation("プレイヤーをブロック",`${state.socialCurrentProfile.publicId} をブロックしますか？`))return;blockSocialPlayer(state.socialCurrentProfile).then(()=>socialClose("publicProfileModal")).catch(error=>socialMessage("publicProfileMessage",firebaseAuthErrorMessage(error)));});
+    socialEl("acceptBattleInviteBtn")?.addEventListener("click",()=>acceptBattleInvite().catch(error=>{hideBattleInviteToast();socialMessage("socialMessage",socialOperationError(error,"invite"));}));
+    socialEl("declineBattleInviteBtn")?.addEventListener("click",()=>declineBattleInvite().catch(error=>console.error(error)));
+    const handleSocialAuth=()=>{updateFriendAuthUi();loadSocialProfile().catch(error=>console.error("[Social] profile",error));};
+    window.addEventListener("waribashi-firebase-ready",handleSocialAuth);
+    window.addEventListener("waribashi-auth-ready",handleSocialAuth);
+    window.addEventListener("waribashi-auth-changed",handleSocialAuth);
     window.addEventListener("waribashi-firebase-error",updateFriendAuthUi);
     window.addEventListener("waribashi-auth-signed-out",updateFriendAuthUi);
     updateFriendAuthUi();
+    renderSocialAccountUi();
+    if(window.WaribashiFirebase?.authUser)loadSocialProfile().catch(error=>console.error("[Social] initial profile",error));
     elements.copyRoomUrlBtn.addEventListener("click", async () => {
       if (!state.friendRoomUrl) return;
       try {
