@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=159b">
+  <link rel="stylesheet" href="style.css?v=161a">
 </head>
 <body>
   <div class="account-actions" id="accountActions" aria-live="polite">
@@ -23,6 +23,7 @@
         <button class="google-auth-btn wide-btn" id="googleLoginBtn">Googleでログイン</button>
         <label>メールアドレス<input id="loginEmailInput" type="email" autocomplete="email"></label>
         <label>パスワード<input id="loginPasswordInput" type="password" autocomplete="current-password"></label>
+        <label class="auth-persistence-option"><input id="authRememberCheckbox" type="checkbox" checked>ログイン状態を保持する</label>
         <button id="emailLoginBtn" class="wide-btn">ログイン</button>
       </div>
       <div id="authRegisterPane" hidden>
@@ -30,6 +31,7 @@
         <label>メールアドレス<input id="registerEmailInput" type="email" autocomplete="email"></label>
         <label>パスワード<input id="registerPasswordInput" type="password" autocomplete="new-password"></label>
         <label>パスワード確認<input id="registerPasswordConfirmInput" type="password" autocomplete="new-password"></label>
+        <label class="auth-persistence-option"><input id="registerRememberCheckbox" type="checkbox" checked>ログイン状態を保持する</label>
         <button id="emailRegisterBtn" class="wide-btn">アカウントを作成</button>
         <button class="google-auth-btn secondary wide-btn" id="googleRegisterBtn">Googleでアカウント作成</button>
       </div>
@@ -48,6 +50,7 @@
   <div class="social-modal" id="accountModal" aria-hidden="true"><div class="social-dialog">
     <button class="social-close" id="accountCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">MY ACCOUNT</div><h2 id="accountPublicId">アカウント</h2>
     <dl class="account-detail"><dt>プレイヤー名</dt><dd id="accountDisplayName">-</dd><dt>ログイン方法</dt><dd id="accountProvider">-</dd><dt>アカウント作成日</dt><dd id="accountCreatedAt">-</dd></dl>
+    <label class="account-persistence-option"><span><strong>自動ログイン</strong><small>ブラウザを閉じてもログイン状態を保持</small></span><input id="accountRememberCheckbox" type="checkbox" checked></label>
     <button id="blockedListBtn" class="secondary wide-btn">ブロック中のプレイヤー</button><div id="blockedList" class="social-list" hidden></div>
     <button id="logoutBtn" class="danger wide-btn">ログアウト</button><p class="social-message" id="accountMessage"></p>
   </div></div>
@@ -63,7 +66,7 @@
 
   <div class="social-modal" id="publicProfileModal" aria-hidden="true"><div class="social-dialog">
     <button class="social-close" id="publicProfileCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PUBLIC PROFILE</div><h2 id="publicProfileId">-</h2><p id="publicProfileName"></p>
-    <div class="social-action-stack"><button id="battleInviteBtn">対戦を申し込む</button><button id="removeFriendBtn" class="secondary">フレンド解除</button><button id="blockPlayerBtn" class="danger">ブロック</button></div><p class="social-message" id="publicProfileMessage"></p>
+    <div class="social-action-stack"><button id="sendFriendRequestBtn">フレンド申請</button><button id="battleInviteBtn">対戦を申し込む</button><button id="removeFriendBtn" class="secondary">フレンド解除</button><button id="blockPlayerBtn" class="danger">ブロック</button></div><p class="social-message" id="publicProfileMessage"></p>
   </div></div>
 
   <div class="social-modal" id="socialConfirmModal" aria-hidden="true"><div class="social-dialog compact-dialog"><h2 id="socialConfirmTitle">確認</h2><p id="socialConfirmText"></p><div class="social-confirm-actions"><button id="socialConfirmOkBtn" class="danger">実行</button><button id="socialConfirmCancelBtn" class="secondary">キャンセル</button></div></div></div>
@@ -356,39 +359,47 @@
     </section>
 
     <section class="screen friend-lobby-screen screen-hidden" id="friendLobbyScreen">
-      <div class="menu-card">
-        <div class="menu-kicker">FRIEND BATTLE</div>
-        <h2>フレンド対戦</h2>
-        <p class="small">Firebaseで部屋の入室状態と準備完了を同期します。まずは2人が同じ部屋に入れるかを確認します。</p>
-        <div class="menu-actions">
+      <div class="menu-card battle-room-shell">
+        <div class="menu-kicker">ONLINE BATTLE LOBBY</div>
+        <h2>対戦ルーム</h2>
+        <div id="roomEntryControls">
+          <p class="small">部屋を作るか、共有されたRoom IDを入力してください。</p>
+          <div class="menu-actions">
           <button id="createRoomBtn">部屋を作る</button>
-          <button id="copyRoomUrlBtn" class="blue" disabled>URLをコピー</button>
+          </div>
+          <div class="room-join-box">
+            <label for="roomIdInput" class="small">Room IDまたはURL</label>
+            <input id="roomIdInput" type="text" placeholder="例：ABC123">
+            <button id="joinRoomBtn" class="secondary wide-btn">部屋に入る</button>
+          </div>
         </div>
-        <div class="room-box" id="roomResultBox">
-          <span class="room-label">部屋URL</span>
-          <div class="room-url" id="roomUrlText">まだ部屋を作っていません。</div>
-        </div>
-        <div class="room-join-box">
-          <label for="roomIdInput" class="small">部屋IDまたはURLを入力</label>
-          <input id="roomIdInput" type="text" placeholder="例：ABC123 または ?room=ABC123 のURL">
-          <button id="joinRoomBtn" class="secondary wide-btn">部屋に入る</button>
+        <div id="battleRoomLobby" class="battle-room-lobby" hidden>
+          <div class="battle-room-id-row"><span><small>ROOM ID</small><strong id="battleRoomIdText">------</strong></span><button id="copyRoomUrlBtn" class="blue" disabled>コピー</button></div>
+          <div class="battle-room-players">
+            <button class="battle-room-player battle-room-self" id="battleRoomSelfCard" type="button"><span class="battle-room-role">あなた</span><strong id="battleRoomSelfName">プレイヤー</strong><span class="battle-room-deck-label">使用デッキ</span><span class="battle-room-deck-name" id="battleRoomDeckName">現在のデッキ</span><span id="battleRoomSelfStatus">準備中</span></button>
+            <div class="battle-room-vs">VS</div>
+            <button class="battle-room-player battle-room-opponent" id="battleRoomOpponentCard" type="button"><span class="battle-room-role">相手</span><strong id="battleRoomOpponentName">参加者を待っています…</strong><span id="battleRoomOpponentStatus">参加者待ち</span></button>
+          </div>
+          <div class="battle-room-controls">
+            <button id="battleRoomDeckEditBtn" class="secondary">デッキ編集</button>
+            <button id="friendReadyBtn" class="blue" disabled>準備完了</button>
+            <button id="friendUnreadyBtn" class="secondary" disabled>準備解除</button>
+            <button id="friendStartBattleBtn" class="danger" disabled>試合開始</button>
+          </div>
+          <button id="battleRoomLeaveBtn" class="secondary wide-btn">部屋を抜ける</button>
         </div>
         <p class="small" id="friendLobbyMessage">Firebase接続前です。部屋を作るか、部屋ID/URLを入力してください。</p>
-        <div class="room-box friend-sync-box">
+        <div class="room-box friend-sync-box" hidden>
           <span class="room-label">同期状態</span>
           <div class="room-url" id="roomStatusText">未接続</div>
           <div class="small" id="roomPlayersText">あなた：未入室 / 相手：未入室</div>
         </div>
-        <div class="menu-actions">
-          <button id="friendReadyBtn" class="blue" disabled>準備完了</button>
-          <button id="friendUnreadyBtn" class="secondary" disabled>準備解除</button>
-        </div>
         <p class="small" id="friendReadyText">2人が入室して準備完了すると「試合開始できます」と表示されます。</p>
-        <button id="friendStartBattleBtn" class="danger wide-btn" disabled>共通画面で試合開始</button>
-        <p class="small">v40ではCPU戦と同じ戦闘画面をオンラインでも使う共通基盤へ切り替えます。</p>
         <button id="friendLobbyBackBtn" class="secondary wide-btn">対戦形式に戻る</button>
       </div>
     </section>
+
+    <div class="battle-vs-cut-in" id="battleVsCutIn" aria-hidden="true"><div class="battle-vs-player self"><span class="presentation-banner"></span><strong id="battleVsSelfName">あなた</strong><span class="presentation-title"></span></div><div class="battle-vs-mark">VS</div><div class="battle-vs-player opponent"><span class="presentation-banner"></span><strong id="battleVsOpponentName">相手</strong><span class="presentation-title"></span></div></div>
 
     <section class="screen difficulty-screen screen-hidden" id="difficultyScreen">
       <div class="menu-card">
@@ -764,7 +775,10 @@
       signInWithCredential,
       linkWithCredential,
       signInWithEmailAndPassword,
-      signOut
+      signOut,
+      setPersistence,
+      browserLocalPersistence,
+      browserSessionPersistence
     } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
     import {
       getFirestore,
@@ -799,6 +813,19 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       const auth = getAuth(app);
+      const persistenceKey = "waribashi-auth-persistence";
+      const rememberLogin = localStorage.getItem(persistenceKey) !== "session";
+      const waitForInitialAuth = async () => {
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+          return;
+        }
+        await new Promise(resolve => {
+          const unsubscribe = onAuthStateChanged(auth, () => { unsubscribe(); resolve(); });
+        });
+      };
+      await waitForInitialAuth();
+      await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
       let authUser = auth.currentUser;
       if (!authUser) authUser = (await signInAnonymously(auth)).user;
       window.WaribashiFirebase = {
@@ -831,14 +858,19 @@
         linkWithCredential,
         signInWithEmailAndPassword,
         signOut,
-        signInAnonymously
+        signInAnonymously,
+        setPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        persistenceKey,
+        rememberLogin
       };
       onAuthStateChanged(auth, user => {
         const api = window.WaribashiFirebase;
         if (!api) return;
         api.authUser = user || null;
         api.uid = user?.uid || null;
-        api.authReady = !!user;
+        api.authReady = true;
         api.ready = !!user;
         window.dispatchEvent(new CustomEvent("waribashi-auth-changed", { detail:{ user:user||null } }));
         window.dispatchEvent(new CustomEvent(user ? "waribashi-auth-ready" : "waribashi-auth-signed-out"));
@@ -851,6 +883,6 @@
     }
   </script>
 
-  <script src="game.js?v=159b"></script>
+  <script src="game.js?v=161a"></script>
 </body>
 </html>

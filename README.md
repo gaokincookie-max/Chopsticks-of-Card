@@ -1,4 +1,27 @@
-# 割り箸カードゲーム v159b
+# 割り箸カードゲーム v161a
+
+## v161a lobby fixes
+
+- PCロビーとVS演出は常に自分を左、相手を右に表示します。幅600px以下では相手を上、自分を下に表示します。
+- 先攻はVS演出が完了してからホストだけがtransaction内で1回決定します。ゲストは保存済み結果を待ち、再接続では再抽選もVS演出の再生も行いません。
+- 先攻ルーレットと結果表示はhost/guestの役割名ではなく、双方の表示名（匿名時はゲストラベル）を使用します。
+- ロビー中は各プレイヤーが自分のready・deck・member readyだけを更新できます。試合開始、先攻確定、試合後のlobby復帰、room終了はホスト専用です。
+
+## v161 persistent battle lobby
+
+- オンラインルームは `lobby / starting / playing / closed` の状態を持ち、試合終了後も同じRoom IDで維持されます。
+- `members.slot0 / slot1` に参加者のUID、表示名、準備状態を保持します。正式アカウントは通常の表示名、匿名ユーザーは再接続でも維持される `ゲスト#00000` 形式です。
+- 自分のデッキ名はローカルロビーだけに表示し、相手やFirestoreへは共有しません。双方が準備完了した後、ホストだけが試合を開始できます。
+- 1試合ごとに新しい `currentMatchId` と `matchSequence` を発行し、開始時にVS演出を1回だけ再生します。再接続ではVS演出を再生しません。
+- ゲスト退出時はゲスト枠だけを空け、ホストの明示操作時のみルームを `closed` にします。ページ再読込や一時切断ではルームを閉じません。
+- 対戦招待の辞退・期限切れ・取消後は、非アクティブな招待を削除して再送できます。
+
+## v160 social / auth
+
+- friendRequestとbattleInviteの重複確認は、存在しない決定的IDを直接getせず、`fromUid`・`toUid`で当事者を限定したqueryを使用します。逆方向blockは引き続きRulesだけが確認します。
+- Firebase Authの初期状態復元を`authStateReady()`（未対応時は`onAuthStateChanged`初回通知）で待ち、ユーザー不在が確定した場合だけ匿名認証を開始します。
+- 「ログイン状態を保持する」がONなら`browserLocalPersistence`、OFFなら`browserSessionPersistence`を使用します。パスワード・credential・tokenは独自保存しません。
+- social/account UIは暗背景上の本文、補助文、input、placeholder、buttonへ明示的な高コントラスト配色を適用します。
 
 ## v159b player tags / symmetric friends
 
