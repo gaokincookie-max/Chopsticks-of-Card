@@ -2133,6 +2133,7 @@ const CARD_LIBRARY = {
       firebaseAuthError: null,
       friendReady: false,
       friendUnsubscribe: null,
+      friendRoomConnectTimer: null,
       friendRoomData: null,
       friendMatchId: null,
       friendMatchStarted: false,
@@ -2155,6 +2156,8 @@ const CARD_LIBRARY = {
       socialFriends: [],
       socialIncomingRequests: [],
       socialOutgoingRequests: [],
+      socialIncomingRequestsError: false,
+      socialOutgoingRequestsError: false,
       socialCurrentProfile: null,
       socialListenerUnsubs: [],
       socialInviteUnsubs: [],
@@ -2167,9 +2170,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v161a-lobby-fixes";
+    const LATEST_NEWS_ID = "v161b-online-connection-fixes";
 
     const UPDATE_NEWS = [
+      {id:"v161b-online-connection-fixes",version:"v161b",date:"2026-08-20",title:"オンライン接続とフレンド申請を修正",summary:"受信申請の表示と対戦ルームの作成・入退室を改善しました。",featured:true,tags:["fix"],items:["フレンド申請と対戦招待の受信listenerを実Firestoreのquery Rulesへ適合","存在しないroomを事前readせず、作成成功後だけロビーへ移動するよう修正","room接続エラーとlistener timeoutを画面内へ表示し、入退室時の状態cleanupを改善"]},
       {id:"v161a-lobby-fixes",version:"v161a",date:"2026-08-20",title:"オンライン対戦ロビーを修正",summary:"ロビー表示・先攻抽選・準備状態の同期を改善しました。",featured:true,tags:["fix"],items:["PCでは自分を左、相手を右に固定し、スマートフォンでは相手を上、自分を下に表示","VS演出完了後にホストだけが先攻を1回抽選し、双方へ同期","各プレイヤーが自分の準備状態とデッキだけを更新できるようSecurity Rulesを強化"]},
       {id:"v161-persistent-lobby",version:"v161",date:"2026-08-20",title:"オンライン対戦ロビーを刷新",summary:"同じルームで準備・対戦・再戦を続けられる常設ロビーを追加しました。",featured:true,tags:["new","system"],items:["入室者名・準備状態・自分の使用デッキを確認できる専用ロビーを追加","試合終了後もルームを維持し、双方の再準備で次の試合を開始","対戦開始時のVS演出と、期限切れ・辞退後の対戦招待再送を改善"]},
       {id:"v160-social-auth",version:"v160",date:"2026-08-20",title:"アカウント・フレンド機能を改善",summary:"申請・招待の不具合修正とログイン状態保持設定を追加しました。",featured:true,tags:["system","fix"],items:["新規フレンド申請と対戦招待が権限エラーになる場合がある問題を修正","アカウント／フレンド画面の文字コントラストを改善","ログイン状態を保持する設定とAuth初期復元待機を追加"]},
@@ -3440,7 +3444,7 @@ const CARD_LIBRARY = {
         return (url.searchParams.get("room") || "").trim();
       } catch (_) {
         const match = raw.match(/[?&]room=([^&]+)/);
-        return match ? decodeURIComponent(match[1]).trim() : raw.replace(/[^a-zA-Z0-9_-]/g, "").trim().toUpperCase();
+        return match ? decodeURIComponent(match[1]).trim() : raw.replace(/[^a-zA-Z0-9_-]/g, "").trim();
       }
     }
 
@@ -3658,21 +3662,22 @@ const CARD_LIBRARY = {
     function docsFromSnapshot(snapshot){return snapshot.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));}
     function subscribeSocialData(){
       cleanupSocialListeners();const fb=firebaseApi(),me=state.socialProfile;if(!fb||!me)return;
-      const watch=(ref,callback)=>state.socialListenerUnsubs.push(fb.onSnapshot(ref,snap=>{callback(docsFromSnapshot(snap));renderSocialLists();},error=>console.error("[Social] listener",error)));
+      state.socialIncomingRequestsError=false;state.socialOutgoingRequestsError=false;
+      const watch=(ref,callback,onError)=>state.socialListenerUnsubs.push(fb.onSnapshot(ref,snap=>{callback(docsFromSnapshot(snap));renderSocialLists();},error=>{console.error("[Social] listener",error?.code,error?.message);onError?.();renderSocialLists();}));
       watch(fb.collection(fb.db,"users",me.uid,"friends"),items=>state.socialFriends=items);
-      watch(fb.query(fb.collection(fb.db,"friendRequests"),fb.where("toUid","==",me.uid)),items=>state.socialIncomingRequests=items.filter(item=>item.status==="pending"));
-      watch(fb.query(fb.collection(fb.db,"friendRequests"),fb.where("fromUid","==",me.uid)),items=>state.socialOutgoingRequests=items.filter(item=>item.status==="pending"));
+      watch(fb.query(fb.collection(fb.db,"friendRequests"),fb.where("toUid","==",me.uid)),items=>{state.socialIncomingRequestsError=false;state.socialIncomingRequests=items.filter(item=>item.status==="pending");},()=>state.socialIncomingRequestsError=true);
+      watch(fb.query(fb.collection(fb.db,"friendRequests"),fb.where("fromUid","==",me.uid)),items=>{state.socialOutgoingRequestsError=false;state.socialOutgoingRequests=items.filter(item=>item.status==="pending");},()=>state.socialOutgoingRequestsError=true);
       const incoming=fb.query(fb.collection(fb.db,"battleInvites"),fb.where("toUid","==",me.uid));
       const outgoing=fb.query(fb.collection(fb.db,"battleInvites"),fb.where("fromUid","==",me.uid));
-      state.socialInviteUnsubs.push(fb.onSnapshot(incoming,snap=>handleIncomingBattleInvites(docsFromSnapshot(snap)),error=>console.error("[Invite] incoming",error)));
-      state.socialInviteUnsubs.push(fb.onSnapshot(outgoing,snap=>handleOutgoingBattleInvites(docsFromSnapshot(snap)),error=>console.error("[Invite] outgoing",error)));
+      state.socialInviteUnsubs.push(fb.onSnapshot(incoming,snap=>handleIncomingBattleInvites(docsFromSnapshot(snap)),error=>{console.error("[Invite] incoming",error?.code,error?.message);socialMessage("socialMessage","対戦招待の取得に失敗しました。");}));
+      state.socialInviteUnsubs.push(fb.onSnapshot(outgoing,snap=>handleOutgoingBattleInvites(docsFromSnapshot(snap)),error=>{console.error("[Invite] outgoing",error?.code,error?.message);socialMessage("socialMessage","送信した対戦招待の取得に失敗しました。");}));
     }
     function socialListRow(label,buttons){return `<div class="social-list-item"><span class="social-id">${escapeHtml(label)}</span><span class="social-list-actions">${buttons}</span></div>`;}
     function renderSocialLists(){
       const badge=state.socialIncomingRequests.length;if(socialEl("socialRequestBadge")){socialEl("socialRequestBadge").hidden=!badge;socialEl("socialRequestBadge").textContent=String(badge);}if(socialEl("requestTabCount"))socialEl("requestTabCount").textContent=badge?`(${badge})`:"";
       if(socialEl("socialFriendsList"))socialEl("socialFriendsList").innerHTML=state.socialFriends.length?state.socialFriends.map(item=>socialListRow(item.publicId,`<button data-social-profile="${item.uid}">詳細</button>`)).join(""):"<p>フレンドはいません。</p>";
-      if(socialEl("incomingRequestsList"))socialEl("incomingRequestsList").innerHTML=state.socialIncomingRequests.length?state.socialIncomingRequests.map(item=>socialListRow(item.fromPublicId,`<button data-request-accept="${item.id}">承認</button><button class="secondary" data-request-reject="${item.id}">拒否</button>`)).join(""):"<p>受信申請はありません。</p>";
-      if(socialEl("outgoingRequestsList"))socialEl("outgoingRequestsList").innerHTML=state.socialOutgoingRequests.length?state.socialOutgoingRequests.map(item=>socialListRow(item.toPublicId,"送信中")).join(""):"<p>送信中の申請はありません。</p>";
+      if(socialEl("incomingRequestsList"))socialEl("incomingRequestsList").innerHTML=state.socialIncomingRequestsError?"<p class=\"social-error\">フレンド申請の取得に失敗しました。</p>":state.socialIncomingRequests.length?state.socialIncomingRequests.map(item=>socialListRow(item.fromPublicId,`<button data-request-accept="${item.id}">承認</button><button class="secondary" data-request-reject="${item.id}">拒否</button>`)).join(""):"<p>受信申請はありません。</p>";
+      if(socialEl("outgoingRequestsList"))socialEl("outgoingRequestsList").innerHTML=state.socialOutgoingRequestsError?"<p class=\"social-error\">送信中の申請を取得できませんでした。</p>":state.socialOutgoingRequests.length?state.socialOutgoingRequests.map(item=>socialListRow(item.toPublicId,"送信中")).join(""):"<p>送信中の申請はありません。</p>";
     }
     function openSocialProfile(target){
       state.socialCurrentProfile=target;socialEl("publicProfileId").textContent=target.publicId;socialEl("publicProfileName").textContent=target.displayName;
@@ -3713,7 +3718,11 @@ const CARD_LIBRARY = {
     async function declineBattleInvite(){const fb=firebaseApi(),id=state.socialInviteToastId;if(!id)return;await fb.deleteDoc(fb.doc(fb.db,"battleInvites",id));hideBattleInviteToast();}
     async function enterAcceptedSocialInvite(invite){
       const fb=firebaseApi();if(!fb||state.socialHandledAcceptedInvites.has(invite.id)||state.friendMatchStarted)return;state.socialHandledAcceptedInvites.add(invite.id);
-      showScreen("friendLobby");try{if(fb.uid===invite.fromUid)await createFriendRoomWithId(invite.roomId,"対戦招待が承認されました。対戦準備をしてください。");else{for(let count=0;count<8;count+=1){await new Promise(resolve=>setTimeout(resolve,count?500:100));const snap=await fb.getDoc(fb.doc(fb.db,"rooms",invite.roomId));if(snap.exists()){await joinFriendRoom(invite.roomId);await fb.deleteDoc(fb.doc(fb.db,"battleInvites",invite.id));return;}}throw new Error("対戦ルームの作成を待っています。もう一度お試しください。");}}catch(error){state.socialHandledAcceptedInvites.delete(invite.id);socialMessage("socialMessage",firebaseAuthErrorMessage(error));}
+      try{if(fb.uid===invite.fromUid)await createFriendRoomWithId(invite.roomId,"対戦招待が承認されました。対戦準備をしてください。");else{for(let count=0;count<8;count+=1){await new Promise(resolve=>setTimeout(resolve,count?500:100));const snap=await fb.getDoc(fb.doc(fb.db,"rooms",invite.roomId));if(snap.exists()){await joinFriendRoom(invite.roomId);await fb.deleteDoc(fb.doc(fb.db,"battleInvites",invite.id));return;}}throw new Error("対戦ルームの作成を待っています。もう一度お試しください。");}}catch(error){
+        state.socialHandledAcceptedInvites.delete(invite.id);
+        try{await fb.deleteDoc(fb.doc(fb.db,"battleInvites",invite.id));}catch(cleanupError){console.error("[Invite] accepted-room cleanup failed",cleanupError?.code,cleanupError?.message);}
+        socialMessage("socialMessage",firebaseAuthErrorMessage(error));
+      }
     }
 
 
@@ -4561,6 +4570,21 @@ const CARD_LIBRARY = {
       if(!state.firebaseAuthReady)updateFriendAuthUi();
     }
 
+    function clearFriendRoomConnectTimer(){
+      if(state.friendRoomConnectTimer)clearTimeout(state.friendRoomConnectTimer);
+      state.friendRoomConnectTimer=null;
+    }
+
+    function clearFriendRoomLocalState({clearUrl=true}={}){
+      clearFriendRoomConnectTimer();
+      state.friendUnsubscribe?.();state.friendUnsubscribe=null;
+      state.friendRoomId=null;state.friendRoomData=null;state.friendRole=null;resetFriendMatchEntryState();
+      if(elements.roomEntryControls)elements.roomEntryControls.hidden=false;
+      if(elements.battleRoomLobby)elements.battleRoomLobby.hidden=true;
+      if(elements.roomStatusText)elements.roomStatusText.textContent="未接続";
+      if(clearUrl)history.replaceState(null,"",location.pathname);
+    }
+
     function subscribeFriendRoom(roomId) {
       const fb = firebaseApi();
       if (!fb) {
@@ -4571,15 +4595,29 @@ const CARD_LIBRARY = {
         state.friendUnsubscribe();
         state.friendUnsubscribe = null;
       }
+      clearFriendRoomConnectTimer();
+      elements.friendLobbyMessage.textContent="部屋情報を取得中…";
+      if(elements.roomStatusText)elements.roomStatusText.textContent=`部屋ID：${roomId} / 状態：接続中`;
+      state.friendRoomConnectTimer=setTimeout(()=>{
+        state.friendRoomConnectTimer=null;
+        elements.friendLobbyMessage.textContent="部屋情報を取得できませんでした。通信を確認して、もう一度入り直してください。";
+        if(elements.roomStatusText)elements.roomStatusText.textContent=`部屋ID：${roomId} / 状態：接続エラー`;
+      },8000);
       const roomRef = fb.doc(fb.db, "rooms", roomId);
       state.friendUnsubscribe = fb.onSnapshot(roomRef, (snapshot) => {
+        clearFriendRoomConnectTimer();
         if (!snapshot.exists()) {
-          elements.friendLobbyMessage.textContent = "この部屋はまだ作成されていません。ホストが部屋を作る必要があります。";
-          state.friendRoomData = null;
-          updateFriendLobbyView(null);
+          clearFriendRoomLocalState();
+          elements.friendLobbyMessage.textContent = "この部屋は存在しません。Room IDを確認してください。";
           return;
         }
         const data = snapshot.data();
+        if(data?.status==="closed"&&state.friendRole==="guest"){
+          clearFriendRoomLocalState();
+          showScreen("friendLobby");
+          elements.friendLobbyMessage.textContent="ホストが部屋を解散しました。";
+          return;
+        }
         state.friendRoomData = data;
         elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
         updateFriendLobbyView(data);
@@ -4637,35 +4675,42 @@ const CARD_LIBRARY = {
           }
         }
       }, (error) => {
-        console.error(error);
-        elements.friendLobbyMessage.textContent = `Firebase同期エラー：${error.message || error}`;
+        clearFriendRoomConnectTimer();
+        console.error("[FriendRoom] listener failed",{operation:"listen",roomId,role:state.friendRole,code:error?.code,message:error?.message});
+        elements.friendLobbyMessage.textContent = "部屋情報を取得できませんでした。もう一度入り直してください。";
+        if(elements.roomStatusText)elements.roomStatusText.textContent=`部屋ID：${roomId} / 状態：接続エラー`;
       });
     }
 
-    async function createFriendRoomWithId(roomId,successMessage="Firebaseに部屋を作成しました。URLをコピーして友達に送ってください。") {
+    async function createFriendRoomWithId(roomId,successMessage="Firebaseに部屋を作成しました。URLをコピーして友達に送ってください。",providedRoomRef=null) {
       const fb = firebaseApi();
       if (!fb) {
         elements.friendLobbyMessage.textContent = "Firebaseの読み込み中です。数秒待ってからもう一度押してください。";
         return;
       }
-      setFriendRoomUi(roomId, "host");
-      const roomRef = fb.doc(fb.db, "rooms", roomId);
+      const roomRef = providedRoomRef||fb.doc(fb.db, "rooms", roomId);
       const member = currentRoomMemberPresentation();
-      await fb.runTransaction(fb.db,async transaction=>{
-        const existing=await transaction.get(roomRef);
-        if(existing.exists()){
-          if(existing.data().hostUid!==fb.uid)throw new Error("この対戦ルームを作成できません。");
-          return;
-        }
-        transaction.set(roomRef,{createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp(),status:"lobby",visibility:"private",regulation:{modeId:"standard",modeVersion:1,options:{}},currentMatchId:null,matchSequence:0,members:{slot0:{...member,slot:0,ready:false,joinedAt:fb.serverTimestamp()},slot1:null},hostJoined:true,hostUid:fb.uid,guestUid:null,guestJoined:false,hostReady:false,guestReady:false,hostClientId:getFriendClientId(),hostLastSeen:fb.serverTimestamp()});
-      });
+      const createdRoom={createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp(),status:"lobby",visibility:"private",regulation:{modeId:"standard",modeVersion:1,options:{}},currentMatchId:null,matchSequence:0,members:{slot0:{...member,slot:0,ready:false,joinedAt:fb.serverTimestamp()},slot1:null},hostJoined:true,hostUid:fb.uid,guestUid:null,guestJoined:false,hostReady:false,guestReady:false,hostClientId:getFriendClientId(),hostLastSeen:fb.serverTimestamp()};
+      try{await fb.setDoc(roomRef,createdRoom);}catch(error){
+        console.error("[FriendRoom] create failed",{operation:"create",roomId,role:"host",code:error?.code,message:error?.message});
+        clearFriendRoomLocalState();
+        elements.friendLobbyMessage.textContent=friendFirestoreErrorMessage(error,"部屋の作成に失敗しました。");
+        throw error;
+      }
+      setFriendRoomUi(roomId, "host");
+      showScreen("friendLobby");
+      state.friendRoomData=createdRoom;
       elements.friendLobbyMessage.textContent = successMessage;
       subscribeFriendRoom(roomId);
       updateFriendLobbyView({ hostJoined: true, guestJoined: false, hostReady: false, guestReady: false, status: "lobby", members:{slot0:{...member,ready:false},slot1:null} });
     }
 
     async function createFriendRoom() {
-      return createFriendRoomWithId(makeRoomId());
+      const fb=firebaseApi();if(!fb)return;
+      elements.friendLobbyMessage.textContent="部屋を作成中…";
+      const roomRef=fb.doc(fb.collection(fb.db,"rooms"));
+      const roomId=roomRef.id||String(roomRef).split("/").pop();
+      return createFriendRoomWithId(roomId,undefined,roomRef);
     }
 
     async function joinFriendRoom(roomIdRaw) {
@@ -4700,9 +4745,12 @@ const CARD_LIBRARY = {
             return;
           }
           const sameGuest = !!data.guestJoined && data.guestUid === fb.uid;
-          const roomUnavailable = ["starting", "playing", "closed"].includes(data.status);
+          if(data.status==="closed"){
+            const error=new Error("ROOM_CLOSED");error.code="ROOM_CLOSED";throw error;
+          }
+          const roomUnavailable = ["starting", "playing"].includes(data.status);
 
-          if ((data.status === "closed") || (roomUnavailable && !sameGuest)) {
+          if (roomUnavailable && !sameGuest) {
             const error = new Error("ROOM_IN_MATCH");
             error.code = "ROOM_IN_MATCH";
             throw error;
@@ -4741,10 +4789,17 @@ const CARD_LIBRARY = {
           elements.friendLobbyMessage.textContent = "このルームではすでに対戦が進行中です。新しく参加することはできません。";
           return;
         }
+        if (error?.code === "ROOM_CLOSED" || error?.message === "ROOM_CLOSED") {
+          if(elements.roomEntryControls)elements.roomEntryControls.hidden=false;if(elements.battleRoomLobby)elements.battleRoomLobby.hidden=true;
+          elements.friendLobbyMessage.textContent = "この部屋は解散されています。";
+          return;
+        }
+        console.error("[FriendRoom] join failed",{operation:"join",roomId,role:"guest",code:error?.code,message:error?.message});
         throw error;
       }
 
       setFriendRoomUi(roomId, resolvedRole);
+      showScreen("friendLobby");
       elements.friendLobbyMessage.textContent = resolvedRole==="host" ? "ホストとして部屋へ再接続しました。" : "Firebase上の部屋に入室しました。";
       subscribeFriendRoom(roomId);
     }
@@ -4775,13 +4830,9 @@ const CARD_LIBRARY = {
         await fb.updateDoc(roomRef, { status:"closed", updatedAt:fb.serverTimestamp() });
       } else {
         const data = state.friendRoomData || {};
-        await fb.updateDoc(roomRef, { status:"lobby", guestUid:null, guestJoined:false, guestReady:false, guestDeckCounts:null, guestClientId:null, members:{...(data.members||{}),slot1:null},updatedAt:fb.serverTimestamp() });
+        await fb.updateDoc(roomRef, { status:"lobby", guestUid:null, guestJoined:false, guestReady:false, guestDeckCounts:null, guestClientId:null, guestLastSeen:null, members:{...(data.members||{}),slot1:null},updatedAt:fb.serverTimestamp() });
       }
-      state.friendUnsubscribe?.(); state.friendUnsubscribe = null;
-      state.friendRoomId = null; state.friendRoomData = null; state.friendRole = null; resetFriendMatchEntryState();
-      if (elements.roomEntryControls) elements.roomEntryControls.hidden = false;
-      if (elements.battleRoomLobby) elements.battleRoomLobby.hidden = true;
-      history.replaceState(null,"",location.pathname);
+      clearFriendRoomLocalState();
       showScreen("battleSelect");
     }
 
@@ -5149,8 +5200,8 @@ const CARD_LIBRARY = {
       const params = new URLSearchParams(window.location.search);
       const roomId = params.get("room");
       if (roomId) {
-        setFriendRoomUi(roomId, "guest");
         showScreen("friendLobby");
+        elements.friendLobbyMessage.textContent="部屋に参加中…";
         if (firebaseApi()) joinFriendRoom(roomId);
         else window.addEventListener("waribashi-firebase-ready", () => joinFriendRoom(roomId), { once: true });
       }
@@ -14407,6 +14458,7 @@ async function endTurn() {
       elements.friendLobbyMessage.textContent = friendFirestoreErrorMessage(error,"部屋を作成できませんでした。");
     }));
     elements.joinRoomBtn.addEventListener("click", () => {
+      elements.friendLobbyMessage.textContent="部屋に参加中…";
       joinFriendRoom(elements.roomIdInput.value).catch(error => {
         console.error("[FriendFirestore] joinRoom failed",error);
         elements.friendLobbyMessage.textContent = friendFirestoreErrorMessage(error,"部屋へ入室できませんでした。");

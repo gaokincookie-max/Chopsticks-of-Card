@@ -1,4 +1,17 @@
-# 割り箸カードゲーム v161a
+# 割り箸カードゲーム v161c
+
+## v161c private room read policy
+
+- 認証済みの参加候補者は、room IDを指定した場合に限り、ホストだけがいる参加可能なlobbyを直接取得できます。
+- guest参加後のlobby、starting、playing、closedは現在のhost/guestだけが取得できます。
+- `rooms`の一覧取得は引き続き禁止です。room作成は事前readを行わず、Firestore成功後だけロビーUIへ遷移します。
+
+## v161b Firestore listener / room connection fixes
+
+- friendRequest・battleInviteの受信／送信listenerは、`toUid == currentUid`または`fromUid == currentUid`の単方向queryを使い、Security Rulesも各分岐を個別に許可します。第三者listや全件readは許可しません。
+- 新規roomは存在しないdocumentを事前readせず、Firestore create成功後だけlocal room state・URL・listener・ロビーUIを確定します。通常作成はFirestoreの自動document IDを使います。
+- room IDを知る認証ユーザーのdirect getはjoin判定用に許可し、rooms collectionのlist/queryは拒否します。
+- room listenerには8秒timeoutと画面内エラー表示を設け、create/join/leave/closed時のlocal state・listener・URL cleanupを統一しました。
 
 ## v161a lobby fixes
 

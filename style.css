@@ -130,6 +130,7 @@
       background: #eef7ff;
       border-color: #bdd7f0;
     }
+    .social-error{color:#ffd2d2;font-weight:700;background:rgba(112,20,34,.42);border:1px solid rgba(255,156,170,.45);border-radius:10px;padding:10px 12px}
 
     .room-join-box input {
       border: 1px solid #d9c5a6;
