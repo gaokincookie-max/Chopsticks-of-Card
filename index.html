@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=161c">
+  <link rel="stylesheet" href="style.css?v=162b">
 </head>
 <body>
   <div class="account-actions" id="accountActions" aria-live="polite">
@@ -70,6 +70,19 @@
   </div></div>
 
   <div class="social-modal" id="socialConfirmModal" aria-hidden="true"><div class="social-dialog compact-dialog"><h2 id="socialConfirmTitle">確認</h2><p id="socialConfirmText"></p><div class="social-confirm-actions"><button id="socialConfirmOkBtn" class="danger">実行</button><button id="socialConfirmCancelBtn" class="secondary">キャンセル</button></div></div></div>
+
+  <div class="social-modal" id="roomCreateModal" aria-hidden="true"><div class="social-dialog room-settings-dialog">
+    <button class="social-close" id="roomCreateCancelX" aria-label="閉じる">×</button><div class="menu-kicker">CREATE ROOM</div><h2>ルームを作成</h2>
+    <label>部屋名<input id="roomNameInput" maxlength="30" placeholder="未入力なら自動生成"></label>
+    <fieldset class="room-visibility-field"><legend>公開設定</legend><label><input type="radio" name="roomVisibility" value="private" checked>非公開</label><label><input type="radio" name="roomVisibility" value="public">公開</label></fieldset>
+    <label>対戦ルール<select id="roomRegulationSelect"><option value="standard">スタンダード</option></select></label>
+    <fieldset><legend>タグ（最大3個）</legend><div class="room-tag-picker" id="roomTagPicker"></div></fieldset>
+    <p class="social-message" id="roomCreateMessage"></p><div class="social-confirm-actions"><button id="roomCreateConfirmBtn">作成</button><button id="roomCreateCancelBtn" class="secondary">キャンセル</button></div>
+  </div></div>
+
+  <div class="social-modal" id="friendInviteRuleModal" aria-hidden="true"><div class="social-dialog compact-dialog"><div class="menu-kicker">FRIEND BATTLE</div><h2>対戦を申し込む</h2><label>対戦ルール<select id="friendInviteRegulationSelect"><option value="standard">スタンダード</option></select></label><p class="social-message" id="friendInviteRuleMessage"></p><div class="social-confirm-actions"><button id="friendInviteSendBtn">申し込む</button><button id="friendInviteCancelBtn" class="secondary">キャンセル</button></div></div></div>
+
+  <div class="social-modal" id="publicRoomDetailModal" aria-hidden="true"><div class="social-dialog compact-dialog"><button class="social-close" id="publicRoomDetailCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PUBLIC ROOM</div><h2 id="publicRoomDetailName">公開ルーム</h2><dl class="account-detail"><dt>作成者</dt><dd id="publicRoomDetailCreator">-</dd><dt>ルール</dt><dd id="publicRoomDetailRule">-</dd><dt>説明</dt><dd id="publicRoomDetailDescription">-</dd><dt>タグ</dt><dd id="publicRoomDetailTags">-</dd></dl><p class="social-message" id="publicRoomDetailMessage"></p><button id="publicRoomDetailJoinBtn" class="wide-btn">参加する</button></div></div>
 
   <div class="battle-invite-toast" id="battleInviteToast" aria-hidden="true"><strong id="battleInviteToastTitle">対戦招待</strong><p id="battleInviteToastText"></p><div><button id="acceptBattleInviteBtn">対戦する</button><button id="declineBattleInviteBtn" class="secondary">断る</button></div><small id="battleInviteCountdown"></small></div>
   <div class="overlay" id="overlay">
@@ -365,7 +378,12 @@
         <div id="roomEntryControls">
           <p class="small">部屋を作るか、共有されたRoom IDを入力してください。</p>
           <div class="menu-actions">
-          <button id="createRoomBtn">部屋を作る</button>
+          <button id="createRoomBtn">ルームを作成</button>
+          <button id="openPublicRoomsBtn" class="secondary">公開ルームを探す</button>
+          </div>
+          <div class="public-room-browser" id="publicRoomBrowser" hidden>
+            <div class="public-room-toolbar"><select id="publicRoomRuleFilter"><option value="all">ルール：すべて</option><option value="standard">スタンダード</option></select><button id="publicRoomTagFilterBtn" class="secondary">タグ</button><button id="publicRoomsRefreshBtn" class="secondary">更新</button><button id="quickMatchBtn">クイックマッチ</button></div>
+            <div class="public-room-tag-filter" id="publicRoomTagFilter" hidden></div><p class="small" id="publicRoomsMessage">更新すると参加可能な公開ルームを表示します。</p><div class="public-room-list" id="publicRoomList"></div>
           </div>
           <div class="room-join-box">
             <label for="roomIdInput" class="small">Room IDまたはURL</label>
@@ -374,6 +392,7 @@
           </div>
         </div>
         <div id="battleRoomLobby" class="battle-room-lobby" hidden>
+          <div class="battle-room-meta"><strong id="battleRoomName">対戦ルーム</strong><span id="battleRoomVisibilityBadge">非公開</span><span id="battleRoomRegulation">スタンダード</span><span id="battleRoomTags"></span></div>
           <div class="battle-room-id-row"><span><small>ROOM ID</small><strong id="battleRoomIdText">------</strong></span><button id="copyRoomUrlBtn" class="blue" disabled>コピー</button></div>
           <div class="battle-room-players">
             <button class="battle-room-player battle-room-self" id="battleRoomSelfCard" type="button"><span class="battle-room-role">あなた</span><strong id="battleRoomSelfName">プレイヤー</strong><span class="battle-room-deck-label">使用デッキ</span><span class="battle-room-deck-name" id="battleRoomDeckName">現在のデッキ</span><span id="battleRoomSelfStatus">準備中</span></button>
@@ -399,7 +418,11 @@
       </div>
     </section>
 
-    <div class="battle-vs-cut-in" id="battleVsCutIn" aria-hidden="true"><div class="battle-vs-player self"><span class="presentation-banner"></span><strong id="battleVsSelfName">あなた</strong><span class="presentation-title"></span></div><div class="battle-vs-mark">VS</div><div class="battle-vs-player opponent"><span class="presentation-banner"></span><strong id="battleVsOpponentName">相手</strong><span class="presentation-title"></span></div></div>
+    <div class="battle-vs-cut-in" id="battleVsCutIn" aria-hidden="true">
+      <article class="vs-player-card vs-player-card--self" data-player-card="self"><div class="vs-player-card__background" data-banner-slot></div><div class="vs-player-card__overlay"></div><div class="vs-player-card__frame"></div><div class="vs-player-card__content"><span class="vs-player-card__title-slot" data-title-slot></span><strong class="vs-player-card__name" id="battleVsSelfName">あなた</strong></div></article>
+      <div class="battle-vs-mark" aria-label="VS">VS</div>
+      <article class="vs-player-card vs-player-card--opponent" data-player-card="opponent"><div class="vs-player-card__background" data-banner-slot></div><div class="vs-player-card__overlay"></div><div class="vs-player-card__frame"></div><div class="vs-player-card__content"><span class="vs-player-card__title-slot" data-title-slot></span><strong class="vs-player-card__name" id="battleVsOpponentName">相手</strong></div></article>
+    </div>
 
     <section class="screen difficulty-screen screen-hidden" id="difficultyScreen">
       <div class="menu-card">
@@ -883,6 +906,6 @@
     }
   </script>
 
-  <script src="game.js?v=161c"></script>
+  <script src="game.js?v=162b"></script>
 </body>
 </html>

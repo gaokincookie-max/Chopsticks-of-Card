@@ -1,4 +1,25 @@
-# 割り箸カードゲーム v161c
+# 割り箸カードゲーム v162b
+
+## v162b battle invite lifecycle hardening
+
+- guestのroom参加完了後、battleInviteを`completed`へ終端してbest-effortで削除します。
+- 古い`accepted`招待は新しい`pending`招待を塞がず、一定時間を超えたhandoffはcleanup対象になります。
+- `roomReady=true`は、対応roomがprivate / lobby / 空席 / 招待rule一致の場合だけ許可します。
+
+## v162a friend invite handoff / VS player cards
+
+- 招待の`accepted`と実room作成完了を`roomReady`で分離します。受信側は`roomReady=true`までroomを読まず、送信側だけがFirestore auto IDのprivate roomを作成します。
+- フレンド戦もinternal room IDはFirestore auto ID、共有用shortCodeは6文字です。invite単位のbusy・completed・timeout guardで重複snapshotと無限待機を防ぎます。
+- 通常のフレンド一覧・招待toast・VS・先攻表示にはdisplayNameまたはguestLabelを使い、publicIdはプロフィール、検索、申請確認など識別が必要な画面だけに表示します。
+- VSはbackground、overlay、frame、content、title slotを分離したplayer-card componentです。PCは自分左／相手右、mobileは相手上／自分下。表示完了後にhostだけが先攻を抽選し、表示済みmatchはreconnectで再生しません。
+
+## v162 online rooms
+
+- ルーム作成時に部屋名、公開／非公開、対戦ルール、固定タグ（最大3個）を設定します。空欄の部屋名は表示名から自動生成されます。
+- `rooms`は実対戦state、`roomCodes`は6文字の共有ID、`publicRooms`は公開検索用metadataとして分離します。`rooms`の一覧取得は禁止のままです。
+- 公開一覧は最大50件を手動更新し、ルールと複数タグ（AND）で絞り込めます。クイックマッチも最新候補を再取得し、最終参加はroom transactionで競合判定します。
+- v162の有効ルールは`standard@1`のみです。room作成後のvisibility、roomName、tags、regulationは変更不可で、試合開始時に`match.regulation`へ固定コピーします。
+- フレンド対戦招待でもルールを送信時に固定し、受信toastへルール名を表示します。
 
 ## v161c private room read policy
 
