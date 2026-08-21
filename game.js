@@ -1521,7 +1521,7 @@ const CARD_LIBRARY = {
         name: "防弾チョッキ",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手は「狙撃」「乱射」の効果によって本数を加えられない。「ロジックアトリエ」の効果は防げない。手が0になったら捨て札に置く。",
+        text: "自分の手に表向きで置く。この手は「銃」カードによる攻撃と「狙撃」を受けない。ただし「ロジックアトリエ」の効果は防げない。手が0になったら捨て札に置く。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1964,7 +1964,7 @@ const CARD_LIBRARY = {
         name: "不変の呪縛",
         cost: 2,
         type: "呪縛",
-        text: "相手の手に表向きで置く。この手が通常攻撃される時、その通常攻撃で加える本数への増減をすべて無効化する。攻撃置換、受ける本数の補正、カードによる直接の本数追加には影響しない。",
+        text: "相手の手に表向きで置く。この呪縛が付いている手で通常攻撃するとき、その通常攻撃で加える本数への増減をすべて無効化する。攻撃置換、受ける本数の補正、カードによる直接の本数追加には影響しない。",
         curse: true,
         canPlay: (player) => canPlaceAttachment(player, player === "human" ? "cpu" : "human")
       },
@@ -2191,9 +2191,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v162b-invite-lifecycle";
+    const LATEST_NEWS_ID = "v163-immutable-bulletproof";
 
     const UPDATE_NEWS = [
+      {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
       {id:"v162b-invite-lifecycle",version:"v162b",date:"2026-08-21",title:"対戦招待の同期を安定化",summary:"完了済みの対戦招待が新しい招待を妨げる場合がある問題を修正しました。",featured:false,tags:["fix","system"],items:["対戦ルームへの参加完了後に招待handoffを終了する処理を追加","古いaccepted招待が新しいpending招待を塞がないようlistenerを改善","roomReady公開時のprivate room・ルール・空席検証を強化"]},
       {id:"v162a-friend-handoff-vs",version:"v162a",date:"2026-08-21",title:"フレンド対戦の接続と開始演出を改善",summary:"対戦招待から双方が同じルームへ入る同期処理を修正し、VS演出をプレイヤーカード形式へ刷新しました。",featured:false,tags:["fix","system"],items:["招待承認後に片側だけルームへ移動する場合がある問題を修正","フレンド戦の内部Room IDをFirestore auto IDへ統一","フレンド一覧・招待表示を表示名中心に整理","VSカットインを拡張可能なプレイヤーカード形式へ変更"]},
       {id:"v162-public-rooms",version:"v162",date:"2026-08-21",title:"公開ルーム機能を追加",summary:"ルーム作成設定、公開ルーム検索、クイックマッチを追加しました。",featured:true,tags:["new","system"],items:["公開／非公開、部屋名、固定タグ、対戦ルールを選べるルーム作成設定を追加","公開ルーム一覧、ルール／タグ絞り込み、更新、クイックマッチに対応","共有用の短いRoom IDと、フレンド戦の対戦ルール指定を追加"]},
@@ -10273,6 +10274,7 @@ function wrapFinger(value) {
       state.mode = "attack";
 
       if (gunCardId === "indiscriminateFire") {
+        let bulletproofFxShown = false;
         for (let shot = 0; shot < power; shot++) {
           const targets = [];
           for (const owner of [player, otherPlayer(player)]) {
@@ -10280,6 +10282,11 @@ function wrapFinger(value) {
           }
           if (!targets.length) break;
           const target = targets[randomIndex(targets.length)];
+          if (isBulletproofVestBlocking(target.owner, target.hand, gunCardId)) {
+            await blockWithBulletproofVest(target.owner, target.hand, gunCardId, "無差別射撃", !bulletproofFxShown);
+            bulletproofFxShown = true;
+            continue;
+          }
           await addFingersWithCalculation(target.owner, target.hand, 1, "無差別射撃");
         }
         addLog(`${handNames[player]}の「無差別射撃」。「${ammoName}」を捨て、威力${power}でランダム射撃した。`);
@@ -10287,7 +10294,15 @@ function wrapFinger(value) {
         const amount = Math.floor(power / 2);
         const opponent = otherPlayer(player);
         const targets = ["L", "R"].filter(hand => state[opponent][hand] > 0);
-        for (const hand of targets) await addFingersWithCalculation(opponent, hand, amount, "ショットガン");
+        let bulletproofFxShown = false;
+        for (const hand of targets) {
+          if (amount > 0 && isBulletproofVestBlocking(opponent, hand, gunCardId)) {
+            await blockWithBulletproofVest(opponent, hand, gunCardId, "ショットガン", !bulletproofFxShown);
+            bulletproofFxShown = true;
+            continue;
+          }
+          await addFingersWithCalculation(opponent, hand, amount, "ショットガン");
+        }
         addLog(`${handNames[player]}の「ショットガン」。「${ammoName}」を捨て、威力${power}（各${amount}本）を生存している相手の手へ加えた。`);
       }
       state.pendingTerminalEnd[player] = true;
@@ -10409,11 +10424,17 @@ function wrapFinger(value) {
       const opponent = otherPlayer(player);
       let targetHand = initialHand;
       let fired = 0;
+      let bulletproofFxShown = false;
       for (; fired < shots; fired++) {
         if (state[opponent][targetHand] <= 0) {
           const alternate = otherHand(targetHand);
           if (state[opponent][alternate] <= 0) break;
           targetHand = alternate;
+        }
+        if (isBulletproofVestBlocking(opponent, targetHand, "fanning")) {
+          await blockWithBulletproofVest(opponent, targetHand, "fanning", "ファニング", !bulletproofFxShown);
+          bulletproofFxShown = true;
+          continue;
         }
         await addFingersWithCalculation(opponent, targetHand, 1, "ファニング");
       }
@@ -10456,6 +10477,21 @@ function wrapFinger(value) {
       return hasAttachment(player, hand, "bulletproofVest");
     }
 
+    function canBulletproofVestBlockSource(sourceCardId) {
+      return sourceCardId === "snipe" || !!CARD_LIBRARY[sourceCardId]?.gun;
+    }
+
+    function isBulletproofVestBlocking(player, hand, sourceCardId) {
+      return hasBulletproofVest(player, hand) && canBulletproofVestBlockSource(sourceCardId);
+    }
+
+    async function blockWithBulletproofVest(defender, targetHand, sourceCardId, sourceName, showFx = true) {
+      if (!isBulletproofVestBlocking(defender, targetHand, sourceCardId)) return false;
+      if (showFx) await triggerBulletproofBlockedFx(defender, sourceName);
+      addLog(`${handNames[defender]}の${handNames[targetHand]}にある「防弾チョッキ」が「${sourceName}」を防いだ。`);
+      return true;
+    }
+
     async function showBulletproofBlockedPopup(defender, sourceName, ms = 900) {
       await showPopup(
         defender,
@@ -10478,9 +10514,7 @@ function wrapFinger(value) {
 
     async function applySnipe(player, defender, targetHand) {
       if (state[defender][targetHand] <= 0) return false;
-      if (hasBulletproofVest(defender, targetHand)) {
-        await triggerBulletproofBlockedFx(defender, "狙撃");
-        addLog(`${handNames[defender]}の${handNames[targetHand]}にある「防弾チョッキ」が「狙撃」を防いだ。`);
+      if (await blockWithBulletproofVest(defender, targetHand, "snipe", "狙撃")) {
         if (player === "human") {
           state.mode = "attack";
           setMessage(`「狙撃」は「防弾チョッキ」に防がれました。まだ攻撃か分けるができます。`);
@@ -12311,6 +12345,14 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
 
+      if (options.sourceCardId && CARD_LIBRARY[options.sourceCardId]?.gun
+          && await blockWithBulletproofVest(defender, targetHand, options.sourceCardId, CARD_LIBRARY[options.sourceCardId].name)) {
+        state.animating = false;
+        clearHighlights();
+        render();
+        return true;
+      }
+
       const attackStartPower = state[attacker][attackHand];
       let targetStartPower = state[defender][targetHand];
       const prestoModifier = !danceActive && state.pendingPrestoAttack?.[attacker]
@@ -12327,13 +12369,13 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       /*
        * ATTACK CORE RULE:
        * 通常攻撃力 = basePower + attackModifier。
-       * 不変の呪縛は、攻撃される手に対するattackModifierを正負とも0にする。
+       * 不変の呪縛は、攻撃する手に付いている場合、その通常攻撃のattackModifierを正負とも0にする。
        * ゴールドラッシュは通常攻撃の加算量置換。乱舞は通常攻撃ではない置換攻撃。
        * どちらもattackModifierを使用せず、乱舞はreceivedAmountも使用しない。
        * 防御側の軽減・増加は、その後のreceivedAmountとして別に処理する。
        */
       const normalBasePower = state[attacker][attackHand];
-      let immutable = hasImmutableCurse(defender, targetHand);
+      let immutable = hasImmutableCurse(attacker, attackHand);
       const goldRushBase = state.hands[attacker].length;
       const basePower = goldRushActive ? goldRushBase : normalBasePower;
       const attackReplacementKind = danceActive ? "result" : goldRushActive ? "amount" : null;
@@ -12393,7 +12435,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (isAttackReplacement && calculateAttackModifier() !== 0) {
         addLog(`攻撃置換中のため、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}は適用されない。`);
       } else if (immutable && calculateAttackModifier() !== 0) {
-        addLog(`${handNames[defender]}の${handNames[targetHand]}の「不変の呪縛」により、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}を無効化した。`);
+        addLog(`${handNames[attacker]}の${handNames[attackHand]}の「不変の呪縛」により、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}を無効化した。`);
       }
       const attackModifierLogsApply = !immutable && !isAttackReplacement;
       if (attackModifierLogsApply && blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、通常攻撃で加える本数+1。`);
@@ -12480,7 +12522,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, false);
         resonanceBonus = redirectedBonus;
         resonance = redirectedResonance;
-        immutable = hasImmutableCurse(defender, targetHand);
+        immutable = hasImmutableCurse(attacker, attackHand);
         attackPowerResult = calculateFinalAttackPower();
         power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
@@ -13144,7 +13186,7 @@ async function endTurn() {
     }
 
     function estimateCpuNormalAttackPower(attackHand,targetHand,extraBonus=0) {
-      const immutable=hasImmutableCurse("human",targetHand);
+      const immutable=hasImmutableCurse("cpu",attackHand);
       const modifier=state.temp.cpu.attackBonus+extraBonus+(state.berserkerTurns.cpu>0?2:0)+(hasAttachment("cpu",attackHand,"powerBlessing")?1:0)+(hasAttachment("cpu",attackHand,"recklessBlessing")?2:0)-(hasAttachment("cpu",attackHand,"slowCurse")?1:0);
       const finalAttackPower=Math.max(1,state.cpu[attackHand]+(immutable?0:modifier));
       return Math.max(1,finalAttackPower-(hasAttachment("human",targetHand,"guardBlessing")?1:0));
@@ -13508,7 +13550,13 @@ async function endTurn() {
       const opponent = otherPlayer(player);
       const targets = ["L", "R"].filter(hand => state[opponent][hand] > 0);
       addLog(`「凶弾」の追加効果。${handNames[opponent]}の1以上の手に3本ずつ加える。`);
+      let bulletproofFxShown = false;
       for (const hand of targets) {
+        if (isBulletproofVestBlocking(opponent, hand, "cursedBullet")) {
+          await blockWithBulletproofVest(opponent, hand, "cursedBullet", "凶弾", !bulletproofFxShown);
+          bulletproofFxShown = true;
+          continue;
+        }
         const before = state[opponent][hand];
         const amount = applyGuardBlessingReduction(opponent, hand, 3, "凶弾の追加効果");
         const total = before + amount;
@@ -13567,9 +13615,7 @@ async function endTurn() {
         return true;
       }
 
-      if (hasBulletproofVest(defender, targetHand)) {
-        await triggerBulletproofBlockedFx(defender, "乱射");
-        addLog(`${handNames[defender]}の${handNames[targetHand]}にある「防弾チョッキ」が「乱射」を防いだ。`);
+      if (await blockWithBulletproofVest(defender, targetHand, "rapidFire", "乱射")) {
         state.pendingTerminalEnd[player] = true;
         state.mode = "attack";
         clearHighlights();
