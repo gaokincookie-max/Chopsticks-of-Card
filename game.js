@@ -3751,8 +3751,37 @@ const CARD_LIBRARY = {
       socialEl("socialConfirmTitle").textContent=title;socialEl("socialConfirmText").textContent=text;socialOpen("socialConfirmModal");
       return new Promise(resolve=>{const ok=socialEl("socialConfirmOkBtn"),cancel=socialEl("socialConfirmCancelBtn");const finish=value=>{ok.removeEventListener("click",accept);cancel.removeEventListener("click",decline);socialClose("socialConfirmModal");resolve(value);};const accept=()=>finish(true),decline=()=>finish(false);ok.addEventListener("click",accept);cancel.addEventListener("click",decline);});
     }
+    function activeRoomRef(fb=firebaseApi()){return fb?fb.doc(fb.db,"activeRooms",fb.uid):null;}
+    async function getActiveRoomRecord(){const fb=firebaseApi();if(!fb)return null;const snap=await fb.getDoc(activeRoomRef(fb));return snap.exists()?{id:snap.id,...snap.data()}:null;}
+    async function findLegacyOwnedPublicRooms(){const fb=firebaseApi();if(!fb)return [];try{const snap=await fb.getDocs(fb.query(fb.collection(fb.db,"publicRooms"),fb.where("creatorUid","==",fb.uid),fb.limit(10)));const rooms=[];for(const item of docsFromSnapshot(snap)){try{const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",item.roomId));if(roomSnap.exists()){const data=roomSnap.data()||{};if(data.hostUid===fb.uid&&data.status!=="closed")rooms.push({roomId:item.roomId,role:"host",data});}}catch(_){}}return rooms;}catch(_){return [];}}
+    async function hasAnyActiveRoom(){if(state.friendRoomId)return true;try{if(await getActiveRoomRecord())return true;return (await findLegacyOwnedPublicRooms()).length>0;}catch(_){return false;}}
+    async function cleanupActiveRoomRecordIfStale(record){
+      const fb=firebaseApi();if(!fb||!record?.roomId)return false;
+      try{const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",record.roomId));if(roomSnap.exists()){const data=roomSnap.data()||{};const stillParticipant=(record.role==="host"&&data.hostUid===fb.uid&&data.status!=="closed")||(record.role==="guest"&&data.guestUid===fb.uid&&data.guestJoined===true&&data.status!=="closed");if(stillParticipant)return false;}await fb.deleteDoc(activeRoomRef(fb));return true;}catch(_){return false;}
+    }
+    async function ensureCurrentRoomLoaded(){
+      if(state.friendRoomId&&state.friendRole)return {roomId:state.friendRoomId,role:state.friendRole,data:state.friendRoomData||null};
+      const fb=firebaseApi();if(!fb)return null;const record=await getActiveRoomRecord();if(record){if(await cleanupActiveRoomRecordIfStale(record))return null;const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",record.roomId));if(roomSnap.exists())return {roomId:record.roomId,role:record.role,data:roomSnap.data()||null};}
+      const legacy=await findLegacyOwnedPublicRooms();return legacy[0]||null;
+    }
+    async function leaveRoomRecordForReplacement(current){
+      const fb=firebaseApi();if(!fb||!current?.roomId||!current?.role)return;
+      const roomRef=fb.doc(fb.db,"rooms",current.roomId),activeRef=activeRoomRef(fb);
+      if(current.role==="host"){
+        await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(roomRef);if(snap.exists()&&snap.data().hostUid===fb.uid){const data=snap.data()||{};transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});if(data.visibility==="public")transaction.delete(fb.doc(fb.db,"publicRooms",current.roomId));if(data.shortCode)transaction.delete(fb.doc(fb.db,"roomCodes",data.shortCode));}transaction.delete(activeRef);});
+      }else{
+        await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(roomRef);if(snap.exists()&&snap.data().guestUid===fb.uid){const data=snap.data()||{};if(data.status!=="lobby")throw Object.assign(new Error("ROOM_IN_MATCH"),{code:"ROOM_IN_MATCH"});const patch={status:"lobby",guestUid:null,guestJoined:false,guestReady:false,guestDeckCounts:null,guestClientId:null,guestLastSeen:null,members:{...(data.members||{}),slot1:null},updatedAt:fb.serverTimestamp()};transaction.update(roomRef,patch);if(data.visibility==="public")transaction.set(fb.doc(fb.db,"publicRooms",current.roomId),publicRoomMetadata(current.roomId,{...data,...patch},fb.serverTimestamp()));}transaction.delete(activeRef);});
+      }
+      if(state.friendRoomId===current.roomId)clearFriendRoomLocalState();
+    }
+    async function confirmAndLeaveCurrentRoom(purpose="新しいルームを作成"){
+      const current=await ensureCurrentRoomLoaded();if(!current)return true;
+      if(state.friendMatchStarted||current.data?.status==="playing"||current.data?.status==="starting"){throw new Error("試合中は別の対戦ルームへ移動できません。");}
+      const host=current.role==="host",ok=await requestSocialConfirmation(host?"現在のルームを解散しますか？":"現在のルームから退出しますか？",host?`${purpose}すると、現在のルームは解散されます。解散して続けますか？`:`${purpose}すると、現在のルームから退出します。退出して続けますか？`);if(!ok)return false;await leaveRoomRecordForReplacement(current);if(host){const leftovers=await findLegacyOwnedPublicRooms();for(const room of leftovers){if(room.roomId!==current.roomId)await leaveRoomRecordForReplacement(room);}}return true;
+    }
     async function sendBattleInvite(target,regulationId="standard"){
       const fb=firebaseApi(),me=state.socialProfile;if(!state.socialFriends.some(item=>item.uid===target.uid))throw new Error("フレンドにのみ対戦を申し込めます。");
+      if(await hasAnyActiveRoom())throw new Error("対戦ルームに参加している間はフレンド対戦を申し込めません。");
       const regulation=regulationSnapshot(regulationId);
       if(await isBlockedByMe(target.uid))throw new Error("このプレイヤーには現在対戦を申し込めません。");
       const forward=fb.doc(fb.db,"battleInvites",socialRequestId(me.uid,target.uid)),now=Date.now();
@@ -3776,6 +3805,7 @@ const CARD_LIBRARY = {
     async function acceptBattleInvite(){
       const fb=firebaseApi(),id=state.socialInviteToastId;if(!id)return;const ref=fb.doc(fb.db,"battleInvites",id);
       const before=await fb.getDoc(ref);if(!before.exists())throw new Error("招待が見つかりません。");if(await isBlockedByMe(before.data().fromUid))throw new Error("この対戦招待は利用できません。");if(!regulationDefinition(before.data().regulationId,before.data().regulationVersion))throw new Error("この対戦ルールには現在対応していません。");
+      if(await hasAnyActiveRoom()){const proceed=await confirmAndLeaveCurrentRoom("このフレンド対戦を受ける");if(!proceed)return;}
       const autoRoomRef=fb.doc(fb.collection(fb.db,"rooms"));
       await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(ref);if(!snap.exists())throw new Error("招待が見つかりません。");const data=snap.data();if(data.status!=="pending"||socialTimestampMillis(data.expiresAt)<=Date.now())throw new Error("招待の有効期限が切れています。");transaction.update(ref,{status:"accepted",acceptedAt:fb.serverTimestamp(),roomId:autoRoomRef.id,roomReady:false,shortCode:null,roomCreatedAt:null});});
       if(state.socialInviteTimer)clearInterval(state.socialInviteTimer);state.socialInviteTimer=null;socialEl("acceptBattleInviteBtn").disabled=true;socialEl("declineBattleInviteBtn").disabled=true;socialEl("battleInviteToastText").textContent="対戦ルームを準備中…";socialEl("battleInviteCountdown").textContent="";socialMessage("socialMessage","対戦ルームを準備中…");
@@ -4777,9 +4807,9 @@ const CARD_LIBRARY = {
           shortCode=attempt?makeShortRoomCode():shortCode;
           const codeRef=fb.doc(fb.db,"roomCodes",shortCode),publicRef=fb.doc(fb.db,"publicRooms",roomId);
           try{await fb.runTransaction(fb.db,async transaction=>{
-            const codeSnap=await transaction.get(codeRef);if(codeSnap.exists())throw Object.assign(new Error("ROOM_CODE_COLLISION"),{code:"ROOM_CODE_COLLISION"});
+            const activeRef=fb.doc(fb.db,"activeRooms",fb.uid);const [codeSnap,activeSnap]=await Promise.all([transaction.get(codeRef),transaction.get(activeRef)]);if(codeSnap.exists())throw Object.assign(new Error("ROOM_CODE_COLLISION"),{code:"ROOM_CODE_COLLISION"});if(activeSnap.exists()&&activeSnap.data().roomId!==roomId)throw Object.assign(new Error("ACTIVE_ROOM_EXISTS"),{code:"ACTIVE_ROOM_EXISTS"});
             const stamp=fb.serverTimestamp();createdRoom={createdAt:stamp,updatedAt:stamp,status:"lobby",visibility,roomName,shortCode,tags,regulation,currentMatchId:null,matchSequence:0,members:{slot0:{...member,slot:0,ready:false,joinedAt:stamp},slot1:null},hostJoined:true,hostUid:fb.uid,guestUid:null,guestJoined:false,hostReady:false,guestReady:false,hostClientId:getFriendClientId(),hostLastSeen:stamp};
-            transaction.set(roomRef,createdRoom);transaction.set(codeRef,{roomId,hostUid:fb.uid,createdAt:stamp});if(visibility==="public")transaction.set(publicRef,publicRoomMetadata(roomId,createdRoom,stamp));
+            transaction.set(roomRef,createdRoom);transaction.set(codeRef,{roomId,hostUid:fb.uid,createdAt:stamp});transaction.set(activeRef,{uid:fb.uid,roomId,role:"host",updatedAt:stamp});if(visibility==="public")transaction.set(publicRef,publicRoomMetadata(roomId,createdRoom,stamp));
           });break;}catch(error){if(error?.code==="ROOM_CODE_COLLISION"&&attempt<7)continue;throw error;}
         }
       }catch(error){
@@ -4799,10 +4829,13 @@ const CARD_LIBRARY = {
     async function createFriendRoom(options={}) {
       const fb=firebaseApi();if(!fb)return;
       if(state.roomCreateBusy)return;state.roomCreateBusy=true;
-      elements.friendLobbyMessage.textContent="部屋を作成中…";
-      const roomRef=fb.doc(fb.collection(fb.db,"rooms"));
-      const roomId=roomRef.id||String(roomRef).split("/").pop();
-      try{return await createFriendRoomWithId(roomId,undefined,roomRef,options);}finally{state.roomCreateBusy=false;}
+      try{
+        if(await hasAnyActiveRoom()){const proceed=await confirmAndLeaveCurrentRoom("新しいルームを作成");if(!proceed)return false;}
+        elements.friendLobbyMessage.textContent="部屋を作成中…";
+        const roomRef=fb.doc(fb.collection(fb.db,"rooms"));
+        const roomId=roomRef.id||String(roomRef).split("/").pop();
+        return await createFriendRoomWithId(roomId,undefined,roomRef,options);
+      }finally{state.roomCreateBusy=false;}
     }
 
     async function joinFriendRoom(roomIdRaw,{internalRoomId=false,publicOnly=false}={}) {
@@ -4833,10 +4866,11 @@ const CARD_LIBRARY = {
           }
 
           const data = snapshot.data() || {};
+          const activeRef=fb.doc(fb.db,"activeRooms",fb.uid),activeSnap=await transaction.get(activeRef);if(activeSnap.exists()&&activeSnap.data().roomId!==roomId)throw Object.assign(new Error("ACTIVE_ROOM_EXISTS"),{code:"ACTIVE_ROOM_EXISTS"});
           if(publicOnly&&data.visibility!=="public")throw Object.assign(new Error("ROOM_NOT_PUBLIC"),{code:"ROOM_NOT_PUBLIC"});
           if(!regulationDefinition(data.regulation?.modeId,data.regulation?.modeVersion))throw Object.assign(new Error("ROOM_RULE_UNSUPPORTED"),{code:"ROOM_RULE_UNSUPPORTED"});
           if(data.hostUid===fb.uid){
-            resolvedRole="host";
+            resolvedRole="host";transaction.set(activeRef,{uid:fb.uid,roomId,role:"host",updatedAt:fb.serverTimestamp()});
             return;
           }
           const sameGuest = !!data.guestJoined && data.guestUid === fb.uid;
@@ -4867,6 +4901,7 @@ const CARD_LIBRARY = {
             guestLastSeen: fb.serverTimestamp(),
             members: { ...(data.members || {slot0:null,slot1:null}), slot1: sameGuest && data.members?.slot1 ? data.members.slot1 : {...joiningMember,slot:1,ready:false,joinedAt:fb.serverTimestamp()} }
           }, { merge: true });
+          transaction.set(activeRef,{uid:fb.uid,roomId,role:"guest",updatedAt:fb.serverTimestamp()});
           if(data.visibility==="public")transaction.delete(fb.doc(fb.db,"publicRooms",roomId));
         });
       } catch (error) {
@@ -4892,6 +4927,7 @@ const CARD_LIBRARY = {
         }
         if(error?.code==="ROOM_RULE_UNSUPPORTED"||error?.message==="ROOM_RULE_UNSUPPORTED"){elements.friendLobbyMessage.textContent="この対戦ルールには現在対応していません。";return false;}
         if(error?.code==="ROOM_NOT_PUBLIC"||error?.message==="ROOM_NOT_PUBLIC"){elements.friendLobbyMessage.textContent="この部屋は公開参加できません。";return false;}
+        if(error?.code==="ACTIVE_ROOM_EXISTS"||error?.message==="ACTIVE_ROOM_EXISTS"){elements.friendLobbyMessage.textContent="すでに別の対戦ルームに参加しています。先に現在のルームを退出してください。";return false;}
         console.error("[FriendRoom] join failed",{operation:"join",roomId,role:"guest",code:error?.code,message:error?.message});
         throw error;
       }
@@ -4926,11 +4962,11 @@ const CARD_LIBRARY = {
       if (!fb || !state.friendRoomId || !state.friendRole) return;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       if (state.friendRole === "host") {
-        await fb.runTransaction(fb.db,async transaction=>{transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});if(state.friendRoomData?.visibility==="public")transaction.delete(fb.doc(fb.db,"publicRooms",state.friendRoomId));transaction.delete(fb.doc(fb.db,"roomCodes",state.friendRoomData.shortCode));});
+        await fb.runTransaction(fb.db,async transaction=>{transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});if(state.friendRoomData?.visibility==="public")transaction.delete(fb.doc(fb.db,"publicRooms",state.friendRoomId));if(state.friendRoomData?.shortCode)transaction.delete(fb.doc(fb.db,"roomCodes",state.friendRoomData.shortCode));transaction.delete(fb.doc(fb.db,"activeRooms",fb.uid));});
       } else {
         const data = state.friendRoomData || {};
         const patch={status:"lobby",guestUid:null,guestJoined:false,guestReady:false,guestDeckCounts:null,guestClientId:null,guestLastSeen:null,members:{...(data.members||{}),slot1:null},updatedAt:fb.serverTimestamp()};
-        if(data.visibility==="public")await fb.runTransaction(fb.db,async transaction=>{transaction.update(roomRef,patch);transaction.set(fb.doc(fb.db,"publicRooms",state.friendRoomId),publicRoomMetadata(state.friendRoomId,{...data,...patch},fb.serverTimestamp()));});else await fb.updateDoc(roomRef,patch);
+        await fb.runTransaction(fb.db,async transaction=>{transaction.update(roomRef,patch);if(data.visibility==="public")transaction.set(fb.doc(fb.db,"publicRooms",state.friendRoomId),publicRoomMetadata(state.friendRoomId,{...data,...patch},fb.serverTimestamp()));transaction.delete(fb.doc(fb.db,"activeRooms",fb.uid));});
       }
       clearFriendRoomLocalState();
       showScreen("battleSelect");
@@ -7980,7 +8016,7 @@ function wrapFinger(value) {
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       const directiveAttackDelta=Number(state.pendingDirectiveAttackLimitDelta[player]||0);state.pendingDirectiveAttackLimitDelta[player]=0;state.temp[player].attackLimit=Math.max(0,1+directiveAttackDelta);
       state.activeDirectiveReformContinue[player]=!!state.pendingDirectiveReformContinue[player];state.pendingDirectiveReformContinue[player]=false;
-      state.noSplit[player]=!!state.pendingDirectiveNoSplit[player];state.pendingDirectiveNoSplit[player]=false;
+      state.noSplit[player]=!!state.noSplit[player]||!!state.pendingDirectiveNoSplit[player];state.pendingDirectiveNoSplit[player]=false;
       state.activeDirectiveAnnihilation[player]=!!state.pendingDirectiveAnnihilation[player];state.pendingDirectiveAnnihilation[player]=false;
       if(state.pendingDeusVult[player]){state.pendingDeusVult[player]=false;state.hands[player].push("deusVult");addLog(`${handNames[player]}の手札に「DEUS VULT」が加わった。神意は証明された。`);}
       state.turn = player;
