@@ -2196,7 +2196,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v164-player-cards";
 
     const UPDATE_NEWS = [
-      {id:"v164-player-cards",version:"v164a",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","新規プロフィールでコード限定装飾を取得できる問題を修正"]},
+      {id:"v164-player-cards",version:"v164b",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","旧プロフィールで認証が完了しない問題を修正"]},
       {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
       {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
       {id:"v162b-invite-lifecycle",version:"v162b",date:"2026-08-21",title:"対戦招待の同期を安定化",summary:"完了済みの対戦招待が新しい招待を妨げる場合がある問題を修正しました。",featured:false,tags:["fix","system"],items:["対戦ルームへの参加完了後に招待handoffを終了する処理を追加","古いaccepted招待が新しいpending招待を塞がないようlistenerを改善","roomReady公開時のprivate room・ルール・空席検証を強化"]},
@@ -3686,9 +3686,23 @@ const CARD_LIBRARY = {
       const snap=await fb.getDoc(fb.doc(fb.db,"users",user.uid));
       if(loadToken!==state.socialAuthLoadToken)return null;
       if(!snap.exists()){state.socialProfile=null;renderSocialAccountUi();socialOpen("profileSetupModal");return null;}
-      state.socialProfile=normalizedPlayerCardProfile({uid:user.uid,...snap.data()});
-      await fb.setDoc(fb.doc(fb.db,"users",user.uid),{lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()},{merge:true});
-      renderSocialAccountUi();subscribeSocialData();repairOwnRoomStateOnStartup().catch(()=>{});return state.socialProfile;
+      const storedProfile={uid:user.uid,...snap.data()};
+      state.socialProfile=normalizedPlayerCardProfile(storedProfile);
+      renderSocialAccountUi();subscribeSocialData();repairOwnRoomStateOnStartup().catch(()=>{});
+      const migration={lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()};
+      if(!Object.hasOwn(storedProfile,"bannerId"))migration.bannerId="";
+      if(!Object.hasOwn(storedProfile,"backgroundId"))migration.backgroundId="default";
+      if(!Object.hasOwn(storedProfile,"titleId"))migration.titleId="rookie";
+      if(!Object.hasOwn(storedProfile,"unlockedBackgroundIds"))migration.unlockedBackgroundIds=[...DEFAULT_BACKGROUND_IDS];
+      if(!Object.hasOwn(storedProfile,"unlockedTitleIds"))migration.unlockedTitleIds=[...DEFAULT_TITLE_IDS];
+      try{
+        await fb.setDoc(fb.doc(fb.db,"users",user.uid),migration,{merge:true});
+      }catch(error){
+        // Auth and profile reads succeeded; optional bookkeeping must not leave
+        // the account UI in a permanent loading state.
+        console.warn("[Social] profile bookkeeping",error?.code,error?.message);
+      }
+      return state.socialProfile;
     }
     function authProviderLabel(user){
       const ids=(user?.providerData||[]).map(item=>item.providerId);
