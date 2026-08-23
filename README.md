@@ -1,4 +1,4 @@
-# 割り箸カードゲーム v164e
+# 割り箸カードゲーム v164f
 
 ## v163c 孤児ルーム自己修復
 
@@ -260,7 +260,8 @@
 
 - 正式プロフィールは`backgroundId`、`titleId`、`unlockedBackgroundIds`、`unlockedTitleIds`を持ちます。旧プロフィールは標準5背景と`rookie`を所有するfallbackで読み込みます。
 - v164cでは旧・未知の選択IDを`default` / `rookie`へcanonicalizeし、所有配列から未知IDだけを除去します。既存の`gold` / `operator`は保持しますが、migrationから新規付与はできません。
-- v164eではactiveRoomsから現在のルームへ復帰できます。lobbyでは復帰・解散/退出・キャンセルを選べ、starting / playingでは対戦へ戻れます。相手heartbeatが30分以上途絶えた対戦だけ、確認後に破棄できます。
+- v164fではactiveRoomsから現在のルームへ復帰できます。lobbyでは復帰・解散/退出・キャンセルを選べ、starting / playingでは対戦へ戻れます。相手heartbeatが30分以上途絶えた対戦だけ、確認後に破棄できます。
+- v164fでは外部効果による手札破棄と設置除去を共通保護判定へ統一しました。`protectedSpecial`・充電は手札破棄候補外、`themeBlessing`は外部除去・移動・交換候補外です。
 - アカウント、対戦ロビー、VSカットインは同じ背景・称号定義を使用します。装飾は操作レイヤーの背後に置き、名前と準備状態へ暗い可読性プレートを付けます。
 - `giftCodes/{code}`を正本とし、本人の`claims/{uid}`と報酬所有配列をtransactionで同時更新します。コード全件listと他人claimの取得は禁止です。
 - 名前変更はtagとUIDを維持し、users、playerTags、相手側friend cacheを同じbatchで同期します。

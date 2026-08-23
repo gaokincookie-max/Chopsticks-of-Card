@@ -1603,7 +1603,7 @@ const CARD_LIBRARY = {
         magicalEvolutionBase: true,
         canPlay: (player) => state.hands[player].length > 1 && (
           state.discard[player].some(id => ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id)) ||
-          state.hands[player].some(id => id !== "wornHope" && ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id))
+          state.hands[player].some(id => id !== "wornHope" && isExternallyDiscardableHandCard(id) && ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id))
         ),
         effect: async (player) => { await useWornHope(player); }
       },
@@ -1618,7 +1618,7 @@ const CARD_LIBRARY = {
         name: "ヒステリー", cost: 2, type: "補助 / 魔法少女・感情変化",
         text: "手札にある加護カードを1枚選んで捨てる。その後、山札からデッキ投入可能な加護カードをランダムに1枚手札へ加える。",
         magicalEvolutionBase: true,
-        canPlay: (player) => state.hands[player].some(id => id !== "hysteria" && CARD_LIBRARY[id]?.blessing) && state.decks[player].some(id => CARD_LIBRARY[id]?.blessing && !CARD_LIBRARY[id]?.token),
+        canPlay: (player) => state.hands[player].some(id => id !== "hysteria" && CARD_LIBRARY[id]?.blessing && isExternallyDiscardableHandCard(id)) && state.decks[player].some(id => CARD_LIBRARY[id]?.blessing && !CARD_LIBRARY[id]?.token),
         effect: async (player) => { await useHysteria(player); }
       },
       withLove: {
@@ -1793,7 +1793,7 @@ const CARD_LIBRARY = {
         name: "犠牲の力", cost: 2, type: "補助 / 魔法少女・感情変化",
         text: "自分の手に付いている加護を1枚以上、好きな数だけ選んで捨てる。次の通常攻撃で、捨てた加護の数だけ加える本数を増やす。",
         magicalEvolutionBase: true,
-        canPlay: (player) => countOwnBlessings(player) > 0,
+        canPlay: (player) => getOwnBlessingAttachments(player).length > 0,
         effect: async (player) => { await useSacrificePower(player); }
       },
       powerOfEveryone: {
@@ -2197,7 +2197,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v164-player-cards";
 
     const UPDATE_NEWS = [
-      {id:"v164-player-cards",version:"v164e",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","ルーム所属時のプロフィール編集導線とエラー表示を修正"]},
+      {id:"v164-player-cards",version:"v164f",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","ルーム所属時のプロフィール編集導線とエラー表示を修正"]},
       {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
       {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
       {id:"v162b-invite-lifecycle",version:"v162b",date:"2026-08-21",title:"対戦招待の同期を安定化",summary:"完了済みの対戦招待が新しい招待を妨げる場合がある問題を修正しました。",featured:false,tags:["fix","system"],items:["対戦ルームへの参加完了後に招待handoffを終了する処理を追加","古いaccepted招待が新しいpending招待を塞がないようlistenerを改善","roomReady公開時のprivate room・ルール・空席検証を強化"]},
@@ -3861,9 +3861,11 @@ const CARD_LIBRARY = {
       if(socialEl("incomingRequestsList"))socialEl("incomingRequestsList").innerHTML=state.socialIncomingRequestsError?"<p class=\"social-error\">フレンド申請の取得に失敗しました。</p>":state.socialIncomingRequests.length?state.socialIncomingRequests.map(item=>socialListRow(item.fromPublicId,`<button data-request-accept="${item.id}">承認</button><button class="secondary" data-request-reject="${item.id}">拒否</button>`)).join(""):"<p>受信申請はありません。</p>";
       if(socialEl("outgoingRequestsList"))socialEl("outgoingRequestsList").innerHTML=state.socialOutgoingRequestsError?"<p class=\"social-error\">送信中の申請を取得できませんでした。</p>":state.socialOutgoingRequests.length?state.socialOutgoingRequests.map(item=>socialListRow(item.toPublicId,"送信中")).join(""):"<p>送信中の申請はありません。</p>";
     }
-    function openSocialProfile(target){
-      state.socialCurrentProfile=target;socialEl("publicProfileId").textContent=target.publicId;socialEl("publicProfileName").textContent=target.displayName;
-      const friend=state.socialFriends.some(item=>item.uid===target.uid),self=target.uid===state.socialProfile?.uid;socialEl("sendFriendRequestBtn").hidden=friend||self||!target.publicId;socialEl("battleInviteBtn").hidden=!friend;socialEl("removeFriendBtn").hidden=!friend;socialOpen("publicProfileModal");
+    async function openSocialProfile(target){
+      const fb=firebaseApi();let profile=target;
+      if(fb&&target?.uid){try{const snap=await fb.getDoc(fb.doc(fb.db,"users",target.uid));if(snap.exists())profile={uid:target.uid,...snap.data()};}catch(error){console.warn("[Social] public profile decoration",error?.code,error?.message);}}
+      profile=normalizedPlayerCardProfile(profile||{});state.socialCurrentProfile=profile;socialEl("publicProfileId").textContent=profile.publicId||"-";socialEl("publicProfileName").textContent=profile.displayName||"-";applyPlayerCardElement(socialEl("publicProfilePlayerCard"),profile,{nameElement:socialEl("publicProfileCardName")});
+      const friend=state.socialFriends.some(item=>item.uid===profile.uid),self=profile.uid===state.socialProfile?.uid;socialEl("sendFriendRequestBtn").hidden=friend||self||!profile.publicId;socialEl("battleInviteBtn").hidden=!friend;socialEl("removeFriendBtn").hidden=!friend;socialOpen("publicProfileModal");return profile;
     }
     function requestSocialConfirmation(title,text,{okLabel="実行",cancelLabel="キャンセル"}={}){
       socialEl("socialConfirmTitle").textContent=title;socialEl("socialConfirmText").textContent=text;socialOpen("socialConfirmModal");
@@ -7840,7 +7842,7 @@ function wrapFinger(value) {
     function gainCharge(player,amount,source="充電効果"){ normalizeChargeHand(player); const before=getChargeLevel(player); const gain=Math.max(0,Number(amount)||0); if(before>=10||gain<=0){ if(before>=10)addLog(`${handNames[player]}は既に充電Lv.10のため充電を得られない。`); return before; } const after=Math.min(10,before+gain); setChargeLevel(player,after); addLog(`${handNames[player]}は${source}で充電${gain}を得た（Lv.${before}→Lv.${after}）。`); return after; }
     function consumeCharge(player,amount,allowPartial=false,source="充電消費"){ const before=getChargeLevel(player); const need=Math.max(0,Number(amount)||0); if(!allowPartial&&before<need){ addLog(`${handNames[player]}の「${source}」は充電不足（必要${need}/現在${before}）で不発。`); return false; } const spent=allowPartial?Math.min(before,need):need; setChargeLevel(player,before-spent); addLog(`${handNames[player]}は${source}で充電${spent}を消費（Lv.${before}→Lv.${before-spent}）。`); return true; }
     function isProtectedChargeCard(cardId){ return chargeLevelFromId(cardId)>0; }
-    function countDiscardableHand(player){ return state.hands[player].filter(id=>!isProtectedHandCard(id)).length; }
+    function countDiscardableHand(player){ return state.hands[player].filter(isExternallyDiscardableHandCard).length; }
     function canUseChargeCardDuringLightSpeed(player, cardId) {
       const card = CARD_LIBRARY[cardId];
       return !!state.temp?.[player]?.lightSpeedCircuit && !!card?.chargeCard;
@@ -8093,7 +8095,7 @@ function wrapFinger(value) {
     function fatigue(player) {
       const discardableCards = state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
-        .filter(item => !isProtectedHandCard(item.cardId));
+        .filter(item => isExternallyDiscardableHandCard(item.cardId));
       if (discardableCards.length > 0) {
         const picked = discardableCards[Math.floor(Math.random() * discardableCards.length)];
         const [discarded] = state.hands[player].splice(picked.index, 1);
@@ -8678,7 +8680,9 @@ function wrapFinger(value) {
       const slots=state.traps[targetPlayer][targetHand];
       if(slots.length>=2){
         if(!replaceRandom)return false;
-        const index=Math.floor(Math.random()*slots.length), removed=slots.splice(index,1)[0], id=trapCardId(removed);
+        const removable=slots.map((slot,index)=>({slot,index,cardId:trapCardId(slot)})).filter(item=>isExternallyRemovableAttachment(item.cardId));
+        if(!removable.length){addLog("「銛投擲」は外部効果で除去できる設置カードがなく、銛付与が不発。");return false;}
+        const picked=removable[Math.floor(Math.random()*removable.length)],removed=slots.splice(picked.index,1)[0],id=trapCardId(removed);
         if(id!=="harpoon") state.discard[targetPlayer].push(id);
         addLog(`「銛投擲」により${handNames[targetPlayer]}の${handNames[targetHand]}の設置カード1枚が捨てられた。`);
       }
@@ -8803,6 +8807,15 @@ function wrapFinger(value) {
     function isProtectedHandCard(cardId) {
       return isProtectedChargeCard(cardId) || !!CARD_LIBRARY[cardId]?.protectedSpecial;
     }
+    function isExternallyDiscardableHandCard(cardId) {
+      return !!cardId && !isProtectedHandCard(cardId);
+    }
+    function isProtectedAttachment(cardId) {
+      return !!CARD_LIBRARY[cardId]?.themeBlessing;
+    }
+    function isExternallyRemovableAttachment(cardId) {
+      return !!cardId && !isProtectedAttachment(cardId);
+    }
 
     function themeCardId(player) {
       return state.selectedTheme?.[player] === "serenade" ? "serenadeTheme" : state.selectedTheme?.[player] === "rondo" ? "rondoTheme" : null;
@@ -8854,7 +8867,7 @@ function wrapFinger(value) {
     }
 
     async function useDaCapo(player) {
-      const indexes = state.hands[player].map((id,index)=>({id,index})).filter(x=>!isProtectedHandCard(x.id)).map(x=>x.index);
+      const indexes = state.hands[player].map((id,index)=>({id,index})).filter(x=>isExternallyDiscardableHandCard(x.id)).map(x=>x.index);
       const directCount = indexes.length;
       await discardFixedHandCardsByEffect(player,indexes,"「ダ・カーポ」");
       for(let i=0;i<directCount;i++) drawCard(player);
@@ -8951,7 +8964,7 @@ function wrapFinger(value) {
       if(!hand){state.pendingTerminalEnd[player]=true;return false;}
       state[player][hand]=0; clearBrokenTraps(player);
       const opponent=otherPlayer(player);
-      const fixedIndexes=state.hands[opponent].map((id,index)=>({id,index})).filter(item=>!isProtectedHandCard(item.id)).map(item=>item.index);
+      const fixedIndexes=state.hands[opponent].map((id,index)=>({id,index})).filter(item=>isExternallyDiscardableHandCard(item.id)).map(item=>item.index);
       await discardFixedHandCardsByEffect(opponent,fixedIndexes,"「Requiem」");
       state.pendingTerminalEnd[player]=true; render(); return true;
     }
@@ -9643,7 +9656,7 @@ function wrapFinger(value) {
       state[player][selected.hand] = 0;
       clearBrokenTraps(player);
       const opponent = otherPlayer(player);
-      const fixedIndexes = state.hands[opponent].map((id,index)=>({id,index})).filter(item=>!isProtectedHandCard(item.id)).map(item=>item.index);
+      const fixedIndexes = state.hands[opponent].map((id,index)=>({id,index})).filter(item=>isExternallyDiscardableHandCard(item.id)).map(item=>item.index);
       await discardFixedHandCardsByEffect(opponent, fixedIndexes, "「Requiem」");
       state.pendingTerminalEnd[player] = true;
       render();
@@ -9681,17 +9694,18 @@ function wrapFinger(value) {
     }
 
     async function useFullHeartV153(player) {
-      if (!state.hands[player].length) return false;
+      const handItems = state.hands[player].map((id,index)=>({id,index,key:`hand-${index}`})).filter(item=>isExternallyDiscardableHandCard(item.id));
+      if (!handItems.length) return false;
       let indexes;
       if (player === "human") {
         indexes = await beginHandCardSelection({
           min: 1,
           max: state.hands.human.length,
-          filter: id => !isProtectedHandCard(id),
+          filter: isExternallyDiscardableHandCard,
           message: "満ちる心：捨てる手札を選び、決定してください。"
         });
       } else {
-        indexes = state.hands[player].map((_, index) => index).filter(index => !isProtectedHandCard(state.hands[player][index])).slice(0, Math.max(1, Math.ceil(state.hands[player].length / 2)));
+        indexes = state.hands[player].map((_, index) => index).filter(index => isExternallyDiscardableHandCard(state.hands[player][index])).slice(0, Math.max(1, Math.ceil(handItems.length / 2)));
       }
       if (!indexes.length) return false;
       const count = indexes.length;
@@ -9738,11 +9752,10 @@ function wrapFinger(value) {
       if (!state.hands[player].length) return false;
       let discardIndex;
       if (player === "human") {
-        const handItems = state.hands[player].map((id, index) => ({ id, index, key: `hand-${index}` }));
         const chosen = await chooseOneMagicalCard("すり減る希望", "まず、捨てる自分の手札を1枚タップしてください。", handItems);
         discardIndex = chosen.index;
       } else {
-        discardIndex = randomIndex(state.hands[player].length);
+        discardIndex = handItems[randomIndex(handItems.length)].index;
       }
       const discardedId = await discardHandCardByEffect(player, discardIndex);
       addLog(`${handNames[player]}は「すり減る希望」で「${CARD_LIBRARY[discardedId]?.name || discardedId}」を捨てた。`);
@@ -9770,7 +9783,7 @@ function wrapFinger(value) {
     function useTogetherWithFriends(player){const n=Math.min(3,state.discard[player].length);for(let i=0;i<n;i++)state.decks[player].push(state.discard[player].splice(randomIndex(state.discard[player].length),1)[0]);shuffle(state.decks[player]);drawCard(player);drawCard(player);drawCard(player);}
 
     async function useHysteria(player) {
-      const handBlessings = state.hands[player].map((id,index)=>({id,index,key:`hand-${index}`})).filter(item => CARD_LIBRARY[item.id]?.blessing);
+      const handBlessings = state.hands[player].map((id,index)=>({id,index,key:`hand-${index}`})).filter(item => CARD_LIBRARY[item.id]?.blessing && isExternallyDiscardableHandCard(item.id));
       const deckBlessings = state.decks[player].map((id,index)=>({id,index})).filter(item => CARD_LIBRARY[item.id]?.blessing && !CARD_LIBRARY[item.id]?.token);
       if (!handBlessings.length || !deckBlessings.length) return false;
       const lost = player === "human"
@@ -9796,7 +9809,7 @@ function wrapFinger(value) {
       for (const hand of ["L", "R"]) {
         state.traps[player][hand].forEach((slot, index) => {
           const id = trapCardId(slot);
-          if (CARD_LIBRARY[id]?.blessing) result.push({ id, hand, index, key: `${hand}-${index}`, location: `${handNames[hand]}の加護` });
+          if (CARD_LIBRARY[id]?.blessing && isExternallyRemovableAttachment(id)) result.push({ id, hand, index, key: `${hand}-${index}`, location: `${handNames[hand]}の加護` });
         });
       }
       return result;
@@ -9825,7 +9838,7 @@ function wrapFinger(value) {
     function beginWithLove(player){if(player==="human"){state.mode="magicalWithLove";setMessage("「愛で！」：2にする自分の手を選んでください。0の手も選べます。");}else{const h=state[player].L===0?"L":state[player].R===0?"R":"L";state[player][h]=2;clearBrokenTraps(player);drawCard(player);}}
     async function useFadedCreed(player){const c=["L","R"].filter(h=>state[player][h]>0);if(!c.length)return false;await addFingersWithCalculation(player,c[randomIndex(c.length)],1,"色褪せた信条");state.temp[player].fadedCreedGuard=true;}
     function beginBetrayedHeart(player){state.temp[player].betrayedHeartPenalty=true;if(player==="human"){state.mode="magicalBetrayedHeart";setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");}else{const c=["L","R"].filter(h=>state[player][h]>0);if(c.length)addFingersWithCalculation(player,c[randomIndex(c.length)],1,"裏切られた心");}}
-    async function useEmptyHeart(player){const n=state.hands[player].length;while(state.hands[player].length)await discardHandCardByEffect(player,0);state.pendingMagicalHeartDraw=state.pendingMagicalHeartDraw||{human:0,cpu:0};state.pendingMagicalHeartDraw[player]=(state.pendingMagicalHeartDraw[player]||0)+n;}
+    async function useEmptyHeart(player){const indexes=state.hands[player].map((id,index)=>({id,index})).filter(item=>isExternallyDiscardableHandCard(item.id)).map(item=>item.index),discarded=await discardFixedHandCardsByEffect(player,indexes,"「空虚な心」");state.pendingMagicalHeartDraw=state.pendingMagicalHeartDraw||{human:0,cpu:0};state.pendingMagicalHeartDraw[player]=(state.pendingMagicalHeartDraw[player]||0)+discarded.length;}
     async function useFullHeart(player){return useFullHeartV153(player);}
     const MAGICAL_CORE_MAP = {
       magicalHatred: "magicalLove",
@@ -9941,7 +9954,7 @@ function wrapFinger(value) {
     }
 
     async function discardHandCardByEffect(player, handIndex, reason = "") {
-      if(isProtectedHandCard(state.hands[player][handIndex])) return null;
+      if(!isExternallyDiscardableHandCard(state.hands[player][handIndex])) return null;
       const [cardId] = state.hands[player].splice(handIndex, 1);
       if (!cardId) return null;
       state.discard[player].push(cardId);
@@ -9954,7 +9967,8 @@ function wrapFinger(value) {
       const fixed = [...new Set(indexes)]
         .filter(index => Number.isInteger(index) && index >= 0 && index < state.hands[player].length)
         .sort((a, b) => a - b)
-        .map(index => ({ index, cardId: state.hands[player][index] }));
+        .map(index => ({ index, cardId: state.hands[player][index] }))
+        .filter(item => isExternallyDiscardableHandCard(item.cardId));
       for (const item of [...fixed].sort((a, b) => b.index - a.index)) {
         state.hands[player].splice(item.index, 1);
       }
@@ -9971,7 +9985,7 @@ function wrapFinger(value) {
       while(discarded<count){
         const candidates = state.hands[player]
           .map((id,index)=>({id,index}))
-          .filter(item=>!isProtectedHandCard(item.id));
+          .filter(item=>isExternallyDiscardableHandCard(item.id));
         if (!candidates.length) break;
         const picked=candidates[Math.floor(Math.random()*candidates.length)];
         const id = await discardHandCardByEffect(player, picked.index, reason);
@@ -10037,7 +10051,7 @@ function wrapFinger(value) {
       const removed = [];
       for (let i = slots.length - 1; i >= 0; i--) {
         const cardId = trapCardId(slots[i]);
-        if (!CARD_LIBRARY[cardId]?.blessing || CARD_LIBRARY[cardId]?.themeBlessing) continue;
+        if (!CARD_LIBRARY[cardId]?.blessing || !isExternallyRemovableAttachment(cardId)) continue;
         const [slot] = slots.splice(i, 1);
         const instanceId = trapInstanceId(slot);
         if (instanceId) state.revealedTrapIds.delete(instanceId);
@@ -10174,7 +10188,7 @@ function wrapFinger(value) {
       for (const hand of ["L", "R"]) {
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
-          if (predicate(cardId) && !CARD_LIBRARY[cardId]?.themeBlessing) options.push({ owner, hand, index, cardId });
+          if (predicate(cardId) && isExternallyRemovableAttachment(cardId)) options.push({ owner, hand, index, cardId });
         });
       }
       return options;
@@ -10316,7 +10330,7 @@ function wrapFinger(value) {
       const opponent = player === "human" ? "cpu" : "human";
       return ["L", "R"].some(hand => {
         const other = otherHand(hand);
-        return state.traps[opponent][hand].length > 0 &&
+        return state.traps[opponent][hand].some(slot=>isExternallyRemovableAttachment(trapCardId(slot))) &&
           state[opponent][other] > 0 &&
           state.traps[opponent][other].length < 2;
       });
@@ -10329,7 +10343,7 @@ function wrapFinger(value) {
         if (state[owner][other] <= 0 || state.traps[owner][other].length >= 2) continue;
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
-          if (!cardId) return;
+          if (!isExternallyRemovableAttachment(cardId)) return;
           options.push({ owner, hand, index, cardId });
         });
       }
@@ -10339,7 +10353,7 @@ function wrapFinger(value) {
     }
 
     async function discardOneCard(player, reason = "") {
-      const candidates=state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>!isProtectedHandCard(x.cardId));
+      const candidates=state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>isExternallyDiscardableHandCard(x.cardId));
       if(!candidates.length) return null;
       const picked=candidates[Math.floor(Math.random()*candidates.length)];
       return await discardHandCardByEffect(player, picked.index, reason);
@@ -10466,13 +10480,13 @@ function wrapFinger(value) {
         : null;
       return state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
-        .filter(item => item.index !== excludedIndex && !isProtectedHandCard(item.cardId));
+        .filter(item => item.index !== excludedIndex && isExternallyDiscardableHandCard(item.cardId));
     }
 
     function getGunAmmoCandidates(player, excludedIndex = null) {
       return state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
-        .filter(item => item.index !== excludedIndex && !isProtectedChargeCard(item.cardId));
+        .filter(item => item.index !== excludedIndex && isExternallyDiscardableHandCard(item.cardId));
     }
 
     function beginGunAmmoEffect(player, gunCardId) {
@@ -10638,7 +10652,7 @@ function wrapFinger(value) {
     async function beginFanning(player) {
       const bulletIndexes = state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
-        .filter(item => CARD_LIBRARY[item.cardId]?.bullet)
+        .filter(item => CARD_LIBRARY[item.cardId]?.bullet && isExternallyDiscardableHandCard(item.cardId))
         .map(item => item.index);
       const fixedCount = bulletIndexes.length;
       await discardFixedHandCardsByEffect(player, bulletIndexes, "「ファニング」");
@@ -10861,7 +10875,7 @@ function wrapFinger(value) {
       }
       const slot = state.traps[owner][hand][index];
       const cardId = trapCardId(slot);
-      if (!cardId) return false;
+      if (!isExternallyRemovableAttachment(cardId)) {setMessage("そのカードは外部効果で移動できません。");return false;}
       state.traps[owner][hand].splice(index, 1);
       state.traps[owner][other].push(slot);
       const label = attachmentLabel(cardId);
@@ -11247,8 +11261,8 @@ function renderLastAction() {
           !intemperanceLocked &&
           (((baseCardActionAvailable || lightSpeedChargePlayable) && isZoneCard && !setupActive) || (setupActive && isTrap)) &&
           canSetAttachmentTarget("human", cardId);
-        const discardPlayable = repairDiscardMode && cardId !== "repair" && !isProtectedHandCard(cardId);
-        const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown" && !isProtectedHandCard(cardId);
+        const discardPlayable = repairDiscardMode && cardId !== "repair" && isExternallyDiscardableHandCard(cardId);
+        const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown" && isExternallyDiscardableHandCard(cardId);
         const rapidDiscardPlayable = rapidFireDiscardMode && getRapidFireDiscardCandidates("human").some(item => item.index === index);
         const gunAmmoPlayable = gunAmmoDiscardMode && state.pendingGunEffect && getGunAmmoCandidates("human", state.pendingGunEffect.excludedIndex).some(item => item.index === index);
         const modulationPlayable = modulationSourceMode && CARD_LIBRARY[cardId]?.gun && deckGunIds().some(id => id !== cardId);
@@ -14903,8 +14917,8 @@ async function endTurn() {
     socialEl("registerRememberCheckbox")?.addEventListener("change",event=>{const other=socialEl("authRememberCheckbox");if(other)other.checked=event.target.checked;});
     socialEl("blockedListBtn")?.addEventListener("click",()=>renderBlockedPlayers().catch(error=>socialMessage("accountMessage",firebaseAuthErrorMessage(error))));
     socialEl("blockedList")?.addEventListener("click",async event=>{const uid=event.target.dataset.unblock;if(!uid)return;try{const fb=firebaseApi();await fb.deleteDoc(fb.doc(fb.db,"users",state.socialProfile.uid,"blocked",uid));await renderBlockedPlayers();}catch(error){socialMessage("accountMessage",firebaseAuthErrorMessage(error));}});
-    socialEl("playerSearchBtn")?.addEventListener("click",async()=>{try{const profile=await searchPlayerByPublicId(socialEl("playerSearchInput").value);socialEl("playerSearchResult").innerHTML=profile?socialListRow(profile.publicId,`<button data-search-add="${profile.uid}">申請する</button>`):"<p class=\"social-empty\">該当するプレイヤーはいません。</p>";state.socialCurrentProfile=profile;socialMessage("socialMessage","");}catch(error){socialMessage("socialMessage",firebaseAuthErrorMessage(error));}});
-    socialEl("socialFriendsPanel")?.addEventListener("click",async event=>{let operation="request";try{const profileUid=event.target.dataset.socialProfile;if(profileUid){const friend=state.socialFriends.find(item=>item.uid===profileUid);if(friend)openSocialProfile(friend);return;}const addUid=event.target.dataset.searchAdd;if(addUid){await sendFriendRequest(state.socialCurrentProfile);socialMessage("socialMessage","フレンド申請を送りました。");event.target.disabled=true;return;}const acceptId=event.target.dataset.requestAccept;if(acceptId){operation="accept";const request=state.socialIncomingRequests.find(item=>item.id===acceptId);if(request)await acceptFriendRequest(request);return;}const rejectId=event.target.dataset.requestReject;if(rejectId){const request=state.socialIncomingRequests.find(item=>item.id===rejectId);if(request)await rejectFriendRequest(request);}}catch(error){socialMessage("socialMessage",socialOperationError(error,operation));}});
+    socialEl("playerSearchBtn")?.addEventListener("click",async()=>{try{const profile=await searchPlayerByPublicId(socialEl("playerSearchInput").value);socialEl("playerSearchResult").innerHTML=profile?socialListRow(profile.publicId,`<button data-search-profile="${profile.uid}">詳細</button><button data-search-add="${profile.uid}">申請する</button>`):"<p class=\"social-empty\">該当するプレイヤーはいません。</p>";state.socialCurrentProfile=profile;socialMessage("socialMessage","");}catch(error){socialMessage("socialMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("socialFriendsPanel")?.addEventListener("click",async event=>{let operation="request";try{const profileUid=event.target.dataset.socialProfile;if(profileUid){const friend=state.socialFriends.find(item=>item.uid===profileUid);if(friend)await openSocialProfile(friend);return;}const searchUid=event.target.dataset.searchProfile;if(searchUid&&state.socialCurrentProfile?.uid===searchUid){await openSocialProfile(state.socialCurrentProfile);return;}const addUid=event.target.dataset.searchAdd;if(addUid){await sendFriendRequest(state.socialCurrentProfile);socialMessage("socialMessage","フレンド申請を送りました。");event.target.disabled=true;return;}const acceptId=event.target.dataset.requestAccept;if(acceptId){operation="accept";const request=state.socialIncomingRequests.find(item=>item.id===acceptId);if(request)await acceptFriendRequest(request);return;}const rejectId=event.target.dataset.requestReject;if(rejectId){const request=state.socialIncomingRequests.find(item=>item.id===rejectId);if(request)await rejectFriendRequest(request);}}catch(error){socialMessage("socialMessage",socialOperationError(error,operation));}});
     socialEl("battleInviteBtn")?.addEventListener("click",()=>{state.pendingFriendInviteTarget=state.socialCurrentProfile;socialClose("publicProfileModal");socialOpen("friendInviteRuleModal");});
     socialEl("friendInviteCancelBtn")?.addEventListener("click",()=>{state.pendingFriendInviteTarget=null;socialClose("friendInviteRuleModal");});
     socialEl("friendInviteSendBtn")?.addEventListener("click",async event=>{if(event.currentTarget.disabled||!state.pendingFriendInviteTarget)return;event.currentTarget.disabled=true;try{await sendBattleInvite(state.pendingFriendInviteTarget,socialEl("friendInviteRegulationSelect").value);socialClose("friendInviteRuleModal");socialMessage("socialMessage","対戦招待を送りました。60秒間有効です。");state.pendingFriendInviteTarget=null;}catch(error){socialMessage("friendInviteRuleMessage",socialOperationError(error,"invite"));}finally{event.currentTarget.disabled=false;}});

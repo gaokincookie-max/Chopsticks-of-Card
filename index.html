@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=164e">
+  <link rel="stylesheet" href="style.css?v=164f">
 </head>
 <body>
   <div class="social-modal" id="authModal" aria-hidden="true">
@@ -65,7 +65,7 @@
 
   <div class="social-modal" id="giftCodeModal" aria-hidden="true"><div class="social-dialog compact-dialog">
     <button class="social-close" id="giftCodeCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">GIFT CODE</div><h2>コード入力</h2>
-    <label>コード<input id="giftCodeInput" maxlength="64" autocomplete="off" autocapitalize="characters" placeholder="WARIBASHI_ADMIN"></label><p class="social-message" id="giftCodeMessage"></p><div class="social-confirm-actions"><button id="giftCodeClaimBtn">受け取る</button><button id="giftCodeCancelBtn" class="secondary">キャンセル</button></div>
+    <label>コード<input id="giftCodeInput" maxlength="64" autocomplete="off" autocapitalize="characters" placeholder="コードを入力"></label><p class="social-message" id="giftCodeMessage"></p><div class="social-confirm-actions"><button id="giftCodeClaimBtn">受け取る</button><button id="giftCodeCancelBtn" class="secondary">キャンセル</button></div>
   </div></div>
 
   <aside class="social-friends-panel" id="socialFriendsPanel" aria-hidden="true">
@@ -73,12 +73,14 @@
     <div class="social-tabs"><button data-social-tab="friends" class="active">フレンド</button><button data-social-tab="requests">申請 <span id="requestTabCount"></span></button><button data-social-tab="add">追加</button></div>
     <div class="social-tab-pane" data-social-pane="friends"><div id="socialFriendsList" class="social-list"></div></div>
     <div class="social-tab-pane" data-social-pane="requests" hidden><h3>受信申請</h3><div id="incomingRequestsList" class="social-list"></div><h3>送信中</h3><div id="outgoingRequestsList" class="social-list"></div></div>
-    <div class="social-tab-pane" data-social-pane="add" hidden><label>プレイヤーID<input id="playerSearchInput" placeholder="Karera#04821"></label><button id="playerSearchBtn" class="wide-btn">検索</button><div id="playerSearchResult" class="social-list"></div></div>
+    <div class="social-tab-pane" data-social-pane="add" hidden><label>プレイヤーID<input id="playerSearchInput" placeholder="名前#12345"></label><button id="playerSearchBtn" class="wide-btn">検索</button><div id="playerSearchResult" class="social-list"></div></div>
     <p class="social-message" id="socialMessage"></p>
   </aside>
 
   <div class="social-modal" id="publicProfileModal" aria-hidden="true"><div class="social-dialog">
-    <button class="social-close" id="publicProfileCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PUBLIC PROFILE</div><h2 id="publicProfileId">-</h2><p id="publicProfileName"></p>
+    <button class="social-close" id="publicProfileCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PUBLIC PROFILE</div>
+    <div class="account-player-card-preview player-card-surface" id="publicProfilePlayerCard"><div class="player-card-decoration" aria-hidden="true"></div><div class="player-card-content"><span data-title-slot>ルーキー</span><strong id="publicProfileCardName">プレイヤー</strong></div></div>
+    <dl class="account-detail"><dt>表示名</dt><dd id="publicProfileName">-</dd><dt>プレイヤーID</dt><dd id="publicProfileId">-</dd></dl>
     <div class="social-action-stack"><button id="sendFriendRequestBtn">フレンド申請</button><button id="battleInviteBtn">対戦を申し込む</button><button id="removeFriendBtn" class="secondary">フレンド解除</button><button id="blockPlayerBtn" class="danger">ブロック</button></div><p class="social-message" id="publicProfileMessage"></p>
   </div></div>
 
@@ -925,6 +927,6 @@
     }
   </script>
 
-  <script src="game.js?v=164e"></script>
+  <script src="game.js?v=164f"></script>
 </body>
 </html>
