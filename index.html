@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=163a">
+  <link rel="stylesheet" href="style.css?v=164a">
 </head>
 <body>
   <div class="social-modal" id="authModal" aria-hidden="true">
@@ -43,9 +43,29 @@
   <div class="social-modal" id="accountModal" aria-hidden="true"><div class="social-dialog">
     <button class="social-close" id="accountCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">MY ACCOUNT</div><h2 id="accountPublicId">アカウント</h2>
     <dl class="account-detail"><dt>プレイヤー名</dt><dd id="accountDisplayName">-</dd><dt>ログイン方法</dt><dd id="accountProvider">-</dd><dt>アカウント作成日</dt><dd id="accountCreatedAt">-</dd></dl>
+    <div class="account-player-card-preview player-card-surface" id="accountPlayerCardPreview"><div class="player-card-decoration" aria-hidden="true"></div><div class="player-card-content"><span data-title-slot>ルーキー</span><strong id="accountPlayerCardName">プレイヤー</strong></div></div>
+    <div class="account-profile-actions"><button id="playerCardEditBtn" class="wide-btn">プレイヤーカード編集</button><button id="playerNameChangeBtn" class="secondary wide-btn">名前変更</button><button id="giftCodeOpenBtn" class="secondary wide-btn">コード入力</button></div>
     <label class="account-persistence-option"><span><strong>自動ログイン</strong><small>ブラウザを閉じてもログイン状態を保持</small></span><input id="accountRememberCheckbox" type="checkbox" checked></label>
     <button id="blockedListBtn" class="secondary wide-btn">ブロック中のプレイヤー</button><div id="blockedList" class="social-list" hidden></div>
     <button id="logoutBtn" class="danger wide-btn">ログアウト</button><p class="social-message" id="accountMessage"></p>
+  </div></div>
+
+  <div class="social-modal" id="playerCardEditorModal" aria-hidden="true"><div class="social-dialog player-card-editor-dialog">
+    <button class="social-close" id="playerCardEditorCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PLAYER CARD</div><h2>プレイヤーカード編集</h2>
+    <div class="account-player-card-preview player-card-surface" id="playerCardEditorPreview"><div class="player-card-decoration" aria-hidden="true"></div><div class="player-card-content"><span data-title-slot>ルーキー</span><strong id="playerCardEditorName">プレイヤー</strong></div></div>
+    <fieldset><legend>背景</legend><div class="player-card-choice-grid" id="playerCardBackgroundChoices"></div></fieldset>
+    <label>称号<select id="playerCardTitleSelect"></select></label>
+    <p class="social-message" id="playerCardEditorMessage"></p><div class="social-confirm-actions"><button id="playerCardSaveBtn">保存</button><button id="playerCardCancelBtn" class="secondary">キャンセル</button></div>
+  </div></div>
+
+  <div class="social-modal" id="playerNameModal" aria-hidden="true"><div class="social-dialog compact-dialog">
+    <button class="social-close" id="playerNameCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">DISPLAY NAME</div><h2>名前変更</h2><p class="small">現在：<span id="playerNameCurrent">-</span></p>
+    <label>新しい名前<input id="playerNameInput" maxlength="20" autocomplete="nickname"></label><p class="social-message" id="playerNameMessage"></p><div class="social-confirm-actions"><button id="playerNameSaveBtn">変更</button><button id="playerNameCancelBtn" class="secondary">キャンセル</button></div>
+  </div></div>
+
+  <div class="social-modal" id="giftCodeModal" aria-hidden="true"><div class="social-dialog compact-dialog">
+    <button class="social-close" id="giftCodeCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">GIFT CODE</div><h2>コード入力</h2>
+    <label>コード<input id="giftCodeInput" maxlength="64" autocomplete="off" autocapitalize="characters" placeholder="WARIBASHI_ADMIN"></label><p class="social-message" id="giftCodeMessage"></p><div class="social-confirm-actions"><button id="giftCodeClaimBtn">受け取る</button><button id="giftCodeCancelBtn" class="secondary">キャンセル</button></div>
   </div></div>
 
   <aside class="social-friends-panel" id="socialFriendsPanel" aria-hidden="true">
@@ -394,9 +414,9 @@
           <div class="battle-room-meta"><strong id="battleRoomName">対戦ルーム</strong><span id="battleRoomVisibilityBadge">非公開</span><span id="battleRoomRegulation">スタンダード</span><span id="battleRoomTags"></span></div>
           <div class="battle-room-id-row"><span><small>ROOM ID</small><strong id="battleRoomIdText">------</strong></span><button id="copyRoomUrlBtn" class="blue" disabled>コピー</button></div>
           <div class="battle-room-players">
-            <button class="battle-room-player battle-room-self" id="battleRoomSelfCard" type="button"><span class="battle-room-role">あなた</span><strong id="battleRoomSelfName">プレイヤー</strong><span class="battle-room-deck-label">使用デッキ</span><span class="battle-room-deck-name" id="battleRoomDeckName">現在のデッキ</span><span id="battleRoomSelfStatus">準備中</span></button>
+            <button class="battle-room-player battle-room-self player-card-surface" id="battleRoomSelfCard" type="button"><span class="player-card-decoration" aria-hidden="true"></span><span class="battle-room-role">あなた</span><span class="battle-room-player-title" data-title-slot>ルーキー</span><strong id="battleRoomSelfName">プレイヤー</strong><span class="battle-room-deck-label">使用デッキ</span><span class="battle-room-deck-name" id="battleRoomDeckName">現在のデッキ</span><span class="battle-room-player-status" id="battleRoomSelfStatus">準備中</span></button>
             <div class="battle-room-vs">VS</div>
-            <button class="battle-room-player battle-room-opponent" id="battleRoomOpponentCard" type="button"><span class="battle-room-role">相手</span><strong id="battleRoomOpponentName">参加者を待っています…</strong><span id="battleRoomOpponentStatus">参加者待ち</span></button>
+            <button class="battle-room-player battle-room-opponent player-card-surface" id="battleRoomOpponentCard" type="button"><span class="player-card-decoration" aria-hidden="true"></span><span class="battle-room-role">相手</span><span class="battle-room-player-title" data-title-slot>ルーキー</span><strong id="battleRoomOpponentName">参加者を待っています…</strong><span class="battle-room-player-status" id="battleRoomOpponentStatus">参加者待ち</span></button>
           </div>
           <div class="battle-room-controls">
             <button id="battleRoomDeckEditBtn" class="secondary">デッキ編集</button>
@@ -905,6 +925,6 @@
     }
   </script>
 
-  <script src="game.js?v=163a"></script>
+  <script src="game.js?v=164a"></script>
 </body>
 </html>

@@ -2013,6 +2013,7 @@ const CARD_LIBRARY = {
     const ROOM_TAG_DEFS = Object.freeze({beginner:"初心者歓迎",rematch:"連戦歓迎",casual:"カジュアル",advanced:"上級者向け",deck_test:"デッキ調整中"});
     const ROOM_TAG_MAX = 3;
     const PUBLIC_ROOM_LIMIT = 50;
+    const ORPHAN_ROOM_GRACE_MS = 10 * 60 * 1000;
     const DEFAULT_REGULATION = Object.freeze({modeId:"standard",modeVersion:1,options:{}});
 
     const state = {
@@ -2185,15 +2186,18 @@ const CARD_LIBRARY = {
       selectedPublicRoom: null,
       pendingFriendInviteTarget: null,
       roomCreateBusy: false
+      ,playerCardDraft: null
       ,friendVsShownMatchIds: new Set()
     };
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v163-immutable-bulletproof";
+    const LATEST_NEWS_ID = "v164-player-cards";
 
     const UPDATE_NEWS = [
+      {id:"v164-player-cards",version:"v164a",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","新規プロフィールでコード限定装飾を取得できる問題を修正"]},
+      {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
       {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
       {id:"v162b-invite-lifecycle",version:"v162b",date:"2026-08-21",title:"対戦招待の同期を安定化",summary:"完了済みの対戦招待が新しい招待を妨げる場合がある問題を修正しました。",featured:false,tags:["fix","system"],items:["対戦ルームへの参加完了後に招待handoffを終了する処理を追加","古いaccepted招待が新しいpending招待を塞がないようlistenerを改善","roomReady公開時のprivate room・ルール・空席検証を強化"]},
       {id:"v162a-friend-handoff-vs",version:"v162a",date:"2026-08-21",title:"フレンド対戦の接続と開始演出を改善",summary:"対戦招待から双方が同じルームへ入る同期処理を修正し、VS演出をプレイヤーカード形式へ刷新しました。",featured:false,tags:["fix","system"],items:["招待承認後に片側だけルームへ移動する場合がある問題を修正","フレンド戦の内部Room IDをFirestore auto IDへ統一","フレンド一覧・招待表示を表示名中心に整理","VSカットインを拡張可能なプレイヤーカード形式へ変更"]},
@@ -3493,8 +3497,9 @@ const CARD_LIBRARY = {
 
     async function resolveRoomCode(value){
       const fb=firebaseApi(),raw=extractRoomId(value),code=normalizeShortRoomCode(raw);if(!fb||!/^[A-HJ-NP-Z2-9]{6}$/.test(String(raw).toUpperCase()))return {roomId:raw,shortCode:""};
-      const snap=await fb.getDoc(fb.doc(fb.db,"roomCodes",code));if(!snap.exists())throw Object.assign(new Error("ROOM_NOT_FOUND"),{code:"ROOM_NOT_FOUND"});
-      return {roomId:snap.data().roomId,shortCode:code};
+      const codeRef=fb.doc(fb.db,"roomCodes",code),snap=await fb.getDoc(codeRef);if(!snap.exists())throw Object.assign(new Error("ROOM_NOT_FOUND"),{code:"ROOM_NOT_FOUND"});
+      const roomId=snap.data().roomId;try{const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",roomId));if(!roomSnap.exists()){await fb.deleteDoc(codeRef).catch(()=>{});throw Object.assign(new Error("ROOM_NOT_FOUND"),{code:"ROOM_NOT_FOUND"});}}catch(error){if(error?.code==="ROOM_NOT_FOUND"||error?.message==="ROOM_NOT_FOUND")throw error;}
+      return {roomId,shortCode:code};
     }
 
     function renderRoomTagControls(){
@@ -3505,9 +3510,24 @@ const CARD_LIBRARY = {
     async function submitRoomCreateSettings(){if(state.roomCreateBusy)return;const button=document.getElementById("roomCreateConfirmBtn");button.disabled=true;try{const visibility=document.querySelector('input[name="roomVisibility"]:checked')?.value||"private",tags=normalizeRoomTags(selectedCheckboxValues("roomTagPicker")),roomName=normalizeRoomName(document.getElementById("roomNameInput").value),regulationId=document.getElementById("roomRegulationSelect").value;await createFriendRoom({visibility,tags,roomName,regulationId});socialClose("roomCreateModal");}catch(error){document.getElementById("roomCreateMessage").textContent=friendFirestoreErrorMessage(error,"ルームを作成できませんでした。");}finally{button.disabled=false;}}
     function filteredPublicRooms(rooms=state.publicRooms){const rule=state.publicRoomFilters.regulationId,tags=state.publicRoomFilters.tags;return rooms.filter(room=>(rule==="all"||room.regulationId===rule)&&tags.every(tag=>(room.tags||[]).includes(tag))&&!!regulationDefinition(room.regulationId,room.regulationVersion));}
     function renderPublicRooms(){const list=document.getElementById("publicRoomList");if(!list)return;list.replaceChildren();const rooms=filteredPublicRooms();if(!rooms.length){const empty=document.createElement("p");empty.className="small";empty.textContent="条件に合う公開ルームはありません。";list.append(empty);return;}for(const room of rooms){const row=document.createElement("div");row.className="public-room-row";const name=document.createElement("button");name.className="public-room-name";name.textContent=String(room.roomName||"公開ルーム");name.addEventListener("click",()=>openPublicRoomDetail(room));const creator=document.createElement("span");creator.className="public-room-creator";creator.textContent=String(room.creatorName||"プレイヤー");const rule=document.createElement("span");rule.className="public-room-rule";rule.textContent=regulationDefinition(room.regulationId,room.regulationVersion)?.name||"未対応";const tags=document.createElement("span");tags.className="public-room-tags";tags.textContent=roomTagLabels(room.tags).join(" / ")||"タグなし";const join=document.createElement("button");join.textContent="参加";join.addEventListener("click",()=>claimPublicRoom(room.roomId));row.append(name,creator,rule,tags,join);list.append(row);}}
-    async function fetchPublicRooms({preserveOnError=true}={}){const fb=firebaseApi();if(!fb)throw new Error("Firebaseに接続されていません。");const generation=++state.publicRoomRefreshGeneration,button=document.getElementById("publicRoomsRefreshBtn");button.disabled=true;button.textContent="更新中…";try{const snap=await fb.getDocs(fb.query(fb.collection(fb.db,"publicRooms"),fb.limit(PUBLIC_ROOM_LIMIT)));if(generation!==state.publicRoomRefreshGeneration)return state.publicRooms;state.publicRooms=docsFromSnapshot(snap).filter(room=>!!regulationDefinition(room.regulationId,room.regulationVersion));renderPublicRooms();document.getElementById("publicRoomsMessage").textContent=`${state.publicRooms.length}件取得・最終更新：たった今`;return state.publicRooms;}catch(error){if(!preserveOnError)state.publicRooms=[];document.getElementById("publicRoomsMessage").textContent="公開ルームの取得に失敗しました。";throw error;}finally{if(generation===state.publicRoomRefreshGeneration){button.disabled=false;button.textContent="更新";}}}
+    async function cleanupPublicRoomCandidate(room){
+      const fb=firebaseApi();if(!fb||!room?.roomId)return false;
+      const updated=socialTimestampMillis(room.updatedAt||room.createdAt);if(updated&&Date.now()-updated<ORPHAN_ROOM_GRACE_MS)return false;
+      const roomRef=fb.doc(fb.db,"rooms",room.roomId),publicRef=fb.doc(fb.db,"publicRooms",room.roomId);
+      let data=null;
+      try{const snap=await fb.getDoc(roomRef);if(snap.exists())data=snap.data()||{};}catch(_){}
+      if(data&&data.status==="lobby"&&data.visibility==="public"&&data.guestUid==null&&data.guestJoined===false&&data.members?.slot1==null){
+        try{await fb.updateDoc(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});if(data.shortCode)await fb.deleteDoc(fb.doc(fb.db,"roomCodes",data.shortCode)).catch(()=>{});}catch(_){}
+      }
+      try{await fb.deleteDoc(publicRef);return true;}catch(_){return false;}
+    }
+    async function cleanupStalePublicRoomEntries(rooms){
+      const stale=(rooms||[]).filter(room=>{const updated=socialTimestampMillis(room.updatedAt||room.createdAt);return !updated||Date.now()-updated>=ORPHAN_ROOM_GRACE_MS;});
+      if(!stale.length)return 0;const results=await Promise.allSettled(stale.map(cleanupPublicRoomCandidate));return results.filter(result=>result.status==="fulfilled"&&result.value).length;
+    }
+    async function fetchPublicRooms({preserveOnError=true}={}){const fb=firebaseApi();if(!fb)throw new Error("Firebaseに接続されていません。");const generation=++state.publicRoomRefreshGeneration,button=document.getElementById("publicRoomsRefreshBtn");button.disabled=true;button.textContent="更新中…";try{let snap=await fb.getDocs(fb.query(fb.collection(fb.db,"publicRooms"),fb.limit(PUBLIC_ROOM_LIMIT)));if(generation!==state.publicRoomRefreshGeneration)return state.publicRooms;const first=docsFromSnapshot(snap);const cleaned=await cleanupStalePublicRoomEntries(first);if(cleaned&&generation===state.publicRoomRefreshGeneration)snap=await fb.getDocs(fb.query(fb.collection(fb.db,"publicRooms"),fb.limit(PUBLIC_ROOM_LIMIT)));if(generation!==state.publicRoomRefreshGeneration)return state.publicRooms;state.publicRooms=docsFromSnapshot(snap).filter(room=>!!regulationDefinition(room.regulationId,room.regulationVersion));renderPublicRooms();document.getElementById("publicRoomsMessage").textContent=`${state.publicRooms.length}件取得・最終更新：たった今${cleaned?`（古い部屋を${cleaned}件整理）`:""}`;return state.publicRooms;}catch(error){if(!preserveOnError)state.publicRooms=[];document.getElementById("publicRoomsMessage").textContent="公開ルームの取得に失敗しました。";throw error;}finally{if(generation===state.publicRoomRefreshGeneration){button.disabled=false;button.textContent="更新";}}}
     function openPublicRoomDetail(room){state.selectedPublicRoom=room;document.getElementById("publicRoomDetailName").textContent=String(room.roomName||"公開ルーム");document.getElementById("publicRoomDetailCreator").textContent=String(room.creatorName||"プレイヤー");const def=regulationDefinition(room.regulationId,room.regulationVersion);document.getElementById("publicRoomDetailRule").textContent=def?.name||"未対応";document.getElementById("publicRoomDetailDescription").textContent=def?.description||"このルールには対応していません。";document.getElementById("publicRoomDetailTags").textContent=roomTagLabels(room.tags).join(" / ")||"なし";document.getElementById("publicRoomDetailJoinBtn").disabled=!def;socialOpen("publicRoomDetailModal");}
-    async function claimPublicRoom(roomId){if(state.publicRoomBusy||state.friendRoomId)return false;state.publicRoomBusy=true;try{await joinFriendRoom(roomId,{internalRoomId:true,publicOnly:true});socialClose("publicRoomDetailModal");return state.friendRoomId===roomId;}catch(error){return false;}finally{state.publicRoomBusy=false;}}
+    async function claimPublicRoom(roomId){if(state.publicRoomBusy)return false;state.publicRoomBusy=true;try{await joinFriendRoom(roomId,{internalRoomId:true,publicOnly:true});socialClose("publicRoomDetailModal");return state.friendRoomId===roomId;}catch(error){return false;}finally{state.publicRoomBusy=false;}}
     function shuffled(values){return shuffle([...values]);}
     async function quickMatchPublicRoom(){if(state.publicRoomBusy||state.friendRoomId)return;state.publicRoomBusy=true;const button=document.getElementById("quickMatchBtn");button.disabled=true;try{const latest=await fetchPublicRooms();const me=firebaseApi()?.uid,candidates=shuffled(filteredPublicRooms(latest).filter(room=>room.creatorUid!==me)).slice(0,5);for(const room of candidates){state.publicRoomBusy=false;const joined=await claimPublicRoom(room.roomId);state.publicRoomBusy=true;if(joined)return;}document.getElementById("publicRoomsMessage").textContent="参加可能な部屋が見つかりませんでした";}finally{state.publicRoomBusy=false;button.disabled=false;}}
 
@@ -3562,6 +3582,33 @@ const CARD_LIBRARY = {
     const isFormalAccount = user => !!user && !user.isAnonymous;
     const socialRequestId = (fromUid,toUid) => `${fromUid}_${toUid}`;
     const socialProfileFields = profile => ({uid:profile.uid,displayName:profile.displayName,tag:profile.tag,publicId:profile.publicId});
+    const DEFAULT_BACKGROUND_IDS = Object.freeze(["default","blue","red","green","purple"]);
+    const DEFAULT_TITLE_IDS = Object.freeze(["rookie"]);
+    const PLAYER_CARD_BACKGROUNDS = Object.freeze({
+      default:{label:"ノーマル"},blue:{label:"ブルー"},red:{label:"レッド"},green:{label:"グリーン"},purple:{label:"パープル"},gold:{label:"ゴールド"}
+    });
+    const PLAYER_TITLES = Object.freeze({rookie:{label:"ルーキー"},operator:{label:"運営者"}});
+    const uniqueKnownIds = (values,definitions,fallback) => [...new Set(Array.isArray(values)?values:fallBackArray(fallback))].filter(id=>Object.hasOwn(definitions,id));
+    const fallBackArray = values => [...values];
+    function normalizedPlayerCardProfile(profile={}){
+      const unlockedBackgroundIds=uniqueKnownIds(profile.unlockedBackgroundIds,PLAYER_CARD_BACKGROUNDS,DEFAULT_BACKGROUND_IDS);
+      const unlockedTitleIds=uniqueKnownIds(profile.unlockedTitleIds,PLAYER_TITLES,DEFAULT_TITLE_IDS);
+      const requestedBackground=String(profile.backgroundId||profile.bannerId||"default");
+      const requestedTitle=String(profile.titleId||"rookie");
+      return {...profile,backgroundId:unlockedBackgroundIds.includes(requestedBackground)&&PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:unlockedTitleIds.includes(requestedTitle)&&PLAYER_TITLES[requestedTitle]?requestedTitle:"rookie",unlockedBackgroundIds,unlockedTitleIds};
+    }
+    function playerCardPresentation(profile={},fallback="プレイヤー"){
+      const requestedBackground=String(profile.backgroundId||profile.bannerId||"default"),requestedTitle=String(profile.titleId||"rookie");
+      return {displayName:String(profile.guestLabel||profile.displayName||fallback),backgroundId:PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:PLAYER_TITLES[requestedTitle]?requestedTitle:"rookie",isGuest:profile.registered===false};
+    }
+    function applyPlayerCardElement(card,presentation,{nameElement=null,titleElement=null}={}){
+      if(!card)return;const normalized=playerCardPresentation(presentation,presentation.displayName);
+      card.dataset.backgroundId=normalized.backgroundId;card.dataset.titleId=normalized.titleId;
+      card.classList.toggle("player-card-gold",normalized.backgroundId==="gold");
+      card.classList.toggle("is-guest",normalized.isGuest);
+      if(nameElement)nameElement.textContent=normalized.displayName;
+      const title=titleElement||card.querySelector("[data-title-slot]");if(title)title.textContent=PLAYER_TITLES[normalized.titleId]?.label||PLAYER_TITLES.rookie.label;
+    }
     const socialTimestampMillis = value => value?.toMillis?.() || Number(value?.seconds||0)*1000 || Number(value||0);
     const authPersistenceEnabled = () => localStorage.getItem("waribashi-auth-persistence") !== "session";
     const normalizePlayerName = value => String(value||"").normalize("NFKC").trim();
@@ -3622,7 +3669,7 @@ const CARD_LIBRARY = {
             const [userSnap,tagSnap]=await Promise.all([transaction.get(userRef),transaction.get(tagRef)]);
             if(userSnap.exists())return {uid:user.uid,...userSnap.data()};
             if(tagSnap.exists()){const error=new Error("PLAYER_TAG_TAKEN");error.code="PLAYER_TAG_TAKEN";throw error;}
-            const publicProfile={uid:user.uid,displayName:name,tag,publicId,createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp(),lastLoginAt:fb.serverTimestamp(),bannerId:"",titleId:""};
+            const publicProfile={uid:user.uid,displayName:name,tag,publicId,createdAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp(),lastLoginAt:fb.serverTimestamp(),bannerId:"",backgroundId:"default",titleId:"rookie",unlockedBackgroundIds:[...DEFAULT_BACKGROUND_IDS],unlockedTitleIds:[...DEFAULT_TITLE_IDS]};
             transaction.set(tagRef,{uid:user.uid,tag,displayName:name,publicId,createdAt:fb.serverTimestamp()});
             transaction.set(userRef,publicProfile);return {...publicProfile,createdAt:Date.now()};
           });
@@ -3639,9 +3686,9 @@ const CARD_LIBRARY = {
       const snap=await fb.getDoc(fb.doc(fb.db,"users",user.uid));
       if(loadToken!==state.socialAuthLoadToken)return null;
       if(!snap.exists()){state.socialProfile=null;renderSocialAccountUi();socialOpen("profileSetupModal");return null;}
-      state.socialProfile={uid:user.uid,...snap.data()};
+      state.socialProfile=normalizedPlayerCardProfile({uid:user.uid,...snap.data()});
       await fb.setDoc(fb.doc(fb.db,"users",user.uid),{lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()},{merge:true});
-      renderSocialAccountUi();subscribeSocialData();return state.socialProfile;
+      renderSocialAccountUi();subscribeSocialData();repairOwnRoomStateOnStartup().catch(()=>{});return state.socialProfile;
     }
     function authProviderLabel(user){
       const ids=(user?.providerData||[]).map(item=>item.providerId);
@@ -3653,11 +3700,52 @@ const CARD_LIBRARY = {
       if(socialEl("loginOpenBtn"))socialEl("loginOpenBtn").hidden=!user||formal;
       if(socialEl("accountOpenBtn"))socialEl("accountOpenBtn").hidden=!formal;
       if(socialEl("socialFriendsOpenBtn"))socialEl("socialFriendsOpenBtn").hidden=!formal||!profile;
-      if(profile){socialEl("accountPublicId").textContent=profile.publicId;socialEl("accountDisplayName").textContent=profile.displayName;}
+      if(profile){state.socialProfile=normalizedPlayerCardProfile(profile);socialEl("accountPublicId").textContent=profile.publicId;socialEl("accountDisplayName").textContent=profile.displayName;applyPlayerCardElement(socialEl("accountPlayerCardPreview"),state.socialProfile,{nameElement:socialEl("accountPlayerCardName")});}
       if(socialEl("accountProvider"))socialEl("accountProvider").textContent=authProviderLabel(user);
       if(socialEl("accountCreatedAt"))socialEl("accountCreatedAt").textContent=profile?.createdAt?new Date(socialTimestampMillis(profile.createdAt)).toLocaleDateString("ja-JP"):"-";
+      for(const id of ["playerCardEditBtn","playerNameChangeBtn"]){const button=socialEl(id);if(button){button.disabled=!!state.friendRoomId;button.title=state.friendRoomId?"対戦ルームに参加している間は変更できません。":"";}}
       ["authRememberCheckbox","registerRememberCheckbox","accountRememberCheckbox"].forEach(id=>{const input=socialEl(id);if(input)input.checked=authPersistenceEnabled();});
       renderSocialLists();
+    }
+    async function ensureProfileChangeAllowed(){
+      const fb=firebaseApi();if(!fb||!state.socialProfile||!isFormalAccount(fb.authUser))throw new Error("正式アカウントへログインしてください。");
+      let record=await getActiveRoomRecord();if(record&&await cleanupActiveRoomRecordIfStale(record))record=null;
+      if(record||state.friendRoomId)throw new Error("対戦ルームに参加している間は変更できません。");
+      return fb;
+    }
+    function renderPlayerCardDraft(){
+      const draft=state.playerCardDraft;if(!draft)return;
+      applyPlayerCardElement(socialEl("playerCardEditorPreview"),{...state.socialProfile,...draft},{nameElement:socialEl("playerCardEditorName")});
+      socialEl("playerCardBackgroundChoices")?.querySelectorAll("[data-background-id]").forEach(button=>button.classList.toggle("selected",button.dataset.backgroundId===draft.backgroundId));
+      if(socialEl("playerCardTitleSelect"))socialEl("playerCardTitleSelect").value=draft.titleId;
+    }
+    async function openPlayerCardEditor(){
+      await ensureProfileChangeAllowed();const profile=normalizedPlayerCardProfile(state.socialProfile);state.playerCardDraft={backgroundId:profile.backgroundId,titleId:profile.titleId};
+      const choices=socialEl("playerCardBackgroundChoices");choices.replaceChildren();for(const id of profile.unlockedBackgroundIds){const def=PLAYER_CARD_BACKGROUNDS[id];if(!def)continue;const button=document.createElement("button");button.type="button";button.className="player-card-choice";button.dataset.backgroundId=id;button.textContent=def.label;button.addEventListener("click",()=>{state.playerCardDraft.backgroundId=id;renderPlayerCardDraft();});choices.append(button);}
+      const select=socialEl("playerCardTitleSelect");select.replaceChildren();for(const id of profile.unlockedTitleIds){const def=PLAYER_TITLES[id];if(!def)continue;const option=document.createElement("option");option.value=id;option.textContent=def.label;select.append(option);}socialMessage("playerCardEditorMessage","");renderPlayerCardDraft();socialOpen("playerCardEditorModal");
+    }
+    function closePlayerCardEditor(){state.playerCardDraft=null;socialClose("playerCardEditorModal");}
+    async function savePlayerCard(){
+      const fb=await ensureProfileChangeAllowed(),profile=normalizedPlayerCardProfile(state.socialProfile),draft=state.playerCardDraft;if(!draft)throw new Error("編集内容がありません。");
+      if(!profile.unlockedBackgroundIds.includes(draft.backgroundId)||!PLAYER_CARD_BACKGROUNDS[draft.backgroundId])throw new Error("所有していない背景は選択できません。");
+      if(!profile.unlockedTitleIds.includes(draft.titleId)||!PLAYER_TITLES[draft.titleId])throw new Error("所有していない称号は選択できません。");
+      await fb.updateDoc(fb.doc(fb.db,"users",profile.uid),{backgroundId:draft.backgroundId,bannerId:draft.backgroundId,titleId:draft.titleId,updatedAt:fb.serverTimestamp()});
+      state.socialProfile=normalizedPlayerCardProfile({...profile,...draft,bannerId:draft.backgroundId});closePlayerCardEditor();renderSocialAccountUi();socialMessage("accountMessage","プレイヤーカードを保存しました。");
+    }
+    function openPlayerNameEditor(){socialEl("playerNameCurrent").textContent=state.socialProfile?.displayName||"-";socialEl("playerNameInput").value=state.socialProfile?.displayName||"";socialMessage("playerNameMessage","");socialOpen("playerNameModal");}
+    async function changePlayerName(){
+      const fb=await ensureProfileChangeAllowed(),profile=state.socialProfile,name=validatePlayerName(socialEl("playerNameInput").value),publicId=`${name}#${profile.tag}`;
+      const friendsSnap=await fb.getDocs(fb.collection(fb.db,"users",profile.uid,"friends")),friends=docsFromSnapshot(friendsSnap),batch=fb.writeBatch(fb.db);
+      batch.update(fb.doc(fb.db,"users",profile.uid),{displayName:name,publicId,updatedAt:fb.serverTimestamp()});
+      batch.update(fb.doc(fb.db,"playerTags",profile.tag),{displayName:name,publicId,updatedAt:fb.serverTimestamp()});
+      for(const friend of friends)batch.update(fb.doc(fb.db,"users",friend.uid,"friends",profile.uid),{displayName:name,publicId});
+      await batch.commit();state.socialProfile={...profile,displayName:name,publicId};socialClose("playerNameModal");renderSocialAccountUi();socialMessage("accountMessage","プレイヤー名を変更しました。");
+    }
+    function normalizeGiftCode(value){return String(value||"").normalize("NFKC").trim().toUpperCase();}
+    async function claimGiftCode(){
+      const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser))throw new Error("正式アカウントでログインしてください。");const code=normalizeGiftCode(socialEl("giftCodeInput").value);if(!code)throw new Error("コードを入力してください。");
+      const result=await fb.runTransaction(fb.db,async transaction=>{const codeRef=fb.doc(fb.db,"giftCodes",code),claimRef=fb.doc(fb.db,"giftCodes",code,"claims",profile.uid),userRef=fb.doc(fb.db,"users",profile.uid);const [codeSnap,claimSnap,userSnap]=await Promise.all([transaction.get(codeRef),transaction.get(claimRef),transaction.get(userRef)]);if(!codeSnap.exists())throw new Error("コードが見つかりません。");const gift=codeSnap.data();if(gift.active!==true)throw new Error("このコードは現在使用できません。");if(gift.expiresAt&&socialTimestampMillis(gift.expiresAt)<=Date.now())throw new Error("このコードの有効期限は終了しました。");if(claimSnap.exists())throw new Error("このコードはすでに受け取っています。");const max=gift.type==="single"?1:Number(gift.maxUses||0);if(["limited","single"].includes(gift.type)&&Number(gift.usedCount||0)>=max)throw new Error("このコードの配布は終了しました。");const user=normalizedPlayerCardProfile(userSnap.data()||profile),rewards=gift.rewards||{},titles=[...new Set([...user.unlockedTitleIds,...(rewards.titleIds||[]).filter(id=>PLAYER_TITLES[id])])],backgrounds=[...new Set([...user.unlockedBackgroundIds,...(rewards.backgroundIds||[]).filter(id=>PLAYER_CARD_BACKGROUNDS[id])])];transaction.update(userRef,{unlockedTitleIds:titles,unlockedBackgroundIds:backgrounds,updatedAt:fb.serverTimestamp()});transaction.set(claimRef,{uid:profile.uid,code,claimedAt:fb.serverTimestamp(),rewardsSnapshot:{titleIds:[...(rewards.titleIds||[])],backgroundIds:[...(rewards.backgroundIds||[])]}});if(["limited","single"].includes(gift.type))transaction.update(codeRef,{usedCount:Number(gift.usedCount||0)+1});return {titles,backgrounds,rewards};});
+      state.socialProfile=normalizedPlayerCardProfile({...profile,unlockedTitleIds:result.titles,unlockedBackgroundIds:result.backgrounds});socialMessage("giftCodeMessage",`報酬を受け取りました：${(result.rewards.titleIds||[]).map(id=>PLAYER_TITLES[id]?.label).filter(Boolean).concat((result.rewards.backgroundIds||[]).map(id=>PLAYER_CARD_BACKGROUNDS[id]?.label).filter(Boolean)).join(" / ")}`);renderSocialAccountUi();
     }
     async function loginWithGoogle(register=false){
       const fb=window.WaribashiFirebase;if(!fb?.auth)throw new Error("認証を準備しています。");
@@ -3753,6 +3841,15 @@ const CARD_LIBRARY = {
     }
     function activeRoomRef(fb=firebaseApi()){return fb?fb.doc(fb.db,"activeRooms",fb.uid):null;}
     async function getActiveRoomRecord(){const fb=firebaseApi();if(!fb)return null;const snap=await fb.getDoc(activeRoomRef(fb));return snap.exists()?{id:snap.id,...snap.data()}:null;}
+    async function repairOwnRoomStateOnStartup(){
+      const fb=firebaseApi();if(!fb)return;
+      try{
+        const record=await getActiveRoomRecord();
+        if(record){await cleanupActiveRoomRecordIfStale(record);return;}
+        const legacy=await findLegacyOwnedPublicRooms();
+        for(const room of legacy){try{await leaveRoomRecordForReplacement(room);}catch(error){console.warn("[FriendRoom] legacy orphan cleanup failed",error?.code,error?.message);}}
+      }catch(error){console.warn("[FriendRoom] startup self repair failed",error?.code,error?.message);}
+    }
     async function findLegacyOwnedPublicRooms(){const fb=firebaseApi();if(!fb)return [];try{const snap=await fb.getDocs(fb.query(fb.collection(fb.db,"publicRooms"),fb.where("creatorUid","==",fb.uid),fb.limit(10)));const rooms=[];for(const item of docsFromSnapshot(snap)){try{const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",item.roomId));if(roomSnap.exists()){const data=roomSnap.data()||{};if(data.hostUid===fb.uid&&data.status!=="closed")rooms.push({roomId:item.roomId,role:"host",data});}}catch(_){}}return rooms;}catch(_){return [];}}
     async function hasAnyActiveRoom(){if(state.friendRoomId)return true;try{if(await getActiveRoomRecord())return true;return (await findLegacyOwnedPublicRooms()).length>0;}catch(_){return false;}}
     async function cleanupActiveRoomRecordIfStale(record){
@@ -3768,7 +3865,23 @@ const CARD_LIBRARY = {
       const fb=firebaseApi();if(!fb||!current?.roomId||!current?.role)return;
       const roomRef=fb.doc(fb.db,"rooms",current.roomId),activeRef=activeRoomRef(fb);
       if(current.role==="host"){
-        await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(roomRef);if(snap.exists()&&snap.data().hostUid===fb.uid){const data=snap.data()||{};transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});if(data.visibility==="public")transaction.delete(fb.doc(fb.db,"publicRooms",current.roomId));if(data.shortCode)transaction.delete(fb.doc(fb.db,"roomCodes",data.shortCode));}transaction.delete(activeRef);});
+        // Close the room first, then clean the index documents. Keeping the close
+        // separate avoids a single failed auxiliary delete leaving the old room alive.
+        let data=current.data||{};
+        await fb.runTransaction(fb.db,async transaction=>{
+          const snap=await transaction.get(roomRef);
+          if(!snap.exists())return;
+          data=snap.data()||{};
+          if(data.hostUid!==fb.uid)return;
+          if(["starting","playing"].includes(data.status))throw Object.assign(new Error("ROOM_IN_MATCH"),{code:"ROOM_IN_MATCH"});
+          transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});
+        });
+        const cleanup=[];
+        if(data.visibility==="public")cleanup.push(fb.deleteDoc(fb.doc(fb.db,"publicRooms",current.roomId)));
+        if(data.shortCode)cleanup.push(fb.deleteDoc(fb.doc(fb.db,"roomCodes",data.shortCode)));
+        if(cleanup.length){const results=await Promise.allSettled(cleanup);for(const result of results)if(result.status==="rejected")console.warn("[FriendRoom] replacement cleanup failed",result.reason?.code,result.reason?.message);}
+        // The active-room lock is critical. Only release it after the room is closed.
+        await fb.deleteDoc(activeRef);
       }else{
         await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(roomRef);if(snap.exists()&&snap.data().guestUid===fb.uid){const data=snap.data()||{};if(data.status!=="lobby")throw Object.assign(new Error("ROOM_IN_MATCH"),{code:"ROOM_IN_MATCH"});const patch={status:"lobby",guestUid:null,guestJoined:false,guestReady:false,guestDeckCounts:null,guestClientId:null,guestLastSeen:null,members:{...(data.members||{}),slot1:null},updatedAt:fb.serverTimestamp()};transaction.update(roomRef,patch);if(data.visibility==="public")transaction.set(fb.doc(fb.db,"publicRooms",current.roomId),publicRoomMetadata(current.roomId,{...data,...patch},fb.serverTimestamp()));}transaction.delete(activeRef);});
       }
@@ -4595,8 +4708,9 @@ const CARD_LIBRARY = {
         publicId: registered ? String(profile.publicId || "") : "",
         registered,
         guestLabel: registered ? "" : displayName,
-        bannerId: registered ? String(profile.bannerId || "") : "",
-        titleId: registered ? String(profile.titleId || "") : ""
+        bannerId: registered ? String(profile.backgroundId || profile.bannerId || "default") : "default",
+        backgroundId: registered ? String(profile.backgroundId || profile.bannerId || "default") : "default",
+        titleId: registered ? String(profile.titleId || "rookie") : "rookie"
       };
     }
 
@@ -4649,6 +4763,8 @@ const CARD_LIBRARY = {
       const opponentMember = roomMember(data, otherFriendRole(role));
       if (elements.battleRoomSelfName) elements.battleRoomSelfName.textContent = selfMember?.displayName || "あなた";
       if (elements.battleRoomOpponentName) elements.battleRoomOpponentName.textContent = opponentMember?.displayName || "参加者を待っています…";
+      applyPlayerCardElement(elements.battleRoomSelfCard,playerCardPresentation(selfMember,"あなた"),{nameElement:elements.battleRoomSelfName});
+      applyPlayerCardElement(elements.battleRoomOpponentCard,playerCardPresentation(opponentMember||{},"参加者を待っています…"),{nameElement:elements.battleRoomOpponentName});
       if (elements.battleRoomSelfStatus) elements.battleRoomSelfStatus.textContent = (role === "host" ? hostReady : guestReady) ? "準備完了" : "準備中";
       if (elements.battleRoomOpponentStatus) elements.battleRoomOpponentStatus.textContent = opponentMember ? ((role === "host" ? guestReady : hostReady) ? "準備完了" : "準備中") : "参加者待ち";
       if (elements.battleRoomDeckName) elements.battleRoomDeckName.textContent = localDeckDisplayName();
@@ -4852,6 +4968,25 @@ const CARD_LIBRARY = {
       }
 
       const roomRef = fb.doc(fb.db, "rooms", roomId);
+
+      // If this account is already in another room, inspect the destination first
+      // and then ask whether to leave/disband the current room. This keeps invalid
+      // room IDs or already-full rooms from kicking the player out unnecessarily.
+      const currentRoom=await ensureCurrentRoomLoaded();
+      if(currentRoom&&currentRoom.roomId!==roomId){
+        let preview;
+        try{preview=await fb.getDoc(roomRef);}catch(error){throw error;}
+        if(!preview.exists())throw Object.assign(new Error("ROOM_NOT_FOUND"),{code:"ROOM_NOT_FOUND"});
+        const previewData=preview.data()||{};
+        if(publicOnly&&previewData.visibility!=="public")throw Object.assign(new Error("ROOM_NOT_PUBLIC"),{code:"ROOM_NOT_PUBLIC"});
+        if(!regulationDefinition(previewData.regulation?.modeId,previewData.regulation?.modeVersion))throw Object.assign(new Error("ROOM_RULE_UNSUPPORTED"),{code:"ROOM_RULE_UNSUPPORTED"});
+        if(previewData.status==="closed")throw Object.assign(new Error("ROOM_CLOSED"),{code:"ROOM_CLOSED"});
+        if(["starting","playing"].includes(previewData.status))throw Object.assign(new Error("ROOM_IN_MATCH"),{code:"ROOM_IN_MATCH"});
+        if(previewData.guestJoined&&previewData.guestUid!==fb.uid)throw Object.assign(new Error("ROOM_FULL"),{code:"ROOM_FULL"});
+        const proceed=await confirmAndLeaveCurrentRoom("別のルームに参加");
+        if(!proceed){elements.friendLobbyMessage.textContent="現在のルームに残りました。";return false;}
+      }
+
       const clientId = getFriendClientId();
       const joiningMember = currentRoomMemberPresentation();
       let resolvedRole = "guest";
@@ -4927,7 +5062,7 @@ const CARD_LIBRARY = {
         }
         if(error?.code==="ROOM_RULE_UNSUPPORTED"||error?.message==="ROOM_RULE_UNSUPPORTED"){elements.friendLobbyMessage.textContent="この対戦ルールには現在対応していません。";return false;}
         if(error?.code==="ROOM_NOT_PUBLIC"||error?.message==="ROOM_NOT_PUBLIC"){elements.friendLobbyMessage.textContent="この部屋は公開参加できません。";return false;}
-        if(error?.code==="ACTIVE_ROOM_EXISTS"||error?.message==="ACTIVE_ROOM_EXISTS"){elements.friendLobbyMessage.textContent="すでに別の対戦ルームに参加しています。先に現在のルームを退出してください。";return false;}
+        if(error?.code==="ACTIVE_ROOM_EXISTS"||error?.message==="ACTIVE_ROOM_EXISTS"){elements.friendLobbyMessage.textContent="現在のルームからの退出処理が完了していません。もう一度お試しください。";return false;}
         console.error("[FriendRoom] join failed",{operation:"join",roomId,role:"guest",code:error?.code,message:error?.message});
         throw error;
       }
@@ -5188,9 +5323,9 @@ const CARD_LIBRARY = {
       }
     }
 
-    function playerPresentation(member,fallback){return {displayName:String(member?.guestLabel||member?.displayName||fallback),isGuest:member?.registered===false,titleId:member?.titleId||"",bannerId:member?.bannerId||""};}
+    function playerPresentation(member,fallback){return playerCardPresentation(member||{},fallback);}
     function vsCutInStorageKey(matchId){return `waribashi_vs_seen_${matchId}`;}
-    function applyVsPlayerPresentation(kind,presentation){const card=elements.battleVsCutIn?.querySelector(`[data-player-card="${kind}"]`),name=kind==="self"?elements.battleVsSelfName:elements.battleVsOpponentName;if(name)name.textContent=presentation.displayName;if(card){card.dataset.bannerId=presentation.bannerId;card.dataset.titleId=presentation.titleId;card.classList.toggle("is-guest",presentation.isGuest);}}
+    function applyVsPlayerPresentation(kind,presentation){const card=elements.battleVsCutIn?.querySelector(`[data-player-card="${kind}"]`),name=kind==="self"?elements.battleVsSelfName:elements.battleVsOpponentName;applyPlayerCardElement(card,presentation,{nameElement:name});}
     async function showFriendVsCutIn(match) {
       const matchId=getFriendMatchId(match),alreadyPersisted=(()=>{try{return sessionStorage.getItem(vsCutInStorageKey(matchId))==="1";}catch(_){return false;}})();
       if(!elements.battleVsCutIn||!matchId||state.friendVsShownMatchIds.has(matchId)||alreadyPersisted||match.startingPlayerDecided)return;
@@ -14669,6 +14804,16 @@ async function endTurn() {
     socialEl("authCloseBtn")?.addEventListener("click",()=>socialClose("authModal"));
     socialEl("accountOpenBtn")?.addEventListener("click",()=>socialOpen("accountModal"));
     socialEl("accountCloseBtn")?.addEventListener("click",()=>socialClose("accountModal"));
+    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await openPlayerCardEditor();}catch(error){socialMessage("accountMessage",error.message);}});
+    socialEl("playerCardTitleSelect")?.addEventListener("change",event=>{if(state.playerCardDraft){state.playerCardDraft.titleId=event.target.value;renderPlayerCardDraft();}});
+    socialEl("playerCardSaveBtn")?.addEventListener("click",async()=>{try{await savePlayerCard();}catch(error){socialMessage("playerCardEditorMessage",error.message);}});
+    socialEl("playerCardCancelBtn")?.addEventListener("click",closePlayerCardEditor);socialEl("playerCardEditorCloseBtn")?.addEventListener("click",closePlayerCardEditor);
+    socialEl("playerNameChangeBtn")?.addEventListener("click",async()=>{try{await ensureProfileChangeAllowed();openPlayerNameEditor();}catch(error){socialMessage("accountMessage",error.message);}});
+    socialEl("playerNameSaveBtn")?.addEventListener("click",async()=>{try{await changePlayerName();}catch(error){socialMessage("playerNameMessage",error.message);}});
+    socialEl("playerNameCancelBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));socialEl("playerNameCloseBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));
+    socialEl("giftCodeOpenBtn")?.addEventListener("click",()=>{socialEl("giftCodeInput").value="";socialMessage("giftCodeMessage","");socialOpen("giftCodeModal");});
+    socialEl("giftCodeClaimBtn")?.addEventListener("click",async()=>{try{await claimGiftCode();}catch(error){socialMessage("giftCodeMessage",error.message);}});
+    socialEl("giftCodeCancelBtn")?.addEventListener("click",()=>socialClose("giftCodeModal"));socialEl("giftCodeCloseBtn")?.addEventListener("click",()=>socialClose("giftCodeModal"));
     socialEl("socialFriendsOpenBtn")?.addEventListener("click",()=>socialOpen("socialFriendsPanel"));
     socialEl("socialFriendsCloseBtn")?.addEventListener("click",()=>socialClose("socialFriendsPanel"));
     socialEl("publicProfileCloseBtn")?.addEventListener("click",()=>socialClose("publicProfileModal"));
