@@ -1241,6 +1241,9 @@
   background: rgba(43, 36, 28, .58);
   backdrop-filter: blur(5px);
 }
+
+.roman-preparation-status{margin:8px auto;padding:9px 12px;max-width:560px;border:1px solid #d7b45a;border-radius:10px;background:rgba(45,31,72,.94);color:#fff4c7;display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap}.roman-preparation-status[hidden]{display:none}.deck-rule-context{padding:7px 10px;border-radius:8px;background:#332655;color:#fff1bd;font-weight:700}.deck-row.rule-blocked{opacity:.62;outline:2px solid #c85d64}.deck-rule-lock{color:#ffd6d9;font-weight:700;margin-top:6px}.rule-detail-body{max-height:65vh;overflow:auto;line-height:1.65}.rule-detail-body h3{margin:14px 0 6px;color:#ffe28f}.rule-detail-body ul{padding-left:1.3rem}.battle-room-meta #battleRoomRuleDetailBtn{padding:5px 9px;font-size:.78rem}
+@media(max-width:480px){.rule-detail-dialog{width:min(94vw,520px)}.roman-preparation-status{font-size:.86rem}.battle-room-meta #battleRoomRuleDetailBtn{width:100%}}
 .battle-result-modal.show { display: flex; animation: fadeIn .24s ease; }
 .battle-result-panel {
   width: min(460px, 94vw);

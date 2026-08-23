@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=164f">
+  <link rel="stylesheet" href="style.css?v=165">
 </head>
 <body>
   <div class="social-modal" id="authModal" aria-hidden="true">
@@ -90,12 +90,14 @@
     <button class="social-close" id="roomCreateCancelX" aria-label="閉じる">×</button><div class="menu-kicker">CREATE ROOM</div><h2>ルームを作成</h2>
     <label>部屋名<input id="roomNameInput" maxlength="30" placeholder="未入力なら自動生成"></label>
     <fieldset class="room-visibility-field"><legend>公開設定</legend><label><input type="radio" name="roomVisibility" value="private" checked>非公開</label><label><input type="radio" name="roomVisibility" value="public">公開</label></fieldset>
-    <label>対戦ルール<select id="roomRegulationSelect"><option value="standard">スタンダード</option></select></label>
+    <label>対戦ルール<select id="roomRegulationSelect"><option value="standard">スタンダード</option><option value="romanGimmick">ロマンギミック杯</option></select></label>
     <fieldset><legend>タグ（最大3個）</legend><div class="room-tag-picker" id="roomTagPicker"></div></fieldset>
     <p class="social-message" id="roomCreateMessage"></p><div class="social-confirm-actions"><button id="roomCreateConfirmBtn">作成</button><button id="roomCreateCancelBtn" class="secondary">キャンセル</button></div>
   </div></div>
 
-  <div class="social-modal" id="friendInviteRuleModal" aria-hidden="true"><div class="social-dialog compact-dialog"><div class="menu-kicker">FRIEND BATTLE</div><h2>対戦を申し込む</h2><label>対戦ルール<select id="friendInviteRegulationSelect"><option value="standard">スタンダード</option></select></label><p class="social-message" id="friendInviteRuleMessage"></p><div class="social-confirm-actions"><button id="friendInviteSendBtn">申し込む</button><button id="friendInviteCancelBtn" class="secondary">キャンセル</button></div></div></div>
+  <div class="social-modal" id="friendInviteRuleModal" aria-hidden="true"><div class="social-dialog compact-dialog"><div class="menu-kicker">FRIEND BATTLE</div><h2>対戦を申し込む</h2><label>対戦ルール<select id="friendInviteRegulationSelect"><option value="standard">スタンダード</option><option value="romanGimmick">ロマンギミック杯</option></select></label><p class="social-message" id="friendInviteRuleMessage"></p><div class="social-confirm-actions"><button id="friendInviteSendBtn">申し込む</button><button id="friendInviteCancelBtn" class="secondary">キャンセル</button></div></div></div>
+
+  <div class="social-modal" id="ruleDetailModal" aria-hidden="true"><div class="social-dialog rule-detail-dialog"><button class="social-close" id="ruleDetailCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">SPECIAL RULE</div><h2 id="ruleDetailTitle">対戦ルール</h2><div id="ruleDetailBody" class="rule-detail-body"></div></div></div>
 
   <div class="social-modal" id="publicRoomDetailModal" aria-hidden="true"><div class="social-dialog compact-dialog"><button class="social-close" id="publicRoomDetailCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">PUBLIC ROOM</div><h2 id="publicRoomDetailName">公開ルーム</h2><dl class="account-detail"><dt>作成者</dt><dd id="publicRoomDetailCreator">-</dd><dt>ルール</dt><dd id="publicRoomDetailRule">-</dd><dt>説明</dt><dd id="publicRoomDetailDescription">-</dd><dt>タグ</dt><dd id="publicRoomDetailTags">-</dd></dl><p class="social-message" id="publicRoomDetailMessage"></p><button id="publicRoomDetailJoinBtn" class="wide-btn">参加する</button></div></div>
 
@@ -403,7 +405,7 @@
           <button id="openPublicRoomsBtn" class="secondary">公開ルームを探す</button>
           </div>
           <div class="public-room-browser" id="publicRoomBrowser" hidden>
-            <div class="public-room-toolbar"><select id="publicRoomRuleFilter"><option value="all">ルール：すべて</option><option value="standard">スタンダード</option></select><button id="publicRoomTagFilterBtn" class="secondary">タグ</button><button id="publicRoomsRefreshBtn" class="secondary">更新</button><button id="quickMatchBtn">クイックマッチ</button></div>
+            <div class="public-room-toolbar"><select id="publicRoomRuleFilter"><option value="all">ルール：すべて</option><option value="standard">スタンダード</option><option value="romanGimmick">ロマンギミック杯</option></select><button id="publicRoomTagFilterBtn" class="secondary">タグ</button><button id="publicRoomsRefreshBtn" class="secondary">更新</button><button id="quickMatchBtn">クイックマッチ</button></div>
             <div class="public-room-tag-filter" id="publicRoomTagFilter" hidden></div><p class="small" id="publicRoomsMessage">更新すると参加可能な公開ルームを表示します。</p><div class="public-room-list" id="publicRoomList"></div>
           </div>
           <div class="room-join-box">
@@ -413,7 +415,7 @@
           </div>
         </div>
         <div id="battleRoomLobby" class="battle-room-lobby" hidden>
-          <div class="battle-room-meta"><strong id="battleRoomName">対戦ルーム</strong><span id="battleRoomVisibilityBadge">非公開</span><span id="battleRoomRegulation">スタンダード</span><span id="battleRoomTags"></span></div>
+          <div class="battle-room-meta"><strong id="battleRoomName">対戦ルーム</strong><span id="battleRoomVisibilityBadge">非公開</span><span id="battleRoomRegulation">スタンダード</span><button id="battleRoomRuleDetailBtn" class="secondary">ルール詳細</button><span id="battleRoomTags"></span></div>
           <div class="battle-room-id-row"><span><small>ROOM ID</small><strong id="battleRoomIdText">------</strong></span><button id="copyRoomUrlBtn" class="blue" disabled>コピー</button></div>
           <div class="battle-room-players">
             <button class="battle-room-player battle-room-self player-card-surface" id="battleRoomSelfCard" type="button"><span class="player-card-decoration" aria-hidden="true"></span><span class="battle-room-role">あなた</span><span class="battle-room-player-title" data-title-slot>ルーキー</span><strong id="battleRoomSelfName">プレイヤー</strong><span class="battle-room-deck-label">使用デッキ</span><span class="battle-room-deck-name" id="battleRoomDeckName">現在のデッキ</span><span class="battle-room-player-status" id="battleRoomSelfStatus">準備中</span></button>
@@ -534,7 +536,7 @@
     <section class="deck-builder deck-screen screen-hidden" id="deckEditorScreen">
       <div class="deck-head">
         <div>
-          <h2>デッキ編集</h2>
+          <h2>デッキ編集</h2><p id="deckRuleContextLabel" class="deck-rule-context" hidden></p>
           <p class="small">20枚ちょうど・コスト40以内なら反映できます。</p>
         </div>
         <div class="deck-head-actions">
@@ -750,6 +752,7 @@
       <div class="message" id="message">
         攻撃する場合は、自分の生きている手を選んでから、相手の手を選んでください。
       </div>
+      <div id="romanPreparationStatus" class="roman-preparation-status" hidden><strong>準備時間</strong><span id="romanPreparationCounts"></span></div>
 
       <div class="split-box" id="splitBox">
         <span>分け直し：</span>
@@ -927,6 +930,6 @@
     }
   </script>
 
-  <script src="game.js?v=164f"></script>
+  <script src="game.js?v=165"></script>
 </body>
 </html>

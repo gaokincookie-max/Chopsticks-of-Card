@@ -2007,8 +2007,21 @@ const CARD_LIBRARY = {
       slowCurse: 2
     };
 
+    const ROMAN_PREPARATION_BLOCKED_NAMES = Object.freeze(new Set([
+      "レーザービーム","エレクトリック","電磁波","固定","等価交換","狙撃","乱射","無差別射撃","ショットガン","ファニング","満ちる心","看破","探り",
+      "解除","手繰り寄せ","すりかえ","DEUS VULT","意思の奔流","倹約令","控訴","上告",
+      "乱舞","フィナーレ","リタルダント","カノン","アルペジオ","4分休符","全休符","Agitato","Lacrimosa","Requiem","Morendo",
+      "アルカナ・スレイブ！！","涙で研ぎ澄まされた剣","空虚","等価なる断罪","不平等な世界","天罰","傾いた天秤","執行"
+    ]));
+    const ROMAN_PROTECTED_BULLET_NAMES = Object.freeze(new Set(["特殊弾","貫通弾","阻害弾","粉砕弾"]));
+    const ROMAN_DECK_BANNED_NAMES = Object.freeze(new Set(["最終判決：没収","最終判決：死刑","最終判決：懲役"]));
     const REGULATION_DEFS = Object.freeze({
-      standard: Object.freeze({id:"standard",version:1,name:"スタンダード",description:"通常の対戦ルール",bannedCardIds:[],allowedThemeIds:null})
+      standard: Object.freeze({id:"standard",version:1,name:"スタンダード",summary:"通常の対戦ルール",details:["通常のカード・デッキルールで対戦します。"],deckRestrictions:null}),
+      romanGimmick: Object.freeze({
+        id:"romanGimmick",version:1,name:"ロマンギミック杯",summary:"双方に3ターンずつの準備時間があり、その後は通常ルールで戦います。",preparationTurns:3,
+        details:["各プレイヤーに3ターンずつ準備時間があります。","準備中も攻撃回数と攻撃した事実、共鳴、自分側トリガーは通常通りです。","相手の手・手札・設置物・妨害状態へ不利益を与える効果は無効です。","一部カードは準備時間中使用できず、一部の弾は捨てられません。"],
+        preparationBlockedNames:[...ROMAN_PREPARATION_BLOCKED_NAMES],protectedBulletNames:[...ROMAN_PROTECTED_BULLET_NAMES],deckRestrictions:{finalVerdictNames:[...ROMAN_DECK_BANNED_NAMES],blockedGroups:["harpoonTheme"]}
+      })
     });
     const ROOM_TAG_DEFS = Object.freeze({beginner:"初心者歓迎",rematch:"連戦歓迎",casual:"カジュアル",advanced:"上級者向け",deck_test:"デッキ調整中"});
     const ROOM_TAG_MAX = 3;
@@ -2032,6 +2045,9 @@ const CARD_LIBRARY = {
       },
       deckCounts: { human: { ...DEFAULT_DECK_COUNTS }, cpu: { ...DEFAULT_DECK_COUNTS } },
       editingDeckOwner: "human",
+      deckRuleContext: null,
+      currentRegulation: { ...DEFAULT_REGULATION },
+      resolvingEffectPlayer: null,
       deckSortMode: "implementation",
       deckNameSearch: "",
       deckKeywordSearch: "",
@@ -2194,9 +2210,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v164-player-cards";
+    const LATEST_NEWS_ID = "v165-roman-gimmick";
 
     const UPDATE_NEWS = [
+      {id:"v165-roman-gimmick",version:"v165",date:"2026-08-23",title:"特殊ルール「ロマンギミック杯」を追加",summary:"双方3ターンの準備時間でコンボを組み立てる特殊ルールを追加しました。",featured:true,tags:["new","system"],items:["準備時間中は相手への妨害を抑え、自分の準備を進められます","ルール詳細と準備ターン表示を追加","ルール別デッキ制約と対戦開始前検証を追加"]},
       {id:"v164-player-cards",version:"v164f",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","ルーム所属時のプロフィール編集導線とエラー表示を修正"]},
       {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
       {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
@@ -3454,6 +3471,20 @@ const CARD_LIBRARY = {
     function normalizeShortRoomCode(value){return String(value||"").trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,"").slice(0,6);}
     function regulationDefinition(id,version){const def=REGULATION_DEFS[id];return def&&def.version===Number(version)?def:null;}
     function regulationSnapshot(id="standard"){const def=REGULATION_DEFS[id];if(!def)throw new Error("この対戦ルールには現在対応していません。");return {modeId:def.id,modeVersion:def.version,options:{}};}
+    function activeRegulation(){return state.friendRoomData?.regulation||state.currentRegulation||DEFAULT_REGULATION;}
+    function activeRuleDefinition(){const rule=activeRegulation();return regulationDefinition(rule?.modeId,rule?.modeVersion)||REGULATION_DEFS.standard;}
+    function isRomanGimmick(){return activeRuleDefinition().id==="romanGimmick";}
+    function romanPreparationCounts(){const started={human:Number(state.personalTurnCount?.human||0),cpu:Number(state.personalTurnCount?.cpu||0)};return {human:Math.max(0,started.human-(state.turn==="human"?1:0)),cpu:Math.max(0,started.cpu-(state.turn==="cpu"?1:0))};}
+    function isRomanPreparation(){if(!isRomanGimmick())return false;const limit=activeRuleDefinition().preparationTurns||3,c=romanPreparationCounts();return c.human<limit||c.cpu<limit;}
+    function isRomanOpponentTarget(actor,target){return isRomanPreparation()&&actor&&target===otherPlayer(actor);}
+    function isCardBlockedInRomanPreparation(cardId){const card=CARD_LIBRARY[effectiveCardIdForPlayer(state.turn||"human",cardId)]||CARD_LIBRARY[cardId];return isRomanPreparation()&&!!card&&(card.curse||ROMAN_PREPARATION_BLOCKED_NAMES.has(card.name));}
+    function canUseCardUnderRule(player,cardId,{silent=false}={}){if(!isCardBlockedInRomanPreparation(cardId))return true;if(!silent&&player==="human")setMessage(`「${CARD_LIBRARY[effectiveCardIdForPlayer(player,cardId)]?.name||CARD_LIBRARY[cardId]?.name||"このカード"}」は準備時間中使用できません。`);return false;}
+    function isRomanTemporarilyProtectedHandCard(cardId){return isRomanPreparation()&&ROMAN_PROTECTED_BULLET_NAMES.has(CARD_LIBRARY[cardId]?.name);}
+    function getDeckRestrictionReason(ruleId,cardId){const rule=REGULATION_DEFS[ruleId],card=CARD_LIBRARY[cardId];if(!rule?.deckRestrictions||!card)return "";if(rule.deckRestrictions.finalVerdictNames?.includes(card.name))return `${rule.name}では使用不可`;if(rule.deckRestrictions.blockedGroups?.includes("harpoonTheme")&&card.harpoonTheme)return `${rule.name}では銛系カードを使用不可`;return "";}
+    function isCardAllowedInDeckForRule(ruleId,cardId){return !getDeckRestrictionReason(ruleId,cardId);}
+    function validateDeckForRule(ruleId,counts){const invalid=[...new Set(Object.entries(counts||{}).filter(([,n])=>Number(n)>0).map(([id])=>id).filter(id=>!isCardAllowedInDeckForRule(ruleId,id)))];return {valid:invalid.length===0,invalidCardIds:invalid,names:invalid.map(id=>CARD_LIBRARY[id]?.name||id)};}
+    function ruleDeckValidationMessage(ruleId,counts){const result=validateDeckForRule(ruleId,counts),rule=REGULATION_DEFS[ruleId];return result.valid?"":`「${rule?.name||"このルール"}」では使えないカードがデッキに含まれています。対象：${result.names.join("、")}`;}
+    function openRuleDetail(ruleId){const rule=REGULATION_DEFS[ruleId]||REGULATION_DEFS.standard,title=document.getElementById("ruleDetailTitle"),body=document.getElementById("ruleDetailBody");title.textContent=rule.name;body.replaceChildren();const summary=document.createElement("p");summary.textContent=rule.summary;body.append(summary);const addSection=(heading,items)=>{if(!items?.length)return;const h=document.createElement("h3");h.textContent=heading;const ul=document.createElement("ul");for(const text of items){const li=document.createElement("li");li.textContent=text;ul.append(li);}body.append(h,ul);};addSection("概要",rule.details);if(rule.id==="romanGimmick"){addSection("準備時間中使用不可",[...rule.preparationBlockedNames,"すべての呪縛"]);addSection("準備時間中捨てられない弾",rule.protectedBulletNames);addSection("デッキ投入不可",[...rule.deckRestrictions.finalVerdictNames,"銛投擲","銛を埋める","グングニル","銛系すべて"]);}socialOpen("ruleDetailModal");}
     function normalizeRoomTags(tags){const unique=[...new Set((tags||[]).filter(id=>Object.hasOwn(ROOM_TAG_DEFS,id)))];if(unique.length>ROOM_TAG_MAX)throw new Error(`タグは${ROOM_TAG_MAX}個まで選択できます。`);return unique;}
     function defaultRoomName(){return `${currentRoomMemberPresentation().displayName}の部屋`;}
     function normalizeRoomName(value){const raw=String(value||"");if(/[\r\n\u0000-\u001f\u007f]/.test(raw))throw new Error("部屋名に改行や制御文字は使用できません。");const clean=raw.trim()||defaultRoomName();if(clean.length<1||clean.length>30)throw new Error("部屋名は30文字以内で入力してください。");return clean;}
@@ -5148,6 +5179,7 @@ const CARD_LIBRARY = {
     async function setFriendReady(ready) {
       const fb = firebaseApi();
       if (!fb || !state.friendRoomId || !state.friendRole) return;
+      if(ready){const ruleId=state.friendRoomData?.regulation?.modeId||"standard",message=ruleDeckValidationMessage(ruleId,state.deckCounts.human);if(message){elements.friendLobbyMessage.textContent=message;return false;}}
       const key = state.friendRole === "host" ? "hostReady" : "guestReady";
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       const deckKey = state.friendRole === "host" ? "hostDeckCounts" : "guestDeckCounts";
@@ -5323,6 +5355,9 @@ const CARD_LIBRARY = {
     async function startFriendCommonBattle(options = {}) {
       if (state.friendRole !== "host" || !state.friendRoomId) return;
       const data = state.friendRoomData;
+      const ruleId=data?.regulation?.modeId||"standard";
+      const hostRuleError=ruleDeckValidationMessage(ruleId,data?.hostDeckCounts||{}),guestRuleError=ruleDeckValidationMessage(ruleId,data?.guestDeckCounts||{});
+      if(hostRuleError||guestRuleError){elements.friendLobbyMessage.textContent=hostRuleError||guestRuleError;return;}
       if (!data?.hostReady || !data?.guestReady || !data?.hostDeckCounts || !data?.guestDeckCounts || data?.status !== "lobby") {
         elements.friendLobbyMessage.textContent = "2人の準備完了とデッキ提出が必要です。";
         return;
@@ -7106,13 +7141,17 @@ function wrapFinger(value) {
     function renderDeckBuilder() {
       const owner = state.editingDeckOwner;
       const counts = currentDeckCounts(owner);
+      const ruleId=state.deckRuleContext?.ruleId||null,ruleDef=ruleId?REGULATION_DEFS[ruleId]:null,contextLabel=document.getElementById("deckRuleContextLabel");
+      if(contextLabel){contextLabel.hidden=!ruleDef;contextLabel.textContent=ruleDef?`${ruleDef.name}用デッキ編集中`:"";}
       elements.deckGrid.innerHTML = "";
       const visibleCardIds = getVisibleDeckCardIds();
       visibleCardIds.forEach(cardId => {
         const card = CARD_LIBRARY[cardId];
         const count = counts[cardId] || 0;
         const row = document.createElement("div");
+        const restrictionReason=ruleId?getDeckRestrictionReason(ruleId,cardId):"";
         row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "") + (card.token ? " generated-card" : "") + (card.magicalEvolution ? " magical-evolution-card" : "");
+        if(restrictionReason)row.classList.add("rule-blocked");
         const relatedButtons = [];
         if (cardId === "focusedShot") relatedButtons.push('<button class="deck-inline-info" data-info="logicCrusherBullet">生成カード「ロジックアトリエ」を確認</button>');
         if (cardId === "lastMelody") relatedButtons.push('<button class="deck-inline-info" data-info="finale">生成カード「フィナーレ」を確認</button>');
@@ -7140,6 +7179,7 @@ function wrapFinger(value) {
             <div class="deck-card-desc">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
             <div class="deck-inline-actions">${relatedButton}${card.token ? `<button class="deck-inline-info" data-info="${cardId}">詳細を見る</button>` : ""}</div>
           </div>
+          ${restrictionReason?`<div class="deck-rule-lock">🔒 ${escapeHtml(restrictionReason)}</div>`:""}
           ${card.token ? '<div class="generated-lock">デッキ投入不可</div>' : `<div class="count-control">
             <button class="secondary" data-action="minus" data-card="${cardId}">−</button>
             <span class="count-num">${count}</span>
@@ -7165,6 +7205,7 @@ function wrapFinger(value) {
 
           const current = counts[cardId] || 0;
           if (action === "plus") {
+            if(restrictionReason){setMessage(restrictionReason);return;}
             const currentStats = getDeckStats(owner);
             if (currentStats.count >= DECK_MAX_COUNT) {
               setMessage(`デッキはちょうど${DECK_MAX_COUNT}枚です。これ以上追加できません。`);
@@ -7426,6 +7467,7 @@ function wrapFinger(value) {
       } else if(base==="directiveCombo"){
         state.pendingDirectiveAttackLimitDelta[player]-=1;
       } else if(base==="directiveConstant"){
+        if(isRomanPreparation())return;
         const opponent=otherPlayer(player);const living=["L","R"].filter(h=>state[opponent][h]>0);
         if(living.length){const hand=living[Math.floor(Math.random()*living.length)];const value=Number(card.directiveData?.value)||1;state[opponent][hand]+=Math.sign(value-state[opponent][hand]);}
       }
@@ -7961,7 +8003,7 @@ function wrapFinger(value) {
         .map((cardId, index) => ({ cardId, index }))
         .filter(item => {
           const card = CARD_LIBRARY[item.cardId];
-          return card && typeof card.effect === "function" && !isEffectCopyExcluded(item.cardId, "brawl");
+          return card && typeof card.effect === "function" && !isEffectCopyExcluded(item.cardId, "brawl") && canUseCardUnderRule(player,item.cardId,{silent:true});
         });
     }
 
@@ -7970,7 +8012,7 @@ function wrapFinger(value) {
         .map((cardId, index) => ({ cardId, index }))
         .filter(item => {
           const card = CARD_LIBRARY[item.cardId];
-          if (!card || typeof card.effect !== "function" || isEffectCopyExcluded(item.cardId, "advanceNotice")) return false;
+          if (!card || typeof card.effect !== "function" || isEffectCopyExcluded(item.cardId, "advanceNotice") || !canUseCardUnderRule(player,item.cardId,{silent:true})) return false;
           if (!canUseChargeCardThisTurn(player, item.cardId)) return false;
           try {
             return !!card.canPlay(player);
@@ -7987,11 +8029,17 @@ function wrapFinger(value) {
         addLog(`${sourceLabel}で選ばれたカードには発動できる効果がなかった。`);
         return false;
       }
+      if (!canUseCardUnderRule(player, effectiveId)) {
+        addLog(`${sourceLabel}で選ばれた「${card.name}」は特殊ルールにより発動できなかった。`);
+        return false;
+      }
 
       // 乱闘・予告状の発動は「カードの効果だけを使う」ため、
       // 充電カードの1ターン1回制限を確認せず、使用済みにも記録しない。
       const previousCopy = state.copiedEffectContext;
+      const previousEffectPlayer = state.resolvingEffectPlayer;
       state.copiedEffectContext = { sourceLabel, cardId, ...context };
+      state.resolvingEffectPlayer = player;
       try {
         recordRondoUse(player, effectiveId);
         await card.effect(player);
@@ -8001,12 +8049,14 @@ function wrapFinger(value) {
         return true;
       } finally {
         state.copiedEffectContext = previousCopy;
+        state.resolvingEffectPlayer = previousEffectPlayer;
       }
     }
 
     async function chooseAdvanceNoticeCard(player, handIndex) {
       if (state.mode === "advanceNoticeChoose" && player === "human" && state.turn !== "human") return false;
       const cardId = state.hands[player][handIndex];
+      if (!canUseCardUnderRule(player, cardId)) return false;
       const valid = getAdvanceNoticeCandidates(player).some(item => item.index === handIndex && item.cardId === cardId);
       if (!valid) {
         if (player === "human") {
@@ -8049,6 +8099,7 @@ function wrapFinger(value) {
       for (const cardId of queue) {
         const card = CARD_LIBRARY[cardId];
         if (!card) continue;
+        if (!canUseCardUnderRule(player, cardId)) { addLog(`【予告状】「${card.name}」は特殊ルールにより発動しなかった。`); continue; }
         addLog(`【予告状】${handNames[player]}が予告した「${card.name}」の効果が発動する。`);
         await showCardPopup(player, card, false, player === "cpu" ? 760 : 650);
         await activateCopiedCardEffect(player, cardId, "予告状");
@@ -8217,7 +8268,10 @@ function wrapFinger(value) {
       if (!state.pendingNoDraw) state.pendingNoDraw = { human: 0, cpu: 0 };
       if (!state.activeNoDraw) state.activeNoDraw = { human: 0, cpu: 0 };
       state.firstTurnStarted[player] = true;
+      state.turn = player;
+      const romanBeforeTurnStart=isRomanPreparation();
       state.personalTurnCount[player] = Number(state.personalTurnCount[player] || 0) + 1;
+      if(romanBeforeTurnStart&&!isRomanPreparation()){addLog("ロマンギミック杯：双方の準備時間が終了した。戦闘開始。");setMessage("準備時間終了 ― 戦闘開始");}
       const directiveOpponent=otherPlayer(player);
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       const directiveAttackDelta=Number(state.pendingDirectiveAttackLimitDelta[player]||0);state.pendingDirectiveAttackLimitDelta[player]=0;state.temp[player].attackLimit=Math.max(0,1+directiveAttackDelta);
@@ -8508,6 +8562,8 @@ function wrapFinger(value) {
 
     function render() {
       refreshPlayerDisplayNames();
+      const romanStatus=document.getElementById("romanPreparationStatus"),romanCounts=document.getElementById("romanPreparationCounts");
+      if(romanStatus){const active=isRomanPreparation(),limit=activeRuleDefinition().preparationTurns||3,c=romanPreparationCounts();romanStatus.hidden=!active;if(active&&romanCounts)romanCounts.textContent=`あなた：残り${Math.max(0,limit-c.human)}ターン / 相手：残り${Math.max(0,limit-c.cpu)}ターン`;}
       ensureThemeAttachments("human"); ensureThemeAttachments("cpu");
       const wrPlayer=state.turn;if(state.wholeRestActive?.[wrPlayer]&&state.temp?.[wrPlayer]?.wholeRestCardUsed&&state.mode==="attack"&&!state.animating){state.temp[wrPlayer].wholeRestCardUsed=false;setTimeout(()=>{if(state.turn===wrPlayer&&!state.gameOver)endTurn();},0);}
       ensureOnlineStateMaps();
@@ -8808,7 +8864,7 @@ function wrapFinger(value) {
       return isProtectedChargeCard(cardId) || !!CARD_LIBRARY[cardId]?.protectedSpecial;
     }
     function isExternallyDiscardableHandCard(cardId) {
-      return !!cardId && !isProtectedHandCard(cardId);
+      return !!cardId && !isProtectedHandCard(cardId) && !isRomanTemporarilyProtectedHandCard(cardId);
     }
     function isProtectedAttachment(cardId) {
       return !!CARD_LIBRARY[cardId]?.themeBlessing;
@@ -8980,7 +9036,7 @@ function wrapFinger(value) {
 
     async function useGrandioso(player){
       const targets=[];
-      for(const owner of [player,otherPlayer(player)])for(const hand of ["L","R"])if(state[owner][hand]>0)targets.push({owner,hand});
+      for(const owner of [player,otherPlayer(player)])for(const hand of ["L","R"])if(state[owner][hand]>0&&!isRomanOpponentTarget(player,owner))targets.push({owner,hand});
       const changes=targets.map(({owner,hand})=>{const before=state[owner][hand],amount=applyGuardBlessingReduction(owner,hand,2,"Grandioso"),total=before+amount;return{owner,hand,before,total,after:normalize(total,owner,hand)};});
       for(const change of changes){await animateCalculation(change.owner,change.hand,change.total,change.after);state[change.owner][change.hand]=change.after;}
       for(const owner of [player,otherPlayer(player)])clearBrokenTraps(owner);
@@ -9954,6 +10010,7 @@ function wrapFinger(value) {
     }
 
     async function discardHandCardByEffect(player, handIndex, reason = "") {
+      if(isRomanOpponentTarget(state.resolvingEffectPlayer,player))return null;
       if(!isExternallyDiscardableHandCard(state.hands[player][handIndex])) return null;
       const [cardId] = state.hands[player].splice(handIndex, 1);
       if (!cardId) return null;
@@ -9964,6 +10021,7 @@ function wrapFinger(value) {
     }
 
     async function discardFixedHandCardsByEffect(player, indexes, reason = "") {
+      if(isRomanOpponentTarget(state.resolvingEffectPlayer,player))return [];
       const fixed = [...new Set(indexes)]
         .filter(index => Number.isInteger(index) && index >= 0 && index < state.hands[player].length)
         .sort((a, b) => a - b)
@@ -11216,6 +11274,7 @@ function renderLastAction() {
         const restrictedByCost = state.activeCostLimit.human !== null && card.cost > state.activeCostLimit.human;
         const berserkLocked = state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed;
         const intemperanceLocked = !!state.activeIntemperanceCardLock?.human;
+        const romanRuleLocked = !canUseCardUnderRule("human",cardId,{silent:true});
         const baseCardActionAvailable =
           state.turn === "human" &&
           !state.gameOver &&
@@ -11242,6 +11301,7 @@ function renderLastAction() {
           !boardOrNumberSelectionMode &&
           !cityWillMode &&
           !advanceNoticeMode &&
+          !romanRuleLocked &&
           !restrictedByCost &&
           canUseCardAction &&
           !isZoneCard &&
@@ -11256,6 +11316,7 @@ function renderLastAction() {
           !boardOrNumberSelectionMode &&
           !cityWillMode &&
           !advanceNoticeMode &&
+          !romanRuleLocked &&
           !restrictedByCost &&
           !berserkLocked &&
           !intemperanceLocked &&
@@ -11304,7 +11365,7 @@ function renderLastAction() {
           ${displaySettings.compactCardDescriptions
             ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
             : `<div class="card-text">${cardId === "magicalChant" && effectiveCardId === "magicalChant" ? `<strong>詠唱進捗：${Number(state.magicalChantProgress?.human || 0)}/3</strong><br>${escapeHtml(card.text)}` : card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
-          ${advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
+          ${romanRuleLocked ? '<div class="used">準備時間中使用不可</div>' : advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
               ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
@@ -11731,6 +11792,7 @@ function renderLastAction() {
       const rawCardId = state.hands.human[index];
       const cardId = effectiveCardIdForPlayer("human", rawCardId);
       const card = CARD_LIBRARY[cardId];
+      if (!canUseCardUnderRule("human", cardId)) return false;
       // 設置カードでも控訴・上告による同名使用禁止を確認する。
       // 以前は未定義の player を参照して例外が発生し、設置系カードが反応しなくなっていた。
       if (Array.isArray(state.temp.human?.terminalCardBanIds) && state.temp.human.terminalCardBanIds.includes(cardId)) {
@@ -11871,6 +11933,7 @@ function renderLastAction() {
     }
 
     function terminalAppealChoices(player) {
+      if (isRomanPreparation()) return [];
       const choices = [];
       for (const id of ["supremeAppeal", "appeal"]) {
         const index = state.hands[player].indexOf(id);
@@ -12003,6 +12066,8 @@ function renderLastAction() {
       const rawCardId = state.hands[player][handIndex];
       const cardId = effectiveCardIdForPlayer(player, rawCardId);
       const card = CARD_LIBRARY[cardId];
+      if (!canUseCardUnderRule(player, cardId)) return false;
+      if (!canUseCardUnderRule(player, cardId)) return false;
 
       if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) {
         if (player === "human") setMessage(`「${card?.name || "このカード"}」は控訴・上告により、このターン再使用できません。`);
@@ -12077,6 +12142,8 @@ function renderLastAction() {
         return true;
       }
 
+      const previousEffectPlayer=state.resolvingEffectPlayer;
+      state.resolvingEffectPlayer=player;
       const judgmentVerdictMap = {
         finalJudgmentConfiscation: "没収",
         finalJudgmentDeath: "死刑",
@@ -12094,6 +12161,7 @@ function renderLastAction() {
 
       recordRondoUse(player, cardId);
       await card.effect(player);
+      state.resolvingEffectPlayer=previousEffectPlayer;
       if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") state.pendingTerminalEnd[player] = true;
       if(state.wholeRestActive?.[player]) state.temp[player].wholeRestCardUsed=true;
       triggerChemicalGeneration(player, cardId);
@@ -12348,6 +12416,8 @@ async function maybeChooseManualTrap(defender, candidates, context) {
     }
 
         async function addFingersWithCalculation(player, hand, amount, sourceLabel, ignoreGuard = false, options = {}) {
+      const effectActor=options.sourcePlayer||state.resolvingEffectPlayer;
+      if(isRomanOpponentTarget(effectActor,player)){addLog(`${sourceLabel}の相手側効果は準備時間中のため無効。`);return false;}
       if (amount <= 0 || (!options.allowZeroTarget && state[player][hand] <= 0)) return false;
       const actual = ignoreGuard ? Math.max(1, amount) : applyGuardBlessingReduction(player, hand, amount, sourceLabel);
       const before = state[player][hand];
@@ -12793,9 +12863,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       // 「銛を埋める」は対象変更後・攻撃結果確定前に最終対象へ付与する。
       // この後に空振り等で無効化されても、付与済みの銛は残る。
-      if (!danceActive) resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
+      if (!danceActive && !isRomanOpponentTarget(attacker,defender)) resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
 
-      if (tearSharpenedSwordActive) {
+      if (tearSharpenedSwordActive && !isRomanOpponentTarget(attacker,defender)) {
         discardAllBlessingsFromHand(defender, targetHand, "「涙で研ぎ澄まされた剣」");
         render();
       }
@@ -12929,6 +12999,12 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
         power=0;
       }
+      if(isRomanOpponentTarget(attacker,defender)){
+        if(power!==0)addLog("ロマンギミック杯の準備時間中のため、相手へ加える本数は0になった。");
+        power=0;
+        state.lastAttackContext.receivedAmount=0;
+        state.lastAttackContext.appliedAmount=0;
+      }
       const before = state[defender][targetHand];
       const total = before + power;
       const reducingAttack = power < 0;
@@ -13002,7 +13078,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         render();
       }
 
-      if (rationalPowerActive && finalTargetWasOpponent) {
+      if (rationalPowerActive && finalTargetWasOpponent && !isRomanPreparation()) {
         const splashHand = otherHand(targetHand);
         if (state[defender][splashHand] > 0) {
           await addFingersWithCalculation(defender, splashHand, power, "理性ある力", true);
@@ -13029,13 +13105,13 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (hasAttachment(attacker,attackHand,"magicalHappiness")) {
         drawCard(attacker); drawCard(attacker);
         const opponent = otherPlayer(attacker);
-        await discardRandomCards(opponent,1,"「幸福」");
-        addLog(`「幸福」により${handNames[attacker]}は2枚引き、${handNames[opponent]}はランダムに1枚捨てた。`);
+        if(!isRomanPreparation())await discardRandomCards(opponent,1,"「幸福」");
+        addLog(`「幸福」により${handNames[attacker]}は2枚引いた。${isRomanPreparation()?"準備時間中のため相手の手札破棄は無効。":`${handNames[opponent]}はランダムに1枚捨てた。`}`);
       }
 
       await resolveResonanceRewards(attacker, attackHand, resonance);
       await resolveAfterAttackBlessings(attacker, attackHand, defender, targetHand, total, trapResult.cancelAttack);
-      await resolveHarpoonAttackHit(attacker,attackHand,defender,targetHand,{resonance,isInternal:!!options.cardInternalAttack});
+      if(!isRomanOpponentTarget(attacker,defender))await resolveHarpoonAttackHit(attacker,attackHand,defender,targetHand,{resonance,isInternal:!!options.cardInternalAttack});
       if (typeof options.afterResolved === "function") {
         await options.afterResolved({ attacker, attackHand, defender, targetHand, power, total, finalValue: resolvedFinal });
       }
@@ -13152,6 +13228,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
 async function endTurn() {
       if(state.startingRouletteActive)return;
+  const romanPreparationWasActive=isRomanPreparation();
   if (isTutorialBattle()) {
     freezeTutorialBattleToHumanTurn();
     return;
@@ -13207,6 +13284,7 @@ async function endTurn() {
       state.activeDirectiveReformContinue[state.turn]=false;
       state.activeDirectiveAnnihilation[state.turn]=false;
       const next = state.turn === "human" ? "cpu" : "human";
+      if(romanPreparationWasActive&&!isRomanPreparation()){addLog("ロマンギミック杯：準備時間終了。戦闘開始。");setMessage("準備時間終了 ― 戦闘開始");}
 
       if (next === "cpu") {
         state.turn = "cpu";
@@ -13484,6 +13562,7 @@ async function endTurn() {
       let best = null;
       state.hands.cpu.forEach((cardId, index) => {
         if (cardId === "rapidFire") return;
+        if(!isExternallyDiscardableHandCard(cardId))return;
         const card = CARD_LIBRARY[cardId];
         if (!card) return;
         let damage = (card.cost || 0) + (card.bullet ? 1 : 0);
@@ -13553,6 +13632,7 @@ async function endTurn() {
       const candidates = [];
 
       const addCard = (id, score, note = "") => {
+        if(!canUseCardUnderRule("cpu",id,{silent:true}))return;
         const index = cpuCanUseCardIndex(id);
         if (index >= 0) candidates.push({ id, index, score, note, action: async () => playCard("cpu", index, true) });
       };
@@ -13801,6 +13881,7 @@ async function endTurn() {
     }
 
     async function resolveCursedBulletBonus(player) {
+      if(isRomanPreparation()){addLog("「凶弾」の相手側追加効果は準備時間中のため無効。");return;}
       const opponent = otherPlayer(player);
       const targets = ["L", "R"].filter(hand => state[opponent][hand] > 0);
       addLog(`「凶弾」の追加効果。${handNames[opponent]}の1以上の手に3本ずつ加える。`);
@@ -13827,6 +13908,7 @@ async function endTurn() {
     }
 
     async function applyRapidFire(player, defender, discardIndex, targetHand) {
+      if(isRomanPreparation()){if(player==="human")setMessage("「乱射」は準備時間中使用できません。");return false;}
       if (state[defender][targetHand] <= 0) return false;
       const cardId = state.hands[player][discardIndex];
       const ammo = CARD_LIBRARY[cardId];
@@ -14848,8 +14930,10 @@ async function endTurn() {
     elements.battleRoomLeaveBtn?.addEventListener("click",()=>leaveFriendRoom().catch(error=>elements.friendLobbyMessage.textContent=friendFirestoreErrorMessage(error,"退出できませんでした。")));
     elements.battleRoomDeckEditBtn?.addEventListener("click",async()=>{
       if(state.friendRoomId)await setFriendReady(false);
-      state.friendDeckEditReturnToLobby=true;state.editingDeckOwner="human";showScreen("deck");
+      state.friendDeckEditReturnToLobby=true;state.editingDeckOwner="human";state.deckRuleContext={ruleId:state.friendRoomData?.regulation?.modeId||"standard"};showScreen("deck");
     });
+    document.getElementById("battleRoomRuleDetailBtn")?.addEventListener("click",()=>openRuleDetail(state.friendRoomData?.regulation?.modeId||"standard"));
+    document.getElementById("ruleDetailCloseBtn")?.addEventListener("click",()=>socialClose("ruleDetailModal"));
     elements.battleRoomOpponentCard?.addEventListener("click",()=>{
       const member=roomMember(state.friendRoomData,otherFriendRole());
       if(member?.registered&&member.publicId)openSocialProfile({uid:member.uid,displayName:member.displayName,publicId:member.publicId,bannerId:member.bannerId||"",titleId:member.titleId||""});
@@ -14945,7 +15029,7 @@ async function endTurn() {
         elements.friendLobbyMessage.textContent = "コピーできない場合は、表示されたURLを長押し/選択してコピーしてください。";
       }
     });
-    elements.menuDeckBtn.addEventListener("click", () => showScreen("deck"));
+    elements.menuDeckBtn.addEventListener("click", () => {state.deckRuleContext=null;showScreen("deck");});
     elements.menuSettingsBtn.addEventListener("click", () => showScreen("settings"));
     elements.menuNewsBtn?.addEventListener("click", () => openNews("all"));
     elements.newsCloseBtn?.addEventListener("click", closeNews);
@@ -14984,6 +15068,7 @@ async function endTurn() {
         elements.friendLobbyMessage.textContent = "デッキ編集を終了しました。準備完了を押すと新しいデッキを提出します。";
         return;
       }
+      state.deckRuleContext=null;
       showScreen("menu");
     });
     elements.battleBackMenuBtn.addEventListener("click", () => showScreen("menu"));
