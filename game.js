@@ -2196,7 +2196,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v164-player-cards";
 
     const UPDATE_NEWS = [
-      {id:"v164-player-cards",version:"v164c",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","旧プロフィールとオンラインルームの互換性を修正"]},
+      {id:"v164-player-cards",version:"v164d",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","ルーム所属時のプロフィール編集導線とエラー表示を修正"]},
       {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
       {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
       {id:"v162b-invite-lifecycle",version:"v162b",date:"2026-08-21",title:"対戦招待の同期を安定化",summary:"完了済みの対戦招待が新しい招待を妨げる場合がある問題を修正しました。",featured:false,tags:["fix","system"],items:["対戦ルームへの参加完了後に招待handoffを終了する処理を追加","古いaccepted招待が新しいpending招待を塞がないようlistenerを改善","roomReady公開時のprivate room・ルール・空席検証を強化"]},
@@ -3507,7 +3507,7 @@ const CARD_LIBRARY = {
     }
     function selectedCheckboxValues(containerId){return [...document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)].map(input=>input.value);}
     function openRoomCreateSettings(){renderRoomTagControls();document.getElementById("roomNameInput").value="";document.querySelector('input[name="roomVisibility"][value="private"]').checked=true;document.getElementById("roomRegulationSelect").value="standard";document.getElementById("roomCreateMessage").textContent="";socialOpen("roomCreateModal");}
-    async function submitRoomCreateSettings(){if(state.roomCreateBusy)return;const button=document.getElementById("roomCreateConfirmBtn");button.disabled=true;try{const visibility=document.querySelector('input[name="roomVisibility"]:checked')?.value||"private",tags=normalizeRoomTags(selectedCheckboxValues("roomTagPicker")),roomName=normalizeRoomName(document.getElementById("roomNameInput").value),regulationId=document.getElementById("roomRegulationSelect").value;await createFriendRoom({visibility,tags,roomName,regulationId});socialClose("roomCreateModal");}catch(error){document.getElementById("roomCreateMessage").textContent=friendFirestoreErrorMessage(error,"ルームを作成できませんでした。");}finally{button.disabled=false;}}
+    async function submitRoomCreateSettings(){if(state.roomCreateBusy)return;const button=document.getElementById("roomCreateConfirmBtn");button.disabled=true;try{const visibility=document.querySelector('input[name="roomVisibility"]:checked')?.value||"private",tags=normalizeRoomTags(selectedCheckboxValues("roomTagPicker")),roomName=normalizeRoomName(document.getElementById("roomNameInput").value),regulationId=document.getElementById("roomRegulationSelect").value;await createFriendRoom({visibility,tags,roomName,regulationId});socialClose("roomCreateModal");}catch(error){document.getElementById("roomCreateMessage").textContent=roomCreateErrorMessage(error);}finally{button.disabled=false;}}
     function filteredPublicRooms(rooms=state.publicRooms){const rule=state.publicRoomFilters.regulationId,tags=state.publicRoomFilters.tags;return rooms.filter(room=>(rule==="all"||room.regulationId===rule)&&tags.every(tag=>(room.tags||[]).includes(tag))&&!!regulationDefinition(room.regulationId,room.regulationVersion));}
     function renderPublicRooms(){const list=document.getElementById("publicRoomList");if(!list)return;list.replaceChildren();const rooms=filteredPublicRooms();if(!rooms.length){const empty=document.createElement("p");empty.className="small";empty.textContent="条件に合う公開ルームはありません。";list.append(empty);return;}for(const room of rooms){const row=document.createElement("div");row.className="public-room-row";const name=document.createElement("button");name.className="public-room-name";name.textContent=String(room.roomName||"公開ルーム");name.addEventListener("click",()=>openPublicRoomDetail(room));const creator=document.createElement("span");creator.className="public-room-creator";creator.textContent=String(room.creatorName||"プレイヤー");const rule=document.createElement("span");rule.className="public-room-rule";rule.textContent=regulationDefinition(room.regulationId,room.regulationVersion)?.name||"未対応";const tags=document.createElement("span");tags.className="public-room-tags";tags.textContent=roomTagLabels(room.tags).join(" / ")||"タグなし";const join=document.createElement("button");join.textContent="参加";join.addEventListener("click",()=>claimPublicRoom(room.roomId));row.append(name,creator,rule,tags,join);list.append(row);}}
     async function cleanupPublicRoomCandidate(room){
@@ -3568,6 +3568,13 @@ const CARD_LIBRARY = {
       if(!state.firebaseAuthReady||error?.code?.startsWith?.("auth/"))return "オンライン認証に失敗しました。しばらくしてからもう一度お試しください。";
       if(error?.code==="unavailable")return "通信できません。接続を確認してもう一度お試しください。";
       return fallback;
+    }
+    function roomCreateErrorMessage(error){
+      if(error?.code==="permission-denied")return "ルームの作成権限が確認できませんでした。再読み込みしてもう一度お試しください。";
+      if(error?.code==="ACTIVE_ROOM_EXISTS")return "別の対戦ルームに所属しています。";
+      if(error?.code==="ROOM_IN_MATCH"||error?.message==="ROOM_IN_MATCH")return "対戦中のルームは解散できません。";
+      if(error?.code==="unavailable")return "通信できません。接続を確認してください。";
+      return friendFirestoreErrorMessage(error,"ルームを作成できませんでした。");
     }
 
     /* ACCOUNT / SOCIAL RULE:
@@ -3857,9 +3864,9 @@ const CARD_LIBRARY = {
       state.socialCurrentProfile=target;socialEl("publicProfileId").textContent=target.publicId;socialEl("publicProfileName").textContent=target.displayName;
       const friend=state.socialFriends.some(item=>item.uid===target.uid),self=target.uid===state.socialProfile?.uid;socialEl("sendFriendRequestBtn").hidden=friend||self||!target.publicId;socialEl("battleInviteBtn").hidden=!friend;socialEl("removeFriendBtn").hidden=!friend;socialOpen("publicProfileModal");
     }
-    function requestSocialConfirmation(title,text){
+    function requestSocialConfirmation(title,text,{okLabel="実行",cancelLabel="キャンセル"}={}){
       socialEl("socialConfirmTitle").textContent=title;socialEl("socialConfirmText").textContent=text;socialOpen("socialConfirmModal");
-      return new Promise(resolve=>{const ok=socialEl("socialConfirmOkBtn"),cancel=socialEl("socialConfirmCancelBtn");const finish=value=>{ok.removeEventListener("click",accept);cancel.removeEventListener("click",decline);socialClose("socialConfirmModal");resolve(value);};const accept=()=>finish(true),decline=()=>finish(false);ok.addEventListener("click",accept);cancel.addEventListener("click",decline);});
+      return new Promise(resolve=>{const ok=socialEl("socialConfirmOkBtn"),cancel=socialEl("socialConfirmCancelBtn");ok.textContent=okLabel;cancel.textContent=cancelLabel;const finish=value=>{ok.removeEventListener("click",accept);cancel.removeEventListener("click",decline);ok.textContent="実行";cancel.textContent="キャンセル";socialClose("socialConfirmModal");resolve(value);};const accept=()=>finish(true),decline=()=>finish(false);ok.addEventListener("click",accept);cancel.addEventListener("click",decline);});
     }
     function activeRoomRef(fb=firebaseApi()){return fb?fb.doc(fb.db,"activeRooms",fb.uid):null;}
     async function getActiveRoomRecord(){const fb=firebaseApi();if(!fb)return null;const snap=await fb.getDoc(activeRoomRef(fb));return snap.exists()?{id:snap.id,...snap.data()}:null;}
@@ -3901,7 +3908,7 @@ const CARD_LIBRARY = {
           data=snap.data()||{};
           if(data.hostUid!==fb.uid)return;
           if(["starting","playing"].includes(data.status))throw Object.assign(new Error("ROOM_IN_MATCH"),{code:"ROOM_IN_MATCH"});
-          transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});
+          if(data.status!=="closed")transaction.update(roomRef,{status:"closed",updatedAt:fb.serverTimestamp()});
         });
         const cleanup=[];
         if(data.visibility==="public")cleanup.push(fb.deleteDoc(fb.doc(fb.db,"publicRooms",current.roomId)));
@@ -3914,10 +3921,21 @@ const CARD_LIBRARY = {
       }
       if(state.friendRoomId===current.roomId)clearFriendRoomLocalState();
     }
+    async function verifyRoomReplacementCleanup(roomId){
+      const record=await getActiveRoomRecord();if(record?.roomId===roomId){if(!await cleanupActiveRoomRecordIfStale(record))throw Object.assign(new Error("ACTIVE_ROOM_EXISTS"),{code:"ACTIVE_ROOM_EXISTS"});}
+      if(state.friendRoomId===roomId)clearFriendRoomLocalState();return true;
+    }
     async function confirmAndLeaveCurrentRoom(purpose="新しいルームを作成"){
-      const current=await ensureCurrentRoomLoaded();if(!current)return true;
+      const current=await ensureCurrentRoomLoaded();if(!current){if(state.friendRoomId)clearFriendRoomLocalState();return true;}
       if(state.friendMatchStarted||current.data?.status==="playing"||current.data?.status==="starting"){throw new Error("試合中は別の対戦ルームへ移動できません。");}
-      const host=current.role==="host",ok=await requestSocialConfirmation(host?"現在のルームを解散しますか？":"現在のルームから退出しますか？",host?`${purpose}すると、現在のルームは解散されます。解散して続けますか？`:`${purpose}すると、現在のルームから退出します。退出して続けますか？`);if(!ok)return false;await leaveRoomRecordForReplacement(current);if(host){const leftovers=await findLegacyOwnedPublicRooms();for(const room of leftovers){if(room.roomId!==current.roomId)await leaveRoomRecordForReplacement(room);}}return true;
+      const host=current.role==="host",ok=await requestSocialConfirmation(host?"現在のルームを解散しますか？":"現在のルームから退出しますか？",host?`${purpose}すると、現在のルームは解散されます。解散して続けますか？`:`${purpose}すると、現在のルームから退出します。退出して続けますか？`,{okLabel:host?"解散して続ける":"退出して続ける"});if(!ok)return false;await leaveRoomRecordForReplacement(current);await verifyRoomReplacementCleanup(current.roomId);if(host){const leftovers=await findLegacyOwnedPublicRooms();for(const room of leftovers){if(room.roomId!==current.roomId)await leaveRoomRecordForReplacement(room);}}return true;
+    }
+    async function prepareProfileChange(action){
+      const current=await ensureCurrentRoomLoaded();
+      if(current&&(state.friendMatchStarted||["starting","playing"].includes(current.data?.status)))throw new Error("対戦中はプロフィールを変更できません。試合終了後に変更してください。");
+      if(current){const host=current.role==="host",ok=await requestSocialConfirmation(host?"現在の対戦ルームを解散して編集しますか？":"現在の対戦ルームから退出して編集しますか？",host?"現在の対戦ルームを解散して編集を続けます。":"現在の対戦ルームから退出して編集を続けます。",{okLabel:host?"解散して編集":"退出して編集"});if(!ok)return false;await leaveRoomRecordForReplacement(current);await verifyRoomReplacementCleanup(current.roomId);}
+      else if(state.friendRoomId)clearFriendRoomLocalState();
+      await action();return true;
     }
     async function sendBattleInvite(target,regulationId="standard"){
       const fb=firebaseApi(),me=state.socialProfile;if(!state.socialFriends.some(item=>item.uid===target.uid))throw new Error("フレンドにのみ対戦を申し込めます。");
@@ -4958,7 +4976,7 @@ const CARD_LIBRARY = {
       }catch(error){
         console.error("[FriendRoom] create failed",{operation:"create",roomId,role:"host",code:error?.code,message:error?.message});
         clearFriendRoomLocalState();
-        elements.friendLobbyMessage.textContent=friendFirestoreErrorMessage(error,"部屋の作成に失敗しました。");
+        elements.friendLobbyMessage.textContent=roomCreateErrorMessage(error);
         throw error;
       }
       setFriendRoomUi(roomId, "host",shortCode);
@@ -14831,11 +14849,11 @@ async function endTurn() {
     socialEl("authCloseBtn")?.addEventListener("click",()=>socialClose("authModal"));
     socialEl("accountOpenBtn")?.addEventListener("click",()=>socialOpen("accountModal"));
     socialEl("accountCloseBtn")?.addEventListener("click",()=>socialClose("accountModal"));
-    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await openPlayerCardEditor();}catch(error){showProfileActionError(error);}});
+    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await prepareProfileChange(openPlayerCardEditor);}catch(error){showProfileActionError(error);}});
     socialEl("playerCardTitleSelect")?.addEventListener("change",event=>{if(state.playerCardDraft){state.playerCardDraft.titleId=event.target.value;renderPlayerCardDraft();}});
     socialEl("playerCardSaveBtn")?.addEventListener("click",async()=>{try{await savePlayerCard();}catch(error){socialMessage("playerCardEditorMessage",error.message);}});
     socialEl("playerCardCancelBtn")?.addEventListener("click",closePlayerCardEditor);socialEl("playerCardEditorCloseBtn")?.addEventListener("click",closePlayerCardEditor);
-    socialEl("playerNameChangeBtn")?.addEventListener("click",async()=>{try{await ensureProfileChangeAllowed();openPlayerNameEditor();}catch(error){showProfileActionError(error);}});
+    socialEl("playerNameChangeBtn")?.addEventListener("click",async()=>{try{await prepareProfileChange(async()=>{await ensureProfileChangeAllowed();openPlayerNameEditor();});}catch(error){showProfileActionError(error);}});
     socialEl("playerNameSaveBtn")?.addEventListener("click",async()=>{try{await changePlayerName();}catch(error){socialMessage("playerNameMessage",error.message);}});
     socialEl("playerNameCancelBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));socialEl("playerNameCloseBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));
     socialEl("giftCodeOpenBtn")?.addEventListener("click",()=>{socialEl("giftCodeInput").value="";socialMessage("giftCodeMessage","");socialOpen("giftCodeModal");});
