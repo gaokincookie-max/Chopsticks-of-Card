@@ -2196,7 +2196,7 @@ const CARD_LIBRARY = {
     const LATEST_NEWS_ID = "v164-player-cards";
 
     const UPDATE_NEWS = [
-      {id:"v164-player-cards",version:"v164b",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","旧プロフィールで認証が完了しない問題を修正"]},
+      {id:"v164-player-cards",version:"v164c",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","旧プロフィールとオンラインルームの互換性を修正"]},
       {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
       {id:"v163-immutable-bulletproof",version:"v163",date:"2026-08-21",title:"不変の呪縛・防弾チョッキを調整",summary:"不変の呪縛の対象手を本来の仕様へ修正し、防弾チョッキの防御対象を銃カード全般へ拡張しました。",featured:true,tags:["fix","balance"],items:["不変の呪縛は、付いている手が通常攻撃するときに加える本数への増減を無効化するよう修正","防弾チョッキは狙撃に加えて銃カードによる攻撃を防ぐよう変更","乱射でロジックアトリエを捨てた場合は従来どおり防弾チョッキを貫通"]},
       {id:"v162b-invite-lifecycle",version:"v162b",date:"2026-08-21",title:"対戦招待の同期を安定化",summary:"完了済みの対戦招待が新しい招待を妨げる場合がある問題を修正しました。",featured:false,tags:["fix","system"],items:["対戦ルームへの参加完了後に招待handoffを終了する処理を追加","古いaccepted招待が新しいpending招待を塞がないようlistenerを改善","roomReady公開時のprivate room・ルール・空席検証を強化"]},
@@ -3588,7 +3588,7 @@ const CARD_LIBRARY = {
       default:{label:"ノーマル"},blue:{label:"ブルー"},red:{label:"レッド"},green:{label:"グリーン"},purple:{label:"パープル"},gold:{label:"ゴールド"}
     });
     const PLAYER_TITLES = Object.freeze({rookie:{label:"ルーキー"},operator:{label:"運営者"}});
-    const uniqueKnownIds = (values,definitions,fallback) => [...new Set(Array.isArray(values)?values:fallBackArray(fallback))].filter(id=>Object.hasOwn(definitions,id));
+    const uniqueKnownIds = (values,definitions,fallback) => [...new Set([...fallBackArray(fallback),...(Array.isArray(values)?values:[])])].filter(id=>Object.hasOwn(definitions,id));
     const fallBackArray = values => [...values];
     function normalizedPlayerCardProfile(profile={}){
       const unlockedBackgroundIds=uniqueKnownIds(profile.unlockedBackgroundIds,PLAYER_CARD_BACKGROUNDS,DEFAULT_BACKGROUND_IDS);
@@ -3596,6 +3596,15 @@ const CARD_LIBRARY = {
       const requestedBackground=String(profile.backgroundId||profile.bannerId||"default");
       const requestedTitle=String(profile.titleId||"rookie");
       return {...profile,backgroundId:unlockedBackgroundIds.includes(requestedBackground)&&PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:unlockedTitleIds.includes(requestedTitle)&&PLAYER_TITLES[requestedTitle]?requestedTitle:"rookie",unlockedBackgroundIds,unlockedTitleIds};
+    }
+    function canonicalProfileMigration(storedProfile={}){
+      const canonical=normalizedPlayerCardProfile(storedProfile),migration={};
+      if(storedProfile.bannerId!==canonical.backgroundId)migration.bannerId=canonical.backgroundId;
+      if(storedProfile.backgroundId!==canonical.backgroundId)migration.backgroundId=canonical.backgroundId;
+      if(storedProfile.titleId!==canonical.titleId)migration.titleId=canonical.titleId;
+      if(JSON.stringify(storedProfile.unlockedBackgroundIds)!==JSON.stringify(canonical.unlockedBackgroundIds))migration.unlockedBackgroundIds=[...canonical.unlockedBackgroundIds];
+      if(JSON.stringify(storedProfile.unlockedTitleIds)!==JSON.stringify(canonical.unlockedTitleIds))migration.unlockedTitleIds=[...canonical.unlockedTitleIds];
+      return migration;
     }
     function playerCardPresentation(profile={},fallback="プレイヤー"){
       const requestedBackground=String(profile.backgroundId||profile.bannerId||"default"),requestedTitle=String(profile.titleId||"rookie");
@@ -3689,12 +3698,7 @@ const CARD_LIBRARY = {
       const storedProfile={uid:user.uid,...snap.data()};
       state.socialProfile=normalizedPlayerCardProfile(storedProfile);
       renderSocialAccountUi();subscribeSocialData();repairOwnRoomStateOnStartup().catch(()=>{});
-      const migration={lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()};
-      if(!Object.hasOwn(storedProfile,"bannerId"))migration.bannerId="";
-      if(!Object.hasOwn(storedProfile,"backgroundId"))migration.backgroundId="default";
-      if(!Object.hasOwn(storedProfile,"titleId"))migration.titleId="rookie";
-      if(!Object.hasOwn(storedProfile,"unlockedBackgroundIds"))migration.unlockedBackgroundIds=[...DEFAULT_BACKGROUND_IDS];
-      if(!Object.hasOwn(storedProfile,"unlockedTitleIds"))migration.unlockedTitleIds=[...DEFAULT_TITLE_IDS];
+      const migration={...canonicalProfileMigration(storedProfile),lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()};
       try{
         await fb.setDoc(fb.doc(fb.db,"users",user.uid),migration,{merge:true});
       }catch(error){
@@ -3717,7 +3721,7 @@ const CARD_LIBRARY = {
       if(profile){state.socialProfile=normalizedPlayerCardProfile(profile);socialEl("accountPublicId").textContent=profile.publicId;socialEl("accountDisplayName").textContent=profile.displayName;applyPlayerCardElement(socialEl("accountPlayerCardPreview"),state.socialProfile,{nameElement:socialEl("accountPlayerCardName")});}
       if(socialEl("accountProvider"))socialEl("accountProvider").textContent=authProviderLabel(user);
       if(socialEl("accountCreatedAt"))socialEl("accountCreatedAt").textContent=profile?.createdAt?new Date(socialTimestampMillis(profile.createdAt)).toLocaleDateString("ja-JP"):"-";
-      for(const id of ["playerCardEditBtn","playerNameChangeBtn"]){const button=socialEl(id);if(button){button.disabled=!!state.friendRoomId;button.title=state.friendRoomId?"対戦ルームに参加している間は変更できません。":"";}}
+      for(const id of ["playerCardEditBtn","playerNameChangeBtn"]){const button=socialEl(id);if(button){button.disabled=false;button.setAttribute("aria-disabled",state.friendRoomId?"true":"false");button.title=state.friendRoomId?"対戦ルームに参加している間は変更できません。":"";}}
       ["authRememberCheckbox","registerRememberCheckbox","accountRememberCheckbox"].forEach(id=>{const input=socialEl(id);if(input)input.checked=authPersistenceEnabled();});
       renderSocialLists();
     }
@@ -3726,6 +3730,10 @@ const CARD_LIBRARY = {
       let record=await getActiveRoomRecord();if(record&&await cleanupActiveRoomRecordIfStale(record))record=null;
       if(record||state.friendRoomId)throw new Error("対戦ルームに参加している間は変更できません。");
       return fb;
+    }
+    function showProfileActionError(error){
+      const text=error?.code==="permission-denied"?"プロフィール状態を確認できませんでした。再読み込みしてください。":String(error?.message||"プロフィールを変更できませんでした。");
+      const target=socialEl("accountMessage");socialMessage("accountMessage",text);target?.classList.add("social-error");target?.scrollIntoView?.({block:"nearest"});
     }
     function renderPlayerCardDraft(){
       const draft=state.playerCardDraft;if(!draft)return;
@@ -3868,7 +3876,12 @@ const CARD_LIBRARY = {
     async function hasAnyActiveRoom(){if(state.friendRoomId)return true;try{if(await getActiveRoomRecord())return true;return (await findLegacyOwnedPublicRooms()).length>0;}catch(_){return false;}}
     async function cleanupActiveRoomRecordIfStale(record){
       const fb=firebaseApi();if(!fb||!record?.roomId)return false;
-      try{const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",record.roomId));if(roomSnap.exists()){const data=roomSnap.data()||{};const stillParticipant=(record.role==="host"&&data.hostUid===fb.uid&&data.status!=="closed")||(record.role==="guest"&&data.guestUid===fb.uid&&data.guestJoined===true&&data.status!=="closed");if(stillParticipant)return false;}await fb.deleteDoc(activeRoomRef(fb));return true;}catch(_){return false;}
+      try{const roomSnap=await fb.getDoc(fb.doc(fb.db,"rooms",record.roomId));if(roomSnap.exists()){const data=roomSnap.data()||{};const stillParticipant=(record.role==="host"&&data.hostUid===fb.uid&&data.status!=="closed")||(record.role==="guest"&&data.guestUid===fb.uid&&data.guestJoined===true&&data.status!=="closed");if(stillParticipant)return false;}await fb.deleteDoc(activeRoomRef(fb));return true;}catch(error){
+        // A non-participant cannot read a private room. The activeRooms delete
+        // Rule independently proves staleness, so attempt that safe self-repair.
+        if(error?.code==="permission-denied"){try{await fb.deleteDoc(activeRoomRef(fb));return true;}catch(_){}}
+        return false;
+      }
     }
     async function ensureCurrentRoomLoaded(){
       if(state.friendRoomId&&state.friendRole)return {roomId:state.friendRoomId,role:state.friendRole,data:state.friendRoomData||null};
@@ -14818,11 +14831,11 @@ async function endTurn() {
     socialEl("authCloseBtn")?.addEventListener("click",()=>socialClose("authModal"));
     socialEl("accountOpenBtn")?.addEventListener("click",()=>socialOpen("accountModal"));
     socialEl("accountCloseBtn")?.addEventListener("click",()=>socialClose("accountModal"));
-    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await openPlayerCardEditor();}catch(error){socialMessage("accountMessage",error.message);}});
+    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await openPlayerCardEditor();}catch(error){showProfileActionError(error);}});
     socialEl("playerCardTitleSelect")?.addEventListener("change",event=>{if(state.playerCardDraft){state.playerCardDraft.titleId=event.target.value;renderPlayerCardDraft();}});
     socialEl("playerCardSaveBtn")?.addEventListener("click",async()=>{try{await savePlayerCard();}catch(error){socialMessage("playerCardEditorMessage",error.message);}});
     socialEl("playerCardCancelBtn")?.addEventListener("click",closePlayerCardEditor);socialEl("playerCardEditorCloseBtn")?.addEventListener("click",closePlayerCardEditor);
-    socialEl("playerNameChangeBtn")?.addEventListener("click",async()=>{try{await ensureProfileChangeAllowed();openPlayerNameEditor();}catch(error){socialMessage("accountMessage",error.message);}});
+    socialEl("playerNameChangeBtn")?.addEventListener("click",async()=>{try{await ensureProfileChangeAllowed();openPlayerNameEditor();}catch(error){showProfileActionError(error);}});
     socialEl("playerNameSaveBtn")?.addEventListener("click",async()=>{try{await changePlayerName();}catch(error){socialMessage("playerNameMessage",error.message);}});
     socialEl("playerNameCancelBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));socialEl("playerNameCloseBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));
     socialEl("giftCodeOpenBtn")?.addEventListener("click",()=>{socialEl("giftCodeInput").value="";socialMessage("giftCodeMessage","");socialOpen("giftCodeModal");});
