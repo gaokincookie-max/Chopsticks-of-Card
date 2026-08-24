@@ -2167,6 +2167,8 @@ const CARD_LIBRARY = {
       friendSyncRevision: 0,
       friendLastAppliedRevision: 0,
       friendApplyingRemoteState: false,
+      friendSnapshotHydrated: false,
+      friendStartedTurnKey: "",
       friendCardResolving: false,
       friendLastPublishedSignature: "",
       friendPublishTimer: null,
@@ -3478,8 +3480,8 @@ const CARD_LIBRARY = {
     function romanPreparationCounts(){const started={human:Number(state.personalTurnCount?.human||0),cpu:Number(state.personalTurnCount?.cpu||0)};return {human:Math.max(0,started.human-(state.turn==="human"?1:0)),cpu:Math.max(0,started.cpu-(state.turn==="cpu"?1:0))};}
     function isRomanPreparation(){if(!isRomanGimmick())return false;const limit=activeRuleDefinition().preparationTurns||3,c=romanPreparationCounts();return c.human<limit||c.cpu<limit;}
     function isRomanOpponentTarget(actor,target){return isRomanPreparation()&&actor&&target===otherPlayer(actor);}
-    function isCardBlockedInRomanPreparation(cardId){const card=CARD_LIBRARY[effectiveCardIdForPlayer(state.turn||"human",cardId)]||CARD_LIBRARY[cardId];return isRomanPreparation()&&!!card&&(card.curse||ROMAN_PREPARATION_BLOCKED_NAMES.has(card.name));}
-    function canUseCardUnderRule(player,cardId,{silent=false}={}){if(!isCardBlockedInRomanPreparation(cardId))return true;if(!silent&&player==="human")setMessage(`「${CARD_LIBRARY[effectiveCardIdForPlayer(player,cardId)]?.name||CARD_LIBRARY[cardId]?.name||"このカード"}」は準備時間中使用できません。`);return false;}
+    function isCardBlockedInRomanPreparation(player,cardId){const card=CARD_LIBRARY[effectiveCardIdForPlayer(player,cardId)]||CARD_LIBRARY[cardId];return isRomanPreparation()&&!!card&&(card.curse||ROMAN_PREPARATION_BLOCKED_NAMES.has(card.name));}
+    function canUseCardUnderRule(player,cardId,{silent=false}={}){if(!isCardBlockedInRomanPreparation(player,cardId))return true;if(!silent&&player==="human")setMessage(`「${CARD_LIBRARY[effectiveCardIdForPlayer(player,cardId)]?.name||CARD_LIBRARY[cardId]?.name||"このカード"}」は準備時間中使用できません。`);return false;}
     function isRomanTemporarilyProtectedHandCard(cardId){return isRomanPreparation()&&ROMAN_PROTECTED_BULLET_NAMES.has(CARD_LIBRARY[cardId]?.name);}
     function getDeckRestrictionReason(ruleId,cardId){const rule=REGULATION_DEFS[ruleId],card=CARD_LIBRARY[cardId];if(!rule?.deckRestrictions||!card)return "";if(rule.deckRestrictions.finalVerdictNames?.includes(card.name))return `${rule.name}では使用不可`;if(rule.deckRestrictions.blockedGroups?.includes("harpoonTheme")&&card.harpoonTheme)return `${rule.name}では銛系カードを使用不可`;return "";}
     function isCardAllowedInDeckForRule(ruleId,cardId){return !getDeckRestrictionReason(ruleId,cardId);}
@@ -4235,6 +4237,12 @@ const CARD_LIBRARY = {
       const ownedTerminalCardBanIds = Array.isArray(state.temp?.[player]?.terminalCardBanIds)
         ? [...state.temp[player].terminalCardBanIds]
         : [];
+      const ownedAttackLimit = Number(state.temp?.[player]?.attackLimit ?? 1);
+      const ownedAttacksUsed = Number(state.temp?.[player]?.attacksUsed || 0);
+      const ownedAttacksOccurredThisTurn = Number(state.temp?.[player]?.attacksOccurredThisTurn || 0);
+      const ownedDirectiveActions = cloneJson(state.temp?.[player]?.directiveActions || { attacks: [], splitUsed: false, cardUsed: false });
+      const ownedMultiAttackSource = state.temp?.[player]?.multiAttackSource ?? null;
+      const ownedPersonalTurnCount = Number(state.personalTurnCount?.[player] || 0);
       const ownedCheapBatteryDecay = Number(state.cheapBatteryDecay?.[player]) || 0;
       const ownedEnergyBarrier = Number(state.energyBarrier?.[player]) || 0;
       state[player] = { L: Number(side.L ?? 0), R: Number(side.R ?? 0) };
@@ -4248,6 +4256,11 @@ const CARD_LIBRARY = {
         state.temp[player].cardActionUsed = ownedCardActionUsed;
         state.temp[player].cardExtraUses = ownedCardExtraUses;
         state.temp[player].terminalCardBanIds = ownedTerminalCardBanIds;
+        state.temp[player].attackLimit = ownedAttackLimit;
+        state.temp[player].attacksUsed = ownedAttacksUsed;
+        state.temp[player].attacksOccurredThisTurn = ownedAttacksOccurredThisTurn;
+        state.temp[player].directiveActions = ownedDirectiveActions;
+        state.temp[player].multiAttackSource = ownedMultiAttackSource;
       } else if (!Array.isArray(state.temp[player].chargeCardsUsed)) {
         state.temp[player].chargeCardsUsed = [];
       }
@@ -4272,7 +4285,7 @@ const CARD_LIBRARY = {
       state.activeCardUseLockSource[player] = side.activeCardUseLockSource || "";
       state.judgmentPrisonTurns[player] = Number(side.judgmentPrisonTurns || 0);
       state.pendingAppealExecution[player] = Number(side.pendingAppealExecution || 0);
-      state.personalTurnCount[player] = Number(side.personalTurnCount || 0);
+      state.personalTurnCount[player] = preserveOwnerOnlyMeta ? ownedPersonalTurnCount : Number(side.personalTurnCount || 0);
       state.pendingMagicalHeartDraw[player] = Number(side.pendingMagicalHeartDraw || 0);
       state.magicalChantProgress[player] = Math.max(0, Math.min(3, Number(side.magicalChantProgress || 0)));
       state.magicalChantCompleted[player] = !!side.magicalChantCompleted;
@@ -4312,10 +4325,13 @@ const CARD_LIBRARY = {
       try {
         const publisherSide = snapshot.publisherSide || null;
 
-        // 自分専用の使用済み・反動・今ターン使用カードは、
-        // 相手が公開した全体スナップショットから上書きさせない。
+        const incomingOwnerGeneration=Number(snapshot[state.friendRole]?.personalTurnCount||0);
+        const localOwnerGeneration=Number(state.personalTurnCount?.human||0);
+        // 初回join/reconnectはroomを正本にする。接続確立後だけ、相手publisherが持つ
+        // 同一または旧turn generationから自分の行動権を巻き戻させない。
+        const preserveLocalOwnerTurn=!!state.friendSnapshotHydrated&&publisherSide!==state.friendRole&&incomingOwnerGeneration<=localOwnerGeneration;
         applyFriendSideToLocal("human", snapshot[state.friendRole], {
-          preserveOwnerOnlyMeta: publisherSide !== state.friendRole
+          preserveOwnerOnlyMeta: preserveLocalOwnerTurn
         });
         applyFriendSideToLocal("cpu", snapshot[otherFriendRole()], {
           preserveOwnerOnlyMeta: publisherSide === state.friendRole
@@ -4352,7 +4368,9 @@ const CARD_LIBRARY = {
       if (!state.gameOver && previousTurn !== "human" && state.turn === "human") {
         const pendingAttackDeltaBeforeStart = Number(state.pendingDirectiveAttackLimitDelta?.human || 0);
         const turnBeforeStart = state.turn;
-        await startTurn("human");
+        const incomingGeneration=Number(snapshot[state.friendRole]?.personalTurnCount||0);
+        const turnKey=`${Number(snapshot.turnNumber||1)}:${state.friendRole}:${incomingGeneration+1}`;
+        await startTurn("human",{friendTurnKey:turnKey});
         // remote apply終了後にstartTurnを実行する。連撃失敗のdelta消費や、
         // attackLimit=0による即時auto-endでstateが進んだ場合も必ずroomへ返す。
         if (pendingAttackDeltaBeforeStart !== Number(state.pendingDirectiveAttackLimitDelta?.human || 0) || turnBeforeStart !== state.turn) {
@@ -4372,18 +4390,24 @@ const CARD_LIBRARY = {
       if (!snapshot) return;
       const signature = JSON.stringify(snapshot);
       if (signature === state.friendLastPublishedSignature) return;
-      const nextRevision = Math.max(state.friendSyncRevision, state.friendLastAppliedRevision) + 1;
-      state.friendSyncRevision = nextRevision;
-      state.friendLastPublishedSignature = signature;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      // match 全体を古いキャッシュで上書きしない。更新するフィールドだけを原子的に書く。
-      await fb.updateDoc(roomRef, {
-        "match.version": 150,
-        "match.stateRevision": nextRevision,
-        "match.state": snapshot,
-        "match.result": state.matchResult ?? null,
-        updatedAt: fb.serverTimestamp()
+      // 両端末が近接publishしても同じrevisionを作らないよう、room正本からtransaction採番する。
+      let committedRevision=0;
+      await fb.runTransaction(fb.db,async transaction=>{
+        const roomSnap=await transaction.get(roomRef);
+        if(!roomSnap.exists())throw new Error("対戦ルームが見つかりません。");
+        const currentRevision=Number(roomSnap.data()?.match?.stateRevision||0);
+        committedRevision=Math.max(currentRevision,state.friendSyncRevision,state.friendLastAppliedRevision)+1;
+        transaction.update(roomRef,{
+          "match.version":150,
+          "match.stateRevision":committedRevision,
+          "match.state":snapshot,
+          "match.result":state.matchResult??null,
+          updatedAt:fb.serverTimestamp()
+        });
       });
+      state.friendSyncRevision=Math.max(state.friendSyncRevision,committedRevision);
+      state.friendLastPublishedSignature=signature;
     }
 
     async function forcePublishFriendStateNow(reason = "state change") {
@@ -5330,6 +5354,8 @@ const CARD_LIBRARY = {
       state.friendSyncRevision = 0;
       state.friendLastAppliedRevision = 0;
       state.friendLastPublishedSignature = "";
+      state.friendSnapshotHydrated = false;
+      state.friendStartedTurnKey = "";
       state.friendInterruptWaiting = null;
       state.friendInterruptHandling = false;
       state.friendHandledInterruptIds = new Set();
@@ -5484,6 +5510,8 @@ const CARD_LIBRARY = {
       state.friendSyncRevision = Number(match.stateRevision || 0);
       state.friendLastAppliedRevision = Number(match.stateRevision || 0);
       state.friendLastPublishedSignature = match.state ? JSON.stringify(match.state) : "";
+      state.friendSnapshotHydrated = false;
+      state.friendStartedTurnKey = "";
       state.friendInterruptWaiting = null;
       state.friendInterruptHandling = false;
       state.friendHandledInterruptIds = new Set();
@@ -5568,6 +5596,8 @@ const CARD_LIBRARY = {
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
         state.friendApplyingRemoteState = false;
       }
+      // 初回join/reconnectだけはroom snapshotを無条件の正本として復元する。
+      state.friendSnapshotHydrated = true;
       setMessage(state.gameOver ? "試合終了。" : state.turn === "human" ? "あなたの番です。" : `${getPlayerDisplayName("cpu")}の番です。同期を待っています。`);
       render();
       if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
@@ -8249,7 +8279,7 @@ function wrapFinger(value) {
       }
     }
 
-    async function startTurn(player) {
+    async function startTurn(player,options={}) {
       if (isTutorialBattle()) {
         if (player === "cpu") {
           freezeTutorialBattleToHumanTurn();
@@ -8263,6 +8293,10 @@ function wrapFinger(value) {
         return;
       }
       ensureOnlineStateMaps();
+      if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey){
+        if(state.friendStartedTurnKey===options.friendTurnKey)return;
+        state.friendStartedTurnKey=options.friendTurnKey;
+      }
       state.resonanceTriggeredThisTurn[player]=false;
       state.activeDrawLock[player]=!!state.pendingDrawLock[player]; state.pendingDrawLock[player]=false;
       state.quarterRestActive[player]=!!state.quarterRestPending[player]; state.quarterRestPending[player]=false;
@@ -8573,6 +8607,9 @@ function wrapFinger(value) {
       }
 
       render();
+      if(state.battleMode==="friend"&&player==="human"&&!state.friendApplyingRemoteState){
+        await forcePublishFriendStateNow("turn start");
+      }
     }
 
     function render() {
