@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=165">
+  <link rel="stylesheet" href="style.css?v=165a">
 </head>
 <body>
   <div class="social-modal" id="authModal" aria-hidden="true">
@@ -450,6 +450,10 @@
     <section class="screen difficulty-screen screen-hidden" id="difficultyScreen">
       <div class="menu-card">
         <div class="menu-kicker">CPU DIFFICULTY</div>
+        <label class="cpu-rule-select">
+          対戦ルール
+          <select id="cpuRegulationSelect" aria-label="CPU戦の対戦ルール"></select>
+        </label>
         <h2>難易度を選択</h2>
         <p class="small">難易度を選ぶと、その設定で試合を開始します。</p>
         <div class="difficulty-grid">
@@ -930,6 +934,6 @@
     }
   </script>
 
-  <script src="game.js?v=165"></script>
+  <script src="game.js?v=165a"></script>
 </body>
 </html>

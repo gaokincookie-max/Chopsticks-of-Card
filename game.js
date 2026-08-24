@@ -3098,6 +3098,7 @@ const CARD_LIBRARY = {
       costLimitInput: document.getElementById("costLimitInput"),
       deckOwnerSelect: document.getElementById("deckOwnerSelect"),
       cpuDifficultySelect: document.getElementById("cpuDifficultySelect"),
+      cpuRegulationSelect: document.getElementById("cpuRegulationSelect"),
       saveDeckBtn: document.getElementById("saveDeckBtn"),
       loadDeckBtn: document.getElementById("loadDeckBtn"),
       copyDeckBtn: document.getElementById("copyDeckBtn"),
@@ -6490,6 +6491,17 @@ const CARD_LIBRARY = {
     }
 
     async function startBattleWithDifficulty(difficulty) {
+      const selectedRuleId=elements.cpuRegulationSelect?.value||"standard";
+      const selectedRule=REGULATION_DEFS[selectedRuleId]||REGULATION_DEFS.standard;
+      const humanRuleError=ruleDeckValidationMessage(selectedRule.id,currentDeckCounts("human"));
+      const cpuRuleError=ruleDeckValidationMessage(selectedRule.id,currentDeckCounts("cpu"));
+      if(humanRuleError||cpuRuleError){
+        state.deckRuleContext={ruleId:selectedRule.id};
+        state.editingDeckOwner=humanRuleError?"human":"cpu";
+        showScreen("deck");
+        setMessage(humanRuleError||`CPU用デッキ：${cpuRuleError}`);
+        return;
+      }
       if (!areBothDecksValid()) {
         const h = getDeckStats("human");
         const c = getDeckStats("cpu");
@@ -6499,6 +6511,8 @@ const CARD_LIBRARY = {
         return;
       }
       state.battleMode = "cpu";
+      state.friendRoomData=null;
+      state.currentRegulation=regulationSnapshot(selectedRule.id);
       state.tutorialBattleActive = false;
       state.tutorialScriptedCpuAction = false;
       tutorial.usingRealBattle = false;
@@ -7205,7 +7219,8 @@ function wrapFinger(value) {
 
           const current = counts[cardId] || 0;
           if (action === "plus") {
-            if(restrictionReason){setMessage(restrictionReason);return;}
+            const clickedRestrictionReason=ruleId?getDeckRestrictionReason(ruleId,cardId):"";
+            if(clickedRestrictionReason){setMessage(clickedRestrictionReason);return;}
             const currentStats = getDeckStats(owner);
             if (currentStats.count >= DECK_MAX_COUNT) {
               setMessage(`デッキはちょうど${DECK_MAX_COUNT}枚です。これ以上追加できません。`);
@@ -14919,7 +14934,15 @@ async function endTurn() {
       elements.realTutorialOverlay?.classList.add("hidden");
       showScreen("battleSelect");
     });
-    elements.plVsCpuBtn.addEventListener("click", () => showScreen("difficulty"));
+    function renderCpuRegulationOptions(){
+      if(!elements.cpuRegulationSelect)return;
+      elements.cpuRegulationSelect.replaceChildren(...Object.values(REGULATION_DEFS).map(rule=>{
+        const option=document.createElement("option");option.value=rule.id;option.textContent=rule.name;return option;
+      }));
+      elements.cpuRegulationSelect.value="standard";
+    }
+    renderCpuRegulationOptions();
+    elements.plVsCpuBtn.addEventListener("click", () => {elements.cpuRegulationSelect.value="standard";state.currentRegulation={...DEFAULT_REGULATION};showScreen("difficulty");});
     elements.plVsPlBtn.addEventListener("click", () => {
       showScreen("friendLobby");
       updateFriendLobbyView();
