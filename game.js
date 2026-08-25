@@ -2172,6 +2172,22 @@ const CARD_LIBRARY = {
       friendTurnSerial: 0,
       friendTurnOwner: null,
       friendTurnStarted: false,
+      friendTurnStartAppliedSerial: 0,
+      friendTurnStartToken: null,
+      friendTurnStartClaimedAtMs: 0,
+      friendStartingTurnKey: "",
+      friendTurnStartAtomicActive: false,
+      friendTurnStartDeferredPublish: false,
+      friendTurnStartPendingFx: [],
+      friendTurnStartPendingInterruptWrites: [],
+      friendTurnStartAtomicContext: null,
+      friendTurnStartCommittedKeys: new Set(),
+      friendTurnStartCommittedContexts: new Map(),
+      friendTurnStartFlushedSideEffectIds: new Set(),
+      friendTurnClaimInFlight: false,
+      friendTurnClaimRetryTimer: null,
+      friendTurnClaimRetryKey: "",
+      friendTurnClaimRetryCount: 0,
       friendCardResolving: false,
       friendLastPublishedSignature: "",
       friendPublishTimer: null,
@@ -2903,7 +2919,7 @@ const CARD_LIBRARY = {
       const token=++state.startingFlowToken;
       await playStartingRoulette(startingPlayer,rouletteOptions);
       if(token!==state.startingFlowToken||state.gameOver)return startingPlayer;
-      if(localStartingPlayer==="human")await claimAndStartFriendTurn({turnSerial:Number(match?.turnSerial||snapshot?.turnSerial||1),turnOwner:startingPlayer});
+      if(localStartingPlayer==="human")await ensureFriendLocalTurnStarted();
       return startingPlayer;
     }
 
@@ -4217,6 +4233,7 @@ const CARD_LIBRARY = {
         turnSerial: Number(state.friendTurnSerial||0),
         turnOwner: state.friendTurnOwner||null,
         turnStarted: !!state.friendTurnStarted,
+        turnStartAppliedSerial:Number(state.friendTurnStartAppliedSerial||0),
         gameOver: !!state.gameOver,
         result: state.matchResult ?? null,
         log: [...state.log],
@@ -4229,21 +4246,158 @@ const CARD_LIBRARY = {
 
     async function claimFriendTurnStart({turnSerial,turnOwner}={}){
       if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendRole||turnOwner!==state.friendRole)return false;
-      const fb=firebaseApi();if(!fb)return false;const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let claimed=false;
+      const fb=firebaseApi();if(!fb)return false;const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let claimed=false;const token=`${state.friendRole}-${turnSerial}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
       await fb.runTransaction(fb.db,async transaction=>{
         const roomSnap=await transaction.get(roomRef);if(!roomSnap.exists())throw new Error("対戦ルームが見つかりません。");
         const match=roomSnap.data()?.match;if(!match||getFriendMatchId(match)!==state.friendMatchId)return;
         const currentSerial=Number(match.turnSerial||match.state?.turnSerial||1),currentOwner=match.turnOwner||match.state?.turnOwner||match.turnSide;
         if(currentSerial!==Number(turnSerial)||currentOwner!==state.friendRole||match.turnStarted===true)return;
-        transaction.update(roomRef,{"match.turnStarted":true,updatedAt:fb.serverTimestamp()});claimed=true;
+        transaction.update(roomRef,{"match.turnStarted":true,"match.turnStartToken":token,"match.turnStartClaimedAt":fb.serverTimestamp(),updatedAt:fb.serverTimestamp()});claimed=true;
       });
-      if(claimed){state.friendTurnSerial=Number(turnSerial);state.friendTurnOwner=turnOwner;state.friendTurnStarted=true;}
+      if(claimed){state.friendTurnSerial=Number(turnSerial);state.friendTurnOwner=turnOwner;state.friendTurnStarted=true;state.friendTurnStartToken=token;state.friendTurnStartClaimedAtMs=Date.now();}
       return claimed;
     }
 
     async function claimAndStartFriendTurn({turnSerial,turnOwner}={}){
       const claimed=await claimFriendTurnStart({turnSerial,turnOwner});if(!claimed)return false;
-      await startTurn("human",{friendTurnKey:`${turnSerial}:${turnOwner}`});return true;
+      await executeClaimedFriendTurnStart({turnSerial,turnOwner,turnStartToken:state.friendTurnStartToken});return true;
+    }
+
+    async function executeClaimedFriendTurnStart({turnSerial,turnOwner,turnStartToken}={}){
+      const baseline=buildFriendCanonicalSnapshot(),wasHydrated=state.friendSnapshotHydrated;
+      state.friendTurnStartAtomicActive=true;
+      state.friendTurnStartDeferredPublish=false;
+      state.friendTurnStartPendingFx=[];
+      state.friendTurnStartPendingInterruptWrites=[];
+      state.friendTurnStartAtomicContext={matchId:state.friendMatchId,turnSerial:Number(turnSerial),turnOwner,turnStartToken};
+      try{
+        await startTurn("human",{friendTurnKey:`${turnSerial}:${turnOwner}`,friendTurnToken:turnStartToken,friendTurnSerial:Number(turnSerial)});
+        const context=state.friendTurnStartAtomicContext,pendingFx=[...state.friendTurnStartPendingFx],pendingInterrupts=[...state.friendTurnStartPendingInterruptWrites],deferred=state.friendTurnStartDeferredPublish;
+        clearFriendTurnStartAtomicState();
+        try{
+          for(const fx of pendingFx)await writeFriendFxNow(fx,context);
+          for(const interrupt of pendingInterrupts){if(interrupt?.__clearInterruptId)await clearResolvedFriendInterruptNow(interrupt.__clearInterruptId,context);else await writeFriendInterruptNow(interrupt,context);}
+          await fatigueFxQueue.catch(()=>{});
+          if(deferred&&state.friendMatchId===context?.matchId)await publishFriendStateNow(context.matchId);
+        }finally{forgetCommittedFriendTurnContext(context);}
+      }catch(error){
+        clearFriendTurnStartAtomicState();
+        state.friendSnapshotHydrated=false;
+        await applyFriendCanonicalSnapshot(baseline,0,{turnSerial,turnOwner,turnStarted:true,turnStartAppliedSerial:Number(baseline?.turnStartAppliedSerial||0),turnStartToken,turnStartClaimedAt:state.friendTurnStartClaimedAtMs});
+        state.friendSnapshotHydrated=wasHydrated;
+        throw error;
+      }
+    }
+
+    function clearFriendTurnStartAtomicState(){
+      state.friendTurnStartAtomicActive=false;
+      state.friendTurnStartDeferredPublish=false;
+      state.friendTurnStartPendingFx=[];
+      state.friendTurnStartPendingInterruptWrites=[];
+      state.friendTurnStartAtomicContext=null;
+    }
+
+    function friendTurnStartContextKey(context){return context?.matchId&&context?.turnSerial&&context?.turnStartToken?`${context.matchId}:${context.turnSerial}:${context.turnStartToken}`:"";}
+
+    function committedFriendTurnContextMode(context){
+      const serial=Number(context?.turnSerial||0),owner=context?.turnOwner;
+      if(!serial||!owner)return "";
+      if(Number(state.friendTurnSerial||0)===serial&&state.friendTurnOwner===owner&&state.friendTurnStarted===true&&state.friendTurnStartToken===context.turnStartToken&&Number(state.friendTurnStartAppliedSerial||0)===serial)return "stableApplied";
+      if(Number(state.friendTurnSerial||0)===serial+1&&state.friendTurnOwner===otherFriendRole(owner)&&state.friendTurnStarted===false&&!state.friendTurnStartToken&&Number(state.friendTurnStartAppliedSerial||0)===serial)return "appliedAndHandoff";
+      return "";
+    }
+
+    function rememberCommittedFriendTurnContext(context){
+      const key=friendTurnStartContextKey(context),mode=committedFriendTurnContextMode(context);
+      if(!key||!mode)return null;
+      const record={matchId:context.matchId,turnSerial:Number(context.turnSerial),turnOwner:context.turnOwner,turnStartToken:context.turnStartToken,mode};
+      state.friendTurnStartCommittedKeys.add(key);
+      state.friendTurnStartCommittedContexts.set(key,record);
+      while(state.friendTurnStartCommittedContexts.size>20){const oldest=state.friendTurnStartCommittedContexts.keys().next().value;state.friendTurnStartCommittedContexts.delete(oldest);state.friendTurnStartCommittedKeys.delete(oldest);}
+      return record;
+    }
+
+    function forgetCommittedFriendTurnContext(context){
+      const key=friendTurnStartContextKey(context);if(!key)return;
+      state.friendTurnStartCommittedKeys.delete(key);state.friendTurnStartCommittedContexts.delete(key);
+    }
+
+    function canFlushCommittedTurnStartSideEffect(match,guard={}){
+      if(getFriendMatchId(match)!==(guard.matchId||state.friendMatchId))return false;
+      if(!guard.turnSerial)return true;
+      const key=friendTurnStartContextKey(guard),record=key&&state.friendTurnStartCommittedContexts.get(key);
+      if(!record||record.matchId!==guard.matchId||record.turnSerial!==Number(guard.turnSerial)||record.turnOwner!==guard.turnOwner||record.turnStartToken!==guard.turnStartToken)return false;
+      const serial=record.turnSerial;
+      if(record.mode==="stableApplied")return Number(match?.turnSerial||0)===serial&&match?.turnOwner===record.turnOwner&&match?.turnStarted===true&&Number(match?.turnStartAppliedSerial||0)===serial&&match?.turnStartToken===record.turnStartToken;
+      if(record.mode==="appliedAndHandoff")return Number(match?.turnSerial||0)===serial+1&&match?.turnOwner===otherFriendRole(record.turnOwner)&&match?.turnStarted===false&&Number(match?.turnStartAppliedSerial||0)===serial&&match?.turnStartToken==null;
+      return false;
+    }
+
+    function friendTimestampMillis(value){return typeof value?.toMillis==="function"?value.toMillis():Number(value||0);}
+
+    async function claimFriendTurnStartRecovery({turnSerial,turnOwner}={}){
+      if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendRole||turnOwner!==state.friendRole)return false;
+      const fb=firebaseApi();if(!fb)return false;const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let claimed=false;const token=`${state.friendRole}-recovery-${turnSerial}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
+      await fb.runTransaction(fb.db,async transaction=>{
+        const roomSnap=await transaction.get(roomRef);if(!roomSnap.exists())return;
+        const match=roomSnap.data()?.match;if(!match||getFriendMatchId(match)!==state.friendMatchId)return;
+        const serial=Number(match.turnSerial||0),owner=match.turnOwner,applied=Number(match.turnStartAppliedSerial||0),claimedAt=friendTimestampMillis(match.turnStartClaimedAt);
+        if(serial!==Number(turnSerial)||owner!==state.friendRole||match.turnStarted!==true||applied>=serial||!claimedAt||Date.now()-claimedAt<5000)return;
+        transaction.update(roomRef,{"match.turnStartToken":token,"match.turnStartClaimedAt":fb.serverTimestamp(),updatedAt:fb.serverTimestamp()});claimed=true;
+      });
+      if(claimed){state.friendTurnStartToken=token;state.friendTurnStartClaimedAtMs=Date.now();}
+      return claimed;
+    }
+
+    async function recoverAndStartFriendTurn({turnSerial,turnOwner}={}){
+      const claimed=await claimFriendTurnStartRecovery({turnSerial,turnOwner});if(!claimed)return false;
+      await executeClaimedFriendTurnStart({turnSerial,turnOwner,turnStartToken:state.friendTurnStartToken});return true;
+    }
+
+    function clearFriendTurnClaimRetry(){
+      if(state.friendTurnClaimRetryTimer)clearTimeout(state.friendTurnClaimRetryTimer);
+      state.friendTurnClaimRetryTimer=null;state.friendTurnClaimRetryKey="";state.friendTurnClaimRetryCount=0;
+    }
+
+    function scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,delayMs=250){
+      const key=`${matchId}:${turnSerial}:${turnOwner}`;
+      if(state.friendTurnClaimRetryKey!==key){clearFriendTurnClaimRetry();state.friendTurnClaimRetryKey=key;}
+      if(state.friendTurnClaimRetryTimer||state.friendTurnClaimRetryCount>=2)return;
+      state.friendTurnClaimRetryCount+=1;
+      state.friendTurnClaimRetryTimer=setTimeout(()=>{
+        state.friendTurnClaimRetryTimer=null;
+        if(state.friendMatchId!==matchId||state.friendTurnSerial!==turnSerial||state.friendTurnOwner!==turnOwner||state.friendTurnStartAppliedSerial>=turnSerial)return;
+        ensureFriendLocalTurnStarted({allowRetry:true}).catch(error=>console.error("[FriendRoom] turn retry failed",{turnSerial,turnOwner,code:error?.code,message:error?.message}));
+      },Math.max(delayMs,250*state.friendTurnClaimRetryCount));
+    }
+
+    async function ensureFriendLocalTurnStarted({allowRetry=true}={}){
+      if(state.battleMode!=="friend"||state.gameOver||!state.friendMatchStarted||state.friendTurnOwner!==state.friendRole)return false;
+      const turnSerial=Number(state.friendTurnSerial||0),turnOwner=state.friendTurnOwner,matchId=state.friendMatchId;
+      if(!turnSerial||!matchId||state.friendTurnClaimInFlight)return false;
+      const turnKey=`${turnSerial}:${turnOwner}`;
+      if(Number(state.friendTurnStartAppliedSerial||0)>=turnSerial){clearFriendTurnClaimRetry();return true;}
+      state.friendTurnClaimInFlight=true;
+      try{
+        let started=false;
+        if(!state.friendTurnStarted){
+          started=await claimAndStartFriendTurn({turnSerial,turnOwner});
+        }else{
+          const leaseRemaining=Math.max(0,Number(state.friendTurnStartClaimedAtMs||0)+5000-Date.now());
+          if(leaseRemaining>0){
+            if(allowRetry)scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,leaseRemaining+100);
+            return false;
+          }
+          started=await recoverAndStartFriendTurn({turnSerial,turnOwner});
+        }
+        if(started){clearFriendTurnClaimRetry();return true;}
+        if(allowRetry&&state.friendMatchId===matchId&&state.friendTurnStartAppliedSerial<turnSerial)scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,500);
+        return false;
+      }catch(error){
+        console.warn("[FriendRoom] turn claim failed",{turnSerial,turnOwner,localRole:state.friendRole,code:error?.code,message:error?.message});
+        if(allowRetry&&state.friendMatchId===matchId&&state.friendTurnStartAppliedSerial<turnSerial)scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,500);
+        return false;
+      }finally{state.friendTurnClaimInFlight=false;}
     }
 
     function applyFriendSideToLocal(player, side, options = {}) {
@@ -4347,7 +4501,6 @@ const CARD_LIBRARY = {
         state.friendPublishTimer = null;
       }
       if (revision && revision <= state.friendLastAppliedRevision) return;
-      const previousTurn = state.turn;
       state.friendApplyingRemoteState = true;
       try {
         const publisherSide = snapshot.publisherSide || null;
@@ -4363,7 +4516,8 @@ const CARD_LIBRARY = {
         applyFriendSideToLocal("cpu", snapshot[otherFriendRole()], {
           preserveOwnerOnlyMeta: publisherSide === state.friendRole
         });
-        state.turn = snapshot.turnSide === state.friendRole ? "human" : "cpu";
+        const authoritativeTurnOwner=matchMeta?.turnOwner||snapshot.turnOwner||snapshot.turnSide;
+        state.turn = authoritativeTurnOwner === state.friendRole ? "human" : "cpu";
         if(snapshot.startingPlayer==="host"||snapshot.startingPlayer==="guest"){
           state.startingPlayer=snapshot.startingPlayer;
           state.startingPlayerDecided=true;
@@ -4371,7 +4525,11 @@ const CARD_LIBRARY = {
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.friendTurnSerial=Number(matchMeta?.turnSerial||snapshot.turnSerial||state.friendTurnSerial||1);
         state.friendTurnOwner=matchMeta?.turnOwner||snapshot.turnOwner||snapshot.turnSide||state.friendTurnOwner;
-        state.friendTurnStarted=matchMeta?.turnStarted===true||snapshot.turnStarted===true;
+        state.friendTurnStarted=typeof matchMeta?.turnStarted==="boolean"?matchMeta.turnStarted:snapshot.turnStarted===true;
+        state.friendTurnStartAppliedSerial=Number(matchMeta?.turnStartAppliedSerial??snapshot.turnStartAppliedSerial??(state.friendTurnStarted?state.friendTurnSerial:Math.max(0,state.friendTurnSerial-1)));
+        state.friendTurnStartToken=matchMeta?.turnStartToken||null;
+        state.friendTurnStartClaimedAtMs=friendTimestampMillis(matchMeta?.turnStartClaimedAt);
+        if(state.friendTurnStartAppliedSerial>=state.friendTurnSerial||state.friendTurnOwner!==state.friendRole)clearFriendTurnClaimRetry();
         state.gameOver = !!snapshot.gameOver;
         state.matchResult = snapshot.result ?? state.matchResult ?? null;
         state.log = [...(snapshot.log || [])];
@@ -4395,10 +4553,10 @@ const CARD_LIBRARY = {
         state.friendApplyingRemoteState = false;
       }
 
-      if (!state.gameOver && previousTurn !== "human" && state.turn === "human") {
+      if (!state.gameOver && state.turn === "human" && state.friendTurnStartAppliedSerial<state.friendTurnSerial) {
         const pendingAttackDeltaBeforeStart = Number(state.pendingDirectiveAttackLimitDelta?.human || 0);
         const turnBeforeStart = state.turn;
-        await claimAndStartFriendTurn({turnSerial:state.friendTurnSerial,turnOwner:state.friendTurnOwner});
+        await ensureFriendLocalTurnStarted();
         // remote apply終了後にstartTurnを実行する。連撃失敗のdelta消費や、
         // attackLimit=0による即時auto-endでstateが進んだ場合も必ずroomへ返す。
         if (pendingAttackDeltaBeforeStart !== Number(state.pendingDirectiveAttackLimitDelta?.human || 0) || turnBeforeStart !== state.turn) {
@@ -4410,23 +4568,35 @@ const CARD_LIBRARY = {
       }
     }
 
-    async function publishFriendStateNow() {
+    async function publishFriendStateNow(expectedMatchId=state.friendMatchId,options={}) {
       if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || state.friendApplyingRemoteState) return;
+      if(state.friendTurnStartAtomicActive&&!Number(options.applyTurnStartSerial||0)){state.friendTurnStartDeferredPublish=true;return;}
+      if(!expectedMatchId||state.friendMatchId!==expectedMatchId)return;
       const fb = firebaseApi();
       if (!fb) return;
       const snapshot = buildFriendCanonicalSnapshot();
       if (!snapshot) return;
+      const applySerial=Number(options.applyTurnStartSerial||0),applyToken=options.turnStartToken||null;
       const signature = JSON.stringify(snapshot);
-      if (signature === state.friendLastPublishedSignature) return;
+      if (!applySerial&&signature === state.friendLastPublishedSignature) return;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // 両端末が近接publishしても同じrevisionを作らないよう、room正本からtransaction採番する。
       let committedRevision=0;
       await fb.runTransaction(fb.db,async transaction=>{
         const roomSnap=await transaction.get(roomRef);
         if(!roomSnap.exists())throw new Error("対戦ルームが見つかりません。");
-        const currentRevision=Number(roomSnap.data()?.match?.stateRevision||0);
+        const remoteMatch=roomSnap.data()?.match;
+        if(getFriendMatchId(remoteMatch)!==expectedMatchId)return;
+        if(applySerial){
+          const remoteSerial=Number(remoteMatch?.turnSerial||0),remoteApplied=Number(remoteMatch?.turnStartAppliedSerial||0);
+          const localSerial=Number(state.friendTurnSerial||0),localOwner=state.friendTurnOwner;
+          const stableApply=localSerial===applySerial&&localOwner===state.friendRole&&state.friendTurnStarted===true;
+          const appliedHandoff=localSerial===applySerial+1&&localOwner===otherFriendRole(state.friendRole)&&state.friendTurnStarted===false;
+          if(remoteSerial!==applySerial||remoteMatch?.turnOwner!==state.friendRole||remoteMatch?.turnStarted!==true||remoteApplied>=applySerial||!applyToken||remoteMatch?.turnStartToken!==applyToken||(!stableApply&&!appliedHandoff))return;
+        }
+        const currentRevision=Number(remoteMatch?.stateRevision||0);
         committedRevision=Math.max(currentRevision,state.friendSyncRevision,state.friendLastAppliedRevision)+1;
-        transaction.update(roomRef,{
+        const update={
           "match.version":150,
           "match.stateRevision":committedRevision,
           "match.state":snapshot,
@@ -4436,14 +4606,36 @@ const CARD_LIBRARY = {
           "match.turnStarted":!!state.friendTurnStarted,
           "match.result":state.matchResult??null,
           updatedAt:fb.serverTimestamp()
-        });
+        };
+        update["match.turnStartAppliedSerial"]=applySerial||Number(state.friendTurnStartAppliedSerial||0);
+        update["match.turnStartToken"]=state.friendTurnStartToken||null;
+        if(!state.friendTurnStartToken)update["match.turnStartClaimedAt"]=null;
+        transaction.update(roomRef,update);
       });
+      if(!committedRevision||state.friendMatchId!==expectedMatchId)return;
       state.friendSyncRevision=Math.max(state.friendSyncRevision,committedRevision);
       state.friendLastPublishedSignature=signature;
+      return true;
+    }
+
+    async function commitFriendTurnStartApplied(options={}){
+      const serial=Number(options.friendTurnSerial||state.friendTurnSerial||0),token=options.friendTurnToken||state.friendTurnStartToken;
+      if(state.battleMode!=="friend"||!serial||!token)return true;
+      const previous=Number(state.friendTurnStartAppliedSerial||0);
+      state.friendTurnStartAppliedSerial=serial;
+      try{
+        const committed=await publishFriendStateNow(state.friendMatchId,{applyTurnStartSerial:serial,turnStartToken:token});
+        if(!committed)throw new Error("ターン開始の確定権が更新されました。");
+        const context={matchId:state.friendMatchId,turnSerial:serial,turnOwner:state.friendRole,turnStartToken:token};
+        const record=rememberCommittedFriendTurnContext(context);
+        if(!record)throw new Error("ターン開始の確定結果を検証できませんでした。");
+        return {ok:true,mode:record.mode};
+      }catch(error){state.friendTurnStartAppliedSerial=previous;throw error;}
     }
 
     async function forcePublishFriendStateNow(reason = "state change") {
       if (state.battleMode !== "friend" || state.friendApplyingRemoteState) return;
+      if(state.friendTurnStartAtomicActive){state.friendTurnStartDeferredPublish=true;return;}
       try {
         state.friendLastPublishedSignature = "";
         await publishFriendStateNow();
@@ -4467,11 +4659,13 @@ const CARD_LIBRARY = {
     }
 
     function scheduleFriendStatePublish() {
+      if(state.friendTurnStartAtomicActive){state.friendTurnStartDeferredPublish=true;return;}
       if (!canPublishFriendStateSafely()) return;
       if (state.friendPublishTimer) clearTimeout(state.friendPublishTimer);
+      const scheduledMatchId=state.friendMatchId;
       state.friendPublishTimer = setTimeout(() => {
         state.friendPublishTimer = null;
-        publishFriendStateNow().catch(error => {
+        publishFriendStateNow(scheduledMatchId).catch(error => {
           console.error("PVP state publish failed", error);
           setMessage(`オンライン同期エラー：${error.message || error}`);
         });
@@ -4491,8 +4685,6 @@ const CARD_LIBRARY = {
 
     async function emitFriendFx(type, payload = {}) {
       if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || state.friendApplyingRemoteState) return;
-      const fb = firebaseApi();
-      if (!fb) return;
       const fx = {
         id: `${state.friendRole}-fx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type,
@@ -4500,12 +4692,27 @@ const CARD_LIBRARY = {
         payload: cloneJson(payload),
         createdAtMs: Date.now()
       };
+      if(state.friendTurnStartAtomicActive){state.friendTurnStartPendingFx.push(fx);return;}
+      await writeFriendFxNow(fx,{matchId:state.friendMatchId});
+    }
+
+    async function writeFriendFxNow(fx,guard={}) {
+      const fb = firebaseApi();
+      if (!fb) return false;
+      const flushId=guard.turnSerial&&fx?.id?`fx:${friendTurnStartContextKey(guard)}:${fx.id}`:"";
+      if(flushId&&state.friendTurnStartFlushedSideEffectIds.has(flushId))return false;
+      const matchId=guard.matchId||state.friendMatchId;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-      await fb.updateDoc(roomRef, {
-        "match.version": 51,
-        "match.fx": fx,
-        updatedAt: fb.serverTimestamp()
+      let committed=false;
+      await fb.runTransaction(fb.db,async transaction=>{
+        const roomSnap=await transaction.get(roomRef);
+        const match=roomSnap.exists()?roomSnap.data()?.match:null;
+        if(!canFlushCommittedTurnStartSideEffect(match,{...guard,matchId}))return;
+        transaction.update(roomRef,{"match.version":51,"match.fx":fx,updatedAt:fb.serverTimestamp()});
+        committed=true;
       });
+      if(committed&&flushId){state.friendTurnStartFlushedSideEffectIds.add(flushId);if(state.friendTurnStartFlushedSideEffectIds.size>160)state.friendTurnStartFlushedSideEffectIds.delete(state.friendTurnStartFlushedSideEffectIds.values().next().value);}
+      return committed;
     }
 
     async function playIncomingFriendFx(fx) {
@@ -4698,19 +4905,33 @@ const CARD_LIBRARY = {
     }
 
     async function writeFriendInterrupt(interrupt) {
+      if(state.friendTurnStartAtomicActive){state.friendTurnStartPendingInterruptWrites.push(cloneJson(interrupt));return true;}
+      return writeFriendInterruptNow(interrupt,{matchId:state.friendMatchId});
+    }
+
+    async function writeFriendInterruptNow(interrupt,guard={}) {
       const fb = firebaseApi();
       if (!fb || !state.friendRoomId) throw new Error("Firebaseに接続されていません。");
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const matchId=guard.matchId||state.friendMatchId;
+      const flushId=guard.turnSerial&&interrupt?.id?`interrupt:${friendTurnStartContextKey(guard)}:${interrupt.id}:${interrupt.status||"pending"}`:"";
+      if(flushId&&state.friendTurnStartFlushedSideEffectIds.has(flushId))return false;
+      let committed=false;
       // 割り込みだけを書き換え、盤面 state / revision を古い値で巻き戻さない。
-      await fb.updateDoc(roomRef, {
-        "match.version": 51,
-        "match.interrupt": interrupt,
-        updatedAt: fb.serverTimestamp()
+      await fb.runTransaction(fb.db,async transaction=>{
+        const roomSnap=await transaction.get(roomRef);
+        const match=roomSnap.exists()?roomSnap.data()?.match:null;
+        if(!canFlushCommittedTurnStartSideEffect(match,{...guard,matchId}))return;
+        transaction.update(roomRef,{"match.version":51,"match.interrupt":interrupt,updatedAt:fb.serverTimestamp()});
+        committed=true;
       });
+      if(committed&&flushId)state.friendTurnStartFlushedSideEffectIds.add(flushId);
+      return committed;
     }
 
     async function requestRemoteFriendDecision(type, payload = {}) {
       if (state.battleMode !== "friend" || !state.friendRole) return null;
+      if(state.friendTurnStartAtomicActive)throw new Error("ターン開始stateの確定前にはオンライン判断を要求できません。");
       if (state.friendInterruptWaiting) throw new Error("別のオンライン割り込み処理を待っています。");
       const id = makeFriendInterruptId();
       const interrupt = {
@@ -4744,15 +4965,26 @@ const CARD_LIBRARY = {
 
     async function clearResolvedFriendInterrupt(interruptId) {
       if (!interruptId || state.battleMode !== "friend" || !state.friendRoomId) return;
+      if(state.friendTurnStartAtomicActive){state.friendTurnStartPendingInterruptWrites.push({__clearInterruptId:interruptId});return;}
+      return clearResolvedFriendInterruptNow(interruptId,{matchId:state.friendMatchId});
+    }
+
+    async function clearResolvedFriendInterruptNow(interruptId,guard={}) {
       const fb = firebaseApi();
       if (!fb) return;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const matchId=guard.matchId||state.friendMatchId;
+      const flushId=guard.turnSerial?`interrupt-clear:${friendTurnStartContextKey(guard)}:${interruptId}`:"";
+      if(flushId&&state.friendTurnStartFlushedSideEffectIds.has(flushId))return false;
       try {
         const current = state.friendRoomData?.match?.interrupt;
         if (current?.id && current.id !== interruptId) return;
-        await fb.updateDoc(roomRef, {
-          "match.interrupt": null,
-          updatedAt: fb.serverTimestamp()
+        await fb.runTransaction(fb.db,async transaction=>{
+          const roomSnap=await transaction.get(roomRef);
+          const remoteMatch=roomSnap.exists()?roomSnap.data()?.match:null;
+          if(remoteMatch?.interrupt?.id!==interruptId||!canFlushCommittedTurnStartSideEffect(remoteMatch,{...guard,matchId}))return;
+          transaction.update(roomRef,{"match.interrupt":null,updatedAt:fb.serverTimestamp()});
+          if(flushId)state.friendTurnStartFlushedSideEffectIds.add(flushId);
         });
       } catch (error) {
         console.warn("PVP interrupt cleanup failed", error);
@@ -5381,16 +5613,28 @@ const CARD_LIBRARY = {
     }
 
     function resetFriendMatchEntryState() {
+      if(state.friendPublishTimer)clearTimeout(state.friendPublishTimer);
+      state.friendPublishTimer=null;
+      clearFriendTurnClaimRetry();
+      clearFriendTurnStartAtomicState();
+      state.friendTurnStartCommittedKeys.clear();
+      state.friendTurnStartCommittedContexts.clear();
+      state.friendTurnStartFlushedSideEffectIds.clear();
+      state.friendTurnClaimInFlight=false;
       state.friendMatchStarted = false;
       state.friendMatchId = null;
       state.friendSyncRevision = 0;
       state.friendLastAppliedRevision = 0;
       state.friendLastPublishedSignature = "";
       state.friendSnapshotHydrated = false;
+      state.friendStartingTurnKey = "";
       state.friendStartedTurnKey = "";
       state.friendTurnSerial = 0;
       state.friendTurnOwner = null;
       state.friendTurnStarted = false;
+      state.friendTurnStartAppliedSerial = 0;
+      state.friendTurnStartToken = null;
+      state.friendTurnStartClaimedAtMs = 0;
       state.friendInterruptWaiting = null;
       state.friendInterruptHandling = false;
       state.friendHandledInterruptIds = new Set();
@@ -5461,6 +5705,9 @@ const CARD_LIBRARY = {
         turnSerial: 1,
         turnOwner: null,
         turnStarted: false,
+        turnStartAppliedSerial: 0,
+        turnStartToken: null,
+        turnStartClaimedAt: null,
         host: initialHost,
         guest: initialGuest,
         stateRevision: 1,
@@ -5475,6 +5722,7 @@ const CARD_LIBRARY = {
           turnSerial: 1,
           turnOwner: null,
           turnStarted: false,
+          turnStartAppliedSerial: 0,
           gameOver: false,
           result: null,
           log: ["オンライン対戦を開始しました。"],
@@ -5533,13 +5781,16 @@ const CARD_LIBRARY = {
         if(getFriendMatchId(current)!==matchId)throw new Error("別の試合が開始されています。");
         if(current.startingPlayerDecided)return current;
         if(room.status!=="starting"||!room.guestUid)throw new Error("試合開始を続行できません。");
-        transaction.update(roomRef,{status:"playing","match.startingPlayer":candidate,"match.startingPlayerDecided":true,"match.turnSide":candidate,"match.turnOwner":candidate,"match.turnSerial":1,"match.turnStarted":false,"match.state.startingPlayer":candidate,"match.state.startingPlayerDecided":true,"match.state.turnSide":candidate,"match.state.turnOwner":candidate,"match.state.turnSerial":1,"match.state.turnStarted":false,updatedAt:fb.serverTimestamp()});
-        return {...current,startingPlayer:candidate,startingPlayerDecided:true,turnSide:candidate,turnOwner:candidate,turnSerial:1,turnStarted:false,state:{...current.state,startingPlayer:candidate,startingPlayerDecided:true,turnSide:candidate,turnOwner:candidate,turnSerial:1,turnStarted:false}};
+        transaction.update(roomRef,{status:"playing","match.startingPlayer":candidate,"match.startingPlayerDecided":true,"match.turnSide":candidate,"match.turnOwner":candidate,"match.turnSerial":1,"match.turnStarted":false,"match.turnStartAppliedSerial":0,"match.turnStartToken":null,"match.turnStartClaimedAt":null,"match.state.startingPlayer":candidate,"match.state.startingPlayerDecided":true,"match.state.turnSide":candidate,"match.state.turnOwner":candidate,"match.state.turnSerial":1,"match.state.turnStarted":false,"match.state.turnStartAppliedSerial":0,updatedAt:fb.serverTimestamp()});
+        return {...current,startingPlayer:candidate,startingPlayerDecided:true,turnSide:candidate,turnOwner:candidate,turnSerial:1,turnStarted:false,turnStartAppliedSerial:0,turnStartToken:null,turnStartClaimedAt:null,state:{...current.state,startingPlayer:candidate,startingPlayerDecided:true,turnSide:candidate,turnOwner:candidate,turnSerial:1,turnStarted:false,turnStartAppliedSerial:0}};
       });
       return resolved;
     }
 
     async function enterFriendCommonBattle(match) {
+      if(state.friendPublishTimer)clearTimeout(state.friendPublishTimer);
+      state.friendPublishTimer=null;
+      clearFriendTurnClaimRetry();
       const mine = state.friendRole === "host" ? match.host : match.guest;
       const other = state.friendRole === "host" ? match.guest : match.host;
       state.battleMode = "friend";
@@ -5552,10 +5803,16 @@ const CARD_LIBRARY = {
       state.friendLastAppliedRevision = Number(match.stateRevision || 0);
       state.friendLastPublishedSignature = match.state ? JSON.stringify(match.state) : "";
       state.friendSnapshotHydrated = false;
+      state.friendStartingTurnKey = "";
       state.friendStartedTurnKey = "";
       state.friendTurnSerial=Number(match.turnSerial||match.state?.turnSerial||1);
       state.friendTurnOwner=match.turnOwner||match.state?.turnOwner||match.turnSide||null;
-      state.friendTurnStarted=match.turnStarted===true||match.state?.turnStarted===true;
+      state.friendTurnStarted=typeof match.turnStarted==="boolean"?match.turnStarted:match.state?.turnStarted===true;
+      state.friendTurnStartAppliedSerial=Number(match.turnStartAppliedSerial??match.state?.turnStartAppliedSerial??(state.friendTurnStarted?state.friendTurnSerial:Math.max(0,state.friendTurnSerial-1)));
+      state.friendTurnStartToken=match.turnStartToken||null;
+      state.friendTurnStartClaimedAtMs=friendTimestampMillis(match.turnStartClaimedAt);
+      clearFriendTurnClaimRetry();
+      state.friendTurnClaimInFlight=false;
       state.friendInterruptWaiting = null;
       state.friendInterruptHandling = false;
       state.friendHandledInterruptIds = new Set();
@@ -5647,7 +5904,22 @@ const CARD_LIBRARY = {
       if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
       await showFriendVsCutIn(match);
       const decidedMatch=await ensureFriendStartingPlayerDecided(match);
-      beginFriendStartingFlow(decidedMatch).catch(error=>{console.error(error);state.startingRouletteActive=false;render();});
+      const decidedSnapshot=decidedMatch?.state||{};
+      state.friendTurnSerial=Number(decidedMatch?.turnSerial||decidedSnapshot.turnSerial||state.friendTurnSerial||1);
+      state.friendTurnOwner=decidedMatch?.turnOwner||decidedSnapshot.turnOwner||decidedMatch?.turnSide||decidedSnapshot.turnSide||state.friendTurnOwner;
+      state.friendTurnStarted=typeof decidedMatch?.turnStarted==="boolean"?decidedMatch.turnStarted:decidedSnapshot.turnStarted===true;
+      state.friendTurnStartAppliedSerial=Number(decidedMatch?.turnStartAppliedSerial??decidedSnapshot.turnStartAppliedSerial??(state.friendTurnStarted?state.friendTurnSerial:Math.max(0,state.friendTurnSerial-1)));
+      state.friendTurnStartToken=decidedMatch?.turnStartToken||null;
+      state.friendTurnStartClaimedAtMs=friendTimestampMillis(decidedMatch?.turnStartClaimedAt);
+      state.turn=state.friendTurnOwner===state.friendRole?"human":"cpu";
+      const initialTurnNotStarted=state.friendTurnSerial===1&&!state.friendTurnStarted&&Number(decidedSnapshot.host?.personalTurnCount||0)===0&&Number(decidedSnapshot.guest?.personalTurnCount||0)===0;
+      if(initialTurnNotStarted){
+        beginFriendStartingFlow(decidedMatch).catch(error=>{console.error(error);state.startingRouletteActive=false;render();});
+      }else{
+        state.startingRouletteActive=false;
+        render();
+        if(state.turn==="human"&&state.friendTurnStartAppliedSerial<state.friendTurnSerial)await ensureFriendLocalTurnStarted();
+      }
     }
 
     function loadRoomFromUrl() {
@@ -8199,6 +8471,7 @@ function wrapFinger(value) {
     let fatigueFxQueue = Promise.resolve();
 
     function queueFatiguePopup(player, detail) {
+      const turnStartContext=state.friendTurnStartAtomicActive?cloneJson(state.friendTurnStartAtomicContext):null;
       const title = "疲労";
       const text = detail.kind === "discard"
         ? `<div class="fatigue-popup-main">山札切れ</div><div>手札から「${escapeHtml(detail.cardName)}」をランダムに捨てました。</div>`
@@ -8207,14 +8480,24 @@ function wrapFinger(value) {
       fatigueFxQueue = fatigueFxQueue
         .catch(() => {})
         .then(async () => {
+          const contextKey=friendTurnStartContextKey(turnStartContext),sameAtomic=contextKey&&contextKey===friendTurnStartContextKey(state.friendTurnStartAtomicContext),committed=contextKey&&state.friendTurnStartCommittedContexts.has(contextKey);
+          if(contextKey&&!sameAtomic&&!committed)return;
           await showPopup(player, title, text, "fatigue", 720, true);
           if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
-            await emitFriendFx("fatigue", {
+            const stillAtomic=contextKey&&contextKey===friendTurnStartContextKey(state.friendTurnStartAtomicContext),committedAfter=contextKey&&state.friendTurnStartCommittedContexts.has(contextKey);
+            if(contextKey&&!stillAtomic&&!committedAfter)return;
+            const fxPayload={
               playerSide: friendSideForLocalPlayer(player),
               ...detail
-            });
-            state.friendLastPublishedSignature = "";
-            await publishFriendStateNow();
+            };
+            if(committedAfter){
+              const fx={id:`${state.friendRole}-fx-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,type:"fatigue",sourceSide:state.friendRole,payload:cloneJson(fxPayload),createdAtMs:Date.now()};
+              await writeFriendFxNow(fx,turnStartContext);
+            }else{
+              await emitFriendFx("fatigue",fxPayload);
+              state.friendLastPublishedSignature = "";
+              await publishFriendStateNow();
+            }
           }
         })
         .catch(error => console.error("疲労演出・同期エラー", error));
@@ -8324,6 +8607,23 @@ function wrapFinger(value) {
     }
 
     async function startTurn(player,options={}) {
+      const friendTurnKey=state.battleMode==="friend"&&player==="human"?String(options.friendTurnKey||""):"";
+      if(!friendTurnKey)return startTurnCore(player,options);
+      if(state.friendStartedTurnKey===friendTurnKey)return true;
+      if(state.friendStartingTurnKey===friendTurnKey)return false;
+      state.friendStartingTurnKey=friendTurnKey;
+      try{
+        await startTurnCore(player,options);
+        const requiredAppliedSerial=Number(options.friendTurnSerial||state.friendTurnSerial||0);
+        if(options.friendTurnToken&&Number(state.friendTurnStartAppliedSerial||0)<requiredAppliedSerial)throw new Error("ターン開始stateを確定できませんでした。");
+        state.friendStartedTurnKey=friendTurnKey;
+        return true;
+      }finally{
+        if(state.friendStartingTurnKey===friendTurnKey)state.friendStartingTurnKey="";
+      }
+    }
+
+    async function startTurnCore(player,options={}) {
       if (isTutorialBattle()) {
         if (player === "cpu") {
           freezeTutorialBattleToHumanTurn();
@@ -8337,10 +8637,6 @@ function wrapFinger(value) {
         return;
       }
       ensureOnlineStateMaps();
-      if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey){
-        if(state.friendStartedTurnKey===options.friendTurnKey)return;
-        state.friendStartedTurnKey=options.friendTurnKey;
-      }
       state.resonanceTriggeredThisTurn[player]=false;
       state.activeDrawLock[player]=!!state.pendingDrawLock[player]; state.pendingDrawLock[player]=false;
       state.quarterRestActive[player]=!!state.quarterRestPending[player]; state.quarterRestPending[player]=false;
@@ -8580,6 +8876,7 @@ function wrapFinger(value) {
         render();
         await showTurnRestrictionPopup({ targetPlayer: player, restrictionType: "furioso" });
         await endTurn();
+        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
         return;
       }
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
@@ -8621,19 +8918,25 @@ function wrapFinger(value) {
 
         await delay(250);
         await endTurn();
+        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
         return;
       }
       if (state.pendingTerminalEnd[player]) {
         state.pendingTerminalEnd[player] = false;
         await endTurn();
+        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
         return;
       }
       if (state.mode !== "attack") {
         render();
+        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
         return;
       }
 
-      if(await maybeAutoEndTurnForNoActions(player)) return;
+      if(await maybeAutoEndTurnForNoActions(player)){
+        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
+        return;
+      }
 
       if (player === "human") {
         setMessage(state.activeIntemperanceCardLock.human
@@ -8651,7 +8954,10 @@ function wrapFinger(value) {
       }
 
       render();
-      if(state.battleMode==="friend"&&player==="human"&&!state.friendApplyingRemoteState){
+      if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey){
+        await commitFriendTurnStartApplied(options);
+      }
+      if(state.battleMode==="friend"&&player==="human"&&!state.friendApplyingRemoteState&&(!options.friendTurnToken||state.friendTurnStartAppliedSerial>=state.friendTurnSerial)){
         await forcePublishFriendStateNow("turn start");
       }
     }
@@ -11945,6 +12251,7 @@ function renderLastAction() {
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
       if (!card || !isAttachmentCard(cardId)) return false;
+      if(!canUseCardUnderRule(player,cardId,{silent:player!=="human"}))return false;
       const setupActive = !!state.temp[player].setupMode;
       if (setupActive && !card.trap) return false;
       if (card.blessing && owner !== player) return false;
@@ -13102,15 +13409,20 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         state.lastAttackContext.appliedAmount=0;
       }
       const before = state[defender][targetHand];
+      const romanOpponentHandProtected=isRomanOpponentTarget(attacker,defender);
       const total = before + power;
       const reducingAttack = power < 0;
-      const overflowWouldApply = !reducingAttack && total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
-      const guardWouldApply = !reducingAttack && total >= 5 && !overflowWouldApply && state.temp[defender].guard;
+      const overflowWouldApply = !romanOpponentHandProtected&&!reducingAttack && total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
+      const guardWouldApply = !romanOpponentHandProtected&&!reducingAttack && total >= 5 && !overflowWouldApply && state.temp[defender].guard;
       const lightningZeroActive = !!state.temp[attacker].lightningZeroAtFive;
       const berserkerZeroActive = state.berserkerTurns[attacker] > 0;
       let resolvedFinal;
 
-      if (reducingAttack) {
+      if(romanOpponentHandProtected){
+        // 準備時間中の対人攻撃は攻撃として解決するが、対象の手の値は計算経路へ渡さない。
+        // power=0でも既存のwrap/超過処理へ通すと5以上のテスト状態が変化するため、盤面値をそのまま保持する。
+        resolvedFinal=before;
+      } else if (reducingAttack) {
         resolvedFinal = Math.max(0, total);
       } else if (state.activeDirectiveAnnihilation?.[attacker] && defender===otherPlayer(attacker) && total>=7) {
         resolvedFinal=0;
@@ -13132,12 +13444,12 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
 
       // 成長は通常攻撃のraw resultが5になった瞬間、5→0などの盤面結果処理より先に発動する。
-      resolveGrowthBeforeFiveToZero(attacker,attackHand,total);
+      if(!romanOpponentHandProtected)resolveGrowthBeforeFiveToZero(attacker,attackHand,total);
 
       state.temp[attacker].lightningZeroAtFive = false;
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
-      resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃");
+      if(!romanOpponentHandProtected)resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃");
       await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
       if(defender===otherPlayer(attacker)&&before>0&&resolvedFinal===0)state.temp[attacker].opponentZeroedThisTurn=true;
@@ -13185,7 +13497,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (hasAttachment(attacker,attackHand,"magicalHatred")) {
         await discardRandomCards(attacker,1,"「憎悪」");
       }
-      if (hasAttachment(defender,targetHand,"magicalDespair")) {
+      if (!romanOpponentHandProtected&&hasAttachment(defender,targetHand,"magicalDespair")) {
         const other=otherHand(targetHand);
         if (isAlive(defender,other)) await addFingersWithCalculation(defender,other,1,"絶望");
       }
@@ -13388,6 +13700,8 @@ async function endTurn() {
           state.friendTurnSerial=Math.max(1,Number(state.friendTurnSerial||0)+1);
           state.friendTurnOwner=otherFriendRole(state.friendRole);
           state.friendTurnStarted=false;
+          state.friendTurnStartToken=null;
+          state.friendTurnStartClaimedAtMs=0;
           setMessage("相手の番です。同期を待っています。");
           render();
           await publishFriendStateNow();
@@ -13687,6 +14001,7 @@ async function endTurn() {
       state.hands.cpu.forEach((cardId, index) => {
         const card = CARD_LIBRARY[cardId];
         if (!isAttachmentCard(cardId)) return;
+        if(!canUseCardUnderRule("cpu",cardId,{silent:true}))return;
         if (state.temp.cpu.setupMode && !card.trap) return;
         if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return;
         const owner = card.curse ? "human" : "cpu";

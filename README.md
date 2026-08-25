@@ -1,4 +1,4 @@
-# 割り箸カードゲーム v165c
+# 割り箸カードゲーム v165h
 
 ## v163c 孤児ルーム自己修復
 
@@ -266,6 +266,11 @@
 - v165aではルール別デッキ編集の追加操作を修正し、CPU戦でも共通ルール定義から対戦ルールを選べるようにしました。
 - v165bではオンライン対戦のターン開始状態を即時同期し、古いsnapshotによるカード・攻撃行動権の巻き戻りとロマンギミック杯の準備ターン表示差を修正しました。
 - v165cではroomの`turnSerial` / `turnOwner` / `turnStarted`を正本に現手番本人だけが開始claimする方式へ変更し、初回ドロー欠落と二重開始を防止しました。ロマンギミック杯ではリタルダントをルール側のデッキ投入不可カードへ移しました。
+- v165dでは試合途中の再接続を現在の`turnOwner`から復元し、未開始turnの限定再claim、旧matchの遅延publish遮断、ロマンギミック杯準備中の相手盤面値保持、CPU設置カードのルールguardを追加しました。
+- v165eではturn claimと開始state適用を分離し、`turnStartAppliedSerial`と期限付き実行tokenによりclaim直後のreload/crashから一意に復旧します。開始stateとapplied markerは同じtransactionで確定します。
+- v165fではturn-start適用中をatomic sectionとして隔離し、canonical commit前の通常state publishを延期します。FXとinterrupt書き込みはtoken付きqueueへ保持し、commit成功端末だけが送信します。
+- v165gではturn-start由来の自動効果・自動終了を完成させたstateとapplied markerを同じcommitで確定します。v165fのatomic section、FX/interrupt queue、token guardは維持します。
+- v165hでは正常commit済みturn contextを明示的に記録し、自動handoff後も旧turn由来のFX／interruptだけをtoken検証付きで1回flushします。
 - アカウント、対戦ロビー、VSカットインは同じ背景・称号定義を使用します。装飾は操作レイヤーの背後に置き、名前と準備状態へ暗い可読性プレートを付けます。
 - `giftCodes/{code}`を正本とし、本人の`claims/{uid}`と報酬所有配列をtransactionで同時更新します。コード全件listと他人claimの取得は禁止です。
 - 名前変更はtagとUIDを維持し、users、playerTags、相手側friend cacheを同じbatchで同期します。
