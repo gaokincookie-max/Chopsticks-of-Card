@@ -1227,7 +1227,7 @@ const CARD_LIBRARY = {
       fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
       canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える最終的な本数と最終対象を記録し、その攻撃で実際に加える本数を0にする。次の相手ターン終了時、記録対象が0でなければ記録した本数を加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
-      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。最低0。次の相手ターン中、相手はカードを引くことができない。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useRitardando(player) },
+      ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。最低0。次の相手ターン中、相手はカードを引くことができない。",token:true,rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useRitardando(player) },
       arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useArpeggioV153(player) },
       wholeRest: { name:"全休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンの通常ドローと通常攻撃を封じ、手札から1枚使用後にターンを終了させる。",rondo:true,rondoFamily:"rest",token:true,canPlay:()=>true,effect:player=>useWholeRest(player) },
       agitato: { name:"Agitato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手は、それぞれ手札をランダムに1枚捨てる。",rondo:true,rondoFamily:"agitato",canPlay:()=>true,effect:player=>useAgitato(player) },
@@ -2020,7 +2020,7 @@ const CARD_LIBRARY = {
       romanGimmick: Object.freeze({
         id:"romanGimmick",version:1,name:"ロマンギミック杯",summary:"双方に3ターンずつの準備時間があり、その後は通常ルールで戦います。",preparationTurns:3,
         details:["各プレイヤーに3ターンずつ準備時間があります。","準備中も攻撃回数と攻撃した事実、共鳴、自分側トリガーは通常通りです。","相手の手・手札・設置物・妨害状態へ不利益を与える効果は無効です。","一部カードは準備時間中使用できず、一部の弾は捨てられません。"],
-        preparationBlockedNames:[...ROMAN_PREPARATION_BLOCKED_NAMES],protectedBulletNames:[...ROMAN_PROTECTED_BULLET_NAMES],deckRestrictions:{finalVerdictNames:[...ROMAN_DECK_BANNED_NAMES],blockedCardNames:["リタルダント"],blockedGroups:["harpoonTheme"]}
+        preparationBlockedNames:[...ROMAN_PREPARATION_BLOCKED_NAMES],protectedBulletNames:[...ROMAN_PROTECTED_BULLET_NAMES],deckRestrictions:{finalVerdictNames:[...ROMAN_DECK_BANNED_NAMES],blockedCardNames:["フェルマータ"],blockedGroups:["harpoonTheme"]}
       })
     });
     const ROOM_TAG_DEFS = Object.freeze({beginner:"初心者歓迎",rematch:"連戦歓迎",casual:"カジュアル",advanced:"上級者向け",deck_test:"デッキ調整中"});
@@ -2231,9 +2231,14 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v165-roman-gimmick";
+    const LATEST_NEWS_ID = "v165k-lobby-rules-modal-fix";
 
     const UPDATE_NEWS = [
+      {id:"v165k-lobby-rules-modal-fix",version:"v165k",date:"2026-08-26",title:"オンラインロビーの同期と確認画面を修正",summary:"準備・デッキ編集・ルーム退出まわりの安定性を改善しました。",featured:true,tags:["fix"],items:["オンラインロビーの準備完了／解除が元に戻る問題を修正","ロビーからデッキ編集を開けない問題を修正","ルーム解散／退出時の権限エラーを修正","Firestore Rulesをルーム状態ごとの安全な処理経路へ整理","既存ルームの確認ポップアップがルーム作成画面の背面へ潜る問題を修正"]},
+      {id:"v165j-generated-card-fix",version:"v165j",date:"2026-08-26",title:"生成・進化カードのデッキ整合性を修正",summary:"リタルダントとロマンギミック杯のデッキ制約を、本来の進化関係に合わせて修正しました。",featured:true,tags:["fix"],items:["リタルダントを生成カードとして扱い、デッキへの直接投入を禁止","ロマンギミック杯の固有禁止対象を、進化後のリタルダントから進化元のフェルマータへ修正","生成・進化カードとデッキ制約の回帰検査を追加"]},
+      {id:"v165i-firestore-rules-fix",version:"v165i",date:"2026-08-26",title:"オンライン対戦の権限エラーを修正",summary:"正しいターン交代がFirestore Rulesで拒否される問題を修正しました。",featured:false,tags:["fix","system"],items:["通常のhost／guestターン交代を実Rulesと整合","Rules構文とturn lifecycle判定を修正","実Firestore Emulatorによる回帰検査を追加"]},
+      {id:"v165d-v165h-online-stability",version:"v165d～v165h",date:"2026-08-25",title:"オンライン再接続とターン同期を安定化",summary:"再接続、turn claim、自動handoff、演出同期を段階的に安定化しました。",featured:false,tags:["fix","system"],items:["turn claimと開始処理の復旧を改善","ターン開始stateをatomicに確定し、二重ドローを防止","自動handoff後のFX・interrupt同期を修正"]},
+      {id:"v165a-v165c-roman-online-fixes",version:"v165a～v165c",date:"2026-08-24",title:"ロマンギミック杯とオンライン開始同期を修正",summary:"特殊ルール用デッキ編集、CPU戦、オンラインの最初のターン開始を修正しました。",featured:false,tags:["fix","system"],items:["特殊ルール用デッキ編集の追加操作を修正","CPU戦で対戦ルールを選択可能に変更","オンライン対戦の開始・準備ターン同期を改善"]},
       {id:"v165-roman-gimmick",version:"v165",date:"2026-08-23",title:"特殊ルール「ロマンギミック杯」を追加",summary:"双方3ターンの準備時間でコンボを組み立てる特殊ルールを追加しました。",featured:true,tags:["new","system"],items:["準備時間中は相手への妨害を抑え、自分の準備を進められます","ルール詳細と準備ターン表示を追加","ルール別デッキ制約と対戦開始前検証を追加"]},
       {id:"v164-player-cards",version:"v164f",date:"2026-08-23",title:"プレイヤーカード機能を追加",summary:"背景と称号でプロフィールを飾り、対戦ロビーやVS画面へ表示できるようになりました。",featured:true,tags:["new","system"],items:["プレイヤーカード編集と5種類の標準背景を追加","称号・ゴールド装飾を対戦ロビーとVSカットインへ反映","コード入力とプレイヤー名変更に対応","ルーム所属時のプロフィール編集導線とエラー表示を修正"]},
       {id:"v163c-orphan-room-repair",version:"v163c",date:"2026-08-23",title:"対戦ルームの自己修復を追加",summary:"古い所属情報や孤児化した公開ルームを安全に整理する自己修復処理を追加しました。",featured:true,tags:["fix","system"],items:["起動時に古いactiveRooms所属情報を自動修復","10分以上更新のない公開ルームを、誰のactiveRoomsにも紐づかない場合だけ孤児として整理","room本体が消えた公開一覧・Room ID mappingの残骸を安全条件付きでcleanup"]},
@@ -3504,7 +3509,7 @@ const CARD_LIBRARY = {
     function isCardBlockedInRomanPreparation(player,cardId){const card=CARD_LIBRARY[effectiveCardIdForPlayer(player,cardId)]||CARD_LIBRARY[cardId];return isRomanPreparation()&&!!card&&(card.curse||ROMAN_PREPARATION_BLOCKED_NAMES.has(card.name));}
     function canUseCardUnderRule(player,cardId,{silent=false}={}){if(!isCardBlockedInRomanPreparation(player,cardId))return true;if(!silent&&player==="human")setMessage(`「${CARD_LIBRARY[effectiveCardIdForPlayer(player,cardId)]?.name||CARD_LIBRARY[cardId]?.name||"このカード"}」は準備時間中使用できません。`);return false;}
     function isRomanTemporarilyProtectedHandCard(cardId){return isRomanPreparation()&&ROMAN_PROTECTED_BULLET_NAMES.has(CARD_LIBRARY[cardId]?.name);}
-    function getDeckRestrictionReason(ruleId,cardId){const rule=REGULATION_DEFS[ruleId],card=CARD_LIBRARY[cardId];if(!rule?.deckRestrictions||!card)return "";if(rule.deckRestrictions.finalVerdictNames?.includes(card.name)||rule.deckRestrictions.blockedCardNames?.includes(card.name))return `${rule.name}では使用不可`;if(rule.deckRestrictions.blockedGroups?.includes("harpoonTheme")&&card.harpoonTheme)return `${rule.name}では銛系カードを使用不可`;return "";}
+    function getDeckRestrictionReason(ruleId,cardId){const rule=REGULATION_DEFS[ruleId],card=CARD_LIBRARY[cardId];if(!card)return "";if(card.token)return "生成カードはデッキ投入不可";if(!rule?.deckRestrictions)return "";if(rule.deckRestrictions.finalVerdictNames?.includes(card.name)||rule.deckRestrictions.blockedCardNames?.includes(card.name))return `${rule.name}では使用不可`;if(rule.deckRestrictions.blockedGroups?.includes("harpoonTheme")&&card.harpoonTheme)return `${rule.name}では銛系カードを使用不可`;return "";}
     function isCardAllowedInDeckForRule(ruleId,cardId){return !getDeckRestrictionReason(ruleId,cardId);}
     function validateDeckForRule(ruleId,counts){const invalid=[...new Set(Object.entries(counts||{}).filter(([,n])=>Number(n)>0).map(([id])=>id).filter(id=>!isCardAllowedInDeckForRule(ruleId,id)))];return {valid:invalid.length===0,invalidCardIds:invalid,names:invalid.map(id=>CARD_LIBRARY[id]?.name||id)};}
     function ruleDeckValidationMessage(ruleId,counts){const result=validateDeckForRule(ruleId,counts),rule=REGULATION_DEFS[ruleId];return result.valid?"":`「${rule?.name||"このルール"}」では使えないカードがデッキに含まれています。対象：${result.names.join("、")}`;}
@@ -15351,7 +15356,9 @@ async function endTurn() {
     elements.friendLobbyBackBtn.addEventListener("click", () => state.friendRoomId ? leaveFriendRoom().catch(error=>elements.friendLobbyMessage.textContent=friendFirestoreErrorMessage(error,"退出できませんでした。")) : showScreen("battleSelect"));
     elements.battleRoomLeaveBtn?.addEventListener("click",()=>leaveFriendRoom().catch(error=>elements.friendLobbyMessage.textContent=friendFirestoreErrorMessage(error,"退出できませんでした。")));
     elements.battleRoomDeckEditBtn?.addEventListener("click",async()=>{
-      if(state.friendRoomId)await setFriendReady(false);
+      const readyKey=state.friendRole==="host"?"hostReady":"guestReady";
+      try{if(state.friendRoomId&&state.friendRoomData?.[readyKey]===true)await setFriendReady(false);}
+      catch(error){elements.friendLobbyMessage.textContent=friendFirestoreErrorMessage(error,"準備解除に失敗したため、デッキ編集を開始できませんでした。");return;}
       state.friendDeckEditReturnToLobby=true;state.editingDeckOwner="human";state.deckRuleContext={ruleId:state.friendRoomData?.regulation?.modeId||"standard"};showScreen("deck");
     });
     document.getElementById("battleRoomRuleDetailBtn")?.addEventListener("click",()=>openRuleDetail(state.friendRoomData?.regulation?.modeId||"standard"));

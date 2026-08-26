@@ -1,4 +1,10 @@
-# 割り箸カードゲーム v165i
+# 割り箸カードゲーム v165k
+
+## v165k オンラインロビー修正
+
+- Firestore Rulesの更新判定をroom status別のhot pathへ分離し、ロビーの準備完了・解除、heartbeat、参加、退出、解散がplaying用turn lifecycle検証を通らないよう修正しました。
+- 準備解除済みなら不要なFirestore writeを行わずデッキ編集へ進み、準備解除writeが失敗した場合はロビーに留まってエラーを表示します。
+- 既存ルーム確認用の`socialConfirmModal`をルーム作成モーダルより前面へ固定し、入力内容を維持したまま確認・キャンセルできるようにしました。
 
 ## v163c 孤児ルーム自己修復
 
@@ -272,6 +278,7 @@
 - v165gではturn-start由来の自動効果・自動終了を完成させたstateとapplied markerを同じcommitで確定します。v165fのatomic section、FX/interrupt queue、token guardは維持します。
 - v165hでは正常commit済みturn contextを明示的に記録し、自動handoff後も旧turn由来のFX／interruptだけをtoken検証付きで1回flushします。
 - v165iではFirestore Rulesの予約語による構文エラーを解消し、通常match更新を完全な検証付きhot pathとして先に評価してRules式数上限によるhandoff拒否を防ぎます。
+- v165jではリタルダントを生成カード属性へ統一し、ロマンギミック杯のデッキ禁止対象を進化元のフェルマータへ修正しました。今後は整数版・枝番ともゲーム内お知らせを更新します。
 
 ## Firestore Emulatorテスト
 
