@@ -1,4 +1,4 @@
-# 割り箸カードゲーム v165h
+# 割り箸カードゲーム v165i
 
 ## v163c 孤児ルーム自己修復
 
@@ -271,6 +271,11 @@
 - v165fではturn-start適用中をatomic sectionとして隔離し、canonical commit前の通常state publishを延期します。FXとinterrupt書き込みはtoken付きqueueへ保持し、commit成功端末だけが送信します。
 - v165gではturn-start由来の自動効果・自動終了を完成させたstateとapplied markerを同じcommitで確定します。v165fのatomic section、FX/interrupt queue、token guardは維持します。
 - v165hでは正常commit済みturn contextを明示的に記録し、自動handoff後も旧turn由来のFX／interruptだけをtoken検証付きで1回flushします。
+- v165iではFirestore Rulesの予約語による構文エラーを解消し、通常match更新を完全な検証付きhot pathとして先に評価してRules式数上限によるhandoff拒否を防ぎます。
+
+## Firestore Emulatorテスト
+
+成果物単体で`pnpm install`後に`pnpm test:rules:emulator`を実行できます。Java 21以上が必要です。テストは実際の`firestore.rules`をFirestore Emulatorへロードし、host/guest handoff、claim、applied、recovery、自動handoff、不正遷移、ロビー復帰・再戦開始を評価します。
 - アカウント、対戦ロビー、VSカットインは同じ背景・称号定義を使用します。装飾は操作レイヤーの背後に置き、名前と準備状態へ暗い可読性プレートを付けます。
 - `giftCodes/{code}`を正本とし、本人の`claims/{uid}`と報酬所有配列をtransactionで同時更新します。コード全件listと他人claimの取得は禁止です。
 - 名前変更はtagとUIDを維持し、users、playerTags、相手側friend cacheを同じbatchで同期します。
