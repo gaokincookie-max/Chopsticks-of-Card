@@ -1229,7 +1229,7 @@ const CARD_LIBRARY = {
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
       ritardando: { name:"リタルダント",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。相手の0ではない両手を1本ずつ減らす。最低0。次の相手ターン中、相手はカードを引くことができない。",token:true,rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useRitardando(player) },
       arpeggio: { name:"アルペジオ",cost:2,type:"終端 / 輪舞曲",text:"輪舞曲。終端。自分の生存手の本数を相手の両手へ分配して加える。",rondo:true,rondoFamily:"canon",token:true,terminal:true,canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useArpeggioV153(player) },
-      wholeRest: { name:"全休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンの通常ドローと通常攻撃を封じ、手札から1枚使用後にターンを終了させる。",rondo:true,rondoFamily:"rest",token:true,canPlay:()=>true,effect:player=>useWholeRest(player) },
+      wholeRest: { name:"全休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターン、通常ドローと通常攻撃を封じる。そのターン、カードを使用できなくなった時、ターンを終了する。",rondo:true,rondoFamily:"rest",token:true,canPlay:()=>true,effect:player=>useWholeRest(player) },
       agitato: { name:"Agitato",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分と相手は、それぞれ手札をランダムに1枚捨てる。",rondo:true,rondoFamily:"agitato",canPlay:()=>true,effect:player=>useAgitato(player) },
       furioso: { name:"Furioso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。このターン、自分の手札にある「輪舞曲」カードの枚数まで通常攻撃できる。この効果で現在の通常攻撃可能回数が減ることはない。その後、「演舞」のレベルを5下げる。次の自分のターン、行動不能になる。",rondo:true,rondoFamily:"agitato",token:true,canPlay:()=>true,effect:player=>useFurioso(player) },
       doloroso: { name:"Doloroso",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。自分の0ではない手を1つ選んで0にし、カードを3枚引く。",rondo:true,rondoFamily:"doloroso",canPlay:player=>state[player].L>0||state[player].R>0,effect:player=>useDolorosoV153(player) },
@@ -2137,6 +2137,8 @@ const CARD_LIBRARY = {
       animating: false,
       gameOver: false,
       matchResult: null,
+      matchResultReason: null,
+      surrenderedBy: null,
       startingPlayer: null,
       startingPlayerDecided: false,
       startingRouletteActive: false,
@@ -2200,6 +2202,11 @@ const CARD_LIBRARY = {
       friendPostMatchResolutionId: null,
       friendPostMatchResolving: false,
       friendDeckEditReturnToLobby: false,
+      friendSurrenderBusy: false,
+      friendSurrenderNoticeAcknowledged: null,
+      friendSurrenderNoticeMatchId: null,
+      friendSurrenderNoticeRunning: false,
+      friendSurrenderAckWriting: false,
       socialProfile: null,
       socialFriends: [],
       socialIncomingRequests: [],
@@ -2231,9 +2238,12 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v165k-lobby-rules-modal-fix";
+    const LATEST_NEWS_ID = "v165n-surrender-notice-order";
 
     const UPDATE_NEWS = [
+      {id:"v165n-surrender-notice-order",version:"v165n",date:"2026-08-27",title:"オンライン降参時の結果表示を改善",summary:"相手の降参を分かりやすく伝えてから勝敗画面へ進むようにしました。",featured:true,tags:["fix","system"],items:["オンラインで相手が降参した際の表示を改善","降参時は一時通知の後に勝敗画面へ進むよう変更","降参結果の表示順と端末間同期を改善","降参時に勝利理由が正しく表示されないことがある問題を修正"]},
+      {id:"v165m-online-surrender-postmatch-ui",version:"v165m",date:"2026-08-27",title:"オンライン対戦の試合中・試合後UIを改善",summary:"オンライン戦の安全な操作と試合部屋へ戻る流れを整理しました。",featured:true,tags:["fix","system"],items:["オンライン戦の不要なテスト・リセット操作を整理","オンライン戦に「降参」を追加","試合後の再戦／デッキ変更／試合部屋復帰を改善","全休符のターン開始説明が旧仕様だった問題を修正"]},
+      {id:"v165l-online-whole-rest-resonance-fix",version:"v165l",date:"2026-08-27",title:"ターン交代・全休符・共鳴判定を修正",summary:"一部のターン進行とカード効果の不具合を修正しました。",featured:true,tags:["fix"],items:["オンラインで一部ターン交代が失敗する問題を修正","全休符のターン進行を本来のカード使用可能回数に合わせて修正","全休符中にCPUが通常攻撃する問題を修正","全休符による通常ドロー封印の表示を修正","共鳴調節とディソナンスで0の手への共鳴が成立しない問題を修正"]},
       {id:"v165k-lobby-rules-modal-fix",version:"v165k",date:"2026-08-26",title:"オンラインロビーの同期と確認画面を修正",summary:"準備・デッキ編集・ルーム退出まわりの安定性を改善しました。",featured:true,tags:["fix"],items:["オンラインロビーの準備完了／解除が元に戻る問題を修正","ロビーからデッキ編集を開けない問題を修正","ルーム解散／退出時の権限エラーを修正","Firestore Rulesをルーム状態ごとの安全な処理経路へ整理","既存ルームの確認ポップアップがルーム作成画面の背面へ潜る問題を修正"]},
       {id:"v165j-generated-card-fix",version:"v165j",date:"2026-08-26",title:"生成・進化カードのデッキ整合性を修正",summary:"リタルダントとロマンギミック杯のデッキ制約を、本来の進化関係に合わせて修正しました。",featured:true,tags:["fix"],items:["リタルダントを生成カードとして扱い、デッキへの直接投入を禁止","ロマンギミック杯の固有禁止対象を、進化後のリタルダントから進化元のフェルマータへ修正","生成・進化カードとデッキ制約の回帰検査を追加"]},
       {id:"v165i-firestore-rules-fix",version:"v165i",date:"2026-08-26",title:"オンライン対戦の権限エラーを修正",summary:"正しいターン交代がFirestore Rulesで拒否される問題を修正しました。",featured:false,tags:["fix","system"],items:["通常のhost／guestターン交代を実Rulesと整合","Rules構文とturn lifecycle判定を修正","実Firestore Emulatorによる回帰検査を追加"]},
@@ -3037,6 +3047,11 @@ const CARD_LIBRARY = {
       deckBackMenuBtn: document.getElementById("deckBackMenuBtn"),
       battleBackMenuBtn: document.getElementById("battleBackMenuBtn"),
       battleRestartBtn: document.getElementById("battleRestartBtn"),
+      friendSurrenderBtn: document.getElementById("friendSurrenderBtn"),
+      surrenderFlowOverlay: document.getElementById("surrenderFlowOverlay"),
+      surrenderFlowKicker: document.getElementById("surrenderFlowKicker"),
+      surrenderFlowText: document.getElementById("surrenderFlowText"),
+      surrenderFlowSub: document.getElementById("surrenderFlowSub"),
       battleResultReopenBtn: document.getElementById("battleResultReopenBtn"),
       humanState: document.getElementById("humanState"),
       cpuState: document.getElementById("cpuState"),
@@ -3213,7 +3228,7 @@ const CARD_LIBRARY = {
       intemperance: { title: "無節制の代償", text: name => `${name}はこのターン、カードを使用できません。通常攻撃・分ける・パスは可能です。`, accent: "restriction-intemperance" },
       appassionato: { title: "Appassionatoの反動", text: name => `${name}はこのターン、カードを使用できません。通常攻撃・分ける・パスは可能です。`, accent: "restriction-appassionato" },
       quarterRest: { title: "4分休符", text: name => `${name}はこのターン、手札からカードを使用できません。通常攻撃・分ける・パスは可能です。`, accent: "restriction-quarter-rest" },
-      wholeRest: { title: "全休符", text: name => `${name}はこのターン通常攻撃できません。手札から使用可能なカードを1枚使用するとターンを終了します。`, accent: "restriction-whole-rest" },
+      wholeRest: { title: "全休符", text: name => `${name}はこのターン通常ドローと通常攻撃を行えません。カードを使用できなくなった時、ターンを終了します。`, accent: "restriction-whole-rest" },
       prison: { title: "懲役", text: name => `${name}は「懲役」により、このターンはカードを使用できません。`, accent: "restriction-prison" },
       furioso: { title: "Furiosoの反動", text: name => `${name}はこのターン行動不能です。`, accent: "restriction-furioso" },
       berserker: { title: "バーサーカー", text: name => `${name}はこのターン攻撃が強化されますが、カード使用・罠設置・分けるを行えません。`, accent: "restriction-berserker" }
@@ -4537,6 +4552,9 @@ const CARD_LIBRARY = {
         if(state.friendTurnStartAppliedSerial>=state.friendTurnSerial||state.friendTurnOwner!==state.friendRole)clearFriendTurnClaimRetry();
         state.gameOver = !!snapshot.gameOver;
         state.matchResult = snapshot.result ?? state.matchResult ?? null;
+        state.matchResultReason = snapshot.resultReason ?? state.matchResultReason ?? null;
+        state.surrenderedBy = snapshot.surrenderedBy ?? matchMeta?.surrenderedBy ?? state.surrenderedBy ?? null;
+        state.friendSurrenderNoticeAcknowledged = matchMeta?.surrenderNoticeAcknowledged ?? state.friendSurrenderNoticeAcknowledged ?? null;
         state.log = [...(snapshot.log || [])];
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
         state.friendLastAppliedRevision = Math.max(state.friendLastAppliedRevision, Number(revision || 0));
@@ -4553,7 +4571,9 @@ const CARD_LIBRARY = {
       elements.andanteBox?.classList.remove("active");
         clearHighlights();
         render();
-        if (state.gameOver && state.matchResult) showBattleResult(state.matchResult);
+        if (state.gameOver && state.matchResult) {
+          applySyncedBattleResult(state.matchResult, state.matchResultReason, state.surrenderedBy, state.friendSurrenderNoticeAcknowledged, getFriendMatchId(matchMeta));
+        }
       } finally {
         state.friendApplyingRemoteState = false;
       }
@@ -4591,6 +4611,7 @@ const CARD_LIBRARY = {
         const roomSnap=await transaction.get(roomRef);
         if(!roomSnap.exists())throw new Error("対戦ルームが見つかりません。");
         const remoteMatch=roomSnap.data()?.match;
+        state.friendLastPublishRemoteMatch=remoteMatch?cloneJson(remoteMatch):null;
         if(getFriendMatchId(remoteMatch)!==expectedMatchId)return;
         if(applySerial){
           const remoteSerial=Number(remoteMatch?.turnSerial||0),remoteApplied=Number(remoteMatch?.turnStartAppliedSerial||0);
@@ -5252,11 +5273,15 @@ const CARD_LIBRARY = {
           applyResolvedFriendPostMatch(data);
         }
         const remoteResult = data?.match?.result ?? data?.match?.state?.result ?? null;
+        const remoteResultReason = data?.match?.resultReason ?? data?.match?.state?.resultReason ?? null;
+        const remoteSurrenderedBy = data?.match?.surrenderedBy ?? data?.match?.state?.surrenderedBy ?? null;
+        const remoteSurrenderNoticeAcknowledged = data?.match?.surrenderNoticeAcknowledged ?? null;
         const remoteMatchId = data?.match ? getFriendMatchId(data.match) : null;
         const sameStartedMatch = state.friendMatchStarted && (!state.friendMatchId || state.friendMatchId === remoteMatchId);
         if ((data?.status === "playing" || data?.status === "lobby") && remoteResult && sameStartedMatch) {
-          applySyncedBattleResult(remoteResult);
-          if(state.friendRole==="host"&&data.status==="playing"&&!data.postMatch){
+          applySyncedBattleResult(remoteResult, remoteResultReason, remoteSurrenderedBy, remoteSurrenderNoticeAcknowledged, remoteMatchId);
+          const surrenderGateOpen = remoteResultReason !== "surrender" || remoteSurrenderNoticeAcknowledged === true;
+          if(state.friendRole==="host"&&data.status==="playing"&&!data.postMatch&&surrenderGateOpen){
             initializeFriendPostMatchAsHost(remoteResult).catch(error=>console.error("PVP post-match initialization failed",error));
           }
         }
@@ -5508,6 +5533,13 @@ const CARD_LIBRARY = {
       return role === "host" ? "hostChoice" : "guestChoice";
     }
 
+    function friendPostMatchResolutionAction(hostChoice,guestChoice) {
+      if(hostChoice==="lobby"||guestChoice==="lobby")return "lobby";
+      if(hostChoice==="deck"||guestChoice==="deck")return "deck";
+      if(hostChoice==="rematch"&&guestChoice==="rematch")return "lobby";
+      return null;
+    }
+
     function updateBattleResultPostMatchView(postMatch = state.friendRoomData?.postMatch) {
       if (!elements.battleResultPostActions) return;
       const isFriend = state.battleMode === "friend";
@@ -5515,14 +5547,16 @@ const CARD_LIBRARY = {
       if (!isFriend) return;
       const myChoice = postMatch?.[friendPostMatchChoiceKey()] || state.friendPostMatchChoice || null;
       const otherChoice = postMatch?.[friendPostMatchChoiceKey(otherFriendRole())] || null;
-      const labels = { rematch: "同じデッキで再戦", deck: "デッキ変更", lobby: "ロビーへ戻る" };
+      const labels = { rematch: "再戦", deck: "デッキを編集して再戦", lobby: "試合部屋へ戻る" };
       elements.battleResultRematchBtn.disabled = !!postMatch?.resolvedAction || state.friendPostMatchResolving;
       elements.battleResultDeckBtn.disabled = !!postMatch?.resolvedAction || state.friendPostMatchResolving;
       elements.battleResultLobbyBtn.disabled = !!postMatch?.resolvedAction || state.friendPostMatchResolving;
       if (postMatch?.resolvedAction) {
         elements.battleResultWait.textContent = "試合後の移動を同期しています…";
       } else if (myChoice) {
-        elements.battleResultWait.textContent = `あなた：${labels[myChoice]} / 相手：${otherChoice ? labels[otherChoice] : "選択待ち"}`;
+        elements.battleResultWait.textContent = myChoice==="rematch"&&!otherChoice
+          ? "相手の選択を待っています…"
+          : `あなた：${labels[myChoice]} / 相手：${otherChoice ? labels[otherChoice] : "選択待ち"}`;
       } else {
         elements.battleResultWait.textContent = "次の行動を選んでください。";
       }
@@ -5530,23 +5564,32 @@ const CARD_LIBRARY = {
 
     async function requestFriendPostMatchChoice(choice) {
       if (state.battleMode !== "friend" || !state.friendRoomId || !state.friendRole || !state.gameOver) return;
+      if (state.matchResultReason === "surrender" && state.friendSurrenderNoticeAcknowledged !== true) return;
       if (!["rematch", "deck", "lobby"].includes(choice)) return;
       const fb = firebaseApi();
       if (!fb) return;
-      state.friendPostMatchChoice = choice;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       if(state.friendRole === "guest" && !state.friendRoomData?.postMatch){
         elements.battleResultWait.textContent="ホストが試合結果を同期しています…";
         return;
       }
-      const postMatchUpdate = state.friendRole === "host"
-        ? { "postMatch.matchId": state.friendMatchId, "postMatch.hostChoice": choice, status: "lobby" }
-        : { "postMatch.guestChoice": choice };
-      await fb.updateDoc(roomRef, { ...postMatchUpdate, updatedAt: fb.serverTimestamp() });
+      state.friendPostMatchResolving=true;
+      let committedPost;
+      try{
+        committedPost=await fb.runTransaction(fb.db,async transaction=>{
+          const snap=await transaction.get(roomRef);if(!snap.exists())throw new Error("試合部屋が見つかりません。");
+          const room=snap.data()||{},matchId=getFriendMatchId(room.match),post=room.postMatch||{};
+          if(String(matchId||"")!==String(state.friendMatchId||"")||String(post.matchId||"")!==String(state.friendMatchId||""))throw new Error("別の試合へ切り替わっています。");
+          if(!room.match?.result&&!room.match?.state?.gameOver)throw new Error("試合結果がまだ確定していません。");
+          if(post.resolvedAction)return post;
+          const next={...post,[friendPostMatchChoiceKey()]:choice},action=friendPostMatchResolutionAction(next.hostChoice,next.guestChoice),patch={[`postMatch.${friendPostMatchChoiceKey()}`]:choice,updatedAt:fb.serverTimestamp()};
+          if(action){patch["postMatch.resolvedAction"]=action;patch["postMatch.resolutionId"]=`${state.friendMatchId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;patch.status="lobby";patch.hostReady=false;patch.guestReady=false;patch["members.slot0.ready"]=false;patch["members.slot1.ready"]=false;next.resolvedAction=action;next.resolutionId=patch["postMatch.resolutionId"];}
+          transaction.update(roomRef,patch);return next;
+        });
+        state.friendPostMatchChoice=choice;
+      }finally{state.friendPostMatchResolving=false;}
       updateBattleResultPostMatchView({
-        ...(state.friendRoomData?.postMatch || {}),
-        matchId: state.friendMatchId,
-        [friendPostMatchChoiceKey()]: choice
+        ...(committedPost||state.friendRoomData?.postMatch||{}),matchId:state.friendMatchId
       });
     }
 
@@ -5555,30 +5598,15 @@ const CARD_LIBRARY = {
       const post = data?.postMatch;
       if (!post || String(post.matchId || "") !== String(getFriendMatchId(data?.match) || "")) return;
       if (post.resolvedAction) return;
-      const hostChoice = post.hostChoice || null;
-      const guestChoice = post.guestChoice || null;
-      let action = null;
-      if (hostChoice === "lobby" || guestChoice === "lobby") action = "lobby";
-      else if (hostChoice === "deck" || guestChoice === "deck") action = "deck";
-      else if (hostChoice === "rematch" && guestChoice === "rematch") action = "lobby";
+      const action=friendPostMatchResolutionAction(post.hostChoice||null,post.guestChoice||null);
       if (!action) return;
 
       state.friendPostMatchResolving = true;
       try {
         const fb = firebaseApi();
         if (!fb) return;
-        const resolutionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
-        await fb.updateDoc(roomRef, {
-          "postMatch.resolvedAction": action,
-          "postMatch.resolutionId": resolutionId,
-          status: "lobby",
-          hostReady: false,
-          guestReady: false,
-          "members.slot0.ready": false,
-          "members.slot1.ready": false,
-          updatedAt: fb.serverTimestamp()
-        });
+        await fb.runTransaction(fb.db,async transaction=>{const snap=await transaction.get(roomRef);if(!snap.exists())return;const room=snap.data()||{},current=room.postMatch||{};if(current.resolvedAction||String(current.matchId||"")!==String(state.friendMatchId||""))return;const expected=friendPostMatchResolutionAction(current.hostChoice,current.guestChoice);if(!expected)return;transaction.update(roomRef,{"postMatch.resolvedAction":expected,"postMatch.resolutionId":`${state.friendMatchId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,status:"lobby",hostReady:false,guestReady:false,"members.slot0.ready":false,"members.slot1.ready":false,updatedAt:fb.serverTimestamp()});});
       } finally {
         state.friendPostMatchResolving = false;
       }
@@ -5598,8 +5626,9 @@ const CARD_LIBRARY = {
         if (myChoice === "deck") {
           state.friendDeckEditReturnToLobby = true;
           state.editingDeckOwner = "human";
-          showScreen("deck");
-          setMessage("再戦用のあなたのデッキを編集してください。編集後はロビーへ戻り、準備完了を押してください。");
+          state.deckRuleContext={ruleId:data?.regulation?.modeId||"standard"};
+          showScreen("friendLobby");updateFriendLobbyView(data);
+          queueMicrotask(()=>{if(state.friendDeckEditReturnToLobby&&state.friendRoomId){showScreen("deck");setMessage("再戦用のあなたのデッキを編集してください。編集後は試合部屋へ戻り、準備完了を押してください。");}});
         } else {
           showScreen("friendLobby");
           elements.friendLobbyMessage.textContent = "相手がデッキを変更しています。変更後、2人とも準備完了してください。";
@@ -5644,14 +5673,21 @@ const CARD_LIBRARY = {
       state.friendInterruptHandling = false;
       state.friendHandledInterruptIds = new Set();
       state.matchResult = null;
+      state.matchResultReason = null;
+      state.surrenderedBy = null;
       state.lastShownResultKey = null;
       state.friendResultPublishing = false;
       state.friendPostMatchChoice = null;
       state.friendPostMatchResolutionId = null;
       state.friendPostMatchResolving = false;
       state.friendDeckEditReturnToLobby = false;
+      state.friendSurrenderNoticeAcknowledged = null;
+      state.friendSurrenderNoticeMatchId = null;
+      state.friendSurrenderNoticeRunning = false;
+      state.friendSurrenderAckWriting = false;
       elements.battleVsCutIn?.classList.remove("show");elements.battleVsCutIn?.setAttribute("aria-hidden","true");
       hideBattleResult();
+      setSurrenderFlowOverlay(null);
     }
 
     function buildDeckFromSubmittedCounts(counts) {
@@ -5870,6 +5906,7 @@ const CARD_LIBRARY = {
       state.animating = false;
       state.gameOver = false;
       state.matchResult = match.result ?? null;
+      state.matchResultReason = match.resultReason ?? match.state?.resultReason ?? null;
       state.lastShownResultKey = null;
       hideBattleResult();
       state.log = [
@@ -5898,6 +5935,7 @@ const CARD_LIBRARY = {
         state.turnNumber = Number(snapshot.turnNumber || 1);
         state.gameOver = !!snapshot.gameOver;
         state.matchResult = snapshot.result ?? match.result ?? null;
+        state.matchResultReason = snapshot.resultReason ?? match.resultReason ?? null;
         state.log = [...(snapshot.log || [])];
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
         state.friendApplyingRemoteState = false;
@@ -6493,6 +6531,7 @@ const CARD_LIBRARY = {
       state.pendingTerminalEnd.cpu = false;
       state.gameOver = false;
       state.matchResult = null;
+      state.matchResultReason = null;
       elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
       render();
@@ -8557,7 +8596,6 @@ function wrapFinger(value) {
       if (state.startingRouletteActive || state.gameOver || state.turn !== player || state.animating) return false;
       if (state.furiosoSkipActive?.[player] || state.quarterRestActive?.[player]) return false;
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0 || state.activeIntemperanceCardLock?.[player]) return false;
-      if (state.wholeRestActive?.[player] && state.temp?.[player]?.wholeRestCardUsed) return false;
       const rawCardId = state.hands[player]?.[handIndex];
       const cardId = effectiveCardIdForPlayer(player, rawCardId);
       const card = CARD_LIBRARY[cardId];
@@ -8604,11 +8642,19 @@ function wrapFinger(value) {
       try {
         if (!options.skipDelay) await delay(220);
         if (state.gameOver || state.turn !== player || state.pendingTerminalEnd?.[player]) return false;
-        await endTurn();
+        await commitFriendTurnStartBeforeImmediateEnd(player,options);
+        await endTurn(options.reason||"no-actions auto end");
         return true;
       } finally {
         state.autoEndingNoActions[player] = false;
       }
+    }
+
+    async function commitFriendTurnStartBeforeImmediateEnd(player, options = {}) {
+      if(state.battleMode!=="friend"||player!=="human"||!options.friendTurnKey)return true;
+      if(Number(state.friendTurnStartAppliedSerial||0)>=Number(options.friendTurnSerial||state.friendTurnSerial||0))return true;
+      await commitFriendTurnStartApplied(options);
+      return true;
     }
 
     async function startTurn(player,options={}) {
@@ -8819,6 +8865,10 @@ function wrapFinger(value) {
         if (draws > 0) draws -= 1;
         addLog(`${handNames[player]}は「阻害弾」により、このターンの通常ドローを行わない。`);
       }
+      if (state.wholeRestActive[player]) {
+        if (draws > 0) draws -= 1;
+        addLog(`${handNames[player]}は「全休符」により、このターンの通常ドローを行わない。`);
+      }
       if ((state.pendingDirectiveBonusDraw[player] || 0) > 0) {
         draws += state.pendingDirectiveBonusDraw[player];
         addLog(`${handNames[player]}は達成した「指令：再編成」により追加で${state.pendingDirectiveBonusDraw[player]}枚引く。`);
@@ -8880,8 +8930,8 @@ function wrapFinger(value) {
         addLog(`${handNames[player]}は「Furioso」の反動により、このターン行動不能。`);
         render();
         await showTurnRestrictionPopup({ targetPlayer: player, restrictionType: "furioso" });
-        await endTurn();
-        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
+        await commitFriendTurnStartBeforeImmediateEnd(player,options);
+        await endTurn("start-turn restriction");
         return;
       }
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0) {
@@ -8922,14 +8972,14 @@ function wrapFinger(value) {
         }
 
         await delay(250);
-        await endTurn();
-        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
+        await commitFriendTurnStartBeforeImmediateEnd(player,options);
+        await endTurn("charge recoil");
         return;
       }
       if (state.pendingTerminalEnd[player]) {
         state.pendingTerminalEnd[player] = false;
-        await endTurn();
-        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
+        await commitFriendTurnStartBeforeImmediateEnd(player,options);
+        await endTurn("start-turn terminal");
         return;
       }
       if (state.mode !== "attack") {
@@ -8938,8 +8988,7 @@ function wrapFinger(value) {
         return;
       }
 
-      if(await maybeAutoEndTurnForNoActions(player)){
-        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
+      if(await maybeAutoEndTurnForNoActions(player,options)){
         return;
       }
 
@@ -8972,7 +9021,6 @@ function wrapFinger(value) {
       const romanStatus=document.getElementById("romanPreparationStatus"),romanCounts=document.getElementById("romanPreparationCounts");
       if(romanStatus){const active=isRomanPreparation();romanStatus.hidden=!active;if(active&&romanCounts)romanCounts.textContent=`あなた：残り${romanRemainingPreparationTurns("human")}ターン / 相手：残り${romanRemainingPreparationTurns("cpu")}ターン`;}
       ensureThemeAttachments("human"); ensureThemeAttachments("cpu");
-      const wrPlayer=state.turn;if(state.wholeRestActive?.[wrPlayer]&&state.temp?.[wrPlayer]?.wholeRestCardUsed&&state.mode==="attack"&&!state.animating){state.temp[wrPlayer].wholeRestCardUsed=false;setTimeout(()=>{if(state.turn===wrPlayer&&!state.gameOver)endTurn();},0);}
       ensureOnlineStateMaps();
       scheduleFriendStatePublish();
       for (const player of ["human", "cpu"]) {
@@ -9061,6 +9109,12 @@ function wrapFinger(value) {
       if (elements.battleRestartBtn) {
         elements.battleRestartBtn.classList.toggle("screen-hidden", state.battleMode === "friend");
       }
+      const friendBattle=state.battleMode==="friend";
+      elements.battleBackMenuBtn?.classList.toggle("screen-hidden",friendBattle);
+      elements.drawBtn?.classList.toggle("screen-hidden",friendBattle);
+      elements.resetBtn?.classList.toggle("screen-hidden",friendBattle);
+      elements.friendSurrenderBtn?.classList.toggle("screen-hidden",!(friendBattle&&state.friendMatchStarted&&!state.gameOver));
+      if(elements.friendSurrenderBtn)elements.friendSurrenderBtn.disabled=state.friendSurrenderBusy||state.gameOver;
       if (elements.battleResultReopenBtn) {
         elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
       }
@@ -9069,7 +9123,7 @@ function wrapFinger(value) {
       const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive || !canUseNormalAttackAction("human");
       elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
-      elements.drawBtn.disabled = lock || setupActive;
+      elements.drawBtn.disabled = friendBattle || lock || setupActive;
       elements.cancelBtn.disabled = lock && !setupActive;
       elements.cancelBtn.textContent = setupActive ? "仕込み終了" : "解除";
       elements.confirmSplitBtn.disabled = lock || setupActive;
@@ -9360,7 +9414,7 @@ function wrapFinger(value) {
     }
     function useRitardando(player){const o=otherPlayer(player);for(const h of ["L","R"]){const before=state[o][h];if(before<=0)continue;state[o][h]=Math.max(0,before-1);if(state[o][h]===0)markDirectiveOpponentZero(player,o,before);}clearBrokenTraps(o);state.pendingDrawLock[o]=true;render();}
     function useQuarterRest(player){const o=otherPlayer(player);state.quarterRestPending[o]=true;state.quarterRestPending[player]=true;}
-    function useWholeRest(player){const o=otherPlayer(player);state.wholeRestPending[o]=true;state.pendingStartDrawSkip[o]=true;}
+    function useWholeRest(player){const o=otherPlayer(player);state.wholeRestPending[o]=true;}
 
     async function chooseLivingHand(player, owner, promptText) {
       const choices=["L","R"].filter(hand=>state[owner][hand]>0);
@@ -12327,7 +12381,6 @@ function renderLastAction() {
       }
       triggerChemicalGeneration(player, cardId);
       recordRondoUse(player,cardId);
-      if(state.wholeRestActive?.[player])state.temp[player].wholeRestCardUsed=true;
       render();
 
       // 罠・加護・呪縛は、対象の手を選んで設置できた後に
@@ -12571,7 +12624,6 @@ function renderLastAction() {
       await card.effect(player);
       state.resolvingEffectPlayer=previousEffectPlayer;
       if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") state.pendingTerminalEnd[player] = true;
-      if(state.wholeRestActive?.[player]) state.temp[player].wholeRestCardUsed=true;
       triggerChemicalGeneration(player, cardId);
       checkWin();
 
@@ -12851,7 +12903,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
     }
 
     function isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower) {
-      if (attackStartPower <= 0 || targetStartPower <= 0) return false;
+      if (attackStartPower <= 0 || targetStartPower < 0) return false;
       return Math.abs(attackStartPower - targetStartPower) <= resonanceThreshold(attacker, attackHand);
     }
 
@@ -13639,8 +13691,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       render();
     }
 
-async function endTurn() {
+async function endTurn(reason="unspecified") {
       if(state.startingRouletteActive)return;
+  const friendRollback=state.battleMode==="friend"&&state.friendRole?{snapshot:buildFriendCanonicalSnapshot(),meta:{turnSerial:state.friendTurnSerial,turnOwner:state.friendTurnOwner,turnStarted:state.friendTurnStarted,turnStartAppliedSerial:state.friendTurnStartAppliedSerial,turnStartToken:state.friendTurnStartToken,turnStartClaimedAt:state.friendTurnStartClaimedAtMs}}:null;
   const romanPreparationWasActive=isRomanPreparation();
   if (isTutorialBattle()) {
     freezeTutorialBattleToHumanTurn();
@@ -13709,7 +13762,16 @@ async function endTurn() {
           state.friendTurnStartClaimedAtMs=0;
           setMessage("相手の番です。同期を待っています。");
           render();
-          await publishFriendStateNow();
+          try{
+            const committed=await publishFriendStateNow();
+            if(committed===false)throw new Error("handoff commit was not accepted");
+          }catch(error){
+            const failed={reason,local:{matchId:state.friendMatchId,friendRole:state.friendRole,turn:state.turn,turnSerial:state.friendTurnSerial,turnOwner:state.friendTurnOwner,turnStarted:state.friendTurnStarted,turnStartAppliedSerial:state.friendTurnStartAppliedSerial,turnStartToken:state.friendTurnStartToken,turnStartClaimedAt:state.friendTurnStartClaimedAtMs},remote:state.friendLastPublishRemoteMatch||null,payload:buildFriendCanonicalSnapshot(),error:{code:error?.code||"",message:error?.message||String(error)}};
+            console.error("[friend-handoff-failed]",failed);
+            if(friendRollback?.snapshot){const hydrated=state.friendSnapshotHydrated;state.friendSnapshotHydrated=false;await applyFriendCanonicalSnapshot(friendRollback.snapshot,0,friendRollback.meta);state.friendSnapshotHydrated=hydrated;state.friendLastPublishedSignature="";}
+            setMessage("ターン交代を同期できませんでした。もう一度操作してください。");
+            throw error;
+          }
           return;
         }
         setMessage("CPUの番です。");
@@ -13748,10 +13810,10 @@ async function endTurn() {
       elements.battleResultKicker.textContent = "MATCH RESULT";
       if (view === "win") {
         elements.battleResultTitle.textContent = "勝利！";
-        elements.battleResultText.textContent = "相手の両手を0にしました。";
+        elements.battleResultText.textContent = state.matchResultReason==="surrender" ? "相手の降参により勝利しました。" : "相手の両手を0にしました。";
       } else if (view === "lose") {
         elements.battleResultTitle.textContent = "敗北…";
-        elements.battleResultText.textContent = "あなたの両手が0になりました。";
+        elements.battleResultText.textContent = state.matchResultReason==="surrender" ? "あなたは降参しました。" : "あなたの両手が0になりました。";
       } else {
         elements.battleResultTitle.textContent = "引き分け";
         elements.battleResultText.textContent = "同じ効果解決中に両者の両手が0になりました。";
@@ -13759,11 +13821,88 @@ async function endTurn() {
       updateBattleResultPostMatchView(state.friendRoomData?.postMatch);
     }
 
-    function applySyncedBattleResult(result) {
+    function setSurrenderFlowOverlay(mode) {
+      if (!elements.surrenderFlowOverlay) return;
+      const showing = mode === "winner-notice" || mode === "surrender-wait";
+      elements.surrenderFlowOverlay.classList.toggle("show", showing);
+      elements.surrenderFlowOverlay.setAttribute("aria-hidden", String(!showing));
+      if (!showing) return;
+      elements.surrenderFlowKicker.textContent = mode === "winner-notice" ? "MATCH UPDATE" : "SYNCING RESULT";
+      elements.surrenderFlowText.textContent = mode === "winner-notice" ? "相手が降参しました。" : "相手が結果を確認しています…";
+      elements.surrenderFlowSub.textContent = mode === "winner-notice" ? "あなたの勝利です。" : "確認が終わるまでそのままお待ちください。";
+    }
+
+    async function acknowledgeFriendSurrenderNotice(matchId) {
+      if (state.friendSurrenderAckWriting || !matchId || String(matchId) !== String(state.friendMatchId || "")) return false;
+      const fb = firebaseApi();
+      if (!fb || !state.friendRoomId || !state.friendRole) return false;
+      state.friendSurrenderAckWriting = true;
+      try {
+        const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+        const acknowledged = await fb.runTransaction(fb.db, async transaction => {
+          const snap = await transaction.get(roomRef);
+          if (!snap.exists()) return false;
+          const room = snap.data() || {}, match = room.match || {};
+          if (String(getFriendMatchId(match) || "") !== String(matchId) || room.status !== "playing") return false;
+          if (match.resultReason !== "surrender" || match.state?.gameOver !== true || match.surrenderedBy === state.friendRole || match.result !== state.friendRole) return false;
+          if (match.surrenderNoticeAcknowledged === true) return true;
+          transaction.update(roomRef, {"match.surrenderNoticeAcknowledged": true, updatedAt: fb.serverTimestamp()});
+          return true;
+        });
+        if (acknowledged && String(matchId) === String(state.friendMatchId || "")) {
+          state.friendSurrenderNoticeAcknowledged = true;
+          setSurrenderFlowOverlay(null);
+          showBattleResult(state.matchResult);
+        }
+        return acknowledged;
+      } finally {
+        state.friendSurrenderAckWriting = false;
+      }
+    }
+
+    async function runFriendSurrenderWinnerNotice(matchId) {
+      if (!matchId || String(matchId) !== String(state.friendMatchId || "") || state.friendSurrenderNoticeAcknowledged === true) return;
+      if (state.friendSurrenderNoticeRunning && state.friendSurrenderNoticeMatchId === matchId) return;
+      state.friendSurrenderNoticeRunning = true;
+      state.friendSurrenderNoticeMatchId = matchId;
+      hideBattleResult();
+      setSurrenderFlowOverlay("winner-notice");
+      try {
+        await delay(1800);
+        if (String(matchId) !== String(state.friendMatchId || "") || state.matchResultReason !== "surrender" || state.friendSurrenderNoticeAcknowledged === true) return;
+        setSurrenderFlowOverlay(null);
+        await acknowledgeFriendSurrenderNotice(matchId);
+      } catch (error) {
+        console.error("PVP surrender notice acknowledgement failed", error);
+        if (String(matchId) === String(state.friendMatchId || "")) {
+          setSurrenderFlowOverlay("winner-notice");
+          setMessage("降参結果の確認同期に失敗しました。再接続すると再試行します。");
+        }
+      } finally {
+        if (state.friendSurrenderNoticeMatchId === matchId) state.friendSurrenderNoticeRunning = false;
+      }
+    }
+
+    function applySyncedBattleResult(result, reason = null, surrenderedBy = null, noticeAcknowledged = null, matchId = state.friendMatchId) {
       if (!result) return;
       state.matchResult = result;
+      state.matchResultReason = reason ?? state.matchResultReason ?? null;
+      state.surrenderedBy = surrenderedBy ?? state.surrenderedBy ?? null;
+      state.friendSurrenderNoticeAcknowledged = noticeAcknowledged;
       state.gameOver = true;
       const view = localResultView(result);
+      if (state.battleMode === "friend" && state.matchResultReason === "surrender" && noticeAcknowledged !== true) {
+        hideBattleResult();
+        if (state.friendRole === state.surrenderedBy) {
+          setSurrenderFlowOverlay("surrender-wait");
+          setMessage("相手が結果を確認しています…");
+        } else if (result === state.friendRole) {
+          runFriendSurrenderWinnerNotice(matchId).catch(error => console.error("PVP surrender notice failed", error));
+        }
+        render();
+        return;
+      }
+      setSurrenderFlowOverlay(null);
       setMessage(view === "win" ? "勝利！ 試合が終了しました。" : view === "lose" ? "敗北…。試合が終了しました。" : "引き分け。試合が終了しました。");
       render();
       showBattleResult(result);
@@ -13771,6 +13910,7 @@ async function endTurn() {
 
     async function initializeFriendPostMatchAsHost(result = state.matchResult) {
       if (state.battleMode !== "friend" || state.friendRole !== "host" || !state.friendRoomId || !state.friendMatchId || !result) return;
+      if (state.matchResultReason === "surrender" && state.friendSurrenderNoticeAcknowledged !== true) return;
       const fb = firebaseApi();
       if (!fb) return;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
@@ -13787,6 +13927,25 @@ async function endTurn() {
         "members.slot1.ready": false,
         updatedAt: fb.serverTimestamp()
       });
+    }
+
+    async function surrenderFriendMatch() {
+      if(state.battleMode!=="friend"||state.currentScreen!=="battle"||state.gameOver||!state.friendMatchStarted||!state.friendRoomId||!state.friendMatchId||!state.friendRole||state.friendSurrenderBusy)return false;
+      const fb=firebaseApi();if(!fb)return false;state.friendSurrenderBusy=true;
+      try{
+        const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId),winner=otherFriendRole(),loser=state.friendRole;
+        const result=await fb.runTransaction(fb.db,async transaction=>{
+          const snap=await transaction.get(roomRef);if(!snap.exists())throw new Error("試合部屋が見つかりません。");
+          const room=snap.data()||{},match=room.match||{},remoteMatchId=getFriendMatchId(match);
+          if(room.status!=="playing"||String(remoteMatchId||"")!==String(state.friendMatchId||""))throw new Error("この試合は既に終了しています。");
+          if(match.result||match.state?.gameOver)return {accepted:false,result:match.result||match.state?.result||null};
+          const snapshot=cloneJson(match.state||buildFriendCanonicalSnapshot());snapshot.gameOver=true;snapshot.result=winner;snapshot.resultReason="surrender";snapshot.surrenderedBy=loser;
+          transaction.update(roomRef,{"match.version":51,"match.stateRevision":Number(match.stateRevision||0)+1,"match.state":snapshot,"match.result":winner,"match.resultReason":"surrender","match.surrenderedBy":loser,"match.surrenderNoticeAcknowledged":false,updatedAt:fb.serverTimestamp()});
+          return {accepted:true,result:winner};
+        });
+        if(result?.result){applySyncedBattleResult(result.result,"surrender",state.friendRole,false,state.friendMatchId);}
+        return !!result?.accepted;
+      }finally{state.friendSurrenderBusy=false;render();}
     }
 
     async function publishFriendResultNow(result) {
@@ -13824,7 +13983,7 @@ async function endTurn() {
             "members.slot1.ready": false
           });
         }
-        await fb.updateDoc(roomRef, resultUpdate);
+        await fb.runTransaction(fb.db,async transaction=>{const roomSnap=await transaction.get(roomRef);if(!roomSnap.exists())throw new Error("試合部屋が見つかりません。");const room=roomSnap.data()||{},match=room.match||{};if(String(getFriendMatchId(match)||"")!==String(state.friendMatchId||""))throw new Error("別の試合へ切り替わっています。");if(match.result||match.state?.gameOver)return;transaction.update(roomRef,resultUpdate);});
       } finally {
         state.friendResultPublishing = false;
       }
@@ -14235,9 +14394,11 @@ async function endTurn() {
       if (state.gameOver) return;
 
       let usedAction = await chooseCpuCardAction();
+      if(state.turn!=="cpu"||state.gameOver)return;
       while(usedAction && usedAction!=="setup"&&!state.pendingTerminalEnd.cpu&&Number(state.temp.cpu.cardExtraUses||0)>0){
         setMessage("CPUが追加のカードを使用します。");render();await delay(300);
         const nextAction=await chooseCpuCardAction();
+        if(state.turn!=="cpu"||state.gameOver)return;
         if(!nextAction)break;
         usedAction=nextAction;
       }
@@ -14259,6 +14420,8 @@ async function endTurn() {
         await endTurn();
         return;
       }
+
+      if(await maybeAutoEndTurnForNoActions("cpu",{skipDelay:true}))return;
 
       const move = chooseCpuMove();
 
@@ -15195,6 +15358,7 @@ async function endTurn() {
       state.animating = false;
       state.gameOver = false;
       state.matchResult = null;
+      state.matchResultReason = null;
       state.lastShownResultKey = null;
       hideBattleResult();
       state.log = [];
@@ -15222,6 +15386,14 @@ async function endTurn() {
     if (elements.battleResultReopenBtn) {
       elements.battleResultReopenBtn.addEventListener("click", () => {
         if (state.matchResult) showBattleResult(state.matchResult);
+      });
+    }
+    if(elements.friendSurrenderBtn){
+      elements.friendSurrenderBtn.addEventListener("click",async()=>{
+        if(state.battleMode!=="friend"||state.gameOver||state.friendSurrenderBusy)return;
+        const confirmed=await requestSocialConfirmation("降参しますか？","降参すると、この試合はあなたの敗北になります。",{okLabel:"降参する",cancelLabel:"キャンセル"});
+        if(!confirmed||state.gameOver||state.friendSurrenderBusy)return;
+        try{await surrenderFriendMatch();}catch(error){console.error("PVP surrender failed",error);setMessage(`降参の同期に失敗しました：${error.message||error}`);}
       });
     }
     if (elements.battleResultRematchBtn) {
@@ -15500,7 +15672,7 @@ async function endTurn() {
       state.deckRuleContext=null;
       showScreen("menu");
     });
-    elements.battleBackMenuBtn.addEventListener("click", () => showScreen("menu"));
+    elements.battleBackMenuBtn.addEventListener("click", () => {if(state.battleMode==="friend")return;showScreen("menu");});
     elements.battleRestartBtn.addEventListener("click", () => startBattleWithDifficulty(state.cpuDifficulty));
 
     document.querySelectorAll("[data-difficulty-start]").forEach(btn => {
@@ -15574,6 +15746,7 @@ async function endTurn() {
     });
 
     elements.drawBtn.addEventListener("click", () => {
+      if(state.battleMode==="friend")return;
       if (state.turn !== "human" || state.gameOver || state.animating || state.temp.human.setupMode) return;
       drawCard("human");
       setMessage("手札を1枚引きました。これはテスト用ボタンです。");
@@ -15609,6 +15782,7 @@ async function endTurn() {
     });
 
     elements.resetBtn.addEventListener("click", () => {
+      if(state.battleMode==="friend")return;
       resetGame();
       setMessage("試合をリセットしました。");
     });
