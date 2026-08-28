@@ -316,13 +316,23 @@ const CARD_LIBRARY = {
           const candidates = getBrawlCandidates(player);
           if (!candidates.length) {
             addLog(`${handNames[player]}の「乱闘」は、発動できるカードがなく不発になった。`);
+            delete state.temp[player].brawlAllowanceBeforeUse;
             return;
           }
           const picked = candidates[Math.floor(Math.random() * candidates.length)];
           const copied = CARD_LIBRARY[picked.cardId];
           addLog(`${handNames[player]}の「乱闘」により「${copied.name}」の効果が無償で発動する。元のカードは手札に残る。`);
           await showCardPopup(player, copied, false, player === "cpu" ? 760 : 620);
-          await activateCopiedCardEffect(player, picked.cardId, "乱闘", { sourceHandIndex: picked.index });
+          try {
+            await activateCopiedCardEffect(player, picked.cardId, "乱闘", { sourceHandIndex: picked.index });
+            if (copied.consumesCardAction === false && state.temp[player].brawlAllowanceBeforeUse) {
+              state.temp[player].cardActionUsed = state.temp[player].brawlAllowanceBeforeUse.cardActionUsed;
+              state.temp[player].cardExtraUses = state.temp[player].brawlAllowanceBeforeUse.cardExtraUses;
+              addLog(`${handNames[player]}の「乱闘」は、使用回数を消費しない効果を引いたためカード使用可能回数を1回分返却した。`);
+            }
+          } finally {
+            delete state.temp[player].brawlAllowanceBeforeUse;
+          }
         }
       },
       advanceNotice: {
@@ -1521,7 +1531,7 @@ const CARD_LIBRARY = {
         name: "防弾チョッキ",
         cost: 2,
         type: "加護",
-        text: "自分の手に表向きで置く。この手は「銃」カードによる攻撃と「狙撃」を受けない。ただし「ロジックアトリエ」の効果は防げない。手が0になったら捨て札に置く。",
+        text: "自分の手に表向きで置く。この手は「銃」カードによる攻撃と「狙撃」「援護射撃」を受けない。ただし「ロジックアトリエ」の効果は防げない。手が0になったら捨て札に置く。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -1991,7 +2001,7 @@ const CARD_LIBRARY = {
       sniperBlessing: {name:"狙撃の加護",cost:2,type:"加護",blessing:true,generatedCards:["supportFire"],text:"自分のターン開始時、手札に「援護射撃」を1枚加える。この加護が付いた手では攻撃できず、その手が5以上になる時は余りを計算せず0になる。",canPlay:p=>canPlaceAttachment(p,p)},
       supportFire: {name:"援護射撃",cost:0,type:"補助 / 生成カード",token:true,countsAsHandCard:false,discardable:false,consumesCardAction:false,vanishOnUse:true,vanishAtTurnEnd:true,text:"相手の0でない手を1つ選び、その手に1本加える。このカードは手札枚数に数えず、カード使用回数を消費しない。使用後またはターン終了時に、捨て札へ送られず消滅する。",canPlay:p=>["L","R"].some(h=>state[otherPlayer(p)][h]>0),effect:async p=>await useSupportFire(p)},
       vibrationGeneration: {name:"振動発電",cost:2,type:"加護 / 共鳴・充電",blessing:true,resonance:true,chargeCard:true,text:"この加護が付いた手を攻撃元として共鳴が成立した時、充電を3得る。",canPlay:p=>canPlaceAttachment(p,p)},
-      cardLock: {name:"カードロック",cost:2,type:"補助",text:"自分の手札から2枚を選ぶ。選ばれたカードは次の2回の自分のターン終了まで、疲労以外では捨てられない。",canPlay:p=>getDiscardCandidates(p,"cardEffect").length>=3,effect:p=>useCardLock(p)},
+      cardLock: {name:"カードロック",cost:2,type:"補助",text:"自分の手札から1～2枚を選ぶ。選ばれたカードは次の2回の自分のターン終了まで、疲労以外では捨てられない。",canPlay:p=>getDiscardCandidates(p,"cardEffect").length>=2,effect:p=>useCardLock(p)},
       replaceAttachments: {name:"置き換える",cost:3,type:"補助",text:"自分の左右の手に設置されている加護・呪縛・罠と、それらに付随する状態を左右丸ごと入れ替える。",canPlay:()=>true,effect:p=>replaceHandAttachments(p)},
       forceCard: {name:"強制",cost:2,type:"補助",text:"相手は通常手札から1枚を選ぶ。次の相手ターン、その個体以外のカードを使用できない。対象がなくなっても選び直さない。",canPlay:p=>getCountedHandCards(otherPlayer(p)).length>0,effect:p=>useForceCard(p)},
       peek: {name:"覗き見",cost:2,type:"補助",text:"相手の通常手札からランダムに最大3枚を見る。",canPlay:()=>true,effect:async p=>await usePeek(p)},
@@ -2260,9 +2270,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v167a-deck-editor-density";
+    const LATEST_NEWS_ID = "v167b-minor-rules-safety";
 
     const UPDATE_NEWS = [
+      {id:"v167b-minor-rules-safety",version:"v167b",date:"2026-08-28",title:"カード処理とデッキ表示を調整",summary:"一部カードの細かな仕様と安全性を改善しました。",featured:true,tags:["fix","balance"],items:["compact表示をPC・iPadで最大4列へ調整","カードロックを手札から1～2枚選べるよう変更","援護射撃を狙撃系防御の対象へ変更","乱闘で使用回数を消費しないカードが選ばれた場合に使用可能回数を返却","過加速反動中の通常ドロー計算を加算式へ調整","狙撃の加護付きの手を通常攻撃時に選択不可へ変更","乱闘時に対象が存在しない効果の安全性を改善"]},
       {id:"v167a-deck-editor-density",version:"v167a",date:"2026-08-28",title:"デッキ編集の一覧性を改善",summary:"お気に入りとコンパクト表示を見やすく調整しました。",featured:true,tags:["fix","ui"],items:["お気に入りカードを選択中の並び順に関係なく常に上部表示","お気に入りボタンを♡／♥へ変更","コンパクト表示を2行・多列の高密度レイアウトへ改善","フィルター選択時の表示を控えめに調整"]},
       {id:"v167-deck-editor-peek-ui",version:"v167",date:"2026-08-28",title:"デッキ編集と「覗き見」を大幅改善",summary:"カードを探し、調整し、確認する操作がより快適になりました。",featured:true,tags:["update","ui"],items:["デッキ編集画面を大幅改善","カード名に加えて本文・種類・テーマから検索可能","種類・コスト・テーマ・採用状態・お気に入りで絞り込み可能","デッキ詳細からカード枚数を直接調整可能","お気に入り機能とお気に入り優先順を追加","設定に初期OFFのデッキ編集コンパクト表示を追加","「覗き見」の結果を最大3枚の専用確認画面で表示"]},
       {id:"v166c-interaction-modal-stability",version:"v166c",date:"2026-08-28",title:"オンライン待機とアカウント画面を安定化",summary:"相手の選択待ちとアカウント内画面の操作不具合を修正しました。",featured:true,tags:["fix","online","ui"],items:["オンラインで相手の選択待ち中に戦闘操作できてしまう問題を修正","「強制」「貿易」の最終効果を同期してから待機状態を解除するよう改善","interaction中に再接続した際の進行ロックを改善","アカウントのコード入力画面が操作不能になる問題を修正","名前変更・プレイヤーカード編集などの画面切替を改善"]},
@@ -9140,12 +9151,12 @@ function wrapFinger(value) {
         }
       }
 
-      if (!accelerationTriggered && state.activeNoDraw[player] > 0) {
-        draws = 0;
+      if (state.activeNoDraw[player] > 0) {
+        draws = calculateTurnStartDrawCount({base:draws,penalty:1});
         state.activeNoDraw[player] -= 1;
         remainingNoDraw = state.activeNoDraw[player];
         noDrawTriggered = true;
-        addLog(`${handNames[player]}は「過加速」の反動で、このターン開始時にカードを引けない。残り${remainingNoDraw}ターン。`);
+        addLog(`${handNames[player]}は「過加速」の反動で、このターン開始時の通常ドローが1枚減る。残り${remainingNoDraw}ターン。`);
       }
 
       if (accelerationTriggered) {
@@ -9254,6 +9265,10 @@ function wrapFinger(value) {
       }
     }
 
+    function calculateTurnStartDrawCount({base=1,bonus=0,penalty=0,suppressed=false}={}) {
+      return suppressed ? 0 : Math.max(0, Number(base||0)+Number(bonus||0)-Number(penalty||0));
+    }
+
     function render() {
       refreshPlayerDisplayNames();
       const romanStatus=document.getElementById("romanPreparationStatus"),romanCounts=document.getElementById("romanPreparationCounts");
@@ -9280,7 +9295,7 @@ function wrapFinger(value) {
               card.classList.add("trap-target");
             }
             if (state.mode === "attack") {
-              if (player === "human" && value > 0) card.classList.add("selectable");
+              if (player === "human" && getNormalAttackSourceHands("human").includes(hand)) card.classList.add("selectable");
               if (player === "cpu" && state.selectedAttackHand && value > 0) card.classList.add("selectable");
             }
             if ((state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing") && player === "human" && value > 0 && state.traps.human[hand].length < 2) {
@@ -9584,6 +9599,10 @@ function wrapFinger(value) {
     }
     function getDiscardCandidates(player,reason="cardEffect"){return state.hands[player].map((cardId,index)=>({cardId,index,instanceId:handCardInstanceId(player,index)})).filter(x=>canDiscardHandCard(player,x.index,reason));}
     function getTradeEligibleCards(player){return getDiscardCandidates(player,"trade");}
+    function getCardLockCandidates(player){
+      const excludedIndex=state.copiedEffectContext?.sourceLabel==="乱闘"&&state.copiedEffectContext?.cardId==="cardLock"?state.copiedEffectContext.sourceHandIndex:-1;
+      return getDiscardCandidates(player,"cardEffect").filter(item=>item.index!==excludedIndex);
+    }
     function removeCardWithoutDiscard(player,index,reason="消滅"){
       if(index<0||index>=state.hands[player].length)return null;ensureHandCardInstances(player);const [id]=state.hands[player].splice(index,1);state.handCardInstances[player].splice(index,1);if(id)addLog(`${handNames[player]}の「${CARD_LIBRARY[id]?.name||id}」が${reason}した。`);return id;
     }
@@ -9593,21 +9612,28 @@ function wrapFinger(value) {
     function v166ApplyFingerValue(targetPlayer,hand,value,sourcePlayer,label){if(state.nobleGasProtected?.[targetPlayer]&&sourcePlayer&&sourcePlayer!==targetPlayer){addLog(`${label}は「貴ガス」に防がれた。`);return state[targetPlayer][hand];}const before=state[targetPlayer][hand];state[targetPlayer][hand]=v166NormalizeForHand(value,targetPlayer,hand);if(before!==state[targetPlayer][hand])addLog(`${label}：${handNames[targetPlayer]}の${handNames[hand]} ${before}→${state[targetPlayer][hand]}。`);clearBrokenTraps(targetPlayer);return state[targetPlayer][hand];}
     async function useSupportFire(player){
       const o=otherPlayer(player),picked=await beginBoardHandSelection(player,{owners:[o],minimum:1,message:"「援護射撃」：1本加える相手の手を選んでください。",cpuPick:candidates=>[...candidates].sort((a,b)=>b.value-a.value)[0]});
-      if(picked)v166ApplyFingerValue(o,picked.hand,state[o][picked.hand]+1,player,"援護射撃");
+      if(!picked){addLog("「援護射撃」は対象が存在せず不発。");return false;}
+      if(await blockWithBulletproofVest(o,picked.hand,"supportFire","援護射撃"))return true;
+      const amount=applyGuardBlessingReduction(o,picked.hand,1,"援護射撃");
+      v166ApplyFingerValue(o,picked.hand,state[o][picked.hand]+amount,player,"援護射撃");
+      return true;
     }
     async function useBalancedScales(player){const plus=player==="cpu"?true:await showGameConfirmation({title:"釣り合った天秤",message:"全ての手へ+1を適用しますか？（キャンセルで-1）",confirmLabel:"+1",cancelLabel:"-1"}),delta=plus?1:-1,o=otherPlayer(player);for(const owner of [player,o])for(const hand of ["L","R"])v166ApplyFingerValue(owner,hand,state[owner][hand]+delta,player,"釣り合った天秤");}
     async function useMemoryCard(player){if((state.copiedEffectDepth||0)>=2){addLog("「思い出」は記憶の連鎖が深くなり不発。");return;}const candidates=state.discard[player].filter(id=>CARD_LIBRARY[id]&&typeof CARD_LIBRARY[id].effect==="function"&&!isEffectCopyExcluded(id,"brawl"));if(!candidates.length)return;const id=candidates[Math.floor(Math.random()*candidates.length)];state.copiedEffectDepth++;try{await activateCopiedCardEffect(player,id,"思い出");}finally{state.copiedEffectDepth--;}}
     async function useCardLock(player){
-      ensureHandCardInstances(player);let picks;
+      ensureHandCardInstances(player);const candidates=getCardLockCandidates(player);if(!candidates.length){addLog("「カードロック」は保護できるカードがなく不発。");return false;}let picks;
       if(player==="human"){
-        const indexes=await beginHandCardSelection({min:2,max:2,filter:(id,index)=>canDiscardHandCard(player,index,"cardEffect"),message:"「カードロック」：保護するカードを2枚選んでください。"});
+        const eligible=new Set(candidates.map(item=>item.index));
+        const indexes=await beginHandCardSelection({min:1,max:2,filter:(_id,index)=>eligible.has(index),message:"「カードロック」：保護するカードを1～2枚選んでください。"});
         picks=indexes.map(index=>({index,cardId:state.hands[player][index],instanceId:handCardInstanceId(player,index)}));
-      }else picks=getDiscardCandidates(player,"cardEffect").slice(0,2);
+      }else picks=candidates.slice(0,2);
       state.cardLocks[player]=[...(state.cardLocks[player]||[]),...picks.map(x=>({instanceId:x.instanceId,cardId:x.cardId,turnsRemaining:2}))];
+      return picks.length>0;
     }
     function replaceHandAttachments(player){[state.traps[player].L,state.traps[player].R]=[state.traps[player].R,state.traps[player].L];addLog(`${handNames[player]}は左右の設置物を入れ替えた。`);}
     async function useForceCard(player){
       const o=otherPlayer(player);let pick=null;
+      if(!getCountedHandCards(o).length){addLog("「強制」は選択できる通常手札がなく不発。");return false;}
       if(state.battleMode==="friend"&&player==="human"){
         const actionId=makeFriendInterruptId();await createSecureFriendInteraction({actionId,type:"forceCard"});
         await forcePublishFriendStateNow("強制の選択待ち開始");
@@ -9663,7 +9689,7 @@ function wrapFinger(value) {
     function v166ExchangePairs(player){const o=otherPlayer(player),pairs=[];for(const a of ["L","R"])for(const b of ["L","R"])if(state[player][a]>0&&state[o][b]>0&&state[player][a]!==state[o][b])pairs.push([a,b]);return pairs;}
     function hasV166ExchangePair(player){return v166ExchangePairs(player).length>0;}
     async function useExchangeHands(player){
-      const o=otherPlayer(player);let pair;
+      const o=otherPlayer(player);if(!hasV166ExchangePair(player)){addLog("「交換」は有効な交換対象がなく不発。");return false;}let pair;
       if(player==="human"){
         const own=await beginBoardHandSelection(player,{owners:[player],minimum:1,message:"「交換」：交換する自分の手を選んでください。"});if(!own)return;
         const opponent=await beginBoardHandSelection(player,{owners:[o],minimum:1,candidateFilter:item=>item.value!==own.value,message:"「交換」：本数の異なる相手の手を選んでください。"});if(!opponent)return;
@@ -9677,6 +9703,7 @@ function wrapFinger(value) {
       return indexes.length?{index:indexes[0],cardId:state.hands[player][indexes[0]],instanceId:handCardInstanceId(player,indexes[0])}:null;
     }
     async function useTrade(player){
+      if(!getTradeEligibleCards(player).length||!getTradeEligibleCards(otherPlayer(player)).length){addLog("「貿易」は交換できるカードがなく不発。");return false;}
       if(state.battleMode==="friend"&&player==="human"){
         const a=await chooseTradeCard(player);if(!a)return;
         const actionId=makeFriendInterruptId(),nonce=randomInteractionNonce(),sourceCommit=await makeTradeCommit({matchId:state.friendMatchId,actionId,role:state.friendRole,instanceId:a.instanceId,nonce});
@@ -11614,8 +11641,10 @@ function wrapFinger(value) {
     }
 
     function canBulletproofVestBlockSource(sourceCardId) {
-      return sourceCardId === "snipe" || !!CARD_LIBRARY[sourceCardId]?.gun;
+      return isSnipingEffect(sourceCardId) || !!CARD_LIBRARY[sourceCardId]?.gun;
     }
+
+    function isSnipingEffect(sourceCardId) { return sourceCardId === "snipe" || sourceCardId === "supportFire"; }
 
     function isBulletproofVestBlocking(player, hand, sourceCardId) {
       return hasBulletproofVest(player, hand) && canBulletproofVestBlockSource(sourceCardId);
@@ -12476,10 +12505,14 @@ function renderLastAction() {
 
     function canUseNormalAttackAction(player) {
       if (isNormalAttackActionForbidden(player)) return false;
-      if (!["L", "R"].some(hand => isAlive(player, hand))) return false;
+      if (!getNormalAttackSourceHands(player).length) return false;
       if (!["L", "R"].some(hand => isAlive(otherPlayer(player), hand))) return false;
       const temp = state.temp[player] || {};
       return Number(temp.attacksUsed || 0) < Number(temp.attackLimit ?? 1) || !!state.activeExtraAction?.[player];
+    }
+
+    function getNormalAttackSourceHands(player) {
+      return ["L", "R"].filter(hand => isAlive(player, hand) && !hasAttachment(player, hand, "sniperBlessing"));
     }
 
     function canUseSplitAction(player) {
@@ -12938,6 +12971,7 @@ function renderLastAction() {
         cardActionUsed: !!state.temp[player].cardActionUsed,
         cardExtraUses: Number(state.temp[player].cardExtraUses || 0)
       };
+      if(cardId==="brawl")state.temp[player].brawlAllowanceBeforeUse={...cardAllowanceBeforeUse};
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
       state.handCardInstances[player].splice(handIndex,1);
@@ -13433,7 +13467,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
       if(state.temp[attacker]?.multiAttackSource==="Furioso"&&Number(state.temp[attacker]?.attackLimit)===0&&!options.cardInternalAttack)return false;
       if(state.wholeRestActive?.[attacker]&&!options.cardInternalAttack){if(attacker==="human")setMessage("全休符により通常攻撃行動はできません。");return false;}
-      if(hasAttachment(attacker,attackHand,"sniperBlessing")){if(attacker==="human")setMessage("「狙撃の加護」が付いた手では攻撃できません。");return false;}
+      if(!options.cardInternalAttack&&hasAttachment(attacker,attackHand,"sniperBlessing")){if(attacker==="human")setMessage("「狙撃の加護」が付いた手では攻撃できません。");return false;}
       const completeAttackAttempt = async () => {
         if (options.countAttackAttempt === false) return null;
         return await completeNormalAttackAttempt(attacker);
@@ -14715,7 +14749,7 @@ async function endTurn(reason="unspecified") {
       const cfg = cpuConfig();
       const attacks = [];
       const normalAttackAvailable=canUseNormalAttackAction("cpu");
-      for (const a of (normalAttackAvailable?["L", "R"]:[]).filter(h => isAlive("cpu", h))) {
+      for (const a of (normalAttackAvailable?getNormalAttackSourceHands("cpu"):[])) {
         for (const t of ["L", "R"].filter(h => isAlive("human", h))) {
           const power = estimateCpuNormalAttackPower(a,t);
           const attackTotal = state.human[t] + power;
@@ -15611,6 +15645,10 @@ async function endTurn(reason="unspecified") {
         }
         if (!isAlive("human", hand)) {
           setMessage("0の手では攻撃できません。");
+          return;
+        }
+        if (!getNormalAttackSourceHands("human").includes(hand)) {
+          setMessage("「狙撃の加護」が付いた手は通常攻撃に使えません。");
           return;
         }
 
