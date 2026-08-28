@@ -60,7 +60,7 @@ const CARD_LIBRARY = {
         cost: 3,
         type: "補助",
         text: "手札を1枚捨て、自分の0の手を1にする。",
-        canPlay: (player) => ["L", "R"].some(h => state[player][h] === 0) && state.hands[player].length > 1,
+        canPlay: (player) => ["L", "R"].some(h => state[player][h] === 0) && countHandCards(player) > 1,
         effect: async (player) => {
           const zeroHands = ["L", "R"].filter(h => state[player][h] === 0);
           if (zeroHands.length === 0) return;
@@ -88,7 +88,7 @@ const CARD_LIBRARY = {
       charge: {
         name: "充電", cost: 1, type: "使用不可 / 生成カード / 充電",
         text: "Lv.1～10。コストはレベルと同じ。充電効果以外では捨てたり移動できない。充電を得る時はレベルが上がり、Lv.10ではそれ以上得られない。",
-        token: true, chargeResource: true, canPlay: () => false
+        token: true, chargeResource: true, countsAsHandCard:false, discardable:false, canPlay: () => false
       },
       overcharge: {
         name: "過充電", cost: 2, type: "補助 / 充電", chargeCard: true,
@@ -481,7 +481,7 @@ const CARD_LIBRARY = {
         type: "終端 / 銃",
         text: "終端。このカードは「銃」として扱う。手札を1枚捨て、捨てた手札のコスト分のダメージを相手の手に与える。捨てたカードが「弾」ならダメージ+1。この攻撃には一部の罠を発動できる。",
         gun: true,
-        canPlay: (player) => state.hands[player].length > 1 && ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] > 0),
+        canPlay: (player) => countHandCards(player) > 1 && ["L", "R"].some(h => state[player === "human" ? "cpu" : "human"][h] > 0),
         terminal: true,
         effect: async (player) => {
           const opponent = otherPlayer(player);
@@ -598,13 +598,13 @@ const CARD_LIBRARY = {
       indiscriminateFire: {
         name: "無差別射撃", cost: 2, type: "終端 / 銃", gun: true, terminal: true,
         text: "終端。このカードは「銃」として扱う。手札を1枚捨て、そのカードのコストを威力とする。捨てたカードが「弾」なら威力+1。威力の回数だけ、自分と相手の0ではない手からランダムに1つ選び、その手に1本加える。対象は1回ごとに選び直す。この効果では罠は発動しない。",
-        canPlay: player => state.hands[player].length > 1,
+        canPlay: player => countHandCards(player) > 1,
         effect: player => beginGunAmmoEffect(player, "indiscriminateFire")
       },
       shotgun: {
         name: "ショットガン", cost: 2, type: "終端 / 銃", gun: true, terminal: true,
         text: "終端。このカードは「銃」として扱う。手札を1枚捨て、そのカードのコストを威力とする。捨てたカードが「弾」なら威力+1。相手の0ではない両手に、それぞれ威力の半分（小数点以下切り捨て）の本数を加える。この効果では罠は発動しない。",
-        canPlay: player => state.hands[player].length > 1,
+        canPlay: player => countHandCards(player) > 1,
         effect: player => beginGunAmmoEffect(player, "shotgun")
       },
       modulation: {
@@ -1089,7 +1089,7 @@ const CARD_LIBRARY = {
         cost: 1,
         type: "補助",
         text: "手札を1枚選んで捨てる。その後、カードを2枚引く。",
-        canPlay: (player) => state.hands[player].length > 1,
+        canPlay: (player) => countHandCards(player) > 1,
         effect: async (player) => {
           if (player === "human") {
             state.mode = "calmDownDiscard";
@@ -1220,10 +1220,10 @@ const CARD_LIBRARY = {
       },
       encore: { name:"アンコール",cost:1,type:"補助",text:"自分の捨て札にある「フィナーレ」をランダムに1枚山札に戻し、山札をシャッフルする。",canPlay:()=>true,effect:player=>useEncore(player) },
       daCapo: { name:"ダ・カーポ",cost:3,type:"終端",text:"終端。残りの手札をすべて捨て、同じ枚数引く。その後、両手を1にし、手札と山札の「ダ・カーポ」をすべて捨てる。",terminal:true,canPlay:()=>true,effect:player=>useDaCapo(player) },
-      themeSetting: { name:"題目設定",cost:1,type:"特殊",text:"デッキ1枚制限。初期手札へ追加され、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与し、このターン手札からカードをあと1枚使用できる。演舞は最大Ⅵで、Ⅴ以上の間は一部の輪舞曲が強化される。",protectedSpecial:true,advanceNoticeExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseThemeV153(player) },
+      themeSetting: { name:"題目設定",cost:1,type:"特殊",text:"デッキ1枚制限。初期手札へ追加され、通常の手札枚数に数えず、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与し、このターン手札からカードをあと1枚使用できる。演舞は最大Ⅵで、Ⅴ以上の間は一部の輪舞曲が強化される。",protectedSpecial:true,countsAsHandCard:false,discardable:false,advanceNoticeExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseThemeV153(player) },
       serenadeTheme: { name:"題目：セレナーデ",cost:0,type:"加護 / 題目",text:"共鳴が発生するたび「演舞」を2上げる。自分のターン中に一度も共鳴が発生しなかった場合、ターン終了時に「演舞」を1下げる。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。外部効果で除去・交換されない。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
       rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"初めて使用する「輪舞曲」カードで「演舞」を2上げる。使用済みの「輪舞曲」の再使用、または輪舞曲ではないカードの使用で1下げる。変化前と変化後は別カードとして数える。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
-      performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,token:true,canPlay:()=>false },
+      performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。通常の手札枚数に数えない。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,countsAsHandCard:false,discardable:false,token:true,canPlay:()=>false },
       fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
       canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える最終的な本数と最終対象を記録し、その攻撃で実際に加える本数を0にする。次の相手ターン終了時、記録対象が0でなければ記録した本数を加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
@@ -1601,7 +1601,7 @@ const CARD_LIBRARY = {
         name: "すり減る希望", cost: 2, type: "補助 / 魔法少女・感情変化",
         text: "手札を1枚選んで捨てる。その後、捨て札の「憎悪」「絶望」「貪欲」「憤怒」「虚無」から1枚を選び、山札へ戻してシャッフルする。",
         magicalEvolutionBase: true,
-        canPlay: (player) => state.hands[player].length > 1 && (
+        canPlay: (player) => countHandCards(player) > 1 && (
           state.discard[player].some(id => ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id)) ||
           state.hands[player].some(id => id !== "wornHope" && isExternallyDiscardableHandCard(id) && ["magicalHatred","magicalDespair","magicalGreed","magicalWrath","magicalVoid"].includes(id))
         ),
@@ -1689,7 +1689,7 @@ const CARD_LIBRARY = {
         name: "満ちる心", cost: 2, type: "補助 / 魔法少女・変身後",
         text: "手札から1枚以上、好きな枚数を選んで捨てる。相手は同じ枚数だけ手札をランダムに捨てる。",
         token: true, magicalEvolution: true,
-        canPlay: (player) => state.hands[player].length > 1,
+        canPlay: (player) => countHandCards(player) > 1,
         effect: async (player) => { await useFullHeartV153(player); }
       },
       magicalChant: {
@@ -1779,10 +1779,10 @@ const CARD_LIBRARY = {
         canPlay: () => true,
         effect: async (player) => {
           const opponent = otherPlayer(player);
-          const difference = Math.max(0, state.hands[opponent].length - state.hands[player].length);
+          const difference = Math.max(0, countHandCards(opponent) - countHandCards(player));
           if (difference > 0) {
             const discarded = await discardRandomCards(opponent, difference, "「空虚」");
-            addLog(`${handNames[player]}の「空虚」により、${handNames[opponent]}は手札を${discarded}枚捨て、${state.hands[opponent].length}枚になった。`);
+            addLog(`${handNames[player]}の「空虚」により、${handNames[opponent]}は手札を${discarded}枚捨て、通常手札${countHandCards(opponent)}枚になった。`);
           } else {
             addLog(`${handNames[player]}は「空虚」を使用したが、相手の手札は自分より多くないため何も起こらなかった。`);
           }
@@ -1985,7 +1985,21 @@ const CARD_LIBRARY = {
       yellowWaspNeedle: { name:"黄蜂針",cost:3,type:"補助 / 黄針",harpoonTheme:true,text:"次の自分のターン開始時、自分が付与した銛を回収する。この回収によって相手の手を0にしたなら、カードを2枚引く。",canPlay:()=>true,effect:p=>{state.pendingYellowWaspNeedle[p]=true;} },
       gungnir: { name:"グングニル",cost:3,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、設置ゾーンに空きがあるなら自分の「銛」をつける。このターン終了時、自分が付与した銛を回収する。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>{await chooseAndAttachHarpoon(p,false);state.pendingGungnirRecovery[p]=true;} },
       doubleCarveHarpoon: { name:"二連削-銛",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"このターンの次の通常攻撃が、自分の銛がついている手へ命中したなら、解決後、同じ攻撃手で同じ手をもう一度通常攻撃する。",canPlay:()=>true,effect:p=>{state.temp[p].doubleCarveHarpoon=true;} },
-      harpoonResonance: { name:"銛共鳴",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"このターンの次の通常攻撃が、自分の銛がついている手へ命中し、その攻撃で共鳴したなら、その銛の振動を3増やす。",canPlay:()=>true,effect:p=>{state.temp[p].harpoonResonance=true;} }
+      harpoonResonance: { name:"銛共鳴",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"このターンの次の通常攻撃が、自分の銛がついている手へ命中し、その攻撃で共鳴したなら、その銛の振動を3増やす。",canPlay:()=>true,effect:p=>{state.temp[p].harpoonResonance=true;} },
+      balancedScales: {name:"釣り合った天秤",cost:2,type:"終端 / 天秤",terminal:true,text:"自分と相手の両手の合計が等しい時に使用できる。+1か-1を選び、自分の左手、右手、相手の左手、右手の順に、0を含む全ての手へ適用する。",canPlay:p=>v166HandTotal(p)===v166HandTotal(otherPlayer(p)),effect:async p=>await useBalancedScales(p)},
+      memory: {name:"思い出",cost:2,type:"補助",text:"自分の捨て札が10枚以上ある時、その中からランダムに1枚の効果を発動する。選ばれたカードは捨て札に残る。",canPlay:p=>state.discard[p].length>=10,effect:async p=>await useMemoryCard(p)},
+      sniperBlessing: {name:"狙撃の加護",cost:2,type:"加護",blessing:true,generatedCards:["supportFire"],text:"自分のターン開始時、手札に「援護射撃」を1枚加える。この加護が付いた手では攻撃できず、その手が5以上になる時は余りを計算せず0になる。",canPlay:p=>canPlaceAttachment(p,p)},
+      supportFire: {name:"援護射撃",cost:0,type:"補助 / 生成カード",token:true,countsAsHandCard:false,discardable:false,consumesCardAction:false,vanishOnUse:true,vanishAtTurnEnd:true,text:"相手の0でない手を1つ選び、その手に1本加える。このカードは手札枚数に数えず、カード使用回数を消費しない。使用後またはターン終了時に、捨て札へ送られず消滅する。",canPlay:p=>["L","R"].some(h=>state[otherPlayer(p)][h]>0),effect:async p=>await useSupportFire(p)},
+      vibrationGeneration: {name:"振動発電",cost:2,type:"加護 / 共鳴・充電",blessing:true,resonance:true,chargeCard:true,text:"この加護が付いた手を攻撃元として共鳴が成立した時、充電を3得る。",canPlay:p=>canPlaceAttachment(p,p)},
+      cardLock: {name:"カードロック",cost:2,type:"補助",text:"自分の手札から2枚を選ぶ。選ばれたカードは次の2回の自分のターン終了まで、疲労以外では捨てられない。",canPlay:p=>getDiscardCandidates(p,"cardEffect").length>=3,effect:p=>useCardLock(p)},
+      replaceAttachments: {name:"置き換える",cost:3,type:"補助",text:"自分の左右の手に設置されている加護・呪縛・罠と、それらに付随する状態を左右丸ごと入れ替える。",canPlay:()=>true,effect:p=>replaceHandAttachments(p)},
+      forceCard: {name:"強制",cost:2,type:"補助",text:"相手は通常手札から1枚を選ぶ。次の相手ターン、その個体以外のカードを使用できない。対象がなくなっても選び直さない。",canPlay:p=>getCountedHandCards(otherPlayer(p)).length>0,effect:p=>useForceCard(p)},
+      peek: {name:"覗き見",cost:2,type:"補助",text:"相手の通常手札からランダムに最大3枚を見る。",canPlay:()=>true,effect:p=>usePeek(p)},
+      exchangeHands: {name:"交換",cost:3,type:"終端",terminal:true,text:"自分と相手の0でない、異なる本数の手を1つずつ選び、その本数を入れ替える。",canPlay:p=>hasV166ExchangePair(p),effect:p=>useExchangeHands(p)},
+      nobleGas: {name:"貴ガス",cost:2,type:"補助",text:"自分の両手の合計が8の時に使用できる。次の自分のターン開始時まで、相手由来の効果では自分の手の本数が変化しない。",canPlay:p=>v166HandTotal(p)===8,effect:p=>{state.nobleGasProtected[p]=true;addLog(`${handNames[p]}は「貴ガス」で相手由来の本数変化を防ぐ。`)}},
+      late: {name:"遅刻",cost:3,type:"終端",terminal:true,text:"次の自分のターン、攻撃可能回数が1回増える。複数予約した場合は累積する。",canPlay:()=>true,effect:p=>{state.pendingLateAttackBonus[p]=Number(state.pendingLateAttackBonus[p]||0)+1}},
+      trade: {name:"貿易",cost:2,type:"補助",text:"自分と相手が、捨てられる手札を1枚ずつ秘密に選び、同時に相手へ渡す。どちらかに候補がなければ使用できない。",canPlay:p=>getTradeEligibleCards(p).length>0&&getTradeEligibleCards(otherPlayer(p)).length>0,effect:p=>useTrade(p)},
+      untidy: {name:"整わない",cost:2,type:"補助",text:"相手の2以上の手を1つ選んで1本減らす。その後、自分のランダムな0でない手を1つ選び1本加える。",canPlay:p=>["L","R"].some(h=>state[otherPlayer(p)][h]>=2),effect:p=>useUntidy(p)}
     };
 
         const DECK_MIN_COUNT = 20;
@@ -2138,6 +2152,13 @@ const CARD_LIBRARY = {
       gameOver: false,
       matchResult: null,
       matchResultReason: null,
+      cardInstanceSequence: 0,
+      handCardInstances: { human: [], cpu: [] },
+      cardLocks: { human: [], cpu: [] },
+      forcedCard: { human: null, cpu: null },
+      nobleGasProtected: { human: false, cpu: false },
+      pendingLateAttackBonus: { human: 0, cpu: 0 },
+      copiedEffectDepth: 0,
       surrenderedBy: null,
       startingPlayer: null,
       startingPlayerDecided: false,
@@ -2238,9 +2259,13 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v165n-surrender-notice-order";
+    const LATEST_NEWS_ID = "v166c-interaction-modal-stability";
 
     const UPDATE_NEWS = [
+      {id:"v166c-interaction-modal-stability",version:"v166c",date:"2026-08-28",title:"オンライン待機とアカウント画面を安定化",summary:"相手の選択待ちとアカウント内画面の操作不具合を修正しました。",featured:true,tags:["fix","online","ui"],items:["オンラインで相手の選択待ち中に戦闘操作できてしまう問題を修正","「強制」「貿易」の最終効果を同期してから待機状態を解除するよう改善","interaction中に再接続した際の進行ロックを改善","アカウントのコード入力画面が操作不能になる問題を修正","名前変更・プレイヤーカード編集などの画面切替を改善"]},
+      {id:"v166b-online-force-trade",version:"v166b",date:"2026-08-28",title:"オンラインの「強制」と「貿易」を改善",summary:"相手入力と秘密選択をオンライン対戦へ対応しました。",featured:true,tags:["fix","online"],items:["オンライン戦で「強制」の対象プレイヤー本人による選択に対応","オンライン戦で「貿易」の双方選択と同時交換に対応","SHA-256 commitと本人専用保存領域により、選択内容の先読みを防止","選択中の待機・再接続復元処理を改善"]},
+      {id:"v166a-selection-late-fixes",version:"v166a",date:"2026-08-28",title:"新カードの選択操作と「遅刻」を修正",summary:"対象を自分で選べるようにし、次ターンの攻撃回数補正を安定化しました。",featured:true,tags:["fix"],items:["援護射撃・カードロック・強制・交換・貿易などの選択操作を改善","釣り合った天秤と整わないの対象選択を改善","「遅刻」の次ターン攻撃回数増加が指令補正で上書きされる問題を修正","新カードの人間操作とCPU自動選択を分離"]},
+      {id:"v166-hand-attributes-new-cards",version:"v166",date:"2026-08-28",title:"新カード14枚と手札属性基盤を追加",summary:"新しい手札操作・設置・本数変化カードを追加し、特殊カードの扱いを整理しました。",featured:true,tags:["new","system"],items:["新カード14枚を追加","狙撃の加護から援護射撃を生成","共鳴×充電の振動発電を追加","強制・覗き見・交換・貿易など新しい手札操作を追加","一部システムカードを通常の手札枚数として数えない仕様へ整理","捨てられないカードを含む全捨て・ランダム捨て処理を安定化"]},
       {id:"v165n-surrender-notice-order",version:"v165n",date:"2026-08-27",title:"オンライン降参時の結果表示を改善",summary:"相手の降参を分かりやすく伝えてから勝敗画面へ進むようにしました。",featured:true,tags:["fix","system"],items:["オンラインで相手が降参した際の表示を改善","降参時は一時通知の後に勝敗画面へ進むよう変更","降参結果の表示順と端末間同期を改善","降参時に勝利理由が正しく表示されないことがある問題を修正"]},
       {id:"v165m-online-surrender-postmatch-ui",version:"v165m",date:"2026-08-27",title:"オンライン対戦の試合中・試合後UIを改善",summary:"オンライン戦の安全な操作と試合部屋へ戻る流れを整理しました。",featured:true,tags:["fix","system"],items:["オンライン戦の不要なテスト・リセット操作を整理","オンライン戦に「降参」を追加","試合後の再戦／デッキ変更／試合部屋復帰を改善","全休符のターン開始説明が旧仕様だった問題を修正"]},
       {id:"v165l-online-whole-rest-resonance-fix",version:"v165l",date:"2026-08-27",title:"ターン交代・全休符・共鳴判定を修正",summary:"一部のターン進行とカード効果の不具合を修正しました。",featured:true,tags:["fix"],items:["オンラインで一部ターン交代が失敗する問題を修正","全休符のターン進行を本来のカード使用可能回数に合わせて修正","全休符中にCPUが通常攻撃する問題を修正","全休符による通常ドロー封印の表示を修正","共鳴調節とディソナンスで0の手への共鳴が成立しない問題を修正"]},
@@ -3661,6 +3686,8 @@ const CARD_LIBRARY = {
     const socialEl = id => document.getElementById(id);
     const socialOpen = id => { const el=socialEl(id); if(el){el.classList.add("show");el.setAttribute("aria-hidden","false");} };
     const socialClose = id => { const el=socialEl(id); if(el){el.classList.remove("show");el.setAttribute("aria-hidden","true");} };
+    const openAccountChildModal = id => { socialClose("accountModal");socialOpen(id); };
+    const closeAccountChildModal = id => { socialClose(id);renderSocialAccountUi();socialOpen("accountModal"); };
     const socialMessage = (id,text="") => { const el=socialEl(id); if(el)el.textContent=text; };
     const isFormalAccount = user => !!user && !user.isAnonymous;
     const socialRequestId = (fromUid,toUid) => `${fromUid}_${toUid}`;
@@ -3827,9 +3854,9 @@ const CARD_LIBRARY = {
     async function openPlayerCardEditor(){
       await ensureProfileChangeAllowed();const profile=normalizedPlayerCardProfile(state.socialProfile);state.playerCardDraft={backgroundId:profile.backgroundId,titleId:profile.titleId};
       const choices=socialEl("playerCardBackgroundChoices");choices.replaceChildren();for(const id of profile.unlockedBackgroundIds){const def=PLAYER_CARD_BACKGROUNDS[id];if(!def)continue;const button=document.createElement("button");button.type="button";button.className="player-card-choice";button.dataset.backgroundId=id;button.textContent=def.label;button.addEventListener("click",()=>{state.playerCardDraft.backgroundId=id;renderPlayerCardDraft();});choices.append(button);}
-      const select=socialEl("playerCardTitleSelect");select.replaceChildren();for(const id of profile.unlockedTitleIds){const def=PLAYER_TITLES[id];if(!def)continue;const option=document.createElement("option");option.value=id;option.textContent=def.label;select.append(option);}socialMessage("playerCardEditorMessage","");renderPlayerCardDraft();socialOpen("playerCardEditorModal");
+      const select=socialEl("playerCardTitleSelect");select.replaceChildren();for(const id of profile.unlockedTitleIds){const def=PLAYER_TITLES[id];if(!def)continue;const option=document.createElement("option");option.value=id;option.textContent=def.label;select.append(option);}socialMessage("playerCardEditorMessage","");renderPlayerCardDraft();openAccountChildModal("playerCardEditorModal");
     }
-    function closePlayerCardEditor(){state.playerCardDraft=null;socialClose("playerCardEditorModal");}
+    function closePlayerCardEditor(){state.playerCardDraft=null;closeAccountChildModal("playerCardEditorModal");}
     async function savePlayerCard(){
       const fb=await ensureProfileChangeAllowed(),profile=normalizedPlayerCardProfile(state.socialProfile),draft=state.playerCardDraft;if(!draft)throw new Error("編集内容がありません。");
       if(!profile.unlockedBackgroundIds.includes(draft.backgroundId)||!PLAYER_CARD_BACKGROUNDS[draft.backgroundId])throw new Error("所有していない背景は選択できません。");
@@ -3837,14 +3864,14 @@ const CARD_LIBRARY = {
       await fb.updateDoc(fb.doc(fb.db,"users",profile.uid),{backgroundId:draft.backgroundId,bannerId:draft.backgroundId,titleId:draft.titleId,updatedAt:fb.serverTimestamp()});
       state.socialProfile=normalizedPlayerCardProfile({...profile,...draft,bannerId:draft.backgroundId});closePlayerCardEditor();renderSocialAccountUi();socialMessage("accountMessage","プレイヤーカードを保存しました。");
     }
-    function openPlayerNameEditor(){socialEl("playerNameCurrent").textContent=state.socialProfile?.displayName||"-";socialEl("playerNameInput").value=state.socialProfile?.displayName||"";socialMessage("playerNameMessage","");socialOpen("playerNameModal");}
+    function openPlayerNameEditor(){socialEl("playerNameCurrent").textContent=state.socialProfile?.displayName||"-";socialEl("playerNameInput").value=state.socialProfile?.displayName||"";socialMessage("playerNameMessage","");openAccountChildModal("playerNameModal");}
     async function changePlayerName(){
       const fb=await ensureProfileChangeAllowed(),profile=state.socialProfile,name=validatePlayerName(socialEl("playerNameInput").value),publicId=`${name}#${profile.tag}`;
       const friendsSnap=await fb.getDocs(fb.collection(fb.db,"users",profile.uid,"friends")),friends=docsFromSnapshot(friendsSnap),batch=fb.writeBatch(fb.db);
       batch.update(fb.doc(fb.db,"users",profile.uid),{displayName:name,publicId,updatedAt:fb.serverTimestamp()});
       batch.update(fb.doc(fb.db,"playerTags",profile.tag),{displayName:name,publicId,updatedAt:fb.serverTimestamp()});
       for(const friend of friends)batch.update(fb.doc(fb.db,"users",friend.uid,"friends",profile.uid),{displayName:name,publicId});
-      await batch.commit();state.socialProfile={...profile,displayName:name,publicId};socialClose("playerNameModal");renderSocialAccountUi();socialMessage("accountMessage","プレイヤー名を変更しました。");
+      await batch.commit();state.socialProfile={...profile,displayName:name,publicId};closeAccountChildModal("playerNameModal");socialMessage("accountMessage","プレイヤー名を変更しました。");
     }
     function normalizeGiftCode(value){return String(value||"").normalize("NFKC").trim().toUpperCase();}
     async function claimGiftCode(){
@@ -4232,7 +4259,12 @@ const CARD_LIBRARY = {
         firstTurnStarted: !!state.firstTurnStarted[player],
         pendingStartDrawSkip: !!state.pendingStartDrawSkip[player],
         pendingYellowWaspNeedle: !!state.pendingYellowWaspNeedle[player],
-        pendingGungnirRecovery: !!state.pendingGungnirRecovery[player]
+        pendingGungnirRecovery: !!state.pendingGungnirRecovery[player],
+        handCardInstances: [...ensureHandCardInstances(player)],
+        cardLocks: cloneJson(state.cardLocks?.[player]||[]),
+        forcedCard: cloneJson(state.forcedCard?.[player]||null),
+        nobleGasProtected: !!state.nobleGasProtected?.[player],
+        pendingLateAttackBonus: Number(state.pendingLateAttackBonus?.[player]||0)
         ,selectedTheme: state.selectedTheme[player]||null, performanceLevel:getPerformanceLevel(player), resonanceTriggeredThisTurn:!!state.resonanceTriggeredThisTurn[player], usedRondoFamilies:[...(state.usedRondoFamilies[player]||[])], usedRondoCards:[...(state.usedRondoCards[player]||[])], pendingDrawLock:!!state.pendingDrawLock[player], activeDrawLock:!!state.activeDrawLock[player], pendingPrestoAttack:!!state.pendingPrestoAttack[player], sforzandoTurnBonus:Number(state.sforzandoTurnBonus[player]||0), quarterRestPending:!!state.quarterRestPending[player], quarterRestActive:!!state.quarterRestActive[player], wholeRestPending:!!state.wholeRestPending[player], wholeRestActive:!!state.wholeRestActive[player], pendingCanonHits:serializeFriendCanonHits(), furiosoSkipPending:!!state.furiosoSkipPending[player], furiosoSkipActive:!!state.furiosoSkipActive[player]
       };
     }
@@ -4478,6 +4510,7 @@ const CARD_LIBRARY = {
       state.pendingYellowWaspNeedle[player] = !!side.pendingYellowWaspNeedle;
       state.pendingGungnirRecovery[player] = !!side.pendingGungnirRecovery;
       state.furiosoSkipPending[player]=!!side.furiosoSkipPending;state.furiosoSkipActive[player]=!!side.furiosoSkipActive;
+      state.handCardInstances[player]=Array.isArray(side.handCardInstances)?[...side.handCardInstances]:[];state.cardLocks[player]=cloneJson(side.cardLocks||[]);state.forcedCard[player]=cloneJson(side.forcedCard||null);state.nobleGasProtected[player]=!!side.nobleGasProtected;state.pendingLateAttackBonus[player]=Number(side.pendingLateAttackBonus||0);ensureHandCardInstances(player);
       state.selectedTheme[player]=side.selectedTheme||null;state.performanceLevel[player]=Math.max(0,Math.min(PERFORMANCE_MAX_LEVEL,Number(side.performanceLevel)||0));state.resonanceTriggeredThisTurn[player]=!!side.resonanceTriggeredThisTurn;state.usedRondoFamilies[player]=[...(side.usedRondoFamilies||[])];state.usedRondoCards[player]=[...(side.usedRondoCards||[])];state.pendingDrawLock[player]=!!side.pendingDrawLock;state.activeDrawLock[player]=!!side.activeDrawLock;state.pendingPrestoAttack[player]=!!side.pendingPrestoAttack;state.sforzandoTurnBonus[player]=Math.max(0,Number(side.sforzandoTurnBonus)||0);state.quarterRestPending[player]=!!side.quarterRestPending;state.quarterRestActive[player]=!!side.quarterRestActive;state.wholeRestPending[player]=!!side.wholeRestPending;state.wholeRestActive[player]=!!side.wholeRestActive;if(Array.isArray(side.pendingCanonHits))state.pendingCanonHits=deserializeFriendCanonHits(side.pendingCanonHits);
       state.pendingTerminalEnd[player] = !!side.pendingTerminalEnd;
       state.pendingIntemperanceCardLock[player] = !!side.pendingIntemperanceCardLock;
@@ -4602,8 +4635,9 @@ const CARD_LIBRARY = {
       const snapshot = buildFriendCanonicalSnapshot();
       if (!snapshot) return;
       const applySerial=Number(options.applyTurnStartSerial||0),applyToken=options.turnStartToken||null;
+      const clearInterruptId=String(options.clearInterruptId||"");
       const signature = JSON.stringify(snapshot);
-      if (!applySerial&&signature === state.friendLastPublishedSignature) return;
+      if (!applySerial&&!clearInterruptId&&signature === state.friendLastPublishedSignature) return;
       const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
       // 両端末が近接publishしても同じrevisionを作らないよう、room正本からtransaction採番する。
       let committedRevision=0;
@@ -4613,6 +4647,7 @@ const CARD_LIBRARY = {
         const remoteMatch=roomSnap.data()?.match;
         state.friendLastPublishRemoteMatch=remoteMatch?cloneJson(remoteMatch):null;
         if(getFriendMatchId(remoteMatch)!==expectedMatchId)return;
+        if(clearInterruptId&&(remoteMatch?.interrupt?.id!==clearInterruptId||remoteMatch?.interrupt?.status!=="resolved"||remoteMatch?.interrupt?.requesterSide!==state.friendRole))return;
         if(applySerial){
           const remoteSerial=Number(remoteMatch?.turnSerial||0),remoteApplied=Number(remoteMatch?.turnStartAppliedSerial||0);
           const localSerial=Number(state.friendTurnSerial||0),localOwner=state.friendTurnOwner;
@@ -4636,7 +4671,9 @@ const CARD_LIBRARY = {
         update["match.turnStartAppliedSerial"]=applySerial||Number(state.friendTurnStartAppliedSerial||0);
         update["match.turnStartToken"]=state.friendTurnStartToken||null;
         if(!state.friendTurnStartToken)update["match.turnStartClaimedAt"]=null;
+        if(clearInterruptId)update["match.interrupt"]=null;
         transaction.update(roomRef,update);
+        if(clearInterruptId)transaction.delete(fb.doc(fb.db,"rooms",state.friendRoomId,"interactions",clearInterruptId));
       });
       if(!committedRevision||state.friendMatchId!==expectedMatchId)return;
       state.friendSyncRevision=Math.max(state.friendSyncRevision,committedRevision);
@@ -4671,12 +4708,34 @@ const CARD_LIBRARY = {
       }
     }
 
+    function canonicalFriendInterrupt() {
+      const interrupt=state.friendRoomData?.match?.interrupt;
+      if(!interrupt||!state.friendMatchId)return null;
+      const interruptMatchId=interrupt.payload?.matchId||state.friendRoomData?.match?.matchId||state.friendRoomData?.match?.id;
+      return interruptMatchId&&interruptMatchId!==state.friendMatchId?null:interrupt;
+    }
+
+    function isFriendInteractionBlocking() {
+      if(state.battleMode!=="friend")return false;
+      const interrupt=canonicalFriendInterrupt();
+      return !!(state.friendCardResolving||state.friendInterruptWaiting||state.friendInterruptHandling||
+        (interrupt&&["pending","resolved"].includes(interrupt.status)));
+    }
+
+    async function publishFriendInteractionFinalState(reason,actionId) {
+      if(state.battleMode!=="friend")return true;
+      state.friendLastPublishedSignature="";
+      const committed=await publishFriendStateNow(state.friendMatchId,{clearInterruptId:actionId});
+      if(committed!==true)throw new Error(`${reason}のcanonical同期が確定されませんでした。`);
+      return true;
+    }
+
     function canPublishFriendStateSafely() {
       if (state.battleMode !== "friend" || state.friendApplyingRemoteState || !state.friendMatchStarted) return false;
       // 通常の自動同期は、現在手番を持つ端末だけが書き込む。
       // ターンを相手へ渡す瞬間は endTurn() から明示的に publishFriendStateNow() を呼ぶ。
       if (state.turn !== "human") return false;
-      if (state.animating || state.friendCardResolving || state.friendInterruptWaiting || state.friendInterruptHandling) return false;
+      if (state.animating || isFriendInteractionBlocking()) return false;
       if (!["attack", "setupTrap"].includes(state.mode)) return false;
       if (state.pendingRepairDiscard || state.pendingEqualTradeSelf || state.pendingRapidFireDiscard || state.pendingSwapFirst) return false;
       if (state.pendingTrapTargetEffect || state.selectedTrapCardIndex !== null) return false;
@@ -4930,6 +4989,30 @@ const CARD_LIBRARY = {
       return `${state.friendRole || "side"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    function friendInteractionPrivateRef(actionId){
+      const fb=firebaseApi();if(!fb||!state.friendRoomId||!fb.uid)return null;
+      return fb.doc(fb.db,"rooms",state.friendRoomId,"interactionPrivate",`${fb.uid}_${actionId}`);
+    }
+    function secureFriendInteractionRef(actionId){const fb=firebaseApi();return fb&&state.friendRoomId?fb.doc(fb.db,"rooms",state.friendRoomId,"interactions",actionId):null;}
+    function friendUidForRole(role){return role==="host"?state.friendRoomData?.hostUid:state.friendRoomData?.guestUid;}
+    async function createSecureFriendInteraction({actionId,type,sourceCommit=null}){
+      const fb=firebaseApi(),ref=secureFriendInteractionRef(actionId),targetRole=otherFriendRole();if(!fb||!ref||!fb.uid)throw new Error("オンライン選択を開始できません。");
+      await fb.setDoc(ref,{actionId,matchId:state.friendMatchId,type,sourceRole:state.friendRole,targetRole,sourceUid:fb.uid,targetUid:friendUidForRole(targetRole),status:"pending",sourceCommit,createdAt:fb.serverTimestamp()});
+    }
+    async function respondSecureFriendInteraction(actionId,response){const fb=firebaseApi(),ref=secureFriendInteractionRef(actionId);if(!fb||!ref)throw new Error("オンライン選択へ応答できません。");await fb.updateDoc(ref,{status:"responded",targetInstanceId:response.instanceId,targetCommit:response.commit??null,targetNonce:response.nonce??null,respondedAt:fb.serverTimestamp()});}
+    async function readSecureFriendInteraction(actionId){const fb=firebaseApi(),ref=secureFriendInteractionRef(actionId);if(!fb||!ref)return null;const snap=await fb.getDoc(ref);return snap.exists()?snap.data():null;}
+    async function deleteSecureFriendInteraction(actionId){const fb=firebaseApi(),ref=secureFriendInteractionRef(actionId);if(fb&&ref)await fb.deleteDoc(ref).catch(()=>{});}
+    function randomInteractionNonce(){const bytes=new Uint8Array(24);crypto.getRandomValues(bytes);return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");}
+    async function sha256Hex(value){const bytes=new TextEncoder().encode(String(value)),digest=await crypto.subtle.digest("SHA-256",bytes);return [...new Uint8Array(digest)].map(item=>item.toString(16).padStart(2,"0")).join("");}
+    function tradeCommitText({matchId,actionId,role,instanceId,nonce}){return ["waribashi-trade-v1",matchId,actionId,role,instanceId,nonce].join("|");}
+    async function makeTradeCommit(payload){return sha256Hex(tradeCommitText(payload));}
+    async function savePrivateTradeChoice({actionId,instanceId,nonce,commit}){
+      const fb=firebaseApi(),ref=friendInteractionPrivateRef(actionId);if(!fb||!ref)throw new Error("秘密選択を保存できません。");
+      await fb.setDoc(ref,{uid:fb.uid,roomId:state.friendRoomId,matchId:state.friendMatchId,actionId,role:state.friendRole,type:"trade",instanceId,nonce,commit,updatedAt:fb.serverTimestamp()});
+    }
+    async function loadPrivateTradeChoice(actionId){const fb=firebaseApi(),ref=friendInteractionPrivateRef(actionId);if(!fb||!ref)return null;const snap=await fb.getDoc(ref);return snap.exists()?snap.data():null;}
+    async function deletePrivateTradeChoice(actionId){const fb=firebaseApi(),ref=friendInteractionPrivateRef(actionId);if(fb&&ref)await fb.deleteDoc(ref).catch(()=>{});}
+
     async function writeFriendInterrupt(interrupt) {
       if(state.friendTurnStartAtomicActive){state.friendTurnStartPendingInterruptWrites.push(cloneJson(interrupt));return true;}
       return writeFriendInterruptNow(interrupt,{matchId:state.friendMatchId});
@@ -4955,11 +5038,11 @@ const CARD_LIBRARY = {
       return committed;
     }
 
-    async function requestRemoteFriendDecision(type, payload = {}) {
+    async function requestRemoteFriendDecision(type, payload = {}, options = {}) {
       if (state.battleMode !== "friend" || !state.friendRole) return null;
       if(state.friendTurnStartAtomicActive)throw new Error("ターン開始stateの確定前にはオンライン判断を要求できません。");
       if (state.friendInterruptWaiting) throw new Error("別のオンライン割り込み処理を待っています。");
-      const id = makeFriendInterruptId();
+      const id = options.id || makeFriendInterruptId();
       const interrupt = {
         id,
         type,
@@ -5051,6 +5134,19 @@ const CARD_LIBRARY = {
           const terminalCard = CARD_LIBRARY[payload.cardId] || { name: payload.cardName || "終端カード" };
           const cardId = await askHumanTerminalAppeal("human", terminalCard);
           response = { cardId: cardId || null };
+        } else if(interrupt.type==="forceCard"){
+          if(payload.matchId!==state.friendMatchId)throw new Error("試合が更新されています。");
+          const indexes=await beginHandCardSelection({min:1,max:1,filter:id=>isCountedHandCard(id),message:"「強制」：次の自分のターンに使用するカードを1枚選んでください。"});
+          if(!indexes.length)throw new Error("選択できる通常手札がありません。");
+          response={matchId:state.friendMatchId,actionId:interrupt.id,instanceId:handCardInstanceId("human",indexes[0])};
+          await respondSecureFriendInteraction(interrupt.id,{instanceId:response.instanceId});
+        } else if(interrupt.type==="trade"){
+          if(payload.matchId!==state.friendMatchId||payload.actionId!==interrupt.id||!payload.sourceCommit)throw new Error("貿易情報が一致しません。");
+          const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>canDiscardHandCard("human",index,"trade"),message:"「貿易」：相手へ渡すカードを1枚選んでください。"});
+          if(!indexes.length)throw new Error("貿易できるカードがありません。");
+          const instanceId=handCardInstanceId("human",indexes[0]),nonce=randomInteractionNonce(),commit=await makeTradeCommit({matchId:state.friendMatchId,actionId:interrupt.id,role:state.friendRole,instanceId,nonce});
+          response={matchId:state.friendMatchId,actionId:interrupt.id,targetCommit:commit,targetReveal:{instanceId,nonce}};
+          await respondSecureFriendInteraction(interrupt.id,{instanceId,commit,nonce});
         }
         await respondFriendInterrupt(interrupt, response || {});
       } catch (error) {
@@ -5067,9 +5163,31 @@ const CARD_LIBRARY = {
       state.friendInterruptWaiting = null;
       if (interrupt.response?.error) waiting.reject(new Error(interrupt.response.error));
       else waiting.resolve(interrupt.response || {});
-      clearResolvedFriendInterrupt(interrupt.id).catch(() => {});
       render();
       return true;
+    }
+
+    async function resolveOnlineForceResponse(interrupt){
+      const response=interrupt?.response,secure=await readSecureFriendInteraction(interrupt.id);if(response?.matchId!==state.friendMatchId||response?.actionId!==interrupt.id||secure?.status!=="responded"||secure?.targetInstanceId!==response.instanceId)return false;
+      ensureHandCardInstances("cpu");const index=state.handCardInstances.cpu.indexOf(secure.targetInstanceId);if(index<0||!isCountedHandCard(state.hands.cpu[index]))return false;
+      state.forcedCard.cpu={instanceId:secure.targetInstanceId,cardId:state.hands.cpu[index],pending:true,active:false};await publishFriendInteractionFinalState("強制の選択確定",interrupt.id);return true;
+    }
+
+    async function resolveOnlineTradeResponse(actionId,response){
+      const ownPrivate=await loadPrivateTradeChoice(actionId),secure=await readSecureFriendInteraction(actionId);if(!ownPrivate||ownPrivate.matchId!==state.friendMatchId||secure?.status!=="responded"||secure?.sourceCommit!==ownPrivate.commit)throw new Error("貿易の秘密選択を復元できません。");
+      const targetReveal={instanceId:secure.targetInstanceId,nonce:secure.targetNonce},targetCommit=secure.targetCommit;if(response?.matchId!==state.friendMatchId||response?.actionId!==actionId||response?.targetReveal?.instanceId!==targetReveal.instanceId||!targetReveal.instanceId||!targetCommit)throw new Error("相手の貿易選択が不完全です。");
+      const verifiedTarget=await makeTradeCommit({matchId:state.friendMatchId,actionId,role:otherFriendRole(),instanceId:targetReveal.instanceId,nonce:targetReveal.nonce});if(verifiedTarget!==targetCommit)throw new Error("相手の貿易revealがcommitと一致しません。");
+      const verifiedOwn=await makeTradeCommit({matchId:state.friendMatchId,actionId,role:state.friendRole,instanceId:ownPrivate.instanceId,nonce:ownPrivate.nonce});if(verifiedOwn!==ownPrivate.commit)throw new Error("自分の貿易revealがcommitと一致しません。");
+      ensureHandCardInstances("human");ensureHandCardInstances("cpu");const ai=state.handCardInstances.human.indexOf(ownPrivate.instanceId),bi=state.handCardInstances.cpu.indexOf(targetReveal.instanceId);if(ai<0||bi<0||!canDiscardHandCard("human",ai,"trade")||!canDiscardHandCard("cpu",bi,"trade")){await deletePrivateTradeChoice(actionId);await clearResolvedFriendInterrupt(actionId);addLog("「貿易」は選択カードが移動したため不発。");return false;}
+      const aid=state.hands.human[ai],bid=state.hands.cpu[bi],ainst=state.handCardInstances.human[ai],binst=state.handCardInstances.cpu[bi];state.hands.human[ai]=bid;state.hands.cpu[bi]=aid;state.handCardInstances.human[ai]=binst;state.handCardInstances.cpu[bi]=ainst;addLog("「貿易」で双方が秘密選択したカードを同時に交換した。");await publishFriendInteractionFinalState("貿易の同時交換",actionId);await deletePrivateTradeChoice(actionId);return true;
+    }
+
+    async function resumeOwnedFriendInteraction(interrupt){
+      if(!interrupt||interrupt.requesterSide!==state.friendRole)return false;
+      if(interrupt.status==="pending"){setMessage(interrupt.type==="trade"?"相手の貿易選択を待っています…":"相手がカードを選択しています…");render();return true;}
+      if(interrupt.status!=="resolved"||state.friendInterruptWaiting)return false;
+      const key=`resume:${interrupt.id}`;if(state.friendHandledInterruptIds.has(key))return true;state.friendHandledInterruptIds.add(key);
+      try{if(interrupt.type==="forceCard")await resolveOnlineForceResponse(interrupt);else if(interrupt.type==="trade")await resolveOnlineTradeResponse(interrupt.id,interrupt.response||{});}catch(error){state.friendHandledInterruptIds.delete(key);setMessage(`オンライン選択の復元に失敗：${error.message||error}`);throw error;}return true;
     }
 
     function setFriendRoomUi(roomId, role = "host", shortCode = state.friendRoomShortCode) {
@@ -5290,7 +5408,8 @@ const CARD_LIBRARY = {
         const interrupt = data?.match?.interrupt;
         if (interrupt) {
           if (!consumeResolvedFriendInterrupt(interrupt)) {
-            handleIncomingFriendInterrupt(interrupt).catch(error => {
+            const interactionTask=interrupt.requesterSide===state.friendRole?resumeOwnedFriendInteraction(interrupt):handleIncomingFriendInterrupt(interrupt);
+            interactionTask.catch(error => {
               console.error("PVP interrupt receive failed", error);
               setMessage(`オンライン割り込みエラー：${error.message || error}`);
             });
@@ -6566,6 +6685,7 @@ const CARD_LIBRARY = {
       state.decks.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
+      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
       state.temp.human.cardActionUsed = false;
@@ -8552,6 +8672,7 @@ function wrapFinger(value) {
       if (state.decks[player].length > 0) {
         const cardId = state.decks[player].pop();
         state.hands[player].push(materializeDrawnCard(cardId));
+        ensureHandCardInstances(player);state.handCardInstances[player][state.hands[player].length-1]=`ci-${++state.cardInstanceSequence}`;
         return true;
       }
 
@@ -8560,12 +8681,11 @@ function wrapFinger(value) {
     }
 
     function fatigue(player) {
-      const discardableCards = state.hands[player]
-        .map((cardId, index) => ({ cardId, index }))
-        .filter(item => isExternallyDiscardableHandCard(item.cardId));
+      const discardableCards = getCountedHandCards(player).filter(item=>canDiscardHandCard(player,item.index,"fatigue"));
       if (discardableCards.length > 0) {
         const picked = discardableCards[Math.floor(Math.random() * discardableCards.length)];
         const [discarded] = state.hands[player].splice(picked.index, 1);
+        state.handCardInstances[player].splice(picked.index,1);
         state.discard[player].push(discarded);
         const cardName = CARD_LIBRARY[discarded]?.name || discarded;
         addLog(`${handNames[player]}は疲労を受け、手札から「${cardName}」をランダムに捨てた。`);
@@ -8593,7 +8713,7 @@ function wrapFinger(value) {
     }
 
     function canNormallyUseHandCard(player, handIndex) {
-      if (state.startingRouletteActive || state.gameOver || state.turn !== player || state.animating) return false;
+      if (state.startingRouletteActive || state.gameOver || state.turn !== player || state.animating || (player==="human"&&isFriendInteractionBlocking())) return false;
       if (state.furiosoSkipActive?.[player] || state.quarterRestActive?.[player]) return false;
       if ((state.judgmentPrisonTurns?.[player] || 0) > 0 || state.activeIntemperanceCardLock?.[player]) return false;
       const rawCardId = state.hands[player]?.[handIndex];
@@ -8629,6 +8749,7 @@ function wrapFinger(value) {
     }
 
     async function maybeAutoEndTurnForNoActions(player, options = {}) {
+      if(isFriendInteractionBlocking())return false;
       if (state.gameOver || state.turn !== player || state.mode !== "attack") return false;
       if (state.pendingTerminalEnd?.[player] || state.autoEndingNoActions?.[player]) return false;
       if (!shouldAutoEndTurnForNoActions(player)) return false;
@@ -8674,6 +8795,10 @@ function wrapFinger(value) {
       }
     }
 
+    function computeTurnAttackLimit({directiveAttackDelta=0,lateBonus=0,otherDelta=0}={}){
+      return Math.max(0,1+Number(directiveAttackDelta||0)+Number(lateBonus||0)+Number(otherDelta||0));
+    }
+
     async function startTurnCore(player,options={}) {
       if (isTutorialBattle()) {
         if (player === "cpu") {
@@ -8714,7 +8839,11 @@ function wrapFinger(value) {
       if(romanBeforeTurnStart&&!isRomanPreparation()){addLog("ロマンギミック杯：双方の準備時間が終了した。戦闘開始。");setMessage("準備時間終了 ― 戦闘開始");}
       const directiveOpponent=otherPlayer(player);
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      const directiveAttackDelta=Number(state.pendingDirectiveAttackLimitDelta[player]||0);state.pendingDirectiveAttackLimitDelta[player]=0;state.temp[player].attackLimit=Math.max(0,1+directiveAttackDelta);
+      state.nobleGasProtected[player]=false;
+      const lateBonus=Number(state.pendingLateAttackBonus[player]||0);state.pendingLateAttackBonus[player]=0;
+      if(state.forcedCard[player]?.pending){state.forcedCard[player].pending=false;state.forcedCard[player].active=true;}
+      if(["L","R"].some(h=>hasAttachment(player,h,"sniperBlessing"))){state.hands[player].push("supportFire");ensureHandCardInstances(player);addLog(`${handNames[player]}の「狙撃の加護」により「援護射撃」が1枚加わった。`);}
+      const directiveAttackDelta=Number(state.pendingDirectiveAttackLimitDelta[player]||0);state.pendingDirectiveAttackLimitDelta[player]=0;state.temp[player].attackLimit=computeTurnAttackLimit({directiveAttackDelta,lateBonus});
       state.activeDirectiveReformContinue[player]=!!state.pendingDirectiveReformContinue[player];state.pendingDirectiveReformContinue[player]=false;
       state.noSplit[player]=!!state.noSplit[player]||!!state.pendingDirectiveNoSplit[player];state.pendingDirectiveNoSplit[player]=false;
       state.activeDirectiveAnnihilation[player]=!!state.pendingDirectiveAnnihilation[player];state.pendingDirectiveAnnihilation[player]=false;
@@ -9119,7 +9248,8 @@ function wrapFinger(value) {
         elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
       }
       const selectionLock = ["boardHandSelection", "handCardSelection", "numberAllocation"].includes(state.mode);
-      const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver || selectionLock;
+      const interactionLock=isFriendInteractionBlocking();
+      const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver || selectionLock || interactionLock;
       const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive || !canUseNormalAttackAction("human");
       elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
@@ -9325,7 +9455,100 @@ function wrapFinger(value) {
       return isProtectedChargeCard(cardId) || !!CARD_LIBRARY[cardId]?.protectedSpecial;
     }
     function isExternallyDiscardableHandCard(cardId) {
-      return !!cardId && !isProtectedHandCard(cardId) && !isRomanTemporarilyProtectedHandCard(cardId);
+      return !!cardId && CARD_LIBRARY[cardId]?.discardable !== false && !isProtectedHandCard(cardId) && !isRomanTemporarilyProtectedHandCard(cardId);
+    }
+    function isCountedHandCard(cardId){return !!cardId&&CARD_LIBRARY[cardId]?.countsAsHandCard!==false;}
+    function getCountedHandCards(player){return state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>isCountedHandCard(x.cardId));}
+    function countHandCards(player){return getCountedHandCards(player).length;}
+    function ensureHandCardInstances(player){
+      if(!state.handCardInstances)state.handCardInstances={human:[],cpu:[]};
+      const ids=state.handCardInstances[player]||[];
+      while(ids.length<state.hands[player].length)ids.push(`ci-${++state.cardInstanceSequence}`);
+      if(ids.length>state.hands[player].length)ids.length=state.hands[player].length;
+      state.handCardInstances[player]=ids;return ids;
+    }
+    function handCardInstanceId(player,index){return ensureHandCardInstances(player)[index]||null;}
+    function isCardInstanceLocked(player,index){const id=handCardInstanceId(player,index);return !!id&&(state.cardLocks?.[player]||[]).some(lock=>lock.instanceId===id&&lock.turnsRemaining>0);}
+    function canDiscardHandCard(player,index,reason="cardEffect"){
+      const cardId=state.hands[player]?.[index];if(!isExternallyDiscardableHandCard(cardId))return false;
+      return reason==="fatigue"||!isCardInstanceLocked(player,index);
+    }
+    function getDiscardCandidates(player,reason="cardEffect"){return state.hands[player].map((cardId,index)=>({cardId,index,instanceId:handCardInstanceId(player,index)})).filter(x=>canDiscardHandCard(player,x.index,reason));}
+    function getTradeEligibleCards(player){return getDiscardCandidates(player,"trade");}
+    function removeCardWithoutDiscard(player,index,reason="消滅"){
+      if(index<0||index>=state.hands[player].length)return null;ensureHandCardInstances(player);const [id]=state.hands[player].splice(index,1);state.handCardInstances[player].splice(index,1);if(id)addLog(`${handNames[player]}の「${CARD_LIBRARY[id]?.name||id}」が${reason}した。`);return id;
+    }
+    function vanishTurnEndCards(player){for(let i=state.hands[player].length-1;i>=0;i--)if(CARD_LIBRARY[state.hands[player][i]]?.vanishAtTurnEnd)removeCardWithoutDiscard(player,i,"ターン終了時に消滅");}
+    function v166HandTotal(player){return Number(state[player].L||0)+Number(state[player].R||0);}
+    function v166NormalizeForHand(value,player,hand){if(value>=5&&hasAttachment(player,hand,"sniperBlessing"))return 0;return normalize(Math.max(0,value),player,hand);}
+    function v166ApplyFingerValue(targetPlayer,hand,value,sourcePlayer,label){if(state.nobleGasProtected?.[targetPlayer]&&sourcePlayer&&sourcePlayer!==targetPlayer){addLog(`${label}は「貴ガス」に防がれた。`);return state[targetPlayer][hand];}const before=state[targetPlayer][hand];state[targetPlayer][hand]=v166NormalizeForHand(value,targetPlayer,hand);if(before!==state[targetPlayer][hand])addLog(`${label}：${handNames[targetPlayer]}の${handNames[hand]} ${before}→${state[targetPlayer][hand]}。`);clearBrokenTraps(targetPlayer);return state[targetPlayer][hand];}
+    async function useSupportFire(player){
+      const o=otherPlayer(player),picked=await beginBoardHandSelection(player,{owners:[o],minimum:1,message:"「援護射撃」：1本加える相手の手を選んでください。",cpuPick:candidates=>[...candidates].sort((a,b)=>b.value-a.value)[0]});
+      if(picked)v166ApplyFingerValue(o,picked.hand,state[o][picked.hand]+1,player,"援護射撃");
+    }
+    async function useBalancedScales(player){const plus=player==="cpu"?true:await showGameConfirmation({title:"釣り合った天秤",message:"全ての手へ+1を適用しますか？（キャンセルで-1）",confirmLabel:"+1",cancelLabel:"-1"}),delta=plus?1:-1,o=otherPlayer(player);for(const owner of [player,o])for(const hand of ["L","R"])v166ApplyFingerValue(owner,hand,state[owner][hand]+delta,player,"釣り合った天秤");}
+    async function useMemoryCard(player){if((state.copiedEffectDepth||0)>=2){addLog("「思い出」は記憶の連鎖が深くなり不発。");return;}const candidates=state.discard[player].filter(id=>CARD_LIBRARY[id]&&typeof CARD_LIBRARY[id].effect==="function"&&!isEffectCopyExcluded(id,"brawl"));if(!candidates.length)return;const id=candidates[Math.floor(Math.random()*candidates.length)];state.copiedEffectDepth++;try{await activateCopiedCardEffect(player,id,"思い出");}finally{state.copiedEffectDepth--;}}
+    async function useCardLock(player){
+      ensureHandCardInstances(player);let picks;
+      if(player==="human"){
+        const indexes=await beginHandCardSelection({min:2,max:2,filter:(id,index)=>canDiscardHandCard(player,index,"cardEffect"),message:"「カードロック」：保護するカードを2枚選んでください。"});
+        picks=indexes.map(index=>({index,cardId:state.hands[player][index],instanceId:handCardInstanceId(player,index)}));
+      }else picks=getDiscardCandidates(player,"cardEffect").slice(0,2);
+      state.cardLocks[player]=[...(state.cardLocks[player]||[]),...picks.map(x=>({instanceId:x.instanceId,cardId:x.cardId,turnsRemaining:2}))];
+    }
+    function replaceHandAttachments(player){[state.traps[player].L,state.traps[player].R]=[state.traps[player].R,state.traps[player].L];addLog(`${handNames[player]}は左右の設置物を入れ替えた。`);}
+    async function useForceCard(player){
+      const o=otherPlayer(player);let pick=null;
+      if(state.battleMode==="friend"&&player==="human"){
+        const actionId=makeFriendInterruptId();await createSecureFriendInteraction({actionId,type:"forceCard"});
+        await forcePublishFriendStateNow("強制の選択待ち開始");
+        const response=await requestRemoteFriendDecision("forceCard",{matchId:state.friendMatchId,turnSerial:Number(state.friendTurnSerial||0)},{id:actionId}),secure=await readSecureFriendInteraction(actionId);
+        if(response?.matchId!==state.friendMatchId||response?.actionId!==actionId||secure?.status!=="responded"||secure?.targetInstanceId!==response.instanceId)return;
+        const index=state.handCardInstances[o].indexOf(secure.targetInstanceId);if(index<0||!isCountedHandCard(state.hands[o][index]))return;
+        state.forcedCard[o]={instanceId:secure.targetInstanceId,cardId:state.hands[o][index],pending:true,active:false};
+        try{await publishFriendInteractionFinalState("強制の選択確定",actionId);}catch(error){setMessage("強制の同期確定を待っています。再接続後も自動的に再開します。");console.error("PVP force finalize failed",error);}
+        return;
+      }
+      if(o==="human"){
+        const indexes=await beginHandCardSelection({min:1,max:1,filter:id=>isCountedHandCard(id),message:"「強制」：次の自分のターンに使用するカードを1枚選んでください。"});
+        if(indexes.length)pick={index:indexes[0],cardId:state.hands[o][indexes[0]]};
+      }else pick=getCountedHandCards(o)[0];
+      if(!pick)return;state.forcedCard[o]={instanceId:handCardInstanceId(o,pick.index),cardId:pick.cardId,pending:true,active:false};
+    }
+    function usePeek(player){const o=otherPlayer(player),cards=getCountedHandCards(o).sort(()=>Math.random()-.5).slice(0,3).map(x=>CARD_LIBRARY[x.cardId]?.name||x.cardId);if(player==="human")setMessage(cards.length?`覗き見：${cards.join("／")}`:"覗き見：通常手札はありません。");}
+    function v166ExchangePairs(player){const o=otherPlayer(player),pairs=[];for(const a of ["L","R"])for(const b of ["L","R"])if(state[player][a]>0&&state[o][b]>0&&state[player][a]!==state[o][b])pairs.push([a,b]);return pairs;}
+    function hasV166ExchangePair(player){return v166ExchangePairs(player).length>0;}
+    async function useExchangeHands(player){
+      const o=otherPlayer(player);let pair;
+      if(player==="human"){
+        const own=await beginBoardHandSelection(player,{owners:[player],minimum:1,message:"「交換」：交換する自分の手を選んでください。"});if(!own)return;
+        const opponent=await beginBoardHandSelection(player,{owners:[o],minimum:1,candidateFilter:item=>item.value!==own.value,message:"「交換」：本数の異なる相手の手を選んでください。"});if(!opponent)return;
+        pair=[own.hand,opponent.hand];
+      }else pair=v166ExchangePairs(player)[0];
+      if(!pair)return;const [a,b]=pair,x=state[player][a],y=state[o][b];v166ApplyFingerValue(player,a,y,player,"交換");v166ApplyFingerValue(o,b,x,player,"交換");
+    }
+    async function chooseTradeCard(player){
+      if(player!=="human")return getTradeEligibleCards(player)[0]||null;
+      const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>canDiscardHandCard(player,index,"trade"),message:"「貿易」：相手へ渡すカードを1枚選んでください。"});
+      return indexes.length?{index:indexes[0],cardId:state.hands[player][indexes[0]],instanceId:handCardInstanceId(player,indexes[0])}:null;
+    }
+    async function useTrade(player){
+      if(state.battleMode==="friend"&&player==="human"){
+        const a=await chooseTradeCard(player);if(!a)return;
+        const actionId=makeFriendInterruptId(),nonce=randomInteractionNonce(),sourceCommit=await makeTradeCommit({matchId:state.friendMatchId,actionId,role:state.friendRole,instanceId:a.instanceId,nonce});
+        await savePrivateTradeChoice({actionId,instanceId:a.instanceId,nonce,commit:sourceCommit});
+        await createSecureFriendInteraction({actionId,type:"trade",sourceCommit});
+        await forcePublishFriendStateNow("貿易の選択待ち開始");
+        const response=await requestRemoteFriendDecision("trade",{matchId:state.friendMatchId,actionId,turnSerial:Number(state.friendTurnSerial||0),sourceCommit},{id:actionId});
+        await resolveOnlineTradeResponse(actionId,response);return;
+      }
+      const o=otherPlayer(player),a=await chooseTradeCard(player),b=await chooseTradeCard(o);if(!a||!b)return;
+      ensureHandCardInstances(player);ensureHandCardInstances(o);const ai=state.handCardInstances[player].indexOf(a.instanceId),bi=state.handCardInstances[o].indexOf(b.instanceId);if(ai<0||bi<0||!canDiscardHandCard(player,ai,"trade")||!canDiscardHandCard(o,bi,"trade"))return;
+      const aid=state.hands[player][ai],bid=state.hands[o][bi],ainst=state.handCardInstances[player][ai],binst=state.handCardInstances[o][bi];state.hands[player][ai]=bid;state.hands[o][bi]=aid;state.handCardInstances[player][ai]=binst;state.handCardInstances[o][bi]=ainst;addLog("「貿易」で双方が選んだカードを同時に交換した。");
+    }
+    async function useUntidy(player){
+      const o=otherPlayer(player),picked=await beginBoardHandSelection(player,{owners:[o],minimum:2,message:"「整わない」：1本減らす相手の手を選んでください。",cpuPick:candidates=>[...candidates].sort((a,b)=>b.value-a.value)[0]});if(!picked)return;
+      v166ApplyFingerValue(o,picked.hand,state[o][picked.hand]-1,player,"整わない");const own=["L","R"].filter(h=>state[player][h]>0);if(own.length){const h=own[Math.floor(Math.random()*own.length)];v166ApplyFingerValue(player,h,state[player][h]+1,player,"整わない");}
     }
     function isProtectedAttachment(cardId) {
       return !!CARD_LIBRARY[cardId]?.themeBlessing;
@@ -9976,11 +10199,12 @@ function wrapFinger(value) {
     let pendingHandCardSelection = null;
     let pendingNumberAllocation = null;
 
-    function beginBoardHandSelection(player, { owners = [player], allowZero = false, minimum = allowZero ? 0 : 1, message = "手を選んでください。", cpuPick = null } = {}) {
+    function beginBoardHandSelection(player, { owners = [player], allowZero = false, minimum = allowZero ? 0 : 1, candidateFilter = () => true, message = "手を選んでください。", cpuPick = null } = {}) {
       const candidates = [];
       for (const owner of owners) for (const hand of ["L", "R"]) {
         const value = Number(state[owner]?.[hand] || 0);
-        if ((allowZero || value > 0) && value >= minimum) candidates.push({ owner, hand, value });
+        const candidate={owner,hand,value};
+        if ((allowZero || value > 0) && value >= minimum && candidateFilter(candidate)) candidates.push(candidate);
       }
       if (!candidates.length) return Promise.resolve(null);
       if (player !== "human") return Promise.resolve(cpuPick ? cpuPick(candidates) : candidates[0]);
@@ -10472,8 +10696,10 @@ function wrapFinger(value) {
 
     async function discardHandCardByEffect(player, handIndex, reason = "") {
       if(isRomanOpponentTarget(state.resolvingEffectPlayer,player))return null;
-      if(!isExternallyDiscardableHandCard(state.hands[player][handIndex])) return null;
+      if(!canDiscardHandCard(player,handIndex,reason==="fatigue"?"fatigue":"cardEffect")) return null;
+      ensureHandCardInstances(player);
       const [cardId] = state.hands[player].splice(handIndex, 1);
+      state.handCardInstances[player].splice(handIndex,1);
       if (!cardId) return null;
       state.discard[player].push(cardId);
       if (reason) addLog(`${reason}：${handNames[player]}は「${CARD_LIBRARY[cardId]?.name || cardId}」を捨てた。`);
@@ -10487,9 +10713,11 @@ function wrapFinger(value) {
         .filter(index => Number.isInteger(index) && index >= 0 && index < state.hands[player].length)
         .sort((a, b) => a - b)
         .map(index => ({ index, cardId: state.hands[player][index] }))
-        .filter(item => isExternallyDiscardableHandCard(item.cardId));
+        .filter(item => canDiscardHandCard(player,item.index,reason==="fatigue"?"fatigue":"cardEffect"));
+      ensureHandCardInstances(player);
       for (const item of [...fixed].sort((a, b) => b.index - a.index)) {
         state.hands[player].splice(item.index, 1);
+        state.handCardInstances[player].splice(item.index,1);
       }
       for (const item of fixed) {
         state.discard[player].push(item.cardId);
@@ -10500,18 +10728,9 @@ function wrapFinger(value) {
     }
 
     async function discardRandomCards(player,count,reason) {
-      let discarded=0;
-      while(discarded<count){
-        const candidates = state.hands[player]
-          .map((id,index)=>({id,index}))
-          .filter(item=>isExternallyDiscardableHandCard(item.id));
-        if (!candidates.length) break;
-        const picked=candidates[Math.floor(Math.random()*candidates.length)];
-        const id = await discardHandCardByEffect(player, picked.index, reason);
-        if (!id) break;
-        discarded++;
-      }
-      return discarded;
+      const candidates=getDiscardCandidates(player,"randomDiscard"),picked=[],limit=Math.max(0,Math.min(Number(count)||0,candidates.length));
+      for(let i=0;i<limit;i++){const at=Math.floor(Math.random()*candidates.length);picked.push(candidates.splice(at,1)[0]);}
+      const ids=await discardFixedHandCardsByEffect(player,picked.map(x=>x.index),reason);return ids.length;
     }
 
     function attachmentKind(cardId) {
@@ -11740,7 +11959,7 @@ function renderLastAction() {
           state.turn === "human" &&
           !state.gameOver &&
           !state.animating &&
-          (!state.temp.human.cardActionUsed || Number(state.temp.human.cardExtraUses || 0) > 0) &&
+          (!state.temp.human.cardActionUsed || Number(state.temp.human.cardExtraUses || 0) > 0 || card.consumesCardAction===false) &&
           !berserkLocked &&
           !intemperanceLocked;
         const lightSpeedChargePlayable =
@@ -11764,6 +11983,7 @@ function renderLastAction() {
           !advanceNoticeMode &&
           !romanRuleLocked &&
           !restrictedByCost &&
+          (!state.forcedCard?.human?.active || handCardInstanceId("human",index)===state.forcedCard.human.instanceId) &&
           canUseCardAction &&
           !isZoneCard &&
           card.canPlay("human");
@@ -12508,6 +12728,7 @@ function renderLastAction() {
 
     async function playCard(player, handIndex, showPopup = true) {
       if(state.startingRouletteActive)return false;
+      if(player==="human"&&isFriendInteractionBlocking())return false;
       if (state.gameOver || state.turn !== player) return false;
       if(state.furiosoSkipActive?.[player])return false;
       if(state.quarterRestActive?.[player]){if(player==="human")setMessage("4分休符により、このターンは手札からカードを使用できません。");return false;}
@@ -12525,6 +12746,7 @@ function renderLastAction() {
       }
 
       const rawCardId = state.hands[player][handIndex];
+      const rawCardInstanceId = handCardInstanceId(player, handIndex);
       const cardId = effectiveCardIdForPlayer(player, rawCardId);
       const card = CARD_LIBRARY[cardId];
       if (!canUseCardUnderRule(player, cardId)) return false;
@@ -12539,9 +12761,11 @@ function renderLastAction() {
         setMessage("今は黄色く光っているカードだけを使ってください。");
         return false;
       }
+      const forced=state.forcedCard?.[player];
+      if(forced?.active&&rawCardInstanceId!==forced.instanceId){if(player==="human")setMessage("「強制」により指定されたカード以外は使用できません。");return false;}
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
       const magicalExtraCardPlayable = Number(state.temp[player].cardExtraUses || 0) > 0;
-      if (state.temp[player].cardActionUsed && !lightSpeedChargePlayable && !magicalExtraCardPlayable) return false;
+      if (card?.consumesCardAction !== false && state.temp[player].cardActionUsed && !lightSpeedChargePlayable && !magicalExtraCardPlayable) return false;
       if (!card || isAttachmentCard(cardId)) return false;
       if (!card.canPlay(player)) {
         if (player === "human" && cardId === "lightSpeedCircuit") {
@@ -12572,9 +12796,10 @@ function renderLastAction() {
       };
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
-      state.discard[player].push(rawCardId);
+      state.handCardInstances[player].splice(handIndex,1);
+      if(!card.vanishOnUse)state.discard[player].push(rawCardId);
       markChargeCardUsedThisTurn(player, cardId);
-      consumeCardActionAllowance(player, { lightSpeedChargePlayable });
+      if(card.consumesCardAction!==false)consumeCardActionAllowance(player, { lightSpeedChargePlayable });
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       setLastAction(player, `「${card.name}」`, card.text, "card");
 
@@ -13059,10 +13284,12 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 
 async function attack(attacker, attackHand, defender, targetHand, options = {}) {
       if(state.startingRouletteActive)return false;
+      if(attacker==="human"&&!options.cardInternalAttack&&isFriendInteractionBlocking())return false;
       if(!options.cardInternalAttack&&!canUseNormalAttackAction(attacker)){if(attacker==="human")setMessage("このターンは通常攻撃できません。");return false;}
       if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
       if(state.temp[attacker]?.multiAttackSource==="Furioso"&&Number(state.temp[attacker]?.attackLimit)===0&&!options.cardInternalAttack)return false;
       if(state.wholeRestActive?.[attacker]&&!options.cardInternalAttack){if(attacker==="human")setMessage("全休符により通常攻撃行動はできません。");return false;}
+      if(hasAttachment(attacker,attackHand,"sniperBlessing")){if(attacker==="human")setMessage("「狙撃の加護」が付いた手では攻撃できません。");return false;}
       const completeAttackAttempt = async () => {
         if (options.countAttackAttempt === false) return null;
         return await completeNormalAttackAttempt(attacker);
@@ -13160,7 +13387,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
        */
       const normalBasePower = state[attacker][attackHand];
       let immutable = hasImmutableCurse(attacker, attackHand);
-      const goldRushBase = state.hands[attacker].length;
+      const goldRushBase = countHandCards(attacker);
       const basePower = goldRushActive ? goldRushBase : normalBasePower;
       const attackReplacementKind = danceActive ? "result" : goldRushActive ? "amount" : null;
       const isAttackReplacement = attackReplacementKind !== null;
@@ -13465,6 +13692,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         state.lastAttackContext.receivedAmount=0;
         state.lastAttackContext.appliedAmount=0;
       }
+      if(state.nobleGasProtected?.[defender]&&attacker!==defender){if(power!==0)addLog("通常攻撃は「貴ガス」に防がれた。");power=0;state.lastAttackContext.receivedAmount=0;state.lastAttackContext.appliedAmount=0;}
       const before = state[defender][targetHand];
       const romanOpponentHandProtected=isRomanOpponentTarget(attacker,defender);
       const total = before + power;
@@ -13493,6 +13721,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       } else if (lightningZeroActive && total >= 5) {
         resolvedFinal = 0;
         addLog(`「雷撃」の充電Lv.10効果により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過計算をせず0になった。`);
+      } else if (total >= 5 && hasAttachment(defender,targetHand,"sniperBlessing")) {
+        resolvedFinal=0;
+        addLog(`「狙撃の加護」により、${handNames[defender]}の${handNames[targetHand]}は5以上になったため0になった。`);
       } else {
         resolvedFinal = overflowWouldApply ? 0 : (guardWouldApply ? 4 : wrapFinger(total));
         if (overflowWouldApply) {
@@ -13509,6 +13740,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if(!romanOpponentHandProtected)resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃");
       await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
+      if(resonance&&hasAttachment(attacker,attackHand,"vibrationGeneration"))gainCharge(attacker,3,"振動発電");
       if(defender===otherPlayer(attacker)&&before>0&&resolvedFinal===0)state.temp[attacker].opponentZeroedThisTurn=true;
       if (guardWouldApply) state.temp[defender].guard = false;
       render();
@@ -13642,6 +13874,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
     }
 
     async function split(player, left, right, show = true) {
+      if(player==="human"&&isFriendInteractionBlocking())return false;
       const before = `${state[player].L}-${state[player].R}`;
       if (show) {
         setLastAction(player, "分ける", "左右の本数を分け直しました。", "action");
@@ -13693,6 +13926,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
 async function endTurn(reason="unspecified") {
       if(state.startingRouletteActive)return;
+      if(isFriendInteractionBlocking())return false;
   const friendRollback=state.battleMode==="friend"&&state.friendRole?{snapshot:buildFriendCanonicalSnapshot(),meta:{turnSerial:state.friendTurnSerial,turnOwner:state.friendTurnOwner,turnStarted:state.friendTurnStarted,turnStartAppliedSerial:state.friendTurnStartAppliedSerial,turnStartToken:state.friendTurnStartToken,turnStartClaimedAt:state.friendTurnStartClaimedAtMs}}:null;
   const romanPreparationWasActive=isRomanPreparation();
   if (isTutorialBattle()) {
@@ -13700,6 +13934,9 @@ async function endTurn(reason="unspecified") {
     return;
   }
   const endingPlayer=state.turn;
+  vanishTurnEndCards(endingPlayer);
+  state.cardLocks[endingPlayer]=(state.cardLocks[endingPlayer]||[]).map(lock=>({...lock,turnsRemaining:Number(lock.turnsRemaining||0)-1})).filter(lock=>lock.turnsRemaining>0);
+  if(state.forcedCard[endingPlayer]?.active)state.forcedCard[endingPlayer]=null;
   if(state.pendingGungnirRecovery?.[endingPlayer]){
     state.pendingGungnirRecovery[endingPlayer]=false;
     await recoverHarpoon(endingPlayer,{sourceLabel:"グングニル"});
@@ -14873,6 +15110,7 @@ async function endTurn(reason="unspecified") {
       const card = event.currentTarget;
       const owner = card.dataset.owner;
       const hand = card.dataset.hand;
+      if(isFriendInteractionBlocking())return;
 
       if (!tutorialExpectedHand(owner, hand)) return;
       if (tutorial.usingRealBattle && state.battleMode === "tutorial") tutorialAfterHandClick(owner, hand);
@@ -15578,10 +15816,10 @@ async function endTurn(reason="unspecified") {
     socialEl("playerCardCancelBtn")?.addEventListener("click",closePlayerCardEditor);socialEl("playerCardEditorCloseBtn")?.addEventListener("click",closePlayerCardEditor);
     socialEl("playerNameChangeBtn")?.addEventListener("click",async()=>{try{await prepareProfileChange(async()=>{await ensureProfileChangeAllowed();openPlayerNameEditor();});}catch(error){showProfileActionError(error);}});
     socialEl("playerNameSaveBtn")?.addEventListener("click",async()=>{try{await changePlayerName();}catch(error){socialMessage("playerNameMessage",error.message);}});
-    socialEl("playerNameCancelBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));socialEl("playerNameCloseBtn")?.addEventListener("click",()=>socialClose("playerNameModal"));
-    socialEl("giftCodeOpenBtn")?.addEventListener("click",()=>{socialEl("giftCodeInput").value="";socialMessage("giftCodeMessage","");socialOpen("giftCodeModal");});
+    socialEl("playerNameCancelBtn")?.addEventListener("click",()=>closeAccountChildModal("playerNameModal"));socialEl("playerNameCloseBtn")?.addEventListener("click",()=>closeAccountChildModal("playerNameModal"));
+    socialEl("giftCodeOpenBtn")?.addEventListener("click",()=>{socialEl("giftCodeInput").value="";socialMessage("giftCodeMessage","");openAccountChildModal("giftCodeModal");queueMicrotask(()=>socialEl("giftCodeInput")?.focus());});
     socialEl("giftCodeClaimBtn")?.addEventListener("click",async()=>{try{await claimGiftCode();}catch(error){socialMessage("giftCodeMessage",error.message);}});
-    socialEl("giftCodeCancelBtn")?.addEventListener("click",()=>socialClose("giftCodeModal"));socialEl("giftCodeCloseBtn")?.addEventListener("click",()=>socialClose("giftCodeModal"));
+    socialEl("giftCodeCancelBtn")?.addEventListener("click",()=>closeAccountChildModal("giftCodeModal"));socialEl("giftCodeCloseBtn")?.addEventListener("click",()=>closeAccountChildModal("giftCodeModal"));
     socialEl("socialFriendsOpenBtn")?.addEventListener("click",()=>socialOpen("socialFriendsPanel"));
     socialEl("socialFriendsCloseBtn")?.addEventListener("click",()=>socialClose("socialFriendsPanel"));
     socialEl("publicProfileCloseBtn")?.addEventListener("click",()=>socialClose("publicProfileModal"));
@@ -15696,6 +15934,7 @@ async function endTurn(reason="unspecified") {
     });
 
     elements.attackBtn.addEventListener("click", () => {
+      if(isFriendInteractionBlocking())return;
       if (state.temp.human.setupMode) return;
       state.mode = "attack";
       state.selectedAttackHand = null;
@@ -15707,6 +15946,7 @@ async function endTurn(reason="unspecified") {
     });
 
     elements.splitBtn.addEventListener("click", () => {
+      if(isFriendInteractionBlocking())return;
       if (isTutorialBattle()) {
         if (tutorial.expected !== "split") {
           setMessage("今は指定された操作を行ってください。");
@@ -15754,6 +15994,7 @@ async function endTurn(reason="unspecified") {
     });
 
     elements.cancelBtn.addEventListener("click", async () => {
+      if(isFriendInteractionBlocking())return;
       if (state.turn === "human" && state.temp.human.setupMode && !state.gameOver) {
         state.temp.human.setupMode = false;
         state.mode = "attack";

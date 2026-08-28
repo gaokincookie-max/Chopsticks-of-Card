@@ -1,4 +1,28 @@
-# 割り箸カードゲーム v165n
+# 割り箸カードゲーム v166c
+
+## v166c
+
+- オンラインinteraction中はcanonicalな`match.interrupt`も参照して、攻撃・カード・分割・ターン終了・自動handoffを停止します。
+- 「強制」「貿易」は最終効果のcanonical publish成功後にinterruptをclearします。
+- コード入力・名前変更・プレイヤーカード編集を、account親モーダルと同時表示しない親子遷移へ変更しました。
+
+## v166b
+
+- オンライン「強制」を既存interruptへ統合し、対象プレイヤー本人が選択します。
+- オンライン「貿易」にSHA-256 commit/revealと参加者本人専用の秘密選択文書を追加しました。
+- pending interactionはmatch/action IDで検証し、再接続時に待機・解決状態を復元します。
+
+## v166a
+
+- v166新カードの人間向け対象選択を既存の手・カード選択UIへ統合しました。
+- CPUは有限候補からの自動選択を維持します。
+- 「遅刻」の予約値を指令補正と同じ最終attackLimit計算へ統合しました。
+
+## v166 新カード14枚・手札共通属性
+
+- `countsAsHandCard`、`discardable`、`consumesCardAction`、`vanishOnUse`、`vanishAtTurnEnd` と共通card instance identityを追加しました。
+- 新カード14枚とCPU・オンラインsnapshot対応を追加しました。
+- 捨て候補を有限集合として先に抽出し、捨てられないカードだけでも全捨て・ランダム捨てが停止するよう安全化しました。
 
 ## v165n オンライン降参通知・結果同期修正
 
