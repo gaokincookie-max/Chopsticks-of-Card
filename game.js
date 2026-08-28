@@ -2260,9 +2260,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v167-deck-editor-peek-ui";
+    const LATEST_NEWS_ID = "v167a-deck-editor-density";
 
     const UPDATE_NEWS = [
+      {id:"v167a-deck-editor-density",version:"v167a",date:"2026-08-28",title:"デッキ編集の一覧性を改善",summary:"お気に入りとコンパクト表示を見やすく調整しました。",featured:true,tags:["fix","ui"],items:["お気に入りカードを選択中の並び順に関係なく常に上部表示","お気に入りボタンを♡／♥へ変更","コンパクト表示を2行・多列の高密度レイアウトへ改善","フィルター選択時の表示を控えめに調整"]},
       {id:"v167-deck-editor-peek-ui",version:"v167",date:"2026-08-28",title:"デッキ編集と「覗き見」を大幅改善",summary:"カードを探し、調整し、確認する操作がより快適になりました。",featured:true,tags:["update","ui"],items:["デッキ編集画面を大幅改善","カード名に加えて本文・種類・テーマから検索可能","種類・コスト・テーマ・採用状態・お気に入りで絞り込み可能","デッキ詳細からカード枚数を直接調整可能","お気に入り機能とお気に入り優先順を追加","設定に初期OFFのデッキ編集コンパクト表示を追加","「覗き見」の結果を最大3枚の専用確認画面で表示"]},
       {id:"v166c-interaction-modal-stability",version:"v166c",date:"2026-08-28",title:"オンライン待機とアカウント画面を安定化",summary:"相手の選択待ちとアカウント内画面の操作不具合を修正しました。",featured:true,tags:["fix","online","ui"],items:["オンラインで相手の選択待ち中に戦闘操作できてしまう問題を修正","「強制」「貿易」の最終効果を同期してから待機状態を解除するよう改善","interaction中に再接続した際の進行ロックを改善","アカウントのコード入力画面が操作不能になる問題を修正","名前変更・プレイヤーカード編集などの画面切替を改善"]},
       {id:"v166b-online-force-trade",version:"v166b",date:"2026-08-28",title:"オンラインの「強制」と「貿易」を改善",summary:"相手入力と秘密選択をオンライン対戦へ対応しました。",featured:true,tags:["fix","online"],items:["オンライン戦で「強制」の対象プレイヤー本人による選択に対応","オンライン戦で「貿易」の双方選択と同時交換に対応","SHA-256 commitと本人専用保存領域により、選択内容の先読みを防止","選択中の待機・再接続復元処理を改善"]},
@@ -7652,10 +7653,8 @@ function wrapFinger(value) {
         const cardB = CARD_LIBRARY[b];
         const tokenDiff = Number(Boolean(cardA.token)) - Number(Boolean(cardB.token));
         if (tokenDiff) return tokenDiff;
-        if (state.deckSortMode === "favorite") {
-          const favoriteDiff = Number(deckFavorites.has(b)) - Number(deckFavorites.has(a));
-          if (favoriteDiff) return favoriteDiff;
-        }
+        const favoriteDiff = Number(deckFavorites.has(b)) - Number(deckFavorites.has(a));
+        if (favoriteDiff) return favoriteDiff;
         if (state.deckSortMode === "name") return cardA.name.localeCompare(cardB.name, "ja");
         if (state.deckSortMode === "cost") return cardA.cost - cardB.cost || cardA.name.localeCompare(cardB.name, "ja");
         if (state.deckSortMode === "type") return deckCardTypeSortKey(cardA).localeCompare(deckCardTypeSortKey(cardB), "ja");
@@ -7764,6 +7763,7 @@ function wrapFinger(value) {
     }
 
     function renderDeckBuilder() {
+      if (!["implementation", "name", "cost", "type"].includes(state.deckSortMode)) state.deckSortMode = "implementation";
       const owner = state.editingDeckOwner;
       const counts = currentDeckCounts(owner);
       const ruleId=state.deckRuleContext?.ruleId||null,ruleDef=ruleId?REGULATION_DEFS[ruleId]:null,contextLabel=document.getElementById("deckRuleContextLabel");
@@ -7792,19 +7792,21 @@ function wrapFinger(value) {
         if (card.harpoonTheme && cardId !== "harpoon") relatedButtons.push('<button class="deck-inline-info" data-info="harpoon">銛とは？</button>');
         const relatedButton = relatedButtons.join("");
         row.innerHTML = `
-          <div>
+          <div class="deck-card-main">
             <div class="card-title">
-              <button class="deck-favorite-btn" data-favorite="${cardId}" aria-pressed="${deckFavorites.has(cardId)}" aria-label="${escapeHtml(card.name)}をお気に入り${deckFavorites.has(cardId) ? "解除" : "登録"}">${deckFavorites.has(cardId) ? "★" : "☆"}</button>
               <button class="deck-card-name deck-card-info" data-info="${cardId}">${escapeHtml(card.name)}</button>
             </div>
-            <div class="card-label-row">
-              <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
-              ${card.token ? '<span class="generated-badge">生成カード</span>' : ''}
+            <div class="deck-card-compact-meta">
+              <div class="card-label-row">
+                <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
+                ${card.token ? '<span class="generated-badge">生成カード</span>' : ''}
+              </div>
+              <div class="card-cost">コスト ${card.cost}</div>
             </div>
-            <div class="card-cost">コスト ${card.cost}</div>
             <div class="deck-card-desc">${card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>
             <div class="deck-inline-actions">${relatedButton}${card.token ? `<button class="deck-inline-info" data-info="${cardId}">詳細を見る</button>` : ""}</div>
           </div>
+          <button class="deck-favorite-btn" data-favorite="${cardId}" aria-pressed="${deckFavorites.has(cardId)}" aria-label="${escapeHtml(card.name)}をお気に入り${deckFavorites.has(cardId) ? "から削除" : "に追加"}">${deckFavorites.has(cardId) ? "♥" : "♡"}</button>
           ${restrictionReason?`<div class="deck-rule-lock">🔒 ${escapeHtml(restrictionReason)}</div>`:""}
           ${card.token ? '<div class="generated-lock">デッキ投入不可</div>' : `<div class="count-control">
             <button class="secondary" data-action="minus" data-card="${cardId}">−</button>
@@ -7826,6 +7828,8 @@ function wrapFinger(value) {
           }
           const favoriteId = btn.dataset.favorite;
           if (favoriteId) {
+            event.preventDefault();
+            event.stopPropagation();
             deckFavorites.has(favoriteId) ? deckFavorites.delete(favoriteId) : deckFavorites.add(favoriteId);
             saveDeckFavorites();
             renderDeckBuilder();
@@ -16239,7 +16243,7 @@ async function endTurn(reason="unspecified") {
 
 
     elements.deckSortSelect?.addEventListener("change", event => {
-      state.deckSortMode = event.target.value || "implementation";
+      state.deckSortMode = ["implementation", "name", "cost", "type"].includes(event.target.value) ? event.target.value : "implementation";
       renderDeckBuilder();
     });
     elements.deckSearchInput?.addEventListener("input", event => {
