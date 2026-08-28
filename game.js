@@ -1994,7 +1994,7 @@ const CARD_LIBRARY = {
       cardLock: {name:"カードロック",cost:2,type:"補助",text:"自分の手札から2枚を選ぶ。選ばれたカードは次の2回の自分のターン終了まで、疲労以外では捨てられない。",canPlay:p=>getDiscardCandidates(p,"cardEffect").length>=3,effect:p=>useCardLock(p)},
       replaceAttachments: {name:"置き換える",cost:3,type:"補助",text:"自分の左右の手に設置されている加護・呪縛・罠と、それらに付随する状態を左右丸ごと入れ替える。",canPlay:()=>true,effect:p=>replaceHandAttachments(p)},
       forceCard: {name:"強制",cost:2,type:"補助",text:"相手は通常手札から1枚を選ぶ。次の相手ターン、その個体以外のカードを使用できない。対象がなくなっても選び直さない。",canPlay:p=>getCountedHandCards(otherPlayer(p)).length>0,effect:p=>useForceCard(p)},
-      peek: {name:"覗き見",cost:2,type:"補助",text:"相手の通常手札からランダムに最大3枚を見る。",canPlay:()=>true,effect:p=>usePeek(p)},
+      peek: {name:"覗き見",cost:2,type:"補助",text:"相手の通常手札からランダムに最大3枚を見る。",canPlay:()=>true,effect:async p=>await usePeek(p)},
       exchangeHands: {name:"交換",cost:3,type:"終端",terminal:true,text:"自分と相手の0でない、異なる本数の手を1つずつ選び、その本数を入れ替える。",canPlay:p=>hasV166ExchangePair(p),effect:p=>useExchangeHands(p)},
       nobleGas: {name:"貴ガス",cost:2,type:"補助",text:"自分の両手の合計が8の時に使用できる。次の自分のターン開始時まで、相手由来の効果では自分の手の本数が変化しない。",canPlay:p=>v166HandTotal(p)===8,effect:p=>{state.nobleGasProtected[p]=true;addLog(`${handNames[p]}は「貴ガス」で相手由来の本数変化を防ぐ。`)}},
       late: {name:"遅刻",cost:3,type:"終端",terminal:true,text:"次の自分のターン、攻撃可能回数が1回増える。複数予約した場合は累積する。",canPlay:()=>true,effect:p=>{state.pendingLateAttackBonus[p]=Number(state.pendingLateAttackBonus[p]||0)+1}},
@@ -2063,8 +2063,9 @@ const CARD_LIBRARY = {
       currentRegulation: { ...DEFAULT_REGULATION },
       resolvingEffectPlayer: null,
       deckSortMode: "implementation",
-      deckNameSearch: "",
-      deckKeywordSearch: "",
+      deckSearch: "",
+      deckNameSearch: "", deckKeywordSearch: "", // 旧保存・回帰テスト互換（UIは単一検索欄）
+      deckFilters: { type: "", cost: "", theme: "", deckOnly: false, unselectedOnly: false, favoriteOnly: false },
       cpuDifficulty: "standard",
       costLimit: 40,
       selectedTrapCardIndex: null,
@@ -2259,9 +2260,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v166c-interaction-modal-stability";
+    const LATEST_NEWS_ID = "v167-deck-editor-peek-ui";
 
     const UPDATE_NEWS = [
+      {id:"v167-deck-editor-peek-ui",version:"v167",date:"2026-08-28",title:"デッキ編集と「覗き見」を大幅改善",summary:"カードを探し、調整し、確認する操作がより快適になりました。",featured:true,tags:["update","ui"],items:["デッキ編集画面を大幅改善","カード名に加えて本文・種類・テーマから検索可能","種類・コスト・テーマ・採用状態・お気に入りで絞り込み可能","デッキ詳細からカード枚数を直接調整可能","お気に入り機能とお気に入り優先順を追加","設定に初期OFFのデッキ編集コンパクト表示を追加","「覗き見」の結果を最大3枚の専用確認画面で表示"]},
       {id:"v166c-interaction-modal-stability",version:"v166c",date:"2026-08-28",title:"オンライン待機とアカウント画面を安定化",summary:"相手の選択待ちとアカウント内画面の操作不具合を修正しました。",featured:true,tags:["fix","online","ui"],items:["オンラインで相手の選択待ち中に戦闘操作できてしまう問題を修正","「強制」「貿易」の最終効果を同期してから待機状態を解除するよう改善","interaction中に再接続した際の進行ロックを改善","アカウントのコード入力画面が操作不能になる問題を修正","名前変更・プレイヤーカード編集などの画面切替を改善"]},
       {id:"v166b-online-force-trade",version:"v166b",date:"2026-08-28",title:"オンラインの「強制」と「貿易」を改善",summary:"相手入力と秘密選択をオンライン対戦へ対応しました。",featured:true,tags:["fix","online"],items:["オンライン戦で「強制」の対象プレイヤー本人による選択に対応","オンライン戦で「貿易」の双方選択と同時交換に対応","SHA-256 commitと本人専用保存領域により、選択内容の先読みを防止","選択中の待機・再接続復元処理を改善"]},
       {id:"v166a-selection-late-fixes",version:"v166a",date:"2026-08-28",title:"新カードの選択操作と「遅刻」を修正",summary:"対象を自分で選べるようにし、次ターンの攻撃回数補正を安定化しました。",featured:true,tags:["fix"],items:["援護射撃・カードロック・強制・交換・貿易などの選択操作を改善","釣り合った天秤と整わないの対象選択を改善","「遅刻」の次ターン攻撃回数増加が指令補正で上書きされる問題を修正","新カードの人間操作とCPU自動選択を分離"]},
@@ -2807,23 +2809,33 @@ const CARD_LIBRARY = {
       }[tag] || String(tag || "").toUpperCase();
     }
 
-    const displaySettings = {
-      compactCardDescriptions: false
-    };
+    const displaySettings = { compactCardDescriptions: false, deckCompactMode: false };
+    const DECK_FAVORITES_STORAGE_KEY = "waribashi_card_deck_favorites_v1";
+    const deckFavorites = new Set();
 
     function loadDisplaySettings() {
       try {
         const saved = JSON.parse(localStorage.getItem(DISPLAY_SETTINGS_STORAGE_KEY) || "{}");
         displaySettings.compactCardDescriptions = saved.compactCardDescriptions === true;
+        displaySettings.deckCompactMode = saved.deckCompactMode === true;
       } catch {
         displaySettings.compactCardDescriptions = false;
+        displaySettings.deckCompactMode = false;
       }
+      try {
+        const savedFavorites = JSON.parse(localStorage.getItem(DECK_FAVORITES_STORAGE_KEY) || "[]");
+        if (Array.isArray(savedFavorites)) savedFavorites.forEach(id => { if (CARD_LIBRARY[id]) deckFavorites.add(id); });
+      } catch {}
     }
 
     function saveDisplaySettings() {
       try {
         localStorage.setItem(DISPLAY_SETTINGS_STORAGE_KEY, JSON.stringify(displaySettings));
       } catch {}
+    }
+
+    function saveDeckFavorites() {
+      try { localStorage.setItem(DECK_FAVORITES_STORAGE_KEY, JSON.stringify([...deckFavorites])); } catch {}
     }
 
     const TUTORIAL_STORAGE_KEY = "waribashi_card_tutorial_progress_v1";
@@ -3069,6 +3081,7 @@ const CARD_LIBRARY = {
       difficultyBackBtn: document.getElementById("difficultyBackBtn"),
       settingsBackBtn: document.getElementById("settingsBackBtn"),
       compactCardDescriptionsToggle: document.getElementById("compactCardDescriptionsToggle"),
+      deckCompactModeToggle: document.getElementById("deckCompactModeToggle"),
       deckBackMenuBtn: document.getElementById("deckBackMenuBtn"),
       battleBackMenuBtn: document.getElementById("battleBackMenuBtn"),
       battleRestartBtn: document.getElementById("battleRestartBtn"),
@@ -3134,6 +3147,10 @@ const CARD_LIBRARY = {
       trapChoiceText: document.getElementById("trapChoiceText"),
       trapChoiceList: document.getElementById("trapChoiceList"),
       trapSkipBtn: document.getElementById("trapSkipBtn"),
+      peekResultModal: document.getElementById("peekResultModal"),
+      peekResultText: document.getElementById("peekResultText"),
+      peekResultList: document.getElementById("peekResultList"),
+      peekResultConfirmBtn: document.getElementById("peekResultConfirmBtn"),
       toggleDeckBtn: document.getElementById("toggleDeckBtn"),
       deckPanel: document.getElementById("deckPanel"),
       deckGrid: document.getElementById("deckGrid"),
@@ -3144,8 +3161,13 @@ const CARD_LIBRARY = {
       deckCountText: document.getElementById("deckCountText"),
       deckCostText: document.getElementById("deckCostText"),
       deckSortSelect: document.getElementById("deckSortSelect"),
-      deckNameSearchInput: document.getElementById("deckNameSearchInput"),
-      deckKeywordSearchInput: document.getElementById("deckKeywordSearchInput"),
+      deckSearchInput: document.getElementById("deckSearchInput"),
+      deckTypeFilter: document.getElementById("deckTypeFilter"),
+      deckCostFilter: document.getElementById("deckCostFilter"),
+      deckThemeFilter: document.getElementById("deckThemeFilter"),
+      deckOnlyToggle: document.getElementById("deckOnlyToggle"),
+      deckUnselectedToggle: document.getElementById("deckUnselectedToggle"),
+      deckFavoriteOnlyToggle: document.getElementById("deckFavoriteOnlyToggle"),
       deckSearchClearBtn: document.getElementById("deckSearchClearBtn"),
       deckSearchResultText: document.getElementById("deckSearchResultText"),
       deckDetailsBtn: document.getElementById("deckDetailsBtn"),
@@ -7535,10 +7557,12 @@ function wrapFinger(value) {
       }
     };
 
-    function openDeckInfo(infoKey) {
+    let deckInfoReturnToCurrentDeck = false;
+    function openDeckInfo(infoKey, returnToCurrentDeck = false) {
       const preset = DECK_INFO[infoKey];
       const card = CARD_LIBRARY[infoKey];
       if (!preset && !card) return;
+      deckInfoReturnToCurrentDeck = returnToCurrentDeck;
       elements.deckInfoKicker.textContent = preset?.kicker || (card?.token ? "GENERATED CARD" : "CARD INFO");
       elements.deckInfoTitle.textContent = preset?.title || card.name;
       elements.deckInfoBody.innerHTML = preset?.html || `
@@ -7553,6 +7577,11 @@ function wrapFinger(value) {
     }
 
     function closeDeckInfo() {
+      if (deckInfoReturnToCurrentDeck) {
+        deckInfoReturnToCurrentDeck = false;
+        openCurrentDeckDetails();
+        return;
+      }
       elements.deckInfoModal.classList.remove("show");
       elements.deckInfoModal.setAttribute("aria-hidden", "true");
     }
@@ -7564,11 +7593,41 @@ function wrapFinger(value) {
     function deckCardSearchText(cardId, card) {
       return normalizeDeckSearchText([
         cardId, card.name, card.type, card.text,
+        ...(Array.isArray(card.searchKeywords) ? card.searchKeywords : []),
+        ...deckCardThemes(cardId, card),
         card.trap ? "罠" : "", card.blessing ? "加護" : "",
         card.curse ? "呪縛" : "", card.chargeCard ? "充電" : "",
         card.directive ? "指令" : "", card.token ? "生成カード" : "",
         card.magicalTransformed ? "変身後 デッキ投入不可" : ""
       ].join(" "));
+    }
+
+    function deckCardThemes(cardId, card) {
+      const themes = [];
+      const add = value => { if (value && !themes.includes(value)) themes.push(value); };
+      (Array.isArray(card.themes) ? card.themes : card.theme ? [card.theme] : []).forEach(add);
+      if (card.chargeCard) add("充電");
+      if (card.harpoonTheme) add("黄針");
+      if (card.directive) add("指令");
+      if (card.magical || card.magicalEvolution || card.magicalTransformed) add("魔法少女");
+      const source = `${card.type || ""} ${card.text || ""}`;
+      ["共鳴", "銃", "弾", "演舞", "均衡", "輪舞曲"].forEach(theme => { if (source.includes(theme)) add(theme); });
+      return themes;
+    }
+
+    function deckCardFilterType(card) { return deckDetailGroupLabel(card); }
+
+    function filterCardForDeckEditor(cardId, card, counts, filters = state.deckFilters) {
+      const query = normalizeDeckSearchText(state.deckSearch || [state.deckNameSearch, state.deckKeywordSearch].filter(Boolean).join(" "));
+      const count = counts[cardId] || 0;
+      if (query && !deckCardSearchText(cardId, card).includes(query)) return false;
+      if (filters.type && deckCardFilterType(card) !== filters.type) return false;
+      if (filters.cost && (filters.cost === "4+" ? Number(card.cost) < 4 : Number(card.cost) !== Number(filters.cost))) return false;
+      if (filters.theme && !deckCardThemes(cardId, card).includes(filters.theme)) return false;
+      if (filters.deckOnly && count < 1) return false;
+      if (filters.unselectedOnly && count > 0) return false;
+      if (filters.favoriteOnly && !deckFavorites.has(cardId)) return false;
+      return true;
     }
 
     function deckCardTypeSortKey(card) {
@@ -7581,14 +7640,11 @@ function wrapFinger(value) {
     function getVisibleDeckCardIds() {
       const implementationIds = Object.keys(CARD_LIBRARY);
       const implementationIndex = new Map(implementationIds.map((id, index) => [id, index]));
-      const nameQuery = normalizeDeckSearchText(state.deckNameSearch);
-      const keywordQuery = normalizeDeckSearchText(state.deckKeywordSearch);
+      const counts = currentDeckCounts(state.editingDeckOwner);
 
       const visible = implementationIds.filter(cardId => {
         const card = CARD_LIBRARY[cardId];
-        if (nameQuery && !normalizeDeckSearchText(card.name).includes(nameQuery)) return false;
-        if (keywordQuery && !deckCardSearchText(cardId, card).includes(keywordQuery)) return false;
-        return true;
+        return filterCardForDeckEditor(cardId, card, counts);
       });
 
       visible.sort((a, b) => {
@@ -7596,12 +7652,43 @@ function wrapFinger(value) {
         const cardB = CARD_LIBRARY[b];
         const tokenDiff = Number(Boolean(cardA.token)) - Number(Boolean(cardB.token));
         if (tokenDiff) return tokenDiff;
+        if (state.deckSortMode === "favorite") {
+          const favoriteDiff = Number(deckFavorites.has(b)) - Number(deckFavorites.has(a));
+          if (favoriteDiff) return favoriteDiff;
+        }
         if (state.deckSortMode === "name") return cardA.name.localeCompare(cardB.name, "ja");
         if (state.deckSortMode === "cost") return cardA.cost - cardB.cost || cardA.name.localeCompare(cardB.name, "ja");
         if (state.deckSortMode === "type") return deckCardTypeSortKey(cardA).localeCompare(deckCardTypeSortKey(cardB), "ja");
         return implementationIndex.get(a) - implementationIndex.get(b);
       });
       return visible;
+    }
+
+    function canAddDeckCard(owner, cardId) {
+      const card = CARD_LIBRARY[cardId], counts = currentDeckCounts(owner), current = counts[cardId] || 0;
+      if (!card || card.token || card.magicalTransformed) return false;
+      if (state.deckRuleContext?.ruleId && getDeckRestrictionReason(state.deckRuleContext.ruleId, cardId)) return false;
+      const stats = getDeckStats(owner);
+      return current < (card.maxDeckCopies || 3) && stats.count < DECK_MAX_COUNT && stats.cost + Number(card.cost || 0) <= state.costLimit;
+    }
+
+    function changeDeckCardCount(owner, cardId, delta) {
+      const counts = currentDeckCounts(owner), current = counts[cardId] || 0;
+      if (delta > 0 && !canAddDeckCard(owner, cardId)) return false;
+      counts[cardId] = Math.max(0, current + (delta > 0 ? 1 : -1));
+      persistCurrentDecks();
+      return true;
+    }
+
+    function initializeDeckFilterOptions() {
+      const types = [...new Set(Object.values(CARD_LIBRARY).map(deckCardFilterType))].sort((a,b) => a.localeCompare(b,"ja"));
+      const themes = [...new Set(Object.entries(CARD_LIBRARY).flatMap(([id, card]) => deckCardThemes(id, card)))].sort((a,b) => a.localeCompare(b,"ja"));
+      const fill = (select, values) => {
+        if (!select || select.options.length > 1) return;
+        values.forEach(value => select.add(new Option(value, value)));
+      };
+      fill(elements.deckTypeFilter, types);
+      fill(elements.deckThemeFilter, themes);
     }
 
     function deckDetailGroupLabel(card) {
@@ -7617,6 +7704,7 @@ function wrapFinger(value) {
     }
 
     function openCurrentDeckDetails() {
+      deckInfoReturnToCurrentDeck = false;
       const owner = state.editingDeckOwner;
       const counts = currentDeckCounts(owner);
       const entries = Object.keys(CARD_LIBRARY)
@@ -7640,12 +7728,16 @@ function wrapFinger(value) {
             <div class="deck-detail-group-head"><strong>${escapeHtml(label)}</strong><span>${groupCount}枚 / ${groupEntries.length}種類</span></div>
             <div class="deck-detail-card-list">
               ${groupEntries.map(entry => `
-                <div class="deck-detail-card-row">
+                <div class="deck-detail-card-row" data-card="${entry.cardId}">
                   <div>
-                    <div class="deck-detail-card-name">${escapeHtml(entry.card.name)}</div>
+                    <button class="deck-detail-card-name deck-detail-info" data-info="${entry.cardId}">${escapeHtml(entry.card.name)}</button>
                     <div class="deck-detail-card-meta">${escapeHtml(entry.card.type)} / コスト${entry.card.cost}</div>
                   </div>
-                  <strong class="deck-detail-card-count">×${entry.count}</strong>
+                  <div class="count-control deck-detail-count-control">
+                    <button class="secondary" data-detail-action="minus" data-card="${entry.cardId}">−</button>
+                    <strong class="deck-detail-card-count">×${entry.count}</strong>
+                    <button data-detail-action="plus" data-card="${entry.cardId}" ${canAddDeckCard(owner, entry.cardId) ? "" : "disabled"}>＋</button>
+                  </div>
                 </div>`).join("")}
             </div>
           </section>`;
@@ -7655,11 +7747,20 @@ function wrapFinger(value) {
       elements.deckInfoTitle.textContent = `${owner === "human" ? "あなた用" : "CPU用"}デッキ詳細`;
       elements.deckInfoBody.innerHTML = `
         <div class="deck-detail-summary">
-          <span>${stats.count}枚</span><span>合計コスト ${stats.cost} / ${state.costLimit}</span><span>${entries.length}種類</span>
+          <span>現在 ${stats.count} / ${DECK_MAX_COUNT}枚</span><span>残り ${Math.max(0, DECK_MAX_COUNT - stats.count)}枚</span>
+          <span>コスト ${stats.cost} / ${state.costLimit}</span><span>残りコスト ${Math.max(0, state.costLimit - stats.cost)}</span><span>${entries.length}種類</span>
         </div>
         ${sectionHtml || '<div class="deck-detail-empty">デッキにカードが入っていません。</div>'}`;
       elements.deckInfoModal.classList.add("show");
       elements.deckInfoModal.setAttribute("aria-hidden", "false");
+      elements.deckInfoBody.querySelectorAll("[data-detail-action]").forEach(button => button.addEventListener("click", () => {
+        const delta = button.dataset.detailAction === "plus" ? 1 : -1;
+        if (changeDeckCardCount(owner, button.dataset.card, delta)) {
+          renderDeckBuilder();
+          openCurrentDeckDetails();
+        }
+      }));
+      elements.deckInfoBody.querySelectorAll(".deck-detail-info").forEach(button => button.addEventListener("click", () => openDeckInfo(button.dataset.info, true)));
     }
 
     function renderDeckBuilder() {
@@ -7674,7 +7775,7 @@ function wrapFinger(value) {
         const count = counts[cardId] || 0;
         const row = document.createElement("div");
         const restrictionReason=ruleId?getDeckRestrictionReason(ruleId,cardId):"";
-        row.className = "deck-row" + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "") + (card.token ? " generated-card" : "") + (card.magicalEvolution ? " magical-evolution-card" : "");
+        row.className = "deck-row" + (displaySettings.deckCompactMode ? " deck-row-compact" : "") + (card.blessing ? " blessing-card" : card.curse ? " curse-card" : "") + (card.token ? " generated-card" : "") + (card.magicalEvolution ? " magical-evolution-card" : "");
         if(restrictionReason)row.classList.add("rule-blocked");
         const relatedButtons = [];
         if (cardId === "focusedShot") relatedButtons.push('<button class="deck-inline-info" data-info="logicCrusherBullet">生成カード「ロジックアトリエ」を確認</button>');
@@ -7693,7 +7794,8 @@ function wrapFinger(value) {
         row.innerHTML = `
           <div>
             <div class="card-title">
-              <span class="deck-card-name">${escapeHtml(card.name)}</span>
+              <button class="deck-favorite-btn" data-favorite="${cardId}" aria-pressed="${deckFavorites.has(cardId)}" aria-label="${escapeHtml(card.name)}をお気に入り${deckFavorites.has(cardId) ? "解除" : "登録"}">${deckFavorites.has(cardId) ? "★" : "☆"}</button>
+              <button class="deck-card-name deck-card-info" data-info="${cardId}">${escapeHtml(card.name)}</button>
             </div>
             <div class="card-label-row">
               <span class="card-type${card.trap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
@@ -7707,7 +7809,7 @@ function wrapFinger(value) {
           ${card.token ? '<div class="generated-lock">デッキ投入不可</div>' : `<div class="count-control">
             <button class="secondary" data-action="minus" data-card="${cardId}">−</button>
             <span class="count-num">${count}</span>
-            <button data-action="plus" data-card="${cardId}">＋</button>
+            <button data-action="plus" data-card="${cardId}" ${canAddDeckCard(owner, cardId) ? "" : "disabled"}>＋</button>
           </div>`}
         `;
         elements.deckGrid.appendChild(row);
@@ -7722,24 +7824,21 @@ function wrapFinger(value) {
             openDeckInfo(infoKey);
             return;
           }
+          const favoriteId = btn.dataset.favorite;
+          if (favoriteId) {
+            deckFavorites.has(favoriteId) ? deckFavorites.delete(favoriteId) : deckFavorites.add(favoriteId);
+            saveDeckFavorites();
+            renderDeckBuilder();
+            return;
+          }
 
           const cardId = btn.dataset.card;
           const action = btn.dataset.action;
           if (!cardId || !action) return;
 
-          const current = counts[cardId] || 0;
-          if (action === "plus") {
-            const clickedRestrictionReason=ruleId?getDeckRestrictionReason(ruleId,cardId):"";
-            if(clickedRestrictionReason){setMessage(clickedRestrictionReason);return;}
-            const currentStats = getDeckStats(owner);
-            if (currentStats.count >= DECK_MAX_COUNT) {
-              setMessage(`デッキはちょうど${DECK_MAX_COUNT}枚です。これ以上追加できません。`);
-              return;
-            }
-            counts[cardId] = Math.min(CARD_LIBRARY[cardId]?.maxDeckCopies||3, current + 1);
-          } else if (action === "minus") {
-            counts[cardId] = Math.max(0, current - 1);
-          }
+          const clickedRestrictionReason=ruleId?getDeckRestrictionReason(ruleId,cardId):"";
+          if(action === "plus" && clickedRestrictionReason){setMessage(clickedRestrictionReason);return;}
+          if (!changeDeckCardCount(owner, cardId, action === "plus" ? 1 : -1)) return;
           renderDeckBuilder();
         });
       });
@@ -7753,11 +7852,17 @@ function wrapFinger(value) {
       elements.deckOwnerSelect.value = owner;
       elements.cpuDifficultySelect.value = state.cpuDifficulty;
       if (elements.deckSortSelect) elements.deckSortSelect.value = state.deckSortMode;
-      if (elements.deckNameSearchInput && elements.deckNameSearchInput.value !== state.deckNameSearch) elements.deckNameSearchInput.value = state.deckNameSearch;
-      if (elements.deckKeywordSearchInput && elements.deckKeywordSearchInput.value !== state.deckKeywordSearch) elements.deckKeywordSearchInput.value = state.deckKeywordSearch;
+      elements.deckGrid.classList.toggle("compact", displaySettings.deckCompactMode);
+      if (elements.deckSearchInput && elements.deckSearchInput.value !== state.deckSearch) elements.deckSearchInput.value = state.deckSearch;
+      if (elements.deckTypeFilter) elements.deckTypeFilter.value = state.deckFilters.type;
+      if (elements.deckCostFilter) elements.deckCostFilter.value = state.deckFilters.cost;
+      if (elements.deckThemeFilter) elements.deckThemeFilter.value = state.deckFilters.theme;
+      if (elements.deckOnlyToggle) elements.deckOnlyToggle.checked = state.deckFilters.deckOnly;
+      if (elements.deckUnselectedToggle) elements.deckUnselectedToggle.checked = state.deckFilters.unselectedOnly;
+      if (elements.deckFavoriteOnlyToggle) elements.deckFavoriteOnlyToggle.checked = state.deckFilters.favoriteOnly;
       if (elements.deckSearchResultText) {
         const total = Object.keys(CARD_LIBRARY).length;
-        const hasSearch = !!(state.deckNameSearch || state.deckKeywordSearch);
+        const hasSearch = !!(state.deckSearch || Object.values(state.deckFilters).some(Boolean));
         elements.deckSearchResultText.textContent = hasSearch ? `${visibleCardIds.length}件 / 全${total}件` : `全${total}件を表示中`;
       }
       const validText = valid ? "使用可能" : stats.count !== DECK_MAX_COUNT ? `ちょうど${DECK_MAX_COUNT}枚必要` : "コスト超過";
@@ -9515,7 +9620,42 @@ function wrapFinger(value) {
       }else pick=getCountedHandCards(o)[0];
       if(!pick)return;state.forcedCard[o]={instanceId:handCardInstanceId(o,pick.index),cardId:pick.cardId,pending:true,active:false};
     }
-    function usePeek(player){const o=otherPlayer(player),cards=getCountedHandCards(o).sort(()=>Math.random()-.5).slice(0,3).map(x=>CARD_LIBRARY[x.cardId]?.name||x.cardId);if(player==="human")setMessage(cards.length?`覗き見：${cards.join("／")}`:"覗き見：通常手札はありません。");}
+    function closePeekResult() {
+      elements.peekResultModal.classList.remove("show");
+      elements.peekResultModal.setAttribute("aria-hidden", "true");
+    }
+
+    function showPeekResult(cards) {
+      return new Promise(resolve => {
+        elements.peekResultText.textContent = cards.length
+          ? "相手の手札から以下のカードが見えました。"
+          : "見ることができるカードはありません。";
+        elements.peekResultList.innerHTML = cards.map(({ cardId }) => {
+          const card = CARD_LIBRARY[cardId];
+          return `<div class="trap-choice-card peek-result-card">
+            <div class="peek-result-card-head"><strong>${escapeHtml(card?.name || cardId)}</strong><span>コスト ${Number(card?.cost) || 0}</span></div>
+            <div class="card-label-row"><span class="card-type">${escapeHtml(card?.type || "その他")}</span></div>
+            <div class="peek-result-card-text">${escapeHtml(card?.text || "")}</div>
+          </div>`;
+        }).join("");
+        elements.peekResultConfirmBtn.onclick = () => {
+          closePeekResult();
+          elements.peekResultConfirmBtn.onclick = null;
+          resolve();
+        };
+        elements.peekResultModal.classList.add("show");
+        elements.peekResultModal.setAttribute("aria-hidden", "false");
+        elements.peekResultConfirmBtn.focus();
+      });
+    }
+
+    async function usePeek(player) {
+      const cards = shuffled(getCountedHandCards(otherPlayer(player))).slice(0, 3);
+      // CPU/remote opponentの取得内容は共有state・ログ・人間側UIへ出さない。
+      if (player !== "human") return cards;
+      await showPeekResult(cards);
+      return cards;
+    }
     function v166ExchangePairs(player){const o=otherPlayer(player),pairs=[];for(const a of ["L","R"])for(const b of ["L","R"])if(state[player][a]>0&&state[o][b]>0&&state[player][a]!==state[o][b])pairs.push([a,b]);return pairs;}
     function hasV166ExchangePair(player){return v166ExchangePairs(player).length>0;}
     async function useExchangeHands(player){
@@ -15899,6 +16039,11 @@ async function endTurn(reason="unspecified") {
       saveDisplaySettings();
       render();
     });
+    elements.deckCompactModeToggle?.addEventListener("change", event => {
+      displaySettings.deckCompactMode = event.target.checked;
+      saveDisplaySettings();
+      renderDeckBuilder();
+    });
     elements.deckBackMenuBtn.addEventListener("click", () => {
       if (state.friendDeckEditReturnToLobby && state.friendRoomId) {
         state.friendDeckEditReturnToLobby = false;
@@ -16097,21 +16242,30 @@ async function endTurn(reason="unspecified") {
       state.deckSortMode = event.target.value || "implementation";
       renderDeckBuilder();
     });
-    elements.deckNameSearchInput?.addEventListener("input", event => {
-      state.deckNameSearch = event.target.value || "";
+    elements.deckSearchInput?.addEventListener("input", event => {
+      state.deckSearch = event.target.value || "";
       renderDeckBuilder();
-      elements.deckNameSearchInput?.focus();
+      elements.deckSearchInput?.focus();
     });
-    elements.deckKeywordSearchInput?.addEventListener("input", event => {
-      state.deckKeywordSearch = event.target.value || "";
+    elements.deckTypeFilter?.addEventListener("change", event => { state.deckFilters.type = event.target.value; renderDeckBuilder(); });
+    elements.deckCostFilter?.addEventListener("change", event => { state.deckFilters.cost = event.target.value; renderDeckBuilder(); });
+    elements.deckThemeFilter?.addEventListener("change", event => { state.deckFilters.theme = event.target.value; renderDeckBuilder(); });
+    elements.deckOnlyToggle?.addEventListener("change", event => {
+      state.deckFilters.deckOnly = event.target.checked;
+      if (event.target.checked) state.deckFilters.unselectedOnly = false;
       renderDeckBuilder();
-      elements.deckKeywordSearchInput?.focus();
     });
+    elements.deckUnselectedToggle?.addEventListener("change", event => {
+      state.deckFilters.unselectedOnly = event.target.checked;
+      if (event.target.checked) state.deckFilters.deckOnly = false;
+      renderDeckBuilder();
+    });
+    elements.deckFavoriteOnlyToggle?.addEventListener("change", event => { state.deckFilters.favoriteOnly = event.target.checked; renderDeckBuilder(); });
     elements.deckSearchClearBtn?.addEventListener("click", () => {
-      state.deckNameSearch = "";
-      state.deckKeywordSearch = "";
+      state.deckSearch = "";
+      state.deckFilters = { type: "", cost: "", theme: "", deckOnly: false, unselectedOnly: false, favoriteOnly: false };
       renderDeckBuilder();
-      elements.deckNameSearchInput?.focus();
+      elements.deckSearchInput?.focus();
     });
     elements.deckDetailsBtn?.addEventListener("click", openCurrentDeckDetails);
 
@@ -16172,6 +16326,8 @@ async function endTurn(reason="unspecified") {
     if (elements.compactCardDescriptionsToggle) {
       elements.compactCardDescriptionsToggle.checked = displaySettings.compactCardDescriptions;
     }
+    if (elements.deckCompactModeToggle) elements.deckCompactModeToggle.checked = displaySettings.deckCompactMode;
+    initializeDeckFilterOptions();
     showScreen("menu");
     updateNewsUnreadBadge();
     renderFeaturedNews();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=166c">
+  <link rel="stylesheet" href="style.css?v=167">
 </head>
 <body>
   <div class="social-modal" id="authModal" aria-hidden="true">
@@ -161,6 +161,15 @@
       <p class="small" id="trapChoiceText">発動できる罠があります。</p>
       <div class="trap-choice-list" id="trapChoiceList"></div>
       <button class="secondary" id="trapSkipBtn">発動しない</button>
+    </div>
+  </div>
+
+  <div class="trap-choice peek-result" id="peekResultModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="peekResultTitle">
+    <div class="trap-choice-panel peek-result-panel">
+      <h2 id="peekResultTitle">覗き見</h2>
+      <p class="small" id="peekResultText">相手の手札から以下のカードが見えました。</p>
+      <div class="trap-choice-list peek-result-list" id="peekResultList"></div>
+      <button class="secondary" id="peekResultConfirmBtn">確認</button>
     </div>
   </div>
 
@@ -498,6 +507,16 @@
               <span class="setting-slider" aria-hidden="true"></span>
             </span>
           </label>
+          <label class="setting-row" for="deckCompactModeToggle">
+            <span class="setting-copy">
+              <strong>デッキ編集をコンパクト表示</strong>
+              <span>カード本文を省略し、1画面でより多くのカードを探せる表示にします。</span>
+            </span>
+            <span class="setting-switch">
+              <input id="deckCompactModeToggle" type="checkbox" />
+              <span class="setting-slider" aria-hidden="true"></span>
+            </span>
+          </label>
         </div>
 
         <p class="settings-note">初期設定はOFFです。変更内容はこのブラウザに保存されます。</p>
@@ -594,15 +613,21 @@
               <option value="name">名前順</option>
               <option value="cost">コスト順</option>
               <option value="type">種類順</option>
+              <option value="favorite">お気に入り優先</option>
             </select>
           </label>
-          <label>名前検索
-            <input id="deckNameSearchInput" type="search" placeholder="例：雷撃、発電" autocomplete="off" />
+          <label class="deck-search-wide">カードを検索
+            <input id="deckSearchInput" type="search" placeholder="名前・本文・種類・テーマから検索" autocomplete="off" />
           </label>
-          <label>キーワード検索
-            <input id="deckKeywordSearchInput" type="search" placeholder="例：充電、加護、ドロー、罠" autocomplete="off" />
-          </label>
-          <button id="deckSearchClearBtn" class="secondary deck-search-clear">検索をクリア</button>
+          <label>種類<select id="deckTypeFilter"><option value="">すべて</option></select></label>
+          <label>コスト<select id="deckCostFilter"><option value="">すべて</option><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4+">4+</option></select></label>
+          <label>テーマ<select id="deckThemeFilter"><option value="">すべて</option></select></label>
+          <div class="deck-filter-toggles" role="group" aria-label="カード状態で絞り込み">
+            <label><input id="deckOnlyToggle" type="checkbox">デッキ内のみ</label>
+            <label><input id="deckUnselectedToggle" type="checkbox">未採用のみ</label>
+            <label><input id="deckFavoriteOnlyToggle" type="checkbox">お気に入りのみ</label>
+          </div>
+          <button id="deckSearchClearBtn" class="secondary deck-search-clear">条件をクリア</button>
           <span id="deckSearchResultText" class="deck-search-result">全カードを表示中</span>
         </div>
         <div id="deckBottomBar" class="deck-bottom-bar hidden">
@@ -943,6 +968,6 @@
     }
   </script>
 
-  <script src="game.js?v=166c"></script>
+  <script src="game.js?v=167"></script>
 </body>
 </html>
