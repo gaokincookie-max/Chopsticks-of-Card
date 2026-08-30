@@ -90,6 +90,12 @@ const CARD_LIBRARY = {
         text: "Lv.1～10。コストはレベルと同じ。充電効果以外では捨てたり移動できない。充電を得る時はレベルが上がり、Lv.10ではそれ以上得られない。",
         token: true, chargeResource: true, countsAsHandCard:false, discardable:false, canPlay: () => false
       },
+      timedBomb: {
+        name: "時限爆弾", cost: 0, type: "補助 / 生成カード",
+        text: "カウント3。自分のターン終了時にカウント-1。0になった時、このカードを取り除き、手札からランダムに最大4枚捨てる。このカードは使用して捨てることができる。",
+        token: true, canPlay: () => true,
+        effect: (player) => addLog(`${handNames[player]}は「時限爆弾」を使用して安全に処理した。`)
+      },
       overcharge: {
         name: "過充電", cost: 2, type: "補助 / 充電", chargeCard: true,
         text: "充電をLv.10にする。次の自分のターンは行動不能になる。",
@@ -1289,7 +1295,7 @@ const CARD_LIBRARY = {
       },
       braceTrap: {
         name: "踏み止まり",
-        cost: 2,
+        cost: 3,
         type: "罠",
         text: "【攻撃判定後・手動】この手が攻撃で0になるとき、0にならず4で止まる。",
         trap: true,
@@ -1320,7 +1326,7 @@ const CARD_LIBRARY = {
       },
       puddleTrap: {
         name: "ぬかるみ",
-        cost: 2,
+        cost: 1,
         type: "罠",
         text: "【攻撃判定前・自動】この手が攻撃対象になったとき、その攻撃で加える本数-1。ただし1未満にならない。乱舞には発動しない。",
         trap: true,
@@ -1336,22 +1342,19 @@ const CARD_LIBRARY = {
       },
       partingGift: {
         name: "置き土産",
-        cost: 2,
+        cost: 1,
         type: "罠",
-        text: "【攻撃判定後・自動】この手が攻撃で0になったとき発動する。攻撃した相手は手札をランダムに1枚捨てる。手札がない場合も発動するが、捨て札効果は発生しない。",
+        text: "【攻撃後・自動】発動した時、相手の手札に『時限爆弾』を2枚加える。",
         trap: true,
         manual: false,
         triggerTiming: "after",
         canTrigger: ({ placedHand, targetHand, resolvedFinal }) => {
           return placedHand === targetHand && resolvedFinal === 0;
         },
-        trigger: async ({ attacker }) => {
-          const discarded = await discardOneCard(attacker);
-          if (discarded) {
-            addLog(`罠「置き土産」により、${handNames[attacker]}は「${CARD_LIBRARY[discarded]?.name || discarded}」を捨てた。`);
-          } else {
-            addLog(`罠「置き土産」が発動したが、${handNames[attacker]}の手札が0枚だったため捨てられなかった。`);
-          }
+        trigger: async ({ defender, attacker }) => {
+          const target=attacker||otherPlayer(defender);
+          addTimedBomb(target); addTimedBomb(target);
+          addLog(`罠「置き土産」により、${handNames[target]}の手札へ「時限爆弾」を2枚加えた。`);
           return {};
         }
       },
@@ -1381,22 +1384,16 @@ const CARD_LIBRARY = {
         name: "反撃",
         cost: 2,
         type: "罠",
-        text: "【攻撃判定後・手動】この手が攻撃された後、この手が0でなければ発動できる。攻撃してきた手に、この手の本数を加える。",
+        text: "【攻撃前・手動】この手が攻撃された時、この攻撃で受ける本数-1。攻撃を受けた後、この手の本数を攻撃してきた手に加える。この効果で相手の手が7以上になる場合、超過処理を行わず0にする。",
         trap: true,
         manual: true,
-        triggerTiming: "after",
-        canTrigger: ({ defender, placedHand, targetHand, attacker, attackHand }) => {
-          return placedHand === targetHand && state[defender][placedHand] > 0 && state[attacker][attackHand] > 0;
-        },
-        trigger: async ({ defender, placedHand, attacker, attackHand }) => {
+        triggerTiming: "before",
+        canTrigger: ({ placedHand, targetHand }) => placedHand === targetHand,
+        trigger: async ({ defender, placedHand, attacker, attackHand, forcedDetonation }) => {
+          if(!forcedDetonation)return { powerDelta:-1, deferredCounter:{defender,placedHand,attacker,attackHand} };
+          if(!attacker||!attackHand)return {};
           const rawPower = state[defender][placedHand];
-          const before = state[attacker][attackHand];
-          const power = applyGuardBlessingReduction(attacker, attackHand, rawPower, "反撃");
-          const total = before + power;
-          const finalValue = normalize(total, attacker, attackHand);
-          await animateCalculation(attacker, attackHand, total, finalValue);
-          state[attacker][attackHand] = finalValue;
-          addLog(`罠「反撃」により、${handNames[attacker]}の${handNames[attackHand]}が${before}→${total}${total >= 5 ? `→${finalValue}` : ""}。`);
+          await addFingersWithCalculation(attacker,attackHand,rawPower,"反撃",false,{sourcePlayer:defender,zeroAtSeven:true});
           return {};
         }
       },
@@ -1404,12 +1401,12 @@ const CARD_LIBRARY = {
         name: "スワンプマン",
         cost: 3,
         type: "罠",
-        text: "【攻撃判定後・手動】この手が攻撃された後、攻撃計算後のこの手が0でなければ発動できる。この手と、攻撃してきた手の本数を入れ替える。",
+        text: "【攻撃後・自動】この手が攻撃された後、この手と攻撃してきた手の本数を入れ替える。この手が攻撃によって0になった場合でも発動する。",
         trap: true,
-        manual: true,
+        manual: false,
         triggerTiming: "after",
         canTrigger: ({ defender, placedHand, targetHand, attacker, attackHand, resolvedFinal }) => {
-          return placedHand === targetHand && resolvedFinal !== 0 && state[attacker][attackHand] > 0;
+          return placedHand === targetHand && !!attacker && !!attackHand;
         },
         trigger: ({ defender, placedHand, attacker, attackHand }) => {
           const a = state[defender][placedHand];
@@ -1422,19 +1419,27 @@ const CARD_LIBRARY = {
       },
       baitTrap: {
         name: "囮",
-        cost: 1,
+        cost: 2,
         type: "罠",
-        text: "【攻撃判定後・自動】この手が攻撃対象になったとき、カードを1枚引く。",
+        text: "【攻撃後・自動】この手が攻撃された後、カードを1枚引く。次の自分のターン、カードをあと1枚使用できる。",
         trap: true,
         manual: false,
         triggerTiming: "after",
         canTrigger: ({ placedHand, targetHand }) => placedHand === targetHand,
         trigger: ({ defender }) => {
           drawCard(defender);
-          addLog(`${handNames[defender]}の罠「囮」発動。1枚引いた。`);
+          state.pendingTrapCardExtraUses[defender]=Number(state.pendingTrapCardExtraUses[defender]||0)+1;
+          addLog(`${handNames[defender]}の罠「囮」発動。1枚引き、次の自分ターンのカード使用回数+1を予約した。`);
           return {};
         }
       },
+      overreaction: {name:"過剰反応",cost:1,type:"罠",text:"【攻撃前・自動】この手が攻撃された時、この手を0にしてカードを2枚引く。",trap:true,manual:false,triggerTiming:"before",canTrigger:({placedHand,targetHand})=>placedHand===targetHand,trigger:({defender,placedHand})=>{state[defender][placedHand]=0;drawCard(defender);drawCard(defender);clearBrokenTraps(defender);addLog(`罠「過剰反応」で${handNames[defender]}の${handNames[placedHand]}を0にし、2枚引いた。`);return{};}},
+      camouflage: {name:"偽装工作",cost:2,type:"罠",text:"この罠が手にある間、自分のターン開始時にカードを1枚引く。この手が攻撃された時、他の罠より先に自動発動して捨てられ、この攻撃では他の罠を発動しない。",trap:true,manual:false,triggerTiming:"before",canTrigger:({placedHand,targetHand})=>placedHand===targetHand,trigger:()=>({skipOtherTraps:true})},
+      jackInTheBox: {name:"びっくり箱",cost:2,type:"罠",text:"設置時、予告状と同じ条件で手札からカードを1枚選び、記録して捨てる。【攻撃後・手動】この手が攻撃された後、記録したカードの効果を発動する。この効果で発動したカードの終端は無視する。びっくり箱自身は選べない。",trap:true,manual:true,triggerTiming:"after",canTrigger:({placedHand,targetHand})=>placedHand===targetHand,trigger:()=>({})},
+      selfDestruct: {name:"自爆",cost:2,type:"罠",text:"【攻撃後・自動】この手が攻撃された後、0でない全ての手に2本加える。この攻撃によってこの手が0になった場合は発動しない。",trap:true,manual:false,triggerTiming:"after",canTrigger:({placedHand,targetHand,resolvedFinal,forcedDetonation})=>forcedDetonation||(placedHand===targetHand&&resolvedFinal!==0),trigger:async()=>{const targets=[];for(const owner of ["human","cpu"])for(const hand of ["L","R"])if(state[owner][hand]>0)targets.push({owner,hand});for(const t of targets)await addFingersWithCalculation(t.owner,t.hand,2,"自爆",true,{allowZeroTarget:false});return{};}},
+      detonate: {name:"起爆",cost:3,type:"補助",text:"自分の両手に付いている罠をすべて発動させる。",canPlay:()=>true,effect:player=>detonateTraps(player)},
+      forcedDetonate: {name:"強制起爆",cost:3,type:"終端",terminal:true,text:"相手の両手に付いている罠をすべて発動させる。",canPlay:()=>true,effect:player=>detonateTraps(otherPlayer(player))},
+      salvage: {name:"残骸回収",cost:2,type:"補助",text:"自分の手を1つ選ぶ。捨て札から罠をランダムに1枚選び、その手に設置する。",canPlay:player=>["L","R"].some(h=>state[player][h]>0&&state.traps[player][h].length<2),effect:player=>useSalvage(player)},
       escapeDevice: {
         name: "逃走装置",
         cost: 2,
@@ -2084,6 +2089,8 @@ const CARD_LIBRARY = {
       revealedTrapIds: new Set(),
       noSplit: { human: false, cpu: false },
       extraActions: { human: 0, cpu: 0 },
+      pendingTrapCardExtraUses: { human: 0, cpu: 0 },
+      handCardMetadata: { human: {}, cpu: {} },
       activeExtraAction: { human: false, cpu: false },
       pendingAcceleration: { human: 0, cpu: 0 },
       activeAcceleration: { human: 0, cpu: 0 },
@@ -2270,9 +2277,11 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v167b-minor-rules-safety";
+    const LATEST_NEWS_ID = "v168a-detonation-fix";
 
     const UPDATE_NEWS = [
+      {id:"v168a-detonation-fix",version:"v168a",date:"2026-08-30",title:"起爆・強制起爆の処理を修正",summary:"強制発動できる罠と、起爆中に手が0になった場合の処理を調整しました。",featured:true,tags:["fix","trap"],items:["過剰反応を起爆・強制起爆でも発動するよう修正","逃走装置の本数移動を起爆時にも適用","起爆途中で手が0になった場合、残りの設置カードを通常どおり破棄するよう修正","びっくり箱のpayload解決後に後続罠の存在を再確認するよう改善"]},
+      {id:"v168-trap-overhaul",version:"v168",date:"2026-08-30",title:"罠テーマを大幅強化",summary:"既存罠の調整と、強制発動・時限爆弾を含む新カードを追加しました。",featured:true,tags:["update","new","balance"],items:["踏み止まり・ぬかるみ・反撃・囮・スワンプマンを調整","起爆・強制起爆・びっくり箱を追加","過剰反応・偽装工作・残骸回収・自爆を追加","置き土産をリワークし、生成カード「時限爆弾」を追加"]},
       {id:"v167b-minor-rules-safety",version:"v167b",date:"2026-08-28",title:"カード処理とデッキ表示を調整",summary:"一部カードの細かな仕様と安全性を改善しました。",featured:true,tags:["fix","balance"],items:["compact表示をPC・iPadで最大4列へ調整","カードロックを手札から1～2枚選べるよう変更","援護射撃を狙撃系防御の対象へ変更","乱闘で使用回数を消費しないカードが選ばれた場合に使用可能回数を返却","過加速反動中の通常ドロー計算を加算式へ調整","狙撃の加護付きの手を通常攻撃時に選択不可へ変更","乱闘時に対象が存在しない効果の安全性を改善"]},
       {id:"v167a-deck-editor-density",version:"v167a",date:"2026-08-28",title:"デッキ編集の一覧性を改善",summary:"お気に入りとコンパクト表示を見やすく調整しました。",featured:true,tags:["fix","ui"],items:["お気に入りカードを選択中の並び順に関係なく常に上部表示","お気に入りボタンを♡／♥へ変更","コンパクト表示を2行・多列の高密度レイアウトへ改善","フィルター選択時の表示を控えめに調整"]},
       {id:"v167-deck-editor-peek-ui",version:"v167",date:"2026-08-28",title:"デッキ編集と「覗き見」を大幅改善",summary:"カードを探し、調整し、確認する操作がより快適になりました。",featured:true,tags:["update","ui"],items:["デッキ編集画面を大幅改善","カード名に加えて本文・種類・テーマから検索可能","種類・コスト・テーマ・採用状態・お気に入りで絞り込み可能","デッキ詳細からカード枚数を直接調整可能","お気に入り機能とお気に入り優先順を追加","設定に初期OFFのデッキ編集コンパクト表示を追加","「覗き見」の結果を最大3枚の専用確認画面で表示"]},
@@ -4263,6 +4272,8 @@ const CARD_LIBRARY = {
         temp: cloneJson(state.temp[player]),
         noSplit: !!state.noSplit[player],
         extraActions: Number(state.extraActions[player] || 0),
+        pendingTrapCardExtraUses:Number(state.pendingTrapCardExtraUses?.[player]||0),
+        handCardMetadata:cloneJson(state.handCardMetadata?.[player]||{}),
         activeExtraAction: !!state.activeExtraAction[player],
         pendingAcceleration: Number(state.pendingAcceleration[player] || 0),
         activeAcceleration: Number(state.activeAcceleration[player] || 0),
@@ -4533,6 +4544,7 @@ const CARD_LIBRARY = {
       }
       state.noSplit[player] = !!side.noSplit;
       state.extraActions[player] = Number(side.extraActions || 0);
+      ensureV168State();state.pendingTrapCardExtraUses[player]=Number(side.pendingTrapCardExtraUses||0);state.handCardMetadata[player]=cloneJson(side.handCardMetadata||{});
       state.activeExtraAction[player] = !!side.activeExtraAction;
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
       state.activeAcceleration[player] = Number(side.activeAcceleration || 0);
@@ -6719,7 +6731,7 @@ const CARD_LIBRARY = {
       state.decks.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
+      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
       state.temp.human.cardActionUsed = false;
@@ -8688,7 +8700,7 @@ function wrapFinger(value) {
       try {
         recordRondoUse(player, effectiveId);
         await card.effect(player);
-        if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
+        if (card.terminal && !context.ignoreTerminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
           state.pendingTerminalEnd[player] = true;
         }
         return true;
@@ -8959,6 +8971,11 @@ function wrapFinger(value) {
       if(romanBeforeTurnStart&&!isRomanPreparation()){addLog("ロマンギミック杯：双方の準備時間が終了した。戦闘開始。");setMessage("準備時間終了 ― 戦闘開始");}
       const directiveOpponent=otherPlayer(player);
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      ensureV168State();
+      state.temp[player].cardExtraUses=Number(state.pendingTrapCardExtraUses[player]||0);state.pendingTrapCardExtraUses[player]=0;
+      const camouflageDraws=["L","R"].reduce((n,h)=>n+state.traps[player][h].filter(slot=>trapCardId(slot)==="camouflage").length,0);
+      if(camouflageDraws){const drawLock=state.activeDrawLock[player];state.activeDrawLock[player]=false;for(let i=0;i<camouflageDraws;i++)drawCard(player);state.activeDrawLock[player]=drawLock;}
+      if(camouflageDraws)addLog(`${handNames[player]}の「偽装工作」により、ターン開始時に${camouflageDraws}枚引いた。`);
       state.nobleGasProtected[player]=false;
       const lateBonus=Number(state.pendingLateAttackBonus[player]||0);state.pendingLateAttackBonus[player]=0;
       if(state.forcedCard[player]?.pending){state.forcedCard[player].pending=false;state.forcedCard[player].active=true;}
@@ -9409,6 +9426,70 @@ function wrapFinger(value) {
         instance.lastDrawTurnKey = "";
       }
       return instance;
+    }
+
+    function ensureV168State(){
+      state.pendingTrapCardExtraUses ||= {human:0,cpu:0};
+      state.handCardMetadata ||= {human:{},cpu:{}};
+      state.handCardMetadata.human ||= {}; state.handCardMetadata.cpu ||= {};
+    }
+    function handCardMetadata(player,index){ensureV168State();const id=handCardInstanceId(player,index);return id?state.handCardMetadata[player][id]||null:null;}
+    function setHandCardMetadata(player,index,metadata){ensureV168State();const id=handCardInstanceId(player,index);if(id)state.handCardMetadata[player][id]=cloneJson(metadata||{});}
+    function forgetHandCardMetadata(player,instanceId){ensureV168State();if(instanceId)delete state.handCardMetadata[player][instanceId];}
+    function addTimedBomb(player){ensureHandCardInstances(player);state.hands[player].push("timedBomb");ensureHandCardInstances(player);const index=state.hands[player].length-1;state.handCardInstances[player][index]=`ci-${++state.cardInstanceSequence}`;setHandCardMetadata(player,index,{countdown:3});return index;}
+    function displayHandCardName(player,index,cardId){const base=CARD_LIBRARY[cardId]?.name||cardId;if(cardId!=="timedBomb")return base;return `${base}[${Math.max(0,Number(handCardMetadata(player,index)?.countdown??3))}]`;}
+    async function resolveTimedBombsAtTurnEnd(player){
+      ensureV168State();ensureHandCardInstances(player);
+      const due=[];
+      for(let i=0;i<state.hands[player].length;i++)if(state.hands[player][i]==="timedBomb"){
+        const meta=handCardMetadata(player,i)||{countdown:3};meta.countdown=Math.max(0,Number(meta.countdown||3)-1);setHandCardMetadata(player,i,meta);if(meta.countdown===0)due.push(handCardInstanceId(player,i));
+      }
+      for(const instanceId of due){
+        const bombIndex=state.handCardInstances[player].indexOf(instanceId);if(bombIndex<0)continue;
+        state.hands[player].splice(bombIndex,1);state.handCardInstances[player].splice(bombIndex,1);forgetHandCardMetadata(player,instanceId);
+        const candidates=getDiscardCandidates(player,"cardEffect");
+        for(let i=candidates.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]];}
+        const picked=candidates.slice(0,4).sort((a,b)=>b.index-a.index);
+        for(const item of picked){const iid=handCardInstanceId(player,item.index);const [id]=state.hands[player].splice(item.index,1);state.handCardInstances[player].splice(item.index,1);forgetHandCardMetadata(player,iid);if(id)state.discard[player].push(id);}
+        addLog(`${handNames[player]}の「時限爆弾」が爆発し、手札を${picked.length}枚捨てた。`);
+      }
+      render();
+    }
+
+    function getJackInTheBoxCandidates(player){return getAdvanceNoticeCandidates(player).filter(item=>item.cardId!=="jackInTheBox");}
+    async function chooseJackInTheBoxPayload(player){
+      const candidates=getJackInTheBoxCandidates(player);if(!candidates.length)return null;
+      let picked;
+      if(player==="human"){const chosen=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>candidates.some(x=>x.index===index),message:"びっくり箱に仕込むカードを選んでください。"});picked=candidates.find(x=>x.index===chosen[0]);}
+      else picked=candidates[Math.floor(Math.random()*candidates.length)];
+      if(!picked)return null;ensureHandCardInstances(player);const instanceId=handCardInstanceId(player,picked.index),metadata=cloneJson(handCardMetadata(player,picked.index)||{});const [cardId]=state.hands[player].splice(picked.index,1);state.handCardInstances[player].splice(picked.index,1);forgetHandCardMetadata(player,instanceId);state.discard[player].push(cardId);return{cardId,instanceMetadata:metadata};
+    }
+
+    async function resolveTrapEffect({owner,hand,trapInstance,triggerContext={},forcedDetonation=false}){
+      const cardId=trapCardId(trapInstance),card=CARD_LIBRARY[cardId];if(!card?.trap)return{};
+      const opponent=otherPlayer(owner),context={...triggerContext,defender:owner,placedHand:hand,forcedDetonation};
+      if(forcedDetonation){context.attacker=opponent;context.attackHand=hand;context.targetHand=hand;}
+      if(cardId==="jackInTheBox"){
+        const payload=typeof trapInstance==="object"?trapInstance.payload:null;if(!payload?.cardId){addLog("「びっくり箱」は中身がなく不発。");return{};}
+        await activateCopiedCardEffect(owner,payload.cardId,"びっくり箱",{ignoreTerminal:true,instanceMetadata:cloneJson(payload.instanceMetadata||{})});return{};
+      }
+      if(forcedDetonation&&cardId==="escapeDevice"&&state[owner][otherHand(hand)]!==0)return{};
+      if(forcedDetonation&&["attention","deflect","dodgeTrap","braceTrap","puddleTrap","camouflage"].includes(cardId))return{};
+      return await card.trigger?.(context)||{};
+    }
+    async function consumeAndResolveTrap(owner,hand,index,triggerContext={},forcedDetonation=false){
+      const slot=state.traps[owner][hand][index];if(!slot)return{};const cardId=trapCardId(slot),card=CARD_LIBRARY[cardId];state.traps[owner][hand].splice(index,1);const iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);state.discard[owner].push(cardId);addLog(`【罠】${handNames[owner]}の「${card?.name||cardId}」が${forcedDetonation?"強制":""}発動。`);return resolveTrapEffect({owner,hand,trapInstance:slot,triggerContext,forcedDetonation});
+    }
+    async function detonateTraps(owner){
+      const snapshot=[];for(const hand of ["L","R"])for(const slot of state.traps[owner][hand])if(CARD_LIBRARY[trapCardId(slot)]?.trap)snapshot.push({hand,instanceId:trapInstanceId(slot),slot});
+      for(const item of snapshot){const slots=state.traps[owner][item.hand];const index=item.instanceId?slots.findIndex(s=>trapInstanceId(s)===item.instanceId):slots.indexOf(item.slot);if(index>=0)await consumeAndResolveTrap(owner,item.hand,index,{},true);}
+      render();
+    }
+    async function useSalvage(player){
+      const selected=await beginBoardHandSelection(player,{owners:[player],minimum:1,candidateFilter:x=>state.traps[player][x.hand].length<2,message:"残骸回収：設置先の手を選んでください。",cpuPick:items=>items[0]});if(!selected)return false;
+      let candidates=state.discard[player].map((cardId,index)=>({cardId,index})).filter(x=>CARD_LIBRARY[x.cardId]?.trap);if(!getJackInTheBoxCandidates(player).length)candidates=candidates.filter(x=>x.cardId!=="jackInTheBox");if(!candidates.length){addLog("「残骸回収」は捨て札に罠がなく不発。");return false;}
+      const picked=candidates[Math.floor(Math.random()*candidates.length)],instance=makeTrapInstance(picked.cardId,player);if(picked.cardId==="jackInTheBox"){const payload=await chooseJackInTheBoxPayload(player);if(!payload)return false;instance.payload=payload;}
+      state.discard[player].splice(picked.index,1);state.traps[player][selected.hand].push(instance);addLog(`「残骸回収」で「${CARD_LIBRARY[picked.cardId].name}」を${handNames[selected.hand]}へ直接設置した。`);render();return true;
     }
 
     function trapCardId(slot) {
@@ -12210,7 +12291,7 @@ function renderLastAction() {
         div.innerHTML = `
           ${rondoUnused ? '<span class="rondo-unused-mark" aria-label="未使用の輪舞曲" title="初使用の輪舞曲">♪</span>' : ''}
           <div class="card-title">
-            <span class="card-name">${escapeHtml(cardId === "performance" ? `演舞${performanceLevelLabel(getPerformanceLevel("human"))}` : card.name)}</span>
+            <span class="card-name">${escapeHtml(cardId === "performance" ? `演舞${performanceLevelLabel(getPerformanceLevel("human"))}` : displayHandCardName("human",index,cardId))}</span>
           </div>
           <div class="card-label-row">
             <span class="card-type${isTrap ? " trap" : card.blessing ? " blessing" : card.curse ? " curse" : ""}">${escapeHtml(card.type)}</span>
@@ -12735,7 +12816,10 @@ function renderLastAction() {
         return false;
       }
 
+      ensureHandCardInstances(player);
       state.hands[player].splice(handIndex, 1);
+      const attachmentInstanceId=state.handCardInstances[player].splice(handIndex,1)[0];
+      const attachmentMetadata=cloneJson(state.handCardMetadata?.[player]?.[attachmentInstanceId]||{});forgetHandCardMetadata(player,attachmentInstanceId);
       markChargeCardUsedThisTurn(player, cardId);
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
@@ -12750,7 +12834,13 @@ function renderLastAction() {
         return true;
       }
 
-      state.traps[owner][hand].push(makeTrapInstance(cardId));
+      const trapInstance=makeTrapInstance(cardId,owner);
+      if(cardId==="jackInTheBox"){
+        const payload=await chooseJackInTheBoxPayload(player);
+        if(!payload){state.hands[player].splice(handIndex,0,cardId);state.handCardInstances[player].splice(handIndex,0,attachmentInstanceId||`ci-${++state.cardInstanceSequence}`);if(Object.keys(attachmentMetadata).length)setHandCardMetadata(player,handIndex,attachmentMetadata);if(player==="human")setMessage("びっくり箱に仕込めるカードがないため設置できません。");return false;}
+        trapInstance.payload=payload;
+      }
+      state.traps[owner][hand].push(trapInstance);
       if (!setupActive) {
         consumeCardActionAllowance(player, { lightSpeedChargePlayable });
         state.mode = "attack";
@@ -12974,7 +13064,7 @@ function renderLastAction() {
       if(cardId==="brawl")state.temp[player].brawlAllowanceBeforeUse={...cardAllowanceBeforeUse};
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
-      state.handCardInstances[player].splice(handIndex,1);
+      const removedHandInstance=state.handCardInstances[player].splice(handIndex,1)[0];forgetHandCardMetadata(player,removedHandInstance);
       if(!card.vanishOnUse)state.discard[player].push(rawCardId);
       markChargeCardUsedThisTurn(player, cardId);
       if(card.consumesCardAction!==false)consumeCardActionAllowance(player, { lightSpeedChargePlayable });
@@ -13107,11 +13197,15 @@ function renderLastAction() {
           const context = { defender, placedHand, targetHand, attacker, attackHand, incomingPower, ...extraContext };
           if (card.canTrigger(context)) {
             let priority = 1;
+            if (cardId === "camouflage") priority = 100;
+            if (cardId === "overreaction") priority = 90;
             if (cardId === "dodgeTrap") priority = 4;
             if (cardId === "braceTrap") priority = 3;
             if (cardId === "deflect") priority = 2;
             if (cardId === "attention") priority = 2;
-            if (cardId === "swampMan") priority = 4;
+            if (cardId === "swampMan") priority = 6;
+            if (cardId === "selfDestruct") priority = 5;
+            if (cardId === "jackInTheBox") priority = 4;
             if (cardId === "counterTrap") priority = 3;
             if (cardId === "partingGift") priority = 3;
             if (cardId === "puddleTrap") priority = 2;
@@ -13255,7 +13349,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
         emitFriendFx("trapReveal", { playerSide: friendSideForLocalPlayer(defender), cardId }).catch(error => console.error("PVP trap fx failed", error));
       }
       await showCardPopup(defender, card, true, 760);
-      const result = await card.trigger({ ...context, defender, placedHand }) || {};
+      const result = await resolveTrapEffect({owner:defender,hand:placedHand,trapInstance:removedSlot,triggerContext:context,forcedDetonation:false});
       render();
 
       // 第4章の空振りは、選択画面で選んだ時ではなく
@@ -13801,6 +13895,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         const afterTrapResult = await resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower:0,attackTotal:matched,resolvedFinal,trapUsed,ignoresDefenderBoard});
         trapUsed = afterTrapResult.trapUsed;
         resolvedFinal = afterTrapResult.resolvedFinal;
+        if(trapResult.deferredCounter&&state[attacker][attackHand]>0){const amount=state[defender][trapResult.deferredCounter.placedHand];await addFingersWithCalculation(attacker,attackHand,amount,"反撃",false,{sourcePlayer:defender,zeroAtSeven:true});}
         setLastAction(attacker, "乱舞", `${handNames[attackHand]}と${handNames[defender]}の${handNames[targetHand]}の本数を揃えた。`, "card");
         clearBrokenTraps(defender);
         clearBrokenTraps(attacker);
@@ -13927,6 +14022,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const afterTrapResult = await resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower:power,attackTotal:total,resolvedFinal,trapUsed,ignoresDefenderBoard});
       trapUsed = afterTrapResult.trapUsed;
       resolvedFinal = afterTrapResult.resolvedFinal;
+      if(trapResult.deferredCounter&&state[attacker][attackHand]>0){
+        const amount=state[defender][trapResult.deferredCounter.placedHand];
+        await addFingersWithCalculation(attacker,attackHand,amount,"反撃",false,{sourcePlayer:defender,zeroAtSeven:true});
+      }
 
       setLastAction(attacker, "攻撃", `${handNames[attackHand]}で${handNames[defender]}の${handNames[targetHand]}を攻撃。`, "action");
 
@@ -14112,6 +14211,7 @@ async function endTurn(reason="unspecified") {
     return;
   }
   const endingPlayer=state.turn;
+  await resolveTimedBombsAtTurnEnd(endingPlayer);
   vanishTurnEndCards(endingPlayer);
   state.cardLocks[endingPlayer]=(state.cardLocks[endingPlayer]||[]).map(lock=>({...lock,turnsRemaining:Number(lock.turnsRemaining||0)-1})).filter(lock=>lock.turnsRemaining>0);
   if(state.forcedCard[endingPlayer]?.active)state.forcedCard[endingPlayer]=null;
