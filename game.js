@@ -888,6 +888,7 @@ const CARD_LIBRARY = {
             return;
           }
           state.temp[player].setupMode = true;
+          state.temp[player].setupFromCopiedEffect = !!state.copiedEffectContext?.ignoreTerminal;
           state.mode = "setupTrap";
           state.selectedAttackHand = null;
           state.selectedTrapCardIndex = null;
@@ -1344,7 +1345,7 @@ const CARD_LIBRARY = {
         name: "置き土産",
         cost: 1,
         type: "罠",
-        text: "【攻撃後・自動】発動した時、相手の手札に『時限爆弾』を2枚加える。",
+        text: "【攻撃判定後・自動】この手が攻撃で0になったとき発動する。攻撃した相手の手札に『時限爆弾』を2枚加える。",
         trap: true,
         manual: false,
         triggerTiming: "after",
@@ -1435,11 +1436,27 @@ const CARD_LIBRARY = {
       },
       overreaction: {name:"過剰反応",cost:1,type:"罠",text:"【攻撃前・自動】この手が攻撃された時、この手を0にしてカードを2枚引く。",trap:true,manual:false,triggerTiming:"before",canTrigger:({placedHand,targetHand})=>placedHand===targetHand,trigger:({defender,placedHand})=>{state[defender][placedHand]=0;drawCard(defender);drawCard(defender);clearBrokenTraps(defender);addLog(`罠「過剰反応」で${handNames[defender]}の${handNames[placedHand]}を0にし、2枚引いた。`);return{};}},
       camouflage: {name:"偽装工作",cost:2,type:"罠",text:"この罠が手にある間、自分のターン開始時にカードを1枚引く。この手が攻撃された時、他の罠より先に自動発動して捨てられ、この攻撃では他の罠を発動しない。",trap:true,manual:false,triggerTiming:"before",canTrigger:({placedHand,targetHand})=>placedHand===targetHand,trigger:()=>({skipOtherTraps:true})},
-      jackInTheBox: {name:"びっくり箱",cost:2,type:"罠",text:"設置時、予告状と同じ条件で手札からカードを1枚選び、記録して捨てる。【攻撃後・手動】この手が攻撃された後、記録したカードの効果を発動する。この効果で発動したカードの終端は無視する。びっくり箱自身は選べない。",trap:true,manual:true,triggerTiming:"after",canTrigger:({placedHand,targetHand})=>placedHand===targetHand,trigger:()=>({})},
+      jackInTheBox: {name:"びっくり箱",cost:2,type:"罠",text:"設置時、手札から現在通常使用できるカードを1枚選び、記録して捨てる。『びっくり箱』自身は選べない。【攻撃後・手動】この手が攻撃され、攻撃後も0でない場合に、記録カードの効果のみを発動する。この発動では終端を無視する。",trap:true,manual:true,triggerTiming:"after",canTrigger:({defender,placedHand,targetHand})=>placedHand===targetHand&&state[defender][placedHand]>0,trigger:()=>({})},
       selfDestruct: {name:"自爆",cost:2,type:"罠",text:"【攻撃後・自動】この手が攻撃された後、0でない全ての手に2本加える。この攻撃によってこの手が0になった場合は発動しない。",trap:true,manual:false,triggerTiming:"after",canTrigger:({placedHand,targetHand,resolvedFinal,forcedDetonation})=>forcedDetonation||(placedHand===targetHand&&resolvedFinal!==0),trigger:async()=>{const targets=[];for(const owner of ["human","cpu"])for(const hand of ["L","R"])if(state[owner][hand]>0)targets.push({owner,hand});for(const t of targets)await addFingersWithCalculation(t.owner,t.hand,2,"自爆",true,{allowZeroTarget:false});return{};}},
-      detonate: {name:"起爆",cost:3,type:"補助",text:"自分の両手に付いている罠をすべて発動させる。",canPlay:()=>true,effect:player=>detonateTraps(player)},
-      forcedDetonate: {name:"強制起爆",cost:3,type:"終端",terminal:true,text:"相手の両手に付いている罠をすべて発動させる。",canPlay:()=>true,effect:player=>detonateTraps(otherPlayer(player))},
+      detonate: {name:"起爆",cost:3,type:"補助",text:"開始時に自分の両手にある罠だけを対象とし、左手の左側から右側、その後に右手の左側から右側へ発動する。各罠は設置手の正面の相手手を対象として、非同期効果も完了後に次へ進む。途中で新設された罠や、順番前に消えた罠は発動しない。",canPlay:()=>true,effect:player=>detonateTraps(player)},
+      forcedDetonate: {name:"強制起爆",cost:3,type:"終端",terminal:true,text:"開始時に相手の両手にある罠だけを対象とし、相手左手の左側から右側、その後に相手右手の左側から右側へ発動する。各罠は設置手の正面の自分手を対象として、非同期効果も完了後に次へ進む。途中で新設された罠や、順番前に消えた罠は発動しない。",canPlay:()=>true,effect:player=>detonateTraps(otherPlayer(player))},
       salvage: {name:"残骸回収",cost:2,type:"補助",text:"自分の手を1つ選ぶ。捨て札から罠をランダムに1枚選び、その手に設置する。",canPlay:player=>["L","R"].some(h=>state[player][h]>0&&state.traps[player][h].length<2),effect:player=>useSalvage(player)},
+      flashback: {name:"フラッシュバック",cost:3,type:"終端",terminal:true,text:"自分が相手に付与し、取り除かれて自分の捨て札へ入った通常デッキ投入可能な呪縛を、元々付いていた同じ側の手へ新しいものから再び付与する。0の手や空き枠のない手には付与しない。",canPlay:()=>true,effect:player=>useFlashback(player)},
+      fixation: {name:"フィクゼーション",cost:2,type:"補助",text:"相手の両手に合計4枚の互いに異なる呪縛がある場合、その4枚を固定する。固定された呪縛は除去・移動・交換できず、手が0の間だけ同じ手から一時退避し、手が復活すると同じ位置へ戻る。",canPlay:player=>canUseFixation(player),effect:player=>useFixation(player)},
+      catharsis: {name:"カタルシス",cost:3,type:"終端",terminal:true,text:"相手の左右それぞれについて、その手にある呪縛の枚数だけ本数を減らす。その後、取り除ける呪縛をすべて捨てる。",canPlay:()=>true,effect:player=>useCatharsis(player)},
+      idCurse: {name:"イド",cost:2,type:"呪縛",curse:true,text:"この手で通常攻撃するとき、この手自身を除く0でない全ての手から攻撃対象をランダムに選び直す。通常攻撃以外には作用しない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      egoBlessing: {name:"エゴ",cost:3,type:"加護",blessing:true,text:"この手の通常攻撃は相手側の罠・加護・呪縛の効果を受けない。その通常攻撃で相手の手を0にすると、同じ位置で「スーパーエゴ」へ変化する。",transformsTo:["superEgo"],canPlay:player=>canPlaceAttachment(player,player)},
+      superEgo: {name:"スーパーエゴ",cost:0,type:"加護 / 生成カード",blessing:true,token:true,text:"この手の通常攻撃は相手側の罠・加護・呪縛の効果を受けず、通常攻撃で加える本数への増減も無効にする。持ち主のターン終了時に減衰量だけ本数を減らし、減衰量を1増やす。",canPlay:()=>false},
+      repetitionCompulsion: {name:"反復強迫",cost:2,type:"補助",text:"手札の呪縛を1種類選ぶ。このカードの処理中だけ、選んだカードと同名の呪縛を、通常の設置条件を守って好きな枚数だけ追加のカード使用回数を消費せず使用できる。",canPlay:player=>state.hands[player].some(id=>CARD_LIBRARY[id]?.curse),effect:player=>useRepetitionCompulsion(player)},
+      homeostasis: {name:"ホメオスタシス",cost:1,type:"呪縛",curse:true,text:"自分の両手が0でない場合のみ、持ち主のターン終了時に、この手がもう片方より多ければ1減らし、少なければ1増やす。同じなら変化しない。0の手は復活させない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      isolation: {name:"孤立",cost:2,type:"呪縛",curse:true,text:"もう片方の手が0の間、この手の通常の罠・加護を無効にし、新たな通常の罠・加護を設置できなくする。呪縛と題目系特殊加護には影響しない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      devaluation: {name:"デバリュエーション",cost:2,type:"補助",text:"相手の取り除ける加護を選び、同じ位置へ手札から設置可能な呪縛を付与する。この操作は任意の回数繰り返し、途中で終了できる。",canPlay:player=>canUseDevaluation(player),effect:player=>useDevaluation(player)},
+      apathy: {name:"アパシー",cost:1,type:"呪縛",curse:true,text:"この手の持ち主がカードを1枚使用し、その効果処理が完了した後、この手を1減らす。ただし1未満にはならない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      displacement: {name:"ディスプレイスメント",cost:2,type:"呪縛",curse:true,text:"この手が通常攻撃を受けた後、もう片方の手が0でなければ、その手に1本加える。0の手は復活させない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      grief: {name:"グリーフ",cost:2,type:"呪縛",curse:true,text:"もう片方の手が0になったとき、持ち主の手札から効果で捨てられるカードをランダムに最大3枚捨てる。もう片方が復活後に再び0になれば再度発動する。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      trauma: {name:"トラウマ",cost:3,type:"呪縛",curse:true,text:"カウント0。この手が通常攻撃されるたびカウント+1。4になった時、この手を0にする。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      complexCurse: {name:"コンプレックス",cost:2,type:"呪縛",curse:true,text:"この手に新しい設置カードが置かれたとき、この呪縛自身の設置を除き、この手に1本加える。既にある各コンプレックスがそれぞれ発動する。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
+      conditioning: {name:"コンディショニング",cost:2,type:"呪縛",curse:true,text:"この手の罠が発動して効果処理を完了した後、この呪縛の設置者は手札から設置可能な呪縛を1枚選び、この同じ手へ付与できる。1回の罠発動につき最大1枚で、使用しなくてもよい。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
       escapeDevice: {
         name: "逃走装置",
         cost: 2,
@@ -2091,6 +2108,10 @@ const CARD_LIBRARY = {
       extraActions: { human: 0, cpu: 0 },
       pendingTrapCardExtraUses: { human: 0, cpu: 0 },
       handCardMetadata: { human: {}, cpu: {} },
+      curseDiscardHistory: [],
+      curseDiscardSequence: 0,
+      fixedCurseRetreats: {human:{L:[],R:[]},cpu:{L:[],R:[]}},
+      repetitionFreeCurse: {human:null,cpu:null},
       activeExtraAction: { human: false, cpu: false },
       pendingAcceleration: { human: 0, cpu: 0 },
       activeAcceleration: { human: 0, cpu: 0 },
@@ -2277,9 +2298,12 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v168a-detonation-fix";
+    const LATEST_NEWS_ID = "v169b-stability";
 
     const UPDATE_NEWS = [
+      {id:"v169b-stability",version:"v169b",date:"2026-08-30",title:"心理学カードと設置処理を安定化",summary:"コピー効果・設置物・オンライン選択の接続不具合を修正しました。",featured:true,tags:["update","fix","online"],items:["びっくり箱のpayloadを選択完了まで待つよう改善し、攻撃で0になった手では発動しないよう修正","孤立・アパシー・フィクゼーションの設置物相互作用を修正","呪縛の除去・押し出し・移動処理を共通化","コンプレックスの題目・反射呪縛・銛の新規設置検知を改善","エゴ・スーパーエゴの相手盤面効果無視とログを修正","グリーフ・コンディショニング・デバリュエーションの処理を安定化"]},
+      {id:"v169a-fixes",version:"v169a",date:"2026-08-30",title:"v169 不具合修正",summary:"心理学カードと呪縛処理の不具合・仕様漏れを修正しました。",featured:true,tags:["update","fix"],items:["グリーフが設置物のない手の0化でも発動するよう修正","ホメオスタシスが0の手を復活させないよう修正","ターン終了時に消えた後続設置物を発動しないよう修正","デバリュエーションの満杯時置換と加護個体選択を修正","エゴ・スーパーエゴでトラウマとディスプレイスメントを正しく無視","フラッシュバックの同名呪縛履歴管理を改善"]},
+      {id:"v169-psychology-curses",version:"v169",date:"2026-08-30",title:"心理学カードと呪縛システムを拡張",summary:"心理学をモチーフにした新カード15枚と生成カード「スーパーエゴ」を追加しました。",featured:true,tags:["update","new","system"],items:["心理学をモチーフにした新カード15枚を追加","生成カード「スーパーエゴ」を追加","呪縛の設置者・捨て札・履歴・固定状態を共通管理","びっくり箱の仕込み条件をカード単体で分かる本文へ改善","起爆・強制起爆の順番と正面対象を本文へ明記","置き土産の攻撃で0になった時という発動条件を明記","関連UIとオンラインcanonical stateを拡張"]},
       {id:"v168a-detonation-fix",version:"v168a",date:"2026-08-30",title:"起爆・強制起爆の処理を修正",summary:"強制発動できる罠と、起爆中に手が0になった場合の処理を調整しました。",featured:true,tags:["fix","trap"],items:["過剰反応を起爆・強制起爆でも発動するよう修正","逃走装置の本数移動を起爆時にも適用","起爆途中で手が0になった場合、残りの設置カードを通常どおり破棄するよう修正","びっくり箱のpayload解決後に後続罠の存在を再確認するよう改善"]},
       {id:"v168-trap-overhaul",version:"v168",date:"2026-08-30",title:"罠テーマを大幅強化",summary:"既存罠の調整と、強制発動・時限爆弾を含む新カードを追加しました。",featured:true,tags:["update","new","balance"],items:["踏み止まり・ぬかるみ・反撃・囮・スワンプマンを調整","起爆・強制起爆・びっくり箱を追加","過剰反応・偽装工作・残骸回収・自爆を追加","置き土産をリワークし、生成カード「時限爆弾」を追加"]},
       {id:"v167b-minor-rules-safety",version:"v167b",date:"2026-08-28",title:"カード処理とデッキ表示を調整",summary:"一部カードの細かな仕様と安全性を改善しました。",featured:true,tags:["fix","balance"],items:["compact表示をPC・iPadで最大4列へ調整","カードロックを手札から1～2枚選べるよう変更","援護射撃を狙撃系防御の対象へ変更","乱闘で使用回数を消費しないカードが選ばれた場合に使用可能回数を返却","過加速反動中の通常ドロー計算を加算式へ調整","狙撃の加護付きの手を通常攻撃時に選択不可へ変更","乱闘時に対象が存在しない効果の安全性を改善"]},
@@ -4222,9 +4246,10 @@ const CARD_LIBRARY = {
       const traps = cloneJson(state.traps[player]);
       if (!state.friendRole) return traps;
       for (const hand of ["L", "R"]) for (const slot of traps[hand] || []) {
-        if (trapCardId(slot) !== "harpoon" || typeof slot !== "object") continue;
-        slot.ownerSide = friendSideForLocalPlayer(slot.owner);
-        delete slot.owner;
+        if (typeof slot !== "object") continue;
+        if(trapCardId(slot)==="harpoon"){slot.ownerSide=friendSideForLocalPlayer(slot.owner);delete slot.owner;}
+        if(slot.sourcePlayer){slot.sourceSide=friendSideForLocalPlayer(slot.sourcePlayer);delete slot.sourcePlayer;}
+        if(slot.attachedPlayer){slot.attachedSide=friendSideForLocalPlayer(slot.attachedPlayer);delete slot.attachedPlayer;}
       }
       return traps;
     }
@@ -4232,12 +4257,36 @@ const CARD_LIBRARY = {
     function deserializeFriendTraps(rawTraps) {
       const traps = cloneJson(rawTraps || { L: [], R: [] });
       for (const hand of ["L", "R"]) for (const slot of traps[hand] || []) {
-        if (trapCardId(slot) !== "harpoon" || typeof slot !== "object") continue;
-        const canonicalOwner = slot.ownerSide || (["host", "guest"].includes(slot.owner) ? slot.owner : null);
-        if (canonicalOwner) slot.owner = localPlayerForFriendSide(canonicalOwner);
-        delete slot.ownerSide;
+        if(typeof slot!=="object")continue;
+        if(trapCardId(slot)==="harpoon"){const canonicalOwner=slot.ownerSide||(["host","guest"].includes(slot.owner)?slot.owner:null);if(canonicalOwner)slot.owner=localPlayerForFriendSide(canonicalOwner);delete slot.ownerSide;}
+        if(slot.sourceSide)slot.sourcePlayer=localPlayerForFriendSide(slot.sourceSide);delete slot.sourceSide;
+        if(slot.attachedSide)slot.attachedPlayer=localPlayerForFriendSide(slot.attachedSide);delete slot.attachedSide;
       }
       return traps;
+    }
+
+    function serializeAttachmentBucketsForFriend(rawBuckets) {
+      const buckets = cloneJson(rawBuckets || { L: [], R: [] });
+      if (!state.friendRole) return buckets;
+      for (const hand of ["L", "R"]) for (const slot of buckets[hand] || []) {
+        if (typeof slot !== "object") continue;
+        if (trapCardId(slot) === "harpoon") { slot.ownerSide = friendSideForLocalPlayer(slot.owner); delete slot.owner; }
+        if (slot.sourcePlayer) { slot.sourceSide = friendSideForLocalPlayer(slot.sourcePlayer); delete slot.sourcePlayer; }
+        if (slot.attachedPlayer) { slot.attachedSide = friendSideForLocalPlayer(slot.attachedPlayer); delete slot.attachedPlayer; }
+      }
+      return buckets;
+    }
+
+    function deserializeAttachmentBucketsForFriend(rawBuckets) {
+      const buckets = cloneJson(rawBuckets || { L: [], R: [] });
+      if (!state.friendRole) return buckets;
+      for (const hand of ["L", "R"]) for (const slot of buckets[hand] || []) {
+        if (typeof slot !== "object") continue;
+        if (slot.ownerSide) { slot.owner = localPlayerForFriendSide(slot.ownerSide); delete slot.ownerSide; }
+        if (slot.sourceSide) { slot.sourcePlayer = localPlayerForFriendSide(slot.sourceSide); delete slot.sourceSide; }
+        if (slot.attachedSide) { slot.attachedPlayer = localPlayerForFriendSide(slot.attachedSide); delete slot.attachedSide; }
+      }
+      return buckets;
     }
 
     function serializeFriendCanonHits() {
@@ -4336,6 +4385,7 @@ const CARD_LIBRARY = {
         log: [...state.log],
         lastAction: state.lastAction ? cloneJson(state.lastAction) : null
       };
+      ensureV169State();snapshot.curseDiscardHistory=state.curseDiscardHistory.map(entry=>({...cloneJson(entry),sourceSide:friendSideForLocalPlayer(entry.sourcePlayer),attachedSide:friendSideForLocalPlayer(entry.attachedPlayer),sourcePlayer:undefined,attachedPlayer:undefined}));snapshot.curseDiscardSequence=state.curseDiscardSequence;snapshot.curseDiscardLedger={host:cloneJson(state.curseDiscardLedger[role==="host"?"human":"cpu"]),guest:cloneJson(state.curseDiscardLedger[role==="guest"?"human":"cpu"])};snapshot.fixedCurseRetreats={host:serializeAttachmentBucketsForFriend(state.fixedCurseRetreats[role==="host"?"human":"cpu"]),guest:serializeAttachmentBucketsForFriend(state.fixedCurseRetreats[role==="guest"?"human":"cpu"])};
       snapshot[role] = serializeFriendSide("human");
       snapshot[otherRole] = serializeFriendSide("cpu");
       return snapshot;
@@ -4636,6 +4686,7 @@ const CARD_LIBRARY = {
         state.friendSurrenderNoticeAcknowledged = matchMeta?.surrenderNoticeAcknowledged ?? state.friendSurrenderNoticeAcknowledged ?? null;
         state.log = [...(snapshot.log || [])];
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
+        ensureV169State();state.curseDiscardHistory=(snapshot.curseDiscardHistory||[]).map(entry=>({...cloneJson(entry),sourcePlayer:localPlayerForFriendSide(entry.sourceSide)||entry.sourcePlayer,attachedPlayer:localPlayerForFriendSide(entry.attachedSide)||entry.attachedPlayer}));state.curseDiscardSequence=Number(snapshot.curseDiscardSequence||0);if(snapshot.curseDiscardLedger){state.curseDiscardLedger.human=cloneJson(snapshot.curseDiscardLedger[state.friendRole]||[]);state.curseDiscardLedger.cpu=cloneJson(snapshot.curseDiscardLedger[otherFriendRole()]||[]);}if(snapshot.fixedCurseRetreats){state.fixedCurseRetreats.human=deserializeAttachmentBucketsForFriend(snapshot.fixedCurseRetreats[state.friendRole]||{L:[],R:[]});state.fixedCurseRetreats.cpu=deserializeAttachmentBucketsForFriend(snapshot.fixedCurseRetreats[otherFriendRole()]||{L:[],R:[]});}
         state.friendLastAppliedRevision = Math.max(state.friendLastAppliedRevision, Number(revision || 0));
         state.friendSyncRevision = Math.max(state.friendSyncRevision, Number(revision || 0));
         state.mode = "attack";
@@ -5180,6 +5231,9 @@ const CARD_LIBRARY = {
           const terminalCard = CARD_LIBRARY[payload.cardId] || { name: payload.cardName || "終端カード" };
           const cardId = await askHumanTerminalAppeal("human", terminalCard);
           response = { cardId: cardId || null };
+        } else if(interrupt.type==="conditioning"){
+          const eligible=state.hands.human.map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse);
+          if(!eligible.length)response={use:false,instanceId:null};else{const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)response={use:false,instanceId:null};else{const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});response={use:true,instanceId:indexes.length?handCardInstanceId("human",indexes[0]):null};}}
         } else if(interrupt.type==="forceCard"){
           if(payload.matchId!==state.friendMatchId)throw new Error("試合が更新されています。");
           const indexes=await beginHandCardSelection({min:1,max:1,filter:id=>isCountedHandCard(id),message:"「強制」：次の自分のターンに使用するカードを1枚選んでください。"});
@@ -6731,7 +6785,7 @@ const CARD_LIBRARY = {
       state.decks.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
+      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.curseDiscardHistory=[];state.curseDiscardSequence=0;state.fixedCurseRetreats={human:{L:[],R:[]},cpu:{L:[],R:[]}};state.repetitionFreeCurse={human:null,cpu:null};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
       state.temp.human.cardActionUsed = false;
@@ -7803,6 +7857,7 @@ function wrapFinger(value) {
         const relatedButtons = [];
         if (cardId === "focusedShot") relatedButtons.push('<button class="deck-inline-info" data-info="logicCrusherBullet">生成カード「ロジックアトリエ」を確認</button>');
         if (cardId === "lastMelody") relatedButtons.push('<button class="deck-inline-info" data-info="finale">生成カード「フィナーレ」を確認</button>');
+        if (cardId === "egoBlessing") relatedButtons.push('<button class="deck-inline-info" data-info="superEgo">変化先「スーパーエゴ」を確認</button>');
         if (MAGICAL_EVOLUTION_MAP[cardId]) {
           const transformedId = MAGICAL_EVOLUTION_MAP[cardId];
           relatedButtons.push(`<button class="deck-inline-info" data-info="${transformedId}">変身後「${escapeHtml(CARD_LIBRARY[transformedId].name)}」を確認</button>`);
@@ -8664,12 +8719,12 @@ function wrapFinger(value) {
         });
     }
 
-    function getAdvanceNoticeCandidates(player) {
+    function getNormallyUsableCardCandidates(player,{copySource="",excludeIds=[]}={}) {
       return state.hands[player]
         .map((cardId, index) => ({ cardId, index }))
         .filter(item => {
           const card = CARD_LIBRARY[item.cardId];
-          if (!card || typeof card.effect !== "function" || isEffectCopyExcluded(item.cardId, "advanceNotice") || !canUseCardUnderRule(player,item.cardId,{silent:true})) return false;
+          if (!card || typeof card.effect !== "function" || excludeIds.includes(item.cardId) || (copySource&&isEffectCopyExcluded(item.cardId,copySource)) || !canUseCardUnderRule(player,item.cardId,{silent:true})) return false;
           if (!canUseChargeCardThisTurn(player, item.cardId)) return false;
           try {
             return !!card.canPlay(player);
@@ -8678,6 +8733,7 @@ function wrapFinger(value) {
           }
         });
     }
+    function getAdvanceNoticeCandidates(player){return getNormallyUsableCardCandidates(player,{copySource:"advanceNotice"});}
 
     async function activateCopiedCardEffect(player, cardId, sourceLabel, context = {}) {
       const effectiveId = effectiveCardIdForPlayer(player, cardId);
@@ -8700,6 +8756,7 @@ function wrapFinger(value) {
       try {
         recordRondoUse(player, effectiveId);
         await card.effect(player);
+        await waitForCardInteractionCompletion(player);
         if (card.terminal && !context.ignoreTerminal && !state.pendingTerminalEnd[player] && state.mode === "attack") {
           state.pendingTerminalEnd[player] = true;
         }
@@ -8709,6 +8766,10 @@ function wrapFinger(value) {
         state.resolvingEffectPlayer = previousEffectPlayer;
       }
     }
+
+    const pendingCardInteractionCompletion = {human:[],cpu:[]};
+    function waitForCardInteractionCompletion(player){if(state.gameOver||state.mode==="attack")return Promise.resolve();return new Promise(resolve=>pendingCardInteractionCompletion[player].push(resolve));}
+    function resolveCompletedCardInteractions(){for(const player of ["human","cpu"]){if(!state.gameOver&&state.mode!=="attack")continue;const queue=pendingCardInteractionCompletion[player].splice(0);for(const resolve of queue)resolve();}}
 
     async function chooseAdvanceNoticeCard(player, handIndex) {
       if (state.mode === "advanceNoticeChoose" && player === "human" && state.turn !== "human") return false;
@@ -9287,6 +9348,7 @@ function wrapFinger(value) {
     }
 
     function render() {
+      resolveCompletedCardInteractions();
       refreshPlayerDisplayNames();
       const romanStatus=document.getElementById("romanPreparationStatus"),romanCounts=document.getElementById("romanPreparationCounts");
       if(romanStatus){const active=isRomanPreparation();romanStatus.hidden=!active;if(active&&romanCounts)romanCounts.textContent=`あなた：残り${romanRemainingPreparationTurns("human")}ターン / 相手：残り${romanRemainingPreparationTurns("cpu")}ターン`;}
@@ -9414,6 +9476,9 @@ function wrapFinger(value) {
         id: `trap_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         cardId
       };
+      if(CARD_LIBRARY[cardId]?.curse)instance.sourcePlayer=owner;
+      if(cardId==="trauma")instance.count=0;
+      if(cardId==="superEgo")instance.decay=1;
       if (cardId === "weaknessCurse") instance.waitTurns = 1;
       if (cardId === "duelSurge") {
         instance.level = 0;
@@ -9427,6 +9492,54 @@ function wrapFinger(value) {
       }
       return instance;
     }
+
+    function ensureV169State(){
+      ensureV168State();state.curseDiscardHistory||=[];state.curseDiscardSequence=Number(state.curseDiscardSequence||0);
+      state.curseDiscardLedger||={human:[],cpu:[]};state.curseDiscardLedger.human||=[];state.curseDiscardLedger.cpu||=[];
+      state.fixedCurseRetreats||={human:{L:[],R:[]},cpu:{L:[],R:[]}};for(const p of ["human","cpu"]){state.fixedCurseRetreats[p]||={L:[],R:[]};state.fixedCurseRetreats[p].L||=[];state.fixedCurseRetreats[p].R||=[];}
+      state.repetitionFreeCurse||={human:null,cpu:null};
+    }
+    function attachmentSourcePlayer(slot,attachedOwner){return typeof slot==="object"&&slot?.sourcePlayer?slot.sourcePlayer:attachedOwner;}
+    function isFixedAttachment(slot){return typeof slot==="object"&&slot.fixed===true;}
+    function isAttachmentEffectActive(owner,hand,slot){const id=trapCardId(slot),card=CARD_LIBRARY[id];if(!card)return false;if(card.curse||card.themeBlessing)return true;if((card.trap||card.blessing)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;}
+    function hasAttachmentRaw(owner,hand,cardId){return state.traps[owner][hand].some(slot=>trapCardId(slot)===cardId);}
+    function canExternallyRemoveAttachment(slot){const id=trapCardId(slot)||slot;return !!id&&!CARD_LIBRARY[id]?.themeBlessing&&!isFixedAttachment(slot);}
+    function canMoveAttachment(slot){return canExternallyRemoveAttachment(slot);}
+    function canReplaceAttachment(slot){return canExternallyRemoveAttachment(slot);}
+    function recordCurseDiscard(slot,attachedOwner,attachedHand,discardOwner){
+      const cardId=trapCardId(slot);if(!CARD_LIBRARY[cardId]?.curse)return;ensureV169State();const entry={entryId:`curse-discard-${++state.curseDiscardSequence}`,cardId,sourcePlayer:attachmentSourcePlayer(slot,attachedOwner),attachedPlayer:attachedOwner,attachedHand,discardOwner,sequence:state.curseDiscardSequence,active:true};state.curseDiscardHistory.push(entry);state.curseDiscardLedger[discardOwner].push({entryId:entry.entryId,cardId,active:true});
+    }
+    function discardAttachment(owner,hand,index,{reason="効果",allowFixed=false,noDiscard=false}={}){
+      const slot=state.traps[owner][hand]?.[index];if(!slot||(!allowFixed&&!canExternallyRemoveAttachment(slot)))return null;state.traps[owner][hand].splice(index,1);const id=trapCardId(slot),iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);if(!noDiscard&&id){const discardOwner=CARD_LIBRARY[id]?.curse?attachmentSourcePlayer(slot,owner):owner;state.discard[discardOwner].push(id);recordCurseDiscard(slot,owner,hand,discardOwner);}return slot;
+    }
+    function restoreFixedCurses(owner){ensureV169State();for(const hand of ["L","R"]){if(state[owner][hand]<=0)continue;const queue=state.fixedCurseRetreats[owner][hand];if(!queue.length)continue;let restored=0;while(queue.length&&state.traps[owner][hand].length<2){const slot=queue.shift();if(trapCardId(slot)==="trauma")slot.count=0;if(installAttachmentInstance(owner,hand,slot,{notify:false}))restored++;}if(restored)addLog(`${handNames[owner]}の${handNames[hand]}へ固定呪縛が復帰した。`);}}
+    function notifyAttachmentInstalled(owner,hand,newSlot){const existing=state.traps[owner][hand].filter(slot=>slot!==newSlot&&trapCardId(slot)==="complexCurse"&&isAttachmentEffectActive(owner,hand,slot));for(const slot of existing){if(state[owner][hand]>0){const before=state[owner][hand];state[owner][hand]=normalize(before+1,owner,hand);addLog(`「コンプレックス」により${handNames[owner]}の${handNames[hand]}が${before}→${state[owner][hand]}。`);}}if(state[owner][hand]===0)clearBrokenTraps(owner);}
+    function installAttachmentInstance(owner,hand,slot,{notify=true}={}){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return false;if(typeof slot==="object"){slot.attachedPlayer=owner;slot.attachedHand=hand;slot.originalHand||=hand;if(trapCardId(slot)==="grief"&&state[owner][otherHand(hand)]===0)slot.otherZeroActive=true;}state.traps[owner][hand].push(slot);if(notify)notifyAttachmentInstalled(owner,hand,slot);return true;}
+    function isDeckEligibleCard(cardId){const card=CARD_LIBRARY[cardId];return !!card&&!card.token&&!card.generatedOnly&&!card.magicalEvolution;}
+    function curseSlots(owner,hand){return state.traps[owner][hand].map((slot,index)=>({slot,index,cardId:trapCardId(slot)})).filter(x=>CARD_LIBRARY[x.cardId]?.curse);}
+    function consumeCurseDiscardHistoryEntry(player,entry){ensureV169State();const ledger=state.curseDiscardLedger[player].find(item=>item.entryId===entry.entryId&&item.active);if(!ledger||ledger.cardId!==entry.cardId)return false;const index=state.discard[player].indexOf(entry.cardId);if(index<0){ledger.active=false;entry.active=false;return false;}state.discard[player].splice(index,1);ledger.active=false;entry.active=false;return true;}
+    async function useFlashback(player){
+      ensureV169State();const target=otherPlayer(player),history=[...state.curseDiscardHistory].filter(x=>x.active&&x.sourcePlayer===player&&x.attachedPlayer===target&&isDeckEligibleCard(x.cardId)).sort((a,b)=>b.sequence-a.sequence);
+      for(const hand of ["L","R"]){for(const entry of history.filter(x=>x.attachedHand===hand)){if(!canPlaceAttachmentOnHand(player,target,hand,entry.cardId))break;if(!consumeCurseDiscardHistoryEntry(player,entry))continue;const slot=makeTrapInstance(entry.cardId,player);slot.originalHand=hand;installAttachmentInstance(target,hand,slot);addLog(`「フラッシュバック」で「${CARD_LIBRARY[entry.cardId].name}」を${handNames[target]}の${handNames[hand]}へ戻した。`);}}
+    }
+    function fixationTargets(player){const target=otherPlayer(player),items=[];for(const hand of ["L","R"])for(const x of curseSlots(target,hand))items.push({...x,hand});return items;}
+    function canUseFixation(player){const items=fixationTargets(player);return items.length===4&&new Set(items.map(x=>x.cardId)).size===4;}
+    function useFixation(player){if(!canUseFixation(player))return false;for(const item of fixationTargets(player)){item.slot.fixed=true;item.slot.originalHand=item.hand;}addLog(`${handNames[player]}は相手の4種類の呪縛を固定した。`);render();return true;}
+    async function useCatharsis(player){const target=otherPlayer(player),counts={L:curseSlots(target,"L").length,R:curseSlots(target,"R").length};for(const hand of ["L","R"]){const before=state[target][hand];state[target][hand]=Math.max(0,before-counts[hand]);addLog(`「カタルシス」：${handNames[target]}の${handNames[hand]} ${before}→${state[target][hand]}。`);}clearBrokenTraps(target);for(const hand of ["L","R"])for(let i=state.traps[target][hand].length-1;i>=0;i--)if(CARD_LIBRARY[trapCardId(state.traps[target][hand][i])]?.curse)discardAttachment(target,hand,i,{reason:"カタルシス"});render();}
+    async function chooseCurseType(player,label){const ids=[...new Set(state.hands[player].filter(id=>CARD_LIBRARY[id]?.curse))];if(!ids.length)return null;if(player!=="human")return ids[0];const chosen=await beginHandCardSelection({min:1,max:1,filter:id=>ids.includes(id),message:label});return chosen.length?state.hands[player][chosen[0]]:null;}
+    async function useRepetitionCompulsion(player){const id=await chooseCurseType(player,"反復強迫：連続して付与する呪縛を選んでください。");if(!id)return false;state.repetitionFreeCurse[player]=id;try{while(state.hands[player].includes(id)){const target=otherPlayer(player),choice=await beginBoardHandSelection(player,{owners:[target],minimum:1,candidateFilter:x=>canPlaceAttachmentOnHand(player,target,x.hand,id),message:`反復強迫：「${CARD_LIBRARY[id].name}」の設置先を選んでください。`,cpuPick:items=>items[0]});if(!choice)break;const index=state.hands[player].indexOf(id);if(index<0||!await setTrap(player,choice.hand,index,target,{freeCardAction:true}))break;if(player==="human"&&state.hands[player].includes(id)){const again=await showGameConfirmation({title:"反復強迫",message:"同名の呪縛を続けて使用しますか？",confirmLabel:"続ける",cancelLabel:"終了"});if(!again)break;}}}finally{state.repetitionFreeCurse[player]=null;state.mode="attack";render();}return true;}
+    function replaceableBlessings(player){const target=otherPlayer(player),out=[];for(const hand of ["L","R"])state.traps[target][hand].forEach((slot,index)=>{if(CARD_LIBRARY[trapCardId(slot)]?.blessing&&canReplaceAttachment(slot))out.push({owner:target,hand,index,slot});});return out;}
+    function canPlaceAttachmentAfterReplacement(user,owner,hand,cardId,replacedSlot){if(!replacedSlot||!canReplaceAttachment(replacedSlot)||state[owner][hand]<=0)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;if(card&&(card.trap||card.blessing)&&!card.themeBlessing&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return state.traps[owner][hand].length-1<2;}
+    async function chooseDevaluationBlessing(player,items){if(player!=="human")return items[0]||null;return chooseOneMagicalCard("デバリュエーション","置換する加護を選んでください。",items.map(item=>({id:item.cardId,key:trapInstanceId(item.slot),location:`${handNames[item.owner]}の${handNames[item.hand]}・設置枠${item.index+1}`,...item})));}
+    function canUseDevaluation(player){return replaceableBlessings(player).length>0&&state.hands[player].some(id=>CARD_LIBRARY[id]?.curse);}
+    async function useDevaluation(player){let changed=0;while(true){const blessings=replaceableBlessings(player);if(!blessings.length)break;const blessing=await chooseDevaluationBlessing(player,blessings);if(!blessing)break;const currentIndex=state.traps[blessing.owner][blessing.hand].findIndex(slot=>trapInstanceId(slot)===trapInstanceId(blessing.slot));if(currentIndex<0)continue;const eligible=state.hands[player].map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentAfterReplacement(player,blessing.owner,blessing.hand,x.id,blessing.slot));if(!eligible.length)break;let picked=eligible[0];if(player==="human"){const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"同じ位置へ設置する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);if(!picked)break;}discardAttachment(blessing.owner,blessing.hand,currentIndex,{reason:"デバリュエーション"});const beforeIds=new Set(state.traps[blessing.owner][blessing.hand].map(trapInstanceId));if(!await setTrap(player,blessing.hand,picked.index,blessing.owner,{freeCardAction:true}))break;const slots=state.traps[blessing.owner][blessing.hand];if(state[blessing.owner][blessing.hand]>0){const installedIndex=slots.findIndex(slot=>!beforeIds.has(trapInstanceId(slot)));if(installedIndex>=0&&installedIndex!==currentIndex){const [installed]=slots.splice(installedIndex,1);slots.splice(Math.min(currentIndex,slots.length),0,installed);}}changed++;if(player==="human"){const again=await showGameConfirmation({title:"デバリュエーション",message:"続けて置換しますか？",confirmLabel:"続ける",cancelLabel:"終了"});if(!again)break;}if(changed>=4)break;}state.mode="attack";render();return changed>0;}
+    function displayAttachmentName(slot){const id=trapCardId(slot),name=CARD_LIBRARY[id]?.name||id,prefix=isFixedAttachment(slot)?"🔒 ":"";if(id==="trauma")return `${prefix}${name}：${Number(slot?.count||0)}`;if(id==="superEgo")return `${prefix}${name}（減衰${Number(slot?.decay||1)}）`;return `${prefix}${name}`;}
+    function processGriefZero(owner,zeroHand){const bearing=otherHand(zeroHand);for(const slot of state.traps[owner][bearing])if(trapCardId(slot)==="grief"&&!slot.otherZeroActive){slot.otherZeroActive=true;const candidates=getDiscardCandidates(owner,"cardEffect");for(let i=candidates.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]];}for(const item of candidates.slice(0,3).sort((a,b)=>b.index-a.index)){const iid=handCardInstanceId(owner,item.index),id=state.hands[owner].splice(item.index,1)[0];state.handCardInstances[owner].splice(item.index,1);forgetHandCardMetadata(owner,iid);if(id)state.discard[owner].push(id);}addLog(`「グリーフ」により${handNames[owner]}は手札を最大3枚捨てた。`);}}
+    function refreshGriefState(owner){for(const hand of ["L","R"])if(state[owner][otherHand(hand)]>0)for(const slot of state.traps[owner][hand])if(trapCardId(slot)==="grief")slot.otherZeroActive=false;}
+    async function resolveV169EndTurnAttachments(player){for(const hand of ["L","R"]){const snapshot=[...state.traps[player][hand]];for(const slot of snapshot){if(state[player][hand]<=0||!state.traps[player][hand].includes(slot))continue;const id=trapCardId(slot);if(id==="homeostasis"){if(state[player][hand]<=0||state[player][otherHand(hand)]<=0)continue;const before=state[player][hand],other=state[player][otherHand(hand)];if(before>other)state[player][hand]=Math.max(0,before-1);else if(before<other)state[player][hand]=normalize(before+1,player,hand);if(before!==state[player][hand])addLog(`「ホメオスタシス」により${handNames[hand]}が${before}→${state[player][hand]}。`);}else if(id==="superEgo"){const before=state[player][hand],decay=Math.max(1,Number(slot.decay||1));state[player][hand]=Math.max(0,before-decay);if(state[player][hand]>0)slot.decay=decay+1;addLog(`「スーパーエゴ」の減衰${decay}：${before}→${state[player][hand]}。`);}if(state[player][hand]===0)clearBrokenTraps(player);}}clearBrokenTraps(player);}
+    async function resolveApathyAfterCardUse(player){for(const hand of ["L","R"])for(const slot of state.traps[player][hand])if(trapCardId(slot)==="apathy"&&state[player][hand]>1){const before=state[player][hand];state[player][hand]=before-1;addLog(`「アパシー」により${handNames[player]}の${handNames[hand]}が${before}→${state[player][hand]}。`);}render();}
+    async function afterActualCardUseResolved(player,context={}){if(context.effectOnly)return;await resolveApathyAfterCardUse(player);}
+    async function afterTrapResolved(owner,hand){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return;const conditioners=state.traps[owner][hand].filter(slot=>trapCardId(slot)==="conditioning");for(const conditioning of conditioners){const source=attachmentSourcePlayer(conditioning,owner),eligible=state.hands[source].map((id,index)=>({id,index,instanceId:handCardInstanceId(source,index)})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand(source,owner,hand,x.id));if(!eligible.length)continue;let picked=null;if(source==="human"){const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)continue;const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);}else if(state.battleMode==="friend"){const response=await requestRemoteFriendDecision("conditioning",{hand,matchId:state.friendMatchId});if(response?.use&&response.instanceId)picked=eligible.find(x=>x.instanceId===response.instanceId);}else picked=eligible[0];if(picked)await setTrap(source,hand,picked.index,owner,{freeCardAction:true});break;}}
 
     function ensureV168State(){
       state.pendingTrapCardExtraUses ||= {human:0,cpu:0};
@@ -9456,7 +9569,7 @@ function wrapFinger(value) {
       render();
     }
 
-    function getJackInTheBoxCandidates(player){return getAdvanceNoticeCandidates(player).filter(item=>item.cardId!=="jackInTheBox");}
+    function getJackInTheBoxCandidates(player){return getNormallyUsableCardCandidates(player,{copySource:"advanceNotice",excludeIds:["jackInTheBox"]});}
     async function chooseJackInTheBoxPayload(player){
       const candidates=getJackInTheBoxCandidates(player);if(!candidates.length)return null;
       let picked;
@@ -9478,7 +9591,7 @@ function wrapFinger(value) {
       return await card.trigger?.(context)||{};
     }
     async function consumeAndResolveTrap(owner,hand,index,triggerContext={},forcedDetonation=false){
-      const slot=state.traps[owner][hand][index];if(!slot)return{};const cardId=trapCardId(slot),card=CARD_LIBRARY[cardId];state.traps[owner][hand].splice(index,1);const iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);state.discard[owner].push(cardId);addLog(`【罠】${handNames[owner]}の「${card?.name||cardId}」が${forcedDetonation?"強制":""}発動。`);return resolveTrapEffect({owner,hand,trapInstance:slot,triggerContext,forcedDetonation});
+      const slot=state.traps[owner][hand][index];if(!slot)return{};const cardId=trapCardId(slot),card=CARD_LIBRARY[cardId];state.traps[owner][hand].splice(index,1);const iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);state.discard[owner].push(cardId);addLog(`【罠】${handNames[owner]}の「${card?.name||cardId}」が${forcedDetonation?"強制":""}発動。`);const result=await resolveTrapEffect({owner,hand,trapInstance:slot,triggerContext,forcedDetonation});await afterTrapResolved(owner,hand);return result;
     }
     async function detonateTraps(owner){
       const snapshot=[];for(const hand of ["L","R"])for(const slot of state.traps[owner][hand])if(CARD_LIBRARY[trapCardId(slot)]?.trap)snapshot.push({hand,instanceId:trapInstanceId(slot),slot});
@@ -9489,7 +9602,7 @@ function wrapFinger(value) {
       const selected=await beginBoardHandSelection(player,{owners:[player],minimum:1,candidateFilter:x=>state.traps[player][x.hand].length<2,message:"残骸回収：設置先の手を選んでください。",cpuPick:items=>items[0]});if(!selected)return false;
       let candidates=state.discard[player].map((cardId,index)=>({cardId,index})).filter(x=>CARD_LIBRARY[x.cardId]?.trap);if(!getJackInTheBoxCandidates(player).length)candidates=candidates.filter(x=>x.cardId!=="jackInTheBox");if(!candidates.length){addLog("「残骸回収」は捨て札に罠がなく不発。");return false;}
       const picked=candidates[Math.floor(Math.random()*candidates.length)],instance=makeTrapInstance(picked.cardId,player);if(picked.cardId==="jackInTheBox"){const payload=await chooseJackInTheBoxPayload(player);if(!payload)return false;instance.payload=payload;}
-      state.discard[player].splice(picked.index,1);state.traps[player][selected.hand].push(instance);addLog(`「残骸回収」で「${CARD_LIBRARY[picked.cardId].name}」を${handNames[selected.hand]}へ直接設置した。`);render();return true;
+      state.discard[player].splice(picked.index,1);installAttachmentInstance(player,selected.hand,instance);addLog(`「残骸回収」で「${CARD_LIBRARY[picked.cardId].name}」を${handNames[selected.hand]}へ直接設置した。`);render();return true;
     }
 
     function trapCardId(slot) {
@@ -9532,13 +9645,12 @@ function wrapFinger(value) {
       const slots=state.traps[targetPlayer][targetHand];
       if(slots.length>=2){
         if(!replaceRandom)return false;
-        const removable=slots.map((slot,index)=>({slot,index,cardId:trapCardId(slot)})).filter(item=>isExternallyRemovableAttachment(item.cardId));
+        const removable=slots.map((slot,index)=>({slot,index,cardId:trapCardId(slot)})).filter(item=>canExternallyRemoveAttachment(item.slot));
         if(!removable.length){addLog("「銛投擲」は外部効果で除去できる設置カードがなく、銛付与が不発。");return false;}
-        const picked=removable[Math.floor(Math.random()*removable.length)],removed=slots.splice(picked.index,1)[0],id=trapCardId(removed);
-        if(id!=="harpoon") state.discard[targetPlayer].push(id);
+        const picked=removable[Math.floor(Math.random()*removable.length)],removed=discardAttachment(targetPlayer,targetHand,picked.index,{reason:"銛投擲"}),id=trapCardId(removed);
         addLog(`「銛投擲」により${handNames[targetPlayer]}の${handNames[targetHand]}の設置カード1枚が捨てられた。`);
       }
-      slots.push(makeTrapInstance("harpoon",owner));
+      installAttachmentInstance(targetPlayer,targetHand,makeTrapInstance("harpoon",owner));
       addLog(`${handNames[owner]}の「銛」が${handNames[targetPlayer]}の${handNames[targetHand]}についた。`);
       render(); return true;
     }
@@ -9711,7 +9823,7 @@ function wrapFinger(value) {
       state.cardLocks[player]=[...(state.cardLocks[player]||[]),...picks.map(x=>({instanceId:x.instanceId,cardId:x.cardId,turnsRemaining:2}))];
       return picks.length>0;
     }
-    function replaceHandAttachments(player){[state.traps[player].L,state.traps[player].R]=[state.traps[player].R,state.traps[player].L];addLog(`${handNames[player]}は左右の設置物を入れ替えた。`);}
+    function replaceHandAttachments(player){if([...state.traps[player].L,...state.traps[player].R].some(slot=>!canMoveAttachment(slot))){addLog(`${handNames[player]}の固定・保護された設置物は左右交換できない。`);return false;}[state.traps[player].L,state.traps[player].R]=[state.traps[player].R,state.traps[player].L];for(const hand of ["L","R"])for(const slot of state.traps[player][hand])if(typeof slot==="object"){slot.attachedHand=hand;slot.attachedPlayer=player;}addLog(`${handNames[player]}は左右の設置物を入れ替えた。`);return true;}
     async function useForceCard(player){
       const o=otherPlayer(player);let pick=null;
       if(!getCountedHandCards(o).length){addLog("「強制」は選択できる通常手札がなく不発。");return false;}
@@ -9806,7 +9918,7 @@ function wrapFinger(value) {
       return !!CARD_LIBRARY[cardId]?.themeBlessing;
     }
     function isExternallyRemovableAttachment(cardId) {
-      return !!cardId && !isProtectedAttachment(cardId);
+      return canExternallyRemoveAttachment(cardId);
     }
 
     function themeCardId(player) {
@@ -9818,7 +9930,7 @@ function wrapFinger(value) {
       state.discard[player]=state.discard[player].filter(cardId=>!CARD_LIBRARY[cardId]?.themeBlessing);
       for (const hand of ["L", "R"]) {
         state.traps[player][hand] = state.traps[player][hand].filter(slot => !CARD_LIBRARY[trapCardId(slot)]?.themeBlessing || trapCardId(slot) === id);
-        if (id && state[player][hand] > 0 && !state.traps[player][hand].some(slot => trapCardId(slot) === id)) state.traps[player][hand].push(id);
+        if (id && state[player][hand] > 0 && !state.traps[player][hand].some(slot => trapCardId(slot) === id)) installAttachmentInstance(player,hand,makeTrapInstance(id,player));
       }
     }
 
@@ -11002,7 +11114,11 @@ function wrapFinger(value) {
     }
 
     function canPlaceAttachment(user, owner) {
-      return ["L", "R"].some(h => state[owner][h] > 0 && state.traps[owner][h].length < 2 && !(user === owner && hasSealCurse(owner, h)));
+      return ["L", "R"].some(h => canPlaceAttachmentOnHand(user,owner,h));
+    }
+    function canPlaceAttachmentOnHand(user,owner,hand,cardId=null){
+      if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;
+      if(card&&(card.trap||card.blessing)&&!card.themeBlessing&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;
     }
 
     function findAttachmentSlot(owner, hand, cardId) {
@@ -11057,7 +11173,7 @@ function wrapFinger(value) {
     }
 
     function hasAttachment(owner, hand, cardId) {
-      return state.traps[owner][hand].some(slot => trapCardId(slot) === cardId);
+      return state.traps[owner][hand].some(slot => trapCardId(slot) === cardId&&isAttachmentEffectActive(owner,hand,slot));
     }
 
     function hasExposedCurse(owner, hand) {
@@ -11076,8 +11192,8 @@ function wrapFinger(value) {
       return state[owner][hand] > 0 && state.traps[owner][hand].length < 2 && !hasSealCurse(owner, hand);
     }
 
-    function ignoresOpponentBoardEffects(attacker) {
-      return !!state.temp[attacker]?.breakthrough;
+    function ignoresOpponentBoardEffects(attacker,attackHand=null) {
+      return !!state.temp[attacker]?.breakthrough||!!(attackHand&&(hasAttachment(attacker,attackHand,"egoBlessing")||hasAttachment(attacker,attackHand,"superEgo")));
     }
 
     function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
@@ -11142,11 +11258,8 @@ function wrapFinger(value) {
     function removeOwnCurse(player, hand, index) {
       const slot = state.traps[player][hand][index];
       const cardId = trapCardId(slot);
-      if (!isCurseCard(cardId)) return false;
-      const instanceId = trapInstanceId(slot);
-      state.traps[player][hand].splice(index, 1);
-      if (instanceId) state.revealedTrapIds.delete(instanceId);
-      state.discard[player].push(cardId);
+      if (!isCurseCard(cardId)||!canExternallyRemoveAttachment(slot)) return false;
+      if(!discardAttachment(player,hand,index,{reason:"解呪"}))return false;
       setLastAction(player, "解呪", `${handNames[hand]}の呪縛「${CARD_LIBRARY[cardId].name}」を捨て札にしました。`, "card");
       addLog(`${handNames[player]}は「解呪」で${handNames[hand]}の呪縛「${CARD_LIBRARY[cardId].name}」を捨て札にした。`);
       if (player === "human") {
@@ -11178,7 +11291,7 @@ function wrapFinger(value) {
       for (const hand of ["L", "R"]) {
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
-          if (predicate(cardId) && isExternallyRemovableAttachment(cardId)) options.push({ owner, hand, index, cardId });
+          if (predicate(cardId) && canExternallyRemoveAttachment(slot)) options.push({ owner, hand, index, cardId, slot });
         });
       }
       return options;
@@ -11299,7 +11412,7 @@ function wrapFinger(value) {
       await showCardPopup(owner, CARD_LIBRARY.magicMirror, true, 760);
 
       if (reflectedHand) {
-        state.traps[targetOwner][reflectedHand].push(makeTrapInstance(cardId));
+        installAttachmentInstance(targetOwner,reflectedHand,makeTrapInstance(cardId,player));
         addLog(`反射された「${CARD_LIBRARY[cardId].name}」は${handNames[targetOwner]}の${handNames[reflectedHand]}に表向きで置かれた。`);
         setMessage(`「マジックミラー」：「${CARD_LIBRARY[cardId].name}」を${handNames[targetOwner]}の${handNames[reflectedHand]}へ反射しました。`);
       } else {
@@ -11320,7 +11433,7 @@ function wrapFinger(value) {
       const opponent = player === "human" ? "cpu" : "human";
       return ["L", "R"].some(hand => {
         const other = otherHand(hand);
-        return state.traps[opponent][hand].some(slot=>isExternallyRemovableAttachment(trapCardId(slot))) &&
+        return state.traps[opponent][hand].some(slot=>canMoveAttachment(slot)) &&
           state[opponent][other] > 0 &&
           state.traps[opponent][other].length < 2;
       });
@@ -11333,7 +11446,7 @@ function wrapFinger(value) {
         if (state[owner][other] <= 0 || state.traps[owner][other].length >= 2) continue;
         state.traps[owner][hand].forEach((slot, index) => {
           const cardId = trapCardId(slot);
-          if (!isExternallyRemovableAttachment(cardId)) return;
+          if (!canMoveAttachment(slot)) return;
           options.push({ owner, hand, index, cardId });
         });
       }
@@ -11867,9 +11980,9 @@ function wrapFinger(value) {
       }
       const slot = state.traps[owner][hand][index];
       const cardId = trapCardId(slot);
-      if (!isExternallyRemovableAttachment(cardId)) {setMessage("そのカードは外部効果で移動できません。");return false;}
+      if (!canMoveAttachment(slot)) {setMessage("そのカードは外部効果で移動できません。");return false;}
       state.traps[owner][hand].splice(index, 1);
-      state.traps[owner][other].push(slot);
+      installAttachmentInstance(owner,other,slot,{notify:false});
       const label = attachmentLabel(cardId);
       setLastAction(user, "手繰り寄せ", `${handNames[owner]}の${label}「${CARD_LIBRARY[cardId].name}」を${handNames[hand]}から${handNames[other]}へ移動しました。`, "card");
       addLog(`${handNames[user]}は「手繰り寄せ」で、${handNames[owner]}の${label}「${CARD_LIBRARY[cardId].name}」を${handNames[hand]}から${handNames[other]}へ移動した。`);
@@ -11945,7 +12058,7 @@ function wrapFinger(value) {
       const info = attachmentKindInfo(card, options);
       elements.attachmentDetailKind.textContent = `${info.symbol} ${info.label}`;
       elements.attachmentDetailKind.className = `attachment-detail-kind ${info.className}`;
-      elements.attachmentDetailName.textContent = card.name;
+      elements.attachmentDetailName.textContent = displayAttachmentName(slot);
       elements.attachmentDetailMeta.textContent = `コスト${card.cost} / ${card.type}`;
       if (cardId === "duelSurge" && options.slot) {
         const level = Number(options.slot.level) || 0;
@@ -12010,7 +12123,7 @@ function wrapFinger(value) {
             (cardId === "harpoon" ? " harpoon-slot" : "") +
             (selectable ? " selectable-trap-card" : "");
           const kindInfo = attachmentKindInfo(card, { publiclyRevealed });
-          const displayName = cardId === "duelSurge" ? `${card.name} Lv.${Number(slot?.level) || 0}` : cardId === "harpoon" ? `銛-振動:${Math.max(0,Number(slot?.vibration)||0)}` : card.name;
+          const displayName = cardId === "duelSurge" ? `${card.name} Lv.${Number(slot?.level) || 0}` : cardId === "harpoon" ? `銛-振動:${Math.max(0,Number(slot?.vibration)||0)}` : displayAttachmentName(slot);
           div.textContent = hidden ? `伏せ${i + 1}` : `${kindInfo.symbol} ${displayName}`;
           div.title = hidden ? "伏せカード" : `${kindInfo.label}「${displayName}」：${card.text}`;
 
@@ -12782,7 +12895,7 @@ function renderLastAction() {
       }
     }
 
-    async function setTrap(player, hand, handIndex, owner = player) {
+    async function setTrap(player, hand, handIndex, owner = player, options = {}) {
       if(state.startingRouletteActive)return false;
       if(state.quarterRestActive?.[player]){if(player==="human")setMessage("4分休符により、このターンは手札からカードを使用できません。");return false;}
       const cardId = state.hands[player][handIndex];
@@ -12790,6 +12903,7 @@ function renderLastAction() {
       if (!card || !isAttachmentCard(cardId)) return false;
       if(!canUseCardUnderRule(player,cardId,{silent:player!=="human"}))return false;
       const setupActive = !!state.temp[player].setupMode;
+      const repetitionFree=!!options.freeCardAction||!!(card.curse&&state.repetitionFreeCurse?.[player]===cardId);
       if (setupActive && !card.trap) return false;
       if (card.blessing && owner !== player) return false;
       if (card.curse && owner === player) return false;
@@ -12808,8 +12922,8 @@ function renderLastAction() {
       }
       if (
         state[owner][hand] <= 0 ||
-        state.traps[owner][hand].length >= 2 ||
-        (state.temp[player].cardActionUsed && Number(state.temp[player].cardExtraUses||0)<=0 && !setupActive && !lightSpeedChargePlayable)
+        !canPlaceAttachmentOnHand(player,owner,hand,cardId) ||
+        (state.temp[player].cardActionUsed && Number(state.temp[player].cardExtraUses||0)<=0 && !setupActive && !lightSpeedChargePlayable&&!repetitionFree)
       ) return false;
       if (card.blessing && hasSealCurse(owner, hand)) {
         if (player === "human") setMessage("封印の呪縛により、その手には新たに加護を置けません。");
@@ -12834,15 +12948,15 @@ function renderLastAction() {
         return true;
       }
 
-      const trapInstance=makeTrapInstance(cardId,owner);
+      const trapInstance=makeTrapInstance(cardId,player);
       if(cardId==="jackInTheBox"){
         const payload=await chooseJackInTheBoxPayload(player);
         if(!payload){state.hands[player].splice(handIndex,0,cardId);state.handCardInstances[player].splice(handIndex,0,attachmentInstanceId||`ci-${++state.cardInstanceSequence}`);if(Object.keys(attachmentMetadata).length)setHandCardMetadata(player,handIndex,attachmentMetadata);if(player==="human")setMessage("びっくり箱に仕込めるカードがないため設置できません。");return false;}
         trapInstance.payload=payload;
       }
-      state.traps[owner][hand].push(trapInstance);
+      installAttachmentInstance(owner,hand,trapInstance);
       if (!setupActive) {
-        consumeCardActionAllowance(player, { lightSpeedChargePlayable });
+        if(!repetitionFree)consumeCardActionAllowance(player, { lightSpeedChargePlayable });
         state.mode = "attack";
       } else {
         state.mode = "setupTrap";
@@ -12868,6 +12982,7 @@ function renderLastAction() {
       }
       triggerChemicalGeneration(player, cardId);
       recordRondoUse(player,cardId);
+      await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
       render();
 
       // 罠・加護・呪縛は、対象の手を選んで設置できた後に
@@ -13116,6 +13231,7 @@ function renderLastAction() {
       recordRondoUse(player, cardId);
       await card.effect(player);
       state.resolvingEffectPlayer=previousEffectPlayer;
+      await resolveApathyAfterCardUse(player);
       if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") state.pendingTerminalEnd[player] = true;
       triggerChemicalGeneration(player, cardId);
       checkWin();
@@ -13192,6 +13308,7 @@ function renderLastAction() {
           const cardId = trapCardId(slot);
           const card = CARD_LIBRARY[cardId];
           if (!card || !card.trap) return;
+          if (!isAttachmentEffectActive(defender,placedHand,slot)) return;
           if (manualMode !== null && !!card.manual !== manualMode) return;
           if (timing !== null && (card.triggerTiming || "before") !== timing) return;
           const context = { defender, placedHand, targetHand, attacker, attackHand, incomingPower, ...extraContext };
@@ -13350,6 +13467,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       }
       await showCardPopup(defender, card, true, 760);
       const result = await resolveTrapEffect({owner:defender,hand:placedHand,trapInstance:removedSlot,triggerContext:context,forcedDetonation:false});
+      await afterTrapResolved(defender,placedHand);
       render();
 
       // 第4章の空振りは、選択画面で選んだ時ではなく
@@ -13586,6 +13704,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           addLog(`「憤怒」により攻撃対象がランダムに${handNames[defender]}の${handNames[targetHand]}へ変更された。`);
         }
       }
+      if(!options.preventTargetChange&&!state.temp[attacker]?.dance&&hasAttachment(attacker,attackHand,"idCurse")){
+        const candidates=[{owner:attacker,hand:otherHand(attackHand)},{owner:otherPlayer(attacker),hand:"L"},{owner:otherPlayer(attacker),hand:"R"}].filter(x=>!(x.owner===attacker&&x.hand===attackHand)&&isAlive(x.owner,x.hand));
+        if(candidates.length){const chosen=candidates[Math.floor(Math.random()*candidates.length)];defender=chosen.owner;targetHand=chosen.hand;addLog(`「イド」により攻撃対象が${handNames[defender]}の${handNames[targetHand]}へ変更された。`);}
+      }
 
       const danceActive = !!state.temp[attacker]?.dance;
       // 乱舞は攻撃行動枠を使う「置換攻撃」であり、通常攻撃の履歴・予約を消費しない。
@@ -13658,7 +13780,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
        * 防御側の軽減・増加は、その後のreceivedAmountとして別に処理する。
        */
       const normalBasePower = state[attacker][attackHand];
-      let immutable = hasImmutableCurse(attacker, attackHand);
+      let immutable = hasImmutableCurse(attacker, attackHand)||hasAttachment(attacker,attackHand,"superEgo");
       const goldRushBase = countHandCards(attacker);
       const basePower = goldRushActive ? goldRushBase : normalBasePower;
       const attackReplacementKind = danceActive ? "result" : goldRushActive ? "amount" : null;
@@ -13737,9 +13859,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (attackModifierLogsApply && resonance && state.temp[attacker]?.crescendo) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴した通常攻撃で加える本数+2。`);
       if (attackModifierLogsApply && resonance && hasAttachment(attacker, attackHand, "largo")) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴した通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、通常攻撃で加える本数-1。`);
-      const ignoresDefenderBoard = defender === otherPlayer(attacker) && ignoresOpponentBoardEffects(attacker);
+      const ignoresDefenderBoard = defender === otherPlayer(attacker) && ignoresOpponentBoardEffects(attacker,attackHand);
       if (ignoresDefenderBoard) {
-        addLog(`${handNames[attacker]}の「強行突破」により、相手側の加護・呪縛効果を無視する。`);
+        const reason=hasAttachment(attacker,attackHand,"superEgo")?"スーパーエゴ":hasAttachment(attacker,attackHand,"egoBlessing")?"エゴ":state.temp[attacker]?.breakthrough?"強行突破":"攻撃効果";
+        addLog(`${handNames[attacker]}の「${reason}」により、相手側の設置効果を無視する。`);
       }
 
       let context = { defender, targetHand, attacker, attackHand, incomingPower: power };
@@ -13805,7 +13928,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, false);
         resonanceBonus = redirectedBonus;
         resonance = redirectedResonance;
-        immutable = hasImmutableCurse(attacker, attackHand);
+        immutable = hasImmutableCurse(attacker, attackHand)||hasAttachment(attacker,attackHand,"superEgo");
         attackPowerResult = calculateFinalAttackPower();
         power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
@@ -13829,7 +13952,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         render();
       }
 
-      if (!danceActive && hasAttachment(defender, targetHand, "villainMark")) {
+      if (!danceActive && !ignoresDefenderBoard && hasAttachment(defender, targetHand, "villainMark")) {
         trapPowerDelta += 1;
         attackPowerResult = calculateFinalAttackPower();
         power = attackPowerResult.finalAttackPower;
@@ -13970,7 +14093,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const romanOpponentHandProtected=isRomanOpponentTarget(attacker,defender);
       const total = before + power;
       const reducingAttack = power < 0;
-      const overflowWouldApply = !romanOpponentHandProtected&&!reducingAttack && total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
+      const overflowWouldApply = !ignoresDefenderBoard&&!romanOpponentHandProtected&&!reducingAttack && total >= 7 && hasAttachment(defender, targetHand, "overflowCurse");
       const guardWouldApply = !romanOpponentHandProtected&&!reducingAttack && total >= 5 && !overflowWouldApply && state.temp[defender].guard;
       const lightningZeroActive = !!state.temp[attacker].lightningZeroAtFive;
       const berserkerZeroActive = state.berserkerTurns[attacker] > 0;
@@ -13994,7 +14117,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       } else if (lightningZeroActive && total >= 5) {
         resolvedFinal = 0;
         addLog(`「雷撃」の充電Lv.10効果により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過計算をせず0になった。`);
-      } else if (total >= 5 && hasAttachment(defender,targetHand,"sniperBlessing")) {
+      } else if (!ignoresDefenderBoard&&total >= 5 && hasAttachment(defender,targetHand,"sniperBlessing")) {
         resolvedFinal=0;
         addLog(`「狙撃の加護」により、${handNames[defender]}の${handNames[targetHand]}は5以上になったため0になった。`);
       } else {
@@ -14017,6 +14140,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if(defender===otherPlayer(attacker)&&before>0&&resolvedFinal===0)state.temp[attacker].opponentZeroedThisTurn=true;
       if (guardWouldApply) state.temp[defender].guard = false;
       render();
+      if(!danceActive&&!ignoresDefenderBoard){
+        for(const slot of [...state.traps[defender][targetHand]])if(trapCardId(slot)==="trauma"){slot.count=Number(slot.count||0)+1;addLog(`「トラウマ」のカウントが${slot.count}になった。`);if(slot.count>=4){state[defender][targetHand]=0;resolvedFinal=0;clearBrokenTraps(defender);break;}}
+        if(state[defender][otherHand(targetHand)]>0&&hasAttachment(defender,targetHand,"displacement"))await addFingersWithCalculation(defender,otherHand(targetHand),1,"ディスプレイスメント",true,{sourcePlayer:defender});
+      }
 
       // 攻撃判定後：囮、踏み止まりなど。攻撃結果置換も同じ1攻撃1罠処理を使う。
       const afterTrapResult = await resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower:power,attackTotal:total,resolvedFinal,trapUsed,ignoresDefenderBoard});
@@ -14038,6 +14165,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       const finalTargetWasOpponent = defender === otherPlayer(attacker);
       const finalTargetWasZero = resolvedFinal === 0;
+      if(!danceActive&&finalTargetWasOpponent&&finalTargetWasZero){const index=state.traps[attacker][attackHand].findIndex(slot=>trapCardId(slot)==="egoBlessing");if(index>=0){const previous=state.traps[attacker][attackHand][index],evolved=makeTrapInstance("superEgo",attacker);evolved.id=trapInstanceId(previous)||evolved.id;state.traps[attacker][attackHand][index]=evolved;addLog(`「エゴ」が「スーパーエゴ」へ変化した。`);}}
 
       if (selfRighteousActive && !finalTargetWasZero && state[attacker][attackHand] > 0) {
         await addFingersWithCalculation(attacker, attackHand, 2, "独善の反動");
@@ -14136,18 +14264,14 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
     function clearBrokenTraps(player) {
       for (const hand of ["L", "R"]) {
+        if (state[player][hand] === 0) { ensureV169State(); processGriefZero(player,hand); }
         if (state[player][hand] === 0 && state.traps[player][hand].length > 0) {
-          const count = state.traps[player][hand].length;
-          state.traps[player][hand].forEach(slot => {
-            const cardId = trapCardId(slot);
-            const instanceId = trapInstanceId(slot);
-            if (instanceId) state.revealedTrapIds.delete(instanceId);
-            if (cardId) state.discard[player].push(cardId);
-          });
-          state.traps[player][hand] = [];
+          const count=state.traps[player][hand].length;
+          for(let i=state.traps[player][hand].length-1;i>=0;i--){const slot=state.traps[player][hand][i];if(isFixedAttachment(slot)&&CARD_LIBRARY[trapCardId(slot)]?.curse){state.traps[player][hand].splice(i,1);slot.originalHand=hand;state.fixedCurseRetreats[player][hand].unshift(slot);}else discardAttachment(player,hand,i,{reason:"手が0",allowFixed:true});}
           addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下のカード${count}枚が捨て札になった。`);
         }
       }
+      restoreFixedCurses(player);refreshGriefState(player);
     }
 
     async function split(player, left, right, show = true) {
@@ -14211,6 +14335,7 @@ async function endTurn(reason="unspecified") {
     return;
   }
   const endingPlayer=state.turn;
+  await resolveV169EndTurnAttachments(endingPlayer);
   await resolveTimedBombsAtTurnEnd(endingPlayer);
   vanishTurnEndCards(endingPlayer);
   state.cardLocks[endingPlayer]=(state.cardLocks[endingPlayer]||[]).map(lock=>({...lock,turnsRemaining:Number(lock.turnsRemaining||0)-1})).filter(lock=>lock.turnsRemaining>0);
@@ -16283,7 +16408,9 @@ async function endTurn(reason="unspecified") {
     elements.cancelBtn.addEventListener("click", async () => {
       if(isFriendInteractionBlocking())return;
       if (state.turn === "human" && state.temp.human.setupMode && !state.gameOver) {
+        const copiedSetup=!!state.temp.human.setupFromCopiedEffect;
         state.temp.human.setupMode = false;
+        state.temp.human.setupFromCopiedEffect = false;
         state.mode = "attack";
         state.selectedAttackHand = null;
         state.selectedTrapCardIndex = null;
@@ -16294,9 +16421,9 @@ async function endTurn(reason="unspecified") {
         state.pendingSwapFirst = null;
         elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
-        setMessage("仕込みを終了しました。相手にターンを渡します。");
+        setMessage(copiedSetup?"仕込みの効果処理を完了しました。":"仕込みを終了しました。相手にターンを渡します。");
         render();
-        await endTurn();
+        if(!copiedSetup)await endTurn();
         return;
       }
       state.mode = "attack";
