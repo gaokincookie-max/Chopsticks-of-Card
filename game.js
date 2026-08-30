@@ -2111,6 +2111,7 @@ const CARD_LIBRARY = {
       curseDiscardHistory: [],
       curseDiscardSequence: 0,
       fixedCurseRetreats: {human:{L:[],R:[]},cpu:{L:[],R:[]}},
+      themeRetreats: {human:{L:null,R:null},cpu:{L:null,R:null}},
       repetitionFreeCurse: {human:null,cpu:null},
       activeExtraAction: { human: false, cpu: false },
       pendingAcceleration: { human: 0, cpu: 0 },
@@ -2298,9 +2299,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v169b-stability";
+    const LATEST_NEWS_ID = "v169c-apathy-theme-fix";
 
     const UPDATE_NEWS = [
+      {id:"v169c-apathy-theme-fix",version:"v169c",date:"2026-08-30",title:"アパシーと題目復元を修正",summary:"実カード使用の判定と、題目系特殊加護の復元処理を修正しました。",featured:true,tags:["fix"],items:["アパシーがデバリュエーション・コンディショニングによる効果設置へ誤反応する問題を修正","マジックミラーで反射された呪縛の通常使用後にもアパシーが正しく発動するよう修正","手が0になった後に題目系特殊加護が復元されてもコンプレックスが新規設置として反応しないよう修正","題目復元状態をオンラインcanonical stateへ同期"]},
       {id:"v169b-stability",version:"v169b",date:"2026-08-30",title:"心理学カードと設置処理を安定化",summary:"コピー効果・設置物・オンライン選択の接続不具合を修正しました。",featured:true,tags:["update","fix","online"],items:["びっくり箱のpayloadを選択完了まで待つよう改善し、攻撃で0になった手では発動しないよう修正","孤立・アパシー・フィクゼーションの設置物相互作用を修正","呪縛の除去・押し出し・移動処理を共通化","コンプレックスの題目・反射呪縛・銛の新規設置検知を改善","エゴ・スーパーエゴの相手盤面効果無視とログを修正","グリーフ・コンディショニング・デバリュエーションの処理を安定化"]},
       {id:"v169a-fixes",version:"v169a",date:"2026-08-30",title:"v169 不具合修正",summary:"心理学カードと呪縛処理の不具合・仕様漏れを修正しました。",featured:true,tags:["update","fix"],items:["グリーフが設置物のない手の0化でも発動するよう修正","ホメオスタシスが0の手を復活させないよう修正","ターン終了時に消えた後続設置物を発動しないよう修正","デバリュエーションの満杯時置換と加護個体選択を修正","エゴ・スーパーエゴでトラウマとディスプレイスメントを正しく無視","フラッシュバックの同名呪縛履歴管理を改善"]},
       {id:"v169-psychology-curses",version:"v169",date:"2026-08-30",title:"心理学カードと呪縛システムを拡張",summary:"心理学をモチーフにした新カード15枚と生成カード「スーパーエゴ」を追加しました。",featured:true,tags:["update","new","system"],items:["心理学をモチーフにした新カード15枚を追加","生成カード「スーパーエゴ」を追加","呪縛の設置者・捨て札・履歴・固定状態を共通管理","びっくり箱の仕込み条件をカード単体で分かる本文へ改善","起爆・強制起爆の順番と正面対象を本文へ明記","置き土産の攻撃で0になった時という発動条件を明記","関連UIとオンラインcanonical stateを拡張"]},
@@ -4385,7 +4387,7 @@ const CARD_LIBRARY = {
         log: [...state.log],
         lastAction: state.lastAction ? cloneJson(state.lastAction) : null
       };
-      ensureV169State();snapshot.curseDiscardHistory=state.curseDiscardHistory.map(entry=>({...cloneJson(entry),sourceSide:friendSideForLocalPlayer(entry.sourcePlayer),attachedSide:friendSideForLocalPlayer(entry.attachedPlayer),sourcePlayer:undefined,attachedPlayer:undefined}));snapshot.curseDiscardSequence=state.curseDiscardSequence;snapshot.curseDiscardLedger={host:cloneJson(state.curseDiscardLedger[role==="host"?"human":"cpu"]),guest:cloneJson(state.curseDiscardLedger[role==="guest"?"human":"cpu"])};snapshot.fixedCurseRetreats={host:serializeAttachmentBucketsForFriend(state.fixedCurseRetreats[role==="host"?"human":"cpu"]),guest:serializeAttachmentBucketsForFriend(state.fixedCurseRetreats[role==="guest"?"human":"cpu"])};
+      ensureV169State();snapshot.curseDiscardHistory=state.curseDiscardHistory.map(entry=>({...cloneJson(entry),sourceSide:friendSideForLocalPlayer(entry.sourcePlayer),attachedSide:friendSideForLocalPlayer(entry.attachedPlayer),sourcePlayer:undefined,attachedPlayer:undefined}));snapshot.curseDiscardSequence=state.curseDiscardSequence;snapshot.curseDiscardLedger={host:cloneJson(state.curseDiscardLedger[role==="host"?"human":"cpu"]),guest:cloneJson(state.curseDiscardLedger[role==="guest"?"human":"cpu"])};snapshot.fixedCurseRetreats={host:serializeAttachmentBucketsForFriend(state.fixedCurseRetreats[role==="host"?"human":"cpu"]),guest:serializeAttachmentBucketsForFriend(state.fixedCurseRetreats[role==="guest"?"human":"cpu"])};snapshot.themeRetreats={host:cloneJson(state.themeRetreats[role==="host"?"human":"cpu"]),guest:cloneJson(state.themeRetreats[role==="guest"?"human":"cpu"])};
       snapshot[role] = serializeFriendSide("human");
       snapshot[otherRole] = serializeFriendSide("cpu");
       return snapshot;
@@ -4686,7 +4688,7 @@ const CARD_LIBRARY = {
         state.friendSurrenderNoticeAcknowledged = matchMeta?.surrenderNoticeAcknowledged ?? state.friendSurrenderNoticeAcknowledged ?? null;
         state.log = [...(snapshot.log || [])];
         state.lastAction = snapshot.lastAction ? cloneJson(snapshot.lastAction) : null;
-        ensureV169State();state.curseDiscardHistory=(snapshot.curseDiscardHistory||[]).map(entry=>({...cloneJson(entry),sourcePlayer:localPlayerForFriendSide(entry.sourceSide)||entry.sourcePlayer,attachedPlayer:localPlayerForFriendSide(entry.attachedSide)||entry.attachedPlayer}));state.curseDiscardSequence=Number(snapshot.curseDiscardSequence||0);if(snapshot.curseDiscardLedger){state.curseDiscardLedger.human=cloneJson(snapshot.curseDiscardLedger[state.friendRole]||[]);state.curseDiscardLedger.cpu=cloneJson(snapshot.curseDiscardLedger[otherFriendRole()]||[]);}if(snapshot.fixedCurseRetreats){state.fixedCurseRetreats.human=deserializeAttachmentBucketsForFriend(snapshot.fixedCurseRetreats[state.friendRole]||{L:[],R:[]});state.fixedCurseRetreats.cpu=deserializeAttachmentBucketsForFriend(snapshot.fixedCurseRetreats[otherFriendRole()]||{L:[],R:[]});}
+        ensureV169State();state.curseDiscardHistory=(snapshot.curseDiscardHistory||[]).map(entry=>({...cloneJson(entry),sourcePlayer:localPlayerForFriendSide(entry.sourceSide)||entry.sourcePlayer,attachedPlayer:localPlayerForFriendSide(entry.attachedSide)||entry.attachedPlayer}));state.curseDiscardSequence=Number(snapshot.curseDiscardSequence||0);if(snapshot.curseDiscardLedger){state.curseDiscardLedger.human=cloneJson(snapshot.curseDiscardLedger[state.friendRole]||[]);state.curseDiscardLedger.cpu=cloneJson(snapshot.curseDiscardLedger[otherFriendRole()]||[]);}if(snapshot.fixedCurseRetreats){state.fixedCurseRetreats.human=deserializeAttachmentBucketsForFriend(snapshot.fixedCurseRetreats[state.friendRole]||{L:[],R:[]});state.fixedCurseRetreats.cpu=deserializeAttachmentBucketsForFriend(snapshot.fixedCurseRetreats[otherFriendRole()]||{L:[],R:[]});}if(snapshot.themeRetreats){state.themeRetreats.human=cloneJson(snapshot.themeRetreats[state.friendRole]||{L:null,R:null});state.themeRetreats.cpu=cloneJson(snapshot.themeRetreats[otherFriendRole()]||{L:null,R:null});}
         state.friendLastAppliedRevision = Math.max(state.friendLastAppliedRevision, Number(revision || 0));
         state.friendSyncRevision = Math.max(state.friendSyncRevision, Number(revision || 0));
         state.mode = "attack";
@@ -6785,7 +6787,7 @@ const CARD_LIBRARY = {
       state.decks.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.curseDiscardHistory=[];state.curseDiscardSequence=0;state.fixedCurseRetreats={human:{L:[],R:[]},cpu:{L:[],R:[]}};state.repetitionFreeCurse={human:null,cpu:null};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
+      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.curseDiscardHistory=[];state.curseDiscardSequence=0;state.fixedCurseRetreats={human:{L:[],R:[]},cpu:{L:[],R:[]}};state.themeRetreats={human:{L:null,R:null},cpu:{L:null,R:null}};state.repetitionFreeCurse={human:null,cpu:null};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
       state.temp.human.cardActionUsed = false;
@@ -9496,7 +9498,7 @@ function wrapFinger(value) {
     function ensureV169State(){
       ensureV168State();state.curseDiscardHistory||=[];state.curseDiscardSequence=Number(state.curseDiscardSequence||0);
       state.curseDiscardLedger||={human:[],cpu:[]};state.curseDiscardLedger.human||=[];state.curseDiscardLedger.cpu||=[];
-      state.fixedCurseRetreats||={human:{L:[],R:[]},cpu:{L:[],R:[]}};for(const p of ["human","cpu"]){state.fixedCurseRetreats[p]||={L:[],R:[]};state.fixedCurseRetreats[p].L||=[];state.fixedCurseRetreats[p].R||=[];}
+      state.fixedCurseRetreats||={human:{L:[],R:[]},cpu:{L:[],R:[]}};state.themeRetreats||={human:{L:null,R:null},cpu:{L:null,R:null}};for(const p of ["human","cpu"]){state.fixedCurseRetreats[p]||={L:[],R:[]};state.fixedCurseRetreats[p].L||=[];state.fixedCurseRetreats[p].R||=[];state.themeRetreats[p]||={L:null,R:null};if(!("L" in state.themeRetreats[p]))state.themeRetreats[p].L=null;if(!("R" in state.themeRetreats[p]))state.themeRetreats[p].R=null;}
       state.repetitionFreeCurse||={human:null,cpu:null};
     }
     function attachmentSourcePlayer(slot,attachedOwner){return typeof slot==="object"&&slot?.sourcePlayer?slot.sourcePlayer:attachedOwner;}
@@ -9532,14 +9534,14 @@ function wrapFinger(value) {
     function canPlaceAttachmentAfterReplacement(user,owner,hand,cardId,replacedSlot){if(!replacedSlot||!canReplaceAttachment(replacedSlot)||state[owner][hand]<=0)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;if(card&&(card.trap||card.blessing)&&!card.themeBlessing&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return state.traps[owner][hand].length-1<2;}
     async function chooseDevaluationBlessing(player,items){if(player!=="human")return items[0]||null;return chooseOneMagicalCard("デバリュエーション","置換する加護を選んでください。",items.map(item=>({id:item.cardId,key:trapInstanceId(item.slot),location:`${handNames[item.owner]}の${handNames[item.hand]}・設置枠${item.index+1}`,...item})));}
     function canUseDevaluation(player){return replaceableBlessings(player).length>0&&state.hands[player].some(id=>CARD_LIBRARY[id]?.curse);}
-    async function useDevaluation(player){let changed=0;while(true){const blessings=replaceableBlessings(player);if(!blessings.length)break;const blessing=await chooseDevaluationBlessing(player,blessings);if(!blessing)break;const currentIndex=state.traps[blessing.owner][blessing.hand].findIndex(slot=>trapInstanceId(slot)===trapInstanceId(blessing.slot));if(currentIndex<0)continue;const eligible=state.hands[player].map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentAfterReplacement(player,blessing.owner,blessing.hand,x.id,blessing.slot));if(!eligible.length)break;let picked=eligible[0];if(player==="human"){const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"同じ位置へ設置する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);if(!picked)break;}discardAttachment(blessing.owner,blessing.hand,currentIndex,{reason:"デバリュエーション"});const beforeIds=new Set(state.traps[blessing.owner][blessing.hand].map(trapInstanceId));if(!await setTrap(player,blessing.hand,picked.index,blessing.owner,{freeCardAction:true}))break;const slots=state.traps[blessing.owner][blessing.hand];if(state[blessing.owner][blessing.hand]>0){const installedIndex=slots.findIndex(slot=>!beforeIds.has(trapInstanceId(slot)));if(installedIndex>=0&&installedIndex!==currentIndex){const [installed]=slots.splice(installedIndex,1);slots.splice(Math.min(currentIndex,slots.length),0,installed);}}changed++;if(player==="human"){const again=await showGameConfirmation({title:"デバリュエーション",message:"続けて置換しますか？",confirmLabel:"続ける",cancelLabel:"終了"});if(!again)break;}if(changed>=4)break;}state.mode="attack";render();return changed>0;}
+    async function useDevaluation(player){let changed=0;while(true){const blessings=replaceableBlessings(player);if(!blessings.length)break;const blessing=await chooseDevaluationBlessing(player,blessings);if(!blessing)break;const currentIndex=state.traps[blessing.owner][blessing.hand].findIndex(slot=>trapInstanceId(slot)===trapInstanceId(blessing.slot));if(currentIndex<0)continue;const eligible=state.hands[player].map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentAfterReplacement(player,blessing.owner,blessing.hand,x.id,blessing.slot));if(!eligible.length)break;let picked=eligible[0];if(player==="human"){const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"同じ位置へ設置する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);if(!picked)break;}discardAttachment(blessing.owner,blessing.hand,currentIndex,{reason:"デバリュエーション"});const beforeIds=new Set(state.traps[blessing.owner][blessing.hand].map(trapInstanceId));if(!await setTrap(player,blessing.hand,picked.index,blessing.owner,{freeCardAction:true,countsAsActualCardUse:false}))break;const slots=state.traps[blessing.owner][blessing.hand];if(state[blessing.owner][blessing.hand]>0){const installedIndex=slots.findIndex(slot=>!beforeIds.has(trapInstanceId(slot)));if(installedIndex>=0&&installedIndex!==currentIndex){const [installed]=slots.splice(installedIndex,1);slots.splice(Math.min(currentIndex,slots.length),0,installed);}}changed++;if(player==="human"){const again=await showGameConfirmation({title:"デバリュエーション",message:"続けて置換しますか？",confirmLabel:"続ける",cancelLabel:"終了"});if(!again)break;}if(changed>=4)break;}state.mode="attack";render();return changed>0;}
     function displayAttachmentName(slot){const id=trapCardId(slot),name=CARD_LIBRARY[id]?.name||id,prefix=isFixedAttachment(slot)?"🔒 ":"";if(id==="trauma")return `${prefix}${name}：${Number(slot?.count||0)}`;if(id==="superEgo")return `${prefix}${name}（減衰${Number(slot?.decay||1)}）`;return `${prefix}${name}`;}
     function processGriefZero(owner,zeroHand){const bearing=otherHand(zeroHand);for(const slot of state.traps[owner][bearing])if(trapCardId(slot)==="grief"&&!slot.otherZeroActive){slot.otherZeroActive=true;const candidates=getDiscardCandidates(owner,"cardEffect");for(let i=candidates.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]];}for(const item of candidates.slice(0,3).sort((a,b)=>b.index-a.index)){const iid=handCardInstanceId(owner,item.index),id=state.hands[owner].splice(item.index,1)[0];state.handCardInstances[owner].splice(item.index,1);forgetHandCardMetadata(owner,iid);if(id)state.discard[owner].push(id);}addLog(`「グリーフ」により${handNames[owner]}は手札を最大3枚捨てた。`);}}
     function refreshGriefState(owner){for(const hand of ["L","R"])if(state[owner][otherHand(hand)]>0)for(const slot of state.traps[owner][hand])if(trapCardId(slot)==="grief")slot.otherZeroActive=false;}
     async function resolveV169EndTurnAttachments(player){for(const hand of ["L","R"]){const snapshot=[...state.traps[player][hand]];for(const slot of snapshot){if(state[player][hand]<=0||!state.traps[player][hand].includes(slot))continue;const id=trapCardId(slot);if(id==="homeostasis"){if(state[player][hand]<=0||state[player][otherHand(hand)]<=0)continue;const before=state[player][hand],other=state[player][otherHand(hand)];if(before>other)state[player][hand]=Math.max(0,before-1);else if(before<other)state[player][hand]=normalize(before+1,player,hand);if(before!==state[player][hand])addLog(`「ホメオスタシス」により${handNames[hand]}が${before}→${state[player][hand]}。`);}else if(id==="superEgo"){const before=state[player][hand],decay=Math.max(1,Number(slot.decay||1));state[player][hand]=Math.max(0,before-decay);if(state[player][hand]>0)slot.decay=decay+1;addLog(`「スーパーエゴ」の減衰${decay}：${before}→${state[player][hand]}。`);}if(state[player][hand]===0)clearBrokenTraps(player);}}clearBrokenTraps(player);}
     async function resolveApathyAfterCardUse(player){for(const hand of ["L","R"])for(const slot of state.traps[player][hand])if(trapCardId(slot)==="apathy"&&state[player][hand]>1){const before=state[player][hand];state[player][hand]=before-1;addLog(`「アパシー」により${handNames[player]}の${handNames[hand]}が${before}→${state[player][hand]}。`);}render();}
     async function afterActualCardUseResolved(player,context={}){if(context.effectOnly)return;await resolveApathyAfterCardUse(player);}
-    async function afterTrapResolved(owner,hand){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return;const conditioners=state.traps[owner][hand].filter(slot=>trapCardId(slot)==="conditioning");for(const conditioning of conditioners){const source=attachmentSourcePlayer(conditioning,owner),eligible=state.hands[source].map((id,index)=>({id,index,instanceId:handCardInstanceId(source,index)})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand(source,owner,hand,x.id));if(!eligible.length)continue;let picked=null;if(source==="human"){const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)continue;const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);}else if(state.battleMode==="friend"){const response=await requestRemoteFriendDecision("conditioning",{hand,matchId:state.friendMatchId});if(response?.use&&response.instanceId)picked=eligible.find(x=>x.instanceId===response.instanceId);}else picked=eligible[0];if(picked)await setTrap(source,hand,picked.index,owner,{freeCardAction:true});break;}}
+    async function afterTrapResolved(owner,hand){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return;const conditioners=state.traps[owner][hand].filter(slot=>trapCardId(slot)==="conditioning");for(const conditioning of conditioners){const source=attachmentSourcePlayer(conditioning,owner),eligible=state.hands[source].map((id,index)=>({id,index,instanceId:handCardInstanceId(source,index)})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand(source,owner,hand,x.id));if(!eligible.length)continue;let picked=null;if(source==="human"){const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)continue;const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);}else if(state.battleMode==="friend"){const response=await requestRemoteFriendDecision("conditioning",{hand,matchId:state.friendMatchId});if(response?.use&&response.instanceId)picked=eligible.find(x=>x.instanceId===response.instanceId);}else picked=eligible[0];if(picked)await setTrap(source,hand,picked.index,owner,{freeCardAction:true,countsAsActualCardUse:false});break;}}
 
     function ensureV168State(){
       state.pendingTrapCardExtraUses ||= {human:0,cpu:0};
@@ -9927,10 +9929,15 @@ function wrapFinger(value) {
 
     function ensureThemeAttachments(player) {
       const id = themeCardId(player);
+      ensureV169State();
       state.discard[player]=state.discard[player].filter(cardId=>!CARD_LIBRARY[cardId]?.themeBlessing);
       for (const hand of ["L", "R"]) {
         state.traps[player][hand] = state.traps[player][hand].filter(slot => !CARD_LIBRARY[trapCardId(slot)]?.themeBlessing || trapCardId(slot) === id);
-        if (id && state[player][hand] > 0 && !state.traps[player][hand].some(slot => trapCardId(slot) === id)) installAttachmentInstance(player,hand,makeTrapInstance(id,player));
+        if (!id) { state.themeRetreats[player][hand]=null; continue; }
+        if (state[player][hand] <= 0) continue;
+        if (state.traps[player][hand].some(slot => trapCardId(slot) === id)) { state.themeRetreats[player][hand]=null; continue; }
+        const restoring = state.themeRetreats[player][hand] === id;
+        if (installAttachmentInstance(player,hand,makeTrapInstance(id,player),{notify:!restoring}) && restoring) state.themeRetreats[player][hand]=null;
       }
     }
 
@@ -12904,6 +12911,7 @@ function renderLastAction() {
       if(!canUseCardUnderRule(player,cardId,{silent:player!=="human"}))return false;
       const setupActive = !!state.temp[player].setupMode;
       const repetitionFree=!!options.freeCardAction||!!(card.curse&&state.repetitionFreeCurse?.[player]===cardId);
+      const countsAsActualCardUse=options.countsAsActualCardUse!==false;
       if (setupActive && !card.trap) return false;
       if (card.blessing && owner !== player) return false;
       if (card.curse && owner === player) return false;
@@ -12944,6 +12952,7 @@ function renderLastAction() {
           state.mode = "setupTrap";
         }
         state.selectedTrapCardIndex = null;
+        if(countsAsActualCardUse)await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
         render();
         return true;
       }
@@ -12982,7 +12991,7 @@ function renderLastAction() {
       }
       triggerChemicalGeneration(player, cardId);
       recordRondoUse(player,cardId);
-      await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
+      if(countsAsActualCardUse)await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
       render();
 
       // 罠・加護・呪縛は、対象の手を選んで設置できた後に
@@ -14267,7 +14276,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         if (state[player][hand] === 0) { ensureV169State(); processGriefZero(player,hand); }
         if (state[player][hand] === 0 && state.traps[player][hand].length > 0) {
           const count=state.traps[player][hand].length;
-          for(let i=state.traps[player][hand].length-1;i>=0;i--){const slot=state.traps[player][hand][i];if(isFixedAttachment(slot)&&CARD_LIBRARY[trapCardId(slot)]?.curse){state.traps[player][hand].splice(i,1);slot.originalHand=hand;state.fixedCurseRetreats[player][hand].unshift(slot);}else discardAttachment(player,hand,i,{reason:"手が0",allowFixed:true});}
+          for(let i=state.traps[player][hand].length-1;i>=0;i--){const slot=state.traps[player][hand][i],slotId=trapCardId(slot);if(CARD_LIBRARY[slotId]?.themeBlessing)state.themeRetreats[player][hand]=slotId;if(isFixedAttachment(slot)&&CARD_LIBRARY[slotId]?.curse){state.traps[player][hand].splice(i,1);slot.originalHand=hand;state.fixedCurseRetreats[player][hand].unshift(slot);}else discardAttachment(player,hand,i,{reason:"手が0",allowFixed:true});}
           addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下のカード${count}枚が捨て札になった。`);
         }
       }
