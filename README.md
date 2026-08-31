@@ -1,4 +1,23 @@
-# 割り箸カードゲーム v169d
+# 割り箸カードゲーム v170
+
+
+## v170
+
+- オンライン進行をAction / Decision / Recoveryの共通基盤へ整理しました。
+- 期限切れDecisionは質問側・回答側のどちらでもtransactionで確定でき、遅延回答は上書きできません。
+- 回答側の選択UIもDecision終了時に自動解除します。
+- Recovery Watchdogが期限切れDecision・turn-start claim・handoff再試行を監視します。
+- 予告状などの対話型ターン開始効果はcanonical turn-start確定後に解決します。
+- 通常攻撃・カード使用・handoffをActionメタデータで追跡し、再接続時の診断と復旧を強化しました。
+
+
+## v169e
+
+- オンライン割り込みに競合安全な応答タイムアウトを追加しました。通常の判断は30秒、貿易・強制・コンディショニングは45秒です。
+- タイムアウトはFirestore transactionで pending 状態にだけ確定し、遅れて届いた回答が結果を上書きしないようにしました。
+- 貿易・強制の時間切れ時は secure interaction / 秘密選択を後片付けします。
+- 再接続時に期限切れの pending interaction を回収します。
+- 受信FXで例外が起きても演出キューと入力状態を復旧し、対戦進行を止めにくくしました。
 
 ## v169d
 

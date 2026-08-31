@@ -2259,6 +2259,17 @@ const CARD_LIBRARY = {
       friendHandledInterruptIds: new Set(),
       friendHandledFxIds: new Set(),
       friendFxQueue: Promise.resolve(),
+      friendEngineVersion: 170,
+      friendConnectionState: "ready",
+      friendActiveAction: null,
+      friendActiveIncomingDecision: null,
+      friendDecisionWatchdogTimer: null,
+      friendDecisionWatchdogBusy: false,
+      friendHandoffRetryTimer: null,
+      friendRecoveryBusy: false,
+      friendLastProgressAtMs: 0,
+      friendLastProgressSignature: "",
+      friendActionSequence: 0,
       friendPostMatchChoice: null,
       friendPostMatchResolutionId: null,
       friendPostMatchResolving: false,
@@ -2299,9 +2310,11 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v169d-online-stability";
+    const LATEST_NEWS_ID = "v170-online-foundation";
 
     const UPDATE_NEWS = [
+      {id:"v170-online-foundation",version:"v170",date:"2026-08-31",title:"オンライン対戦基盤を再構築",summary:"オンライン進行をAction・Decision・Recoveryの共通基盤へ整理し、通信断・時間切れ・二重受信・ターン交代失敗から自動復旧しやすい構造へ刷新しました。",featured:true,tags:["update","online","system"],items:["オンライン選択をDecision Managerへ集約し、回答・時間切れ・キャンセルを共通状態として管理","期限切れDecisionは質問側・回答側のどちらからでも競合安全に確定可能","回答側の選択UIもDecision終了時に自動解除し、古いモーダルが操作を塞がないよう改善","Decision・handoff・turn startを監視するRecovery Watchdogを追加し、一時的な通信失敗を自動再試行","予告状などの対話型ターン開始効果をturn-start canonical確定後に処理できるよう整理","通常攻撃・カード使用・ターン交代を共通Actionメタデータで追跡し、二重処理・再接続時の復旧判定を強化","オンライン演出失敗はゲーム進行から分離し、入力ロックを残さない設計を維持","既存のCPU戦・ローマンギミック杯・カードルールは変更なし"]},
+      {id:"v169e-online-timeout-safety",version:"v169e",date:"2026-08-31",title:"オンライン待機の時間切れと演出復旧を追加",summary:"相手の応答が途絶えた場合でも対戦を継続できるよう、競合安全な時間切れ処理と演出キュー保護を追加しました。",featured:true,tags:["fix","online"],items:["通常のオンライン選択は30秒、貿易・強制・コンディショニングは45秒を上限として待機","時間切れはFirestore上のpending割り込みをtransactionで確定し、遅れて届いた回答で上書きされないよう改善","貿易・強制の時間切れ時はsecure interactionや秘密選択データも安全に後片付け","再接続時に期限切れpending割り込みを自動回収","受信演出で例外が発生しても演出キューと入力状態を復旧して対戦処理を継続" ]},
       {id:"v169d-online-stability",version:"v169d",date:"2026-08-31",title:"オンライン対戦を安定化",summary:"攻撃後のターン交代、相手ターン中の選択、オンライン割り込み、予告状からの仕込みを修正しました。",featured:true,tags:["fix","online"],items:["通常攻撃後に相手へターンが渡らず進行不能になる経路を修正","貿易・強制・コンディショニングで相手ターン中でも必要な手札選択ができるよう修正","解決済みオンライン割り込みがターン終了を止め続ける問題を修正","割り込み送信・回答失敗時に永久待機しにくいよう復旧処理を改善","予告状などの効果コピーから仕込みを使った際、仕込み終了で元の効果処理へ戻るよう修正","攻撃結果のcanonical同期を攻撃回数消費後へ整理し、handoff失敗時は攻撃済みターンへ巻き戻さず再試行"]},
       {id:"v169c-apathy-theme-fix",version:"v169c",date:"2026-08-30",title:"アパシーと題目復元を修正",summary:"実カード使用の判定と、題目系特殊加護の復元処理を修正しました。",featured:true,tags:["fix"],items:["アパシーがデバリュエーション・コンディショニングによる効果設置へ誤反応する問題を修正","マジックミラーで反射された呪縛の通常使用後にもアパシーが正しく発動するよう修正","手が0になった後に題目系特殊加護が復元されてもコンプレックスが新規設置として反応しないよう修正","題目復元状態をオンラインcanonical stateへ同期"]},
       {id:"v169b-stability",version:"v169b",date:"2026-08-30",title:"心理学カードと設置処理を安定化",summary:"コピー効果・設置物・オンライン選択の接続不具合を修正しました。",featured:true,tags:["update","fix","online"],items:["びっくり箱のpayloadを選択完了まで待つよう改善し、攻撃で0になった手では発動しないよう修正","孤立・アパシー・フィクゼーションの設置物相互作用を修正","呪縛の除去・押し出し・移動処理を共通化","コンプレックスの題目・反射呪縛・銛の新規設置検知を改善","エゴ・スーパーエゴの相手盤面効果無視とログを修正","グリーフ・コンディショニング・デバリュエーションの処理を安定化"]},
@@ -4758,7 +4771,7 @@ const CARD_LIBRARY = {
         const currentRevision=Number(remoteMatch?.stateRevision||0);
         committedRevision=Math.max(currentRevision,state.friendSyncRevision,state.friendLastAppliedRevision)+1;
         const update={
-          "match.version":150,
+          "match.version":170,
           "match.stateRevision":committedRevision,
           "match.state":snapshot,
           "match.turnSide":state.friendTurnOwner||snapshot.turnSide,
@@ -4798,7 +4811,7 @@ const CARD_LIBRARY = {
 
     async function forcePublishFriendStateNow(reason = "state change") {
       if (state.battleMode !== "friend" || state.friendApplyingRemoteState) return;
-      if(state.friendTurnStartAtomicActive){state.friendTurnStartDeferredPublish=true;return;}
+      if(state.friendTurnStartAtomicActive && Number(state.friendTurnStartAppliedSerial||0) < Number(state.friendTurnSerial||0)){state.friendTurnStartDeferredPublish=true;return;}
       try {
         state.friendLastPublishedSignature = "";
         await publishFriendStateNow();
@@ -4894,7 +4907,7 @@ const CARD_LIBRARY = {
         const roomSnap=await transaction.get(roomRef);
         const match=roomSnap.exists()?roomSnap.data()?.match:null;
         if(!canFlushCommittedTurnStartSideEffect(match,{...guard,matchId}))return;
-        transaction.update(roomRef,{"match.version":51,"match.fx":fx,updatedAt:fb.serverTimestamp()});
+        transaction.update(roomRef,{"match.version":170,"match.fx":fx,updatedAt:fb.serverTimestamp()});
         committed=true;
       });
       if(committed&&flushId){state.friendTurnStartFlushedSideEffectIds.add(flushId);if(state.friendTurnStartFlushedSideEffectIds.size>160)state.friendTurnStartFlushedSideEffectIds.delete(state.friendTurnStartFlushedSideEffectIds.values().next().value);}
@@ -5080,15 +5093,271 @@ const CARD_LIBRARY = {
       }
       state.friendFxQueue = state.friendFxQueue
         .catch(() => {})
-        .then(() => playIncomingFriendFx(fx))
+        .then(async () => {
+          // 受信FXの例外でキュー自体を止めない。animating はFX側で取得された場合だけ保険で解除する。
+          const wasAnimating = !!state.animating;
+          try {
+            await playIncomingFriendFx(fx);
+          } finally {
+            if (!wasAnimating && state.animating) state.animating = false;
+            render();
+          }
+        })
         .catch(error => {
           console.error("PVP fx receive failed", error);
+          setMessage("オンライン演出の再生に失敗しましたが、対戦処理は継続します。");
+          render();
         });
     }
 
     function makeFriendInterruptId() {
       return `${state.friendRole || "side"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
+
+
+    // v170 Online Foundation -------------------------------------------------
+    // オンラインの待機・復旧・Action追跡をカード効果から切り離す共通層。
+    function makeFriendActionId(type="action") {
+      state.friendActionSequence = Number(state.friendActionSequence || 0) + 1;
+      return `act-${state.friendRole || "side"}-${type}-${Number(state.friendTurnSerial || 0)}-${Date.now()}-${state.friendActionSequence}`;
+    }
+
+    function currentFriendEngineMeta(){
+      const match=state.friendRoomData?.match||{};
+      return {action:match.action||null,handoff:match.handoff||null,lastCompletedActionId:match.lastCompletedActionId||null};
+    }
+
+    async function updateFriendEngineMeta(patch={}, {expectedActionId=null}={}){
+      if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendMatchId)return false;
+      const fb=firebaseApi();if(!fb)return false;
+      const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let committed=false;
+      await fb.runTransaction(fb.db,async transaction=>{
+        const snap=await transaction.get(roomRef);if(!snap.exists())return;
+        const match=snap.data()?.match;if(!match||getFriendMatchId(match)!==state.friendMatchId)return;
+        if(expectedActionId&&match.action?.id!==expectedActionId)return;
+        const update={"match.version":170,"match.schemaVersion":170,updatedAt:fb.serverTimestamp()};
+        for(const [key,value] of Object.entries(patch))update[`match.${key}`]=cloneJson(value);
+        transaction.update(roomRef,update);committed=true;
+      });
+      return committed;
+    }
+
+    const OnlineActionManager={
+      async begin(type,payload={}){
+        if(state.battleMode!=="friend"||state.friendApplyingRemoteState)return null;
+        const actorSide=state.friendRole, id=makeFriendActionId(type);
+        const action={id,type,actorSide,turnSerial:Number(state.friendTurnSerial||0),phase:"resolving",step:"started",payload:cloneJson(payload),appliedStepIds:[],createdAtMs:Date.now(),updatedAtMs:Date.now()};
+        state.friendActiveAction=action;
+        // Action metadata is recovery information only. Failure must never block gameplay.
+        updateFriendEngineMeta({action}).catch(error=>console.warn("PVP action begin metadata failed",error));
+        return action;
+      },
+      async step(action,step){
+        if(!action||state.battleMode!=="friend")return;
+        action.step=step;action.updatedAtMs=Date.now();state.friendActiveAction=action;
+        updateFriendEngineMeta({action},{expectedActionId:action.id}).catch(()=>{});
+      },
+      async complete(action){
+        if(!action||state.battleMode!=="friend")return;
+        const completed={...action,phase:"completed",step:"completed",updatedAtMs:Date.now()};
+        state.friendActiveAction=null;
+        updateFriendEngineMeta({action:null,lastCompletedActionId:action.id},{expectedActionId:action.id}).catch(()=>{});
+        return completed;
+      },
+      async cancel(action){
+        if(!action||state.battleMode!=="friend")return;
+        state.friendActiveAction=null;
+        updateFriendEngineMeta({action:null},{expectedActionId:action.id}).catch(()=>{});
+      }
+    };
+
+    function clearDecisionUiArtifacts(){
+      try{elements.trapChoice?.classList.remove("show");}catch(_){ }
+      try{if(elements.trapSkipBtn)elements.trapSkipBtn.onclick=null;}catch(_){ }
+      try{document.querySelector(".magical-choice-overlay.show")?.classList.remove("show");}catch(_){ }
+      if(pendingGameChoiceResolve){const done=pendingGameChoiceResolve;pendingGameChoiceResolve=null;try{done(null);}catch(_){ }}
+      if(pendingHandCardSelection){
+        const pending=pendingHandCardSelection;pendingHandCardSelection=null;
+        try{elements.handCardSelectionBox?.classList.remove("active");}catch(_){ }
+        if(state.mode==="handCardSelection")state.mode="attack";
+        try{pending.resolve([]);}catch(_){ }
+      }
+      if(pendingBoardHandSelection){
+        const pending=pendingBoardHandSelection;pendingBoardHandSelection=null;
+        if(state.mode==="boardHandSelection")state.mode="attack";
+        try{pending.resolve(null);}catch(_){ }
+      }
+      render();
+    }
+
+    function cancelIncomingFriendDecision(interruptId,reason="cancelled"){
+      const active=state.friendActiveIncomingDecision;
+      if(!active||active.id!==interruptId)return false;
+      state.friendActiveIncomingDecision=null;
+      clearDecisionUiArtifacts();
+      try{active.resolveTerminal({cancelled:true,reason});}catch(_){ }
+      return true;
+    }
+
+    function incomingFriendDecisionTerminalPromise(interrupt){
+      return new Promise(resolve=>{
+        state.friendActiveIncomingDecision={id:interrupt.id,type:interrupt.type,resolveTerminal:resolve,deadlineMs:Number(interrupt.decisionDeadlineMs||0)};
+      });
+    }
+
+    async function runIncomingFriendDecision(interrupt, uiPromise, timeoutValue){
+      const terminalPromise=incomingFriendDecisionTerminalPromise(interrupt);
+      try{
+        const winner=await Promise.race([
+          Promise.resolve(uiPromise).then(value=>({kind:"ui",value})),
+          terminalPromise.then(value=>({kind:"terminal",value}))
+        ]);
+        return winner.kind==="ui"?winner.value:timeoutValue;
+      }finally{
+        if(state.friendActiveIncomingDecision?.id===interrupt.id)state.friendActiveIncomingDecision=null;
+      }
+    }
+
+    const DecisionManager={
+      async requestRemote(type,payload={},options={}){
+        const action=state.friendActiveAction;
+        if(action)await OnlineActionManager.step(action,"waiting-decision");
+        try{return await requestRemoteFriendDecision(type,payload,options);}
+        finally{if(action&&state.friendActiveAction?.id===action.id)await OnlineActionManager.step(action,"resolving");}
+      },
+      cancelRemoteUi(interruptId,reason){return cancelIncomingFriendDecision(interruptId,reason);},
+      timeoutMs(type,options={}){return friendDecisionTimeoutMs(type,options);}
+    };
+
+    function friendDecisionIsTerminal(interrupt){return !!interrupt&&["resolved","timed_out","cancelled","finalized"].includes(interrupt.status);}
+
+    async function expireFriendDecision(interrupt,{retry=true}={}){
+      if(!interrupt?.id||interrupt.status!=="pending")return false;
+      const deadline=Number(interrupt.decisionDeadlineMs||0);if(!deadline||Date.now()<deadline)return false;
+      const response={timeout:true,errorCode:"TIMEOUT"};
+      try{
+        const committed=await resolveFriendInterruptAtomically(interrupt.id,response,{timeout:true});
+        if(committed){
+          cancelIncomingFriendDecision(interrupt.id,"timeout");
+          const waiting=state.friendInterruptWaiting;
+          if(waiting?.id===interrupt.id){state.friendInterruptWaiting=null;waiting.resolve(response);}
+          return true;
+        }
+      }catch(error){console.warn("PVP decision expire failed",error);}
+      if(retry)setTimeout(()=>{const latest=canonicalFriendInterrupt();if(latest?.id===interrupt.id)expireFriendDecision(latest,{retry:false}).catch(()=>{});},1200);
+      return false;
+    }
+
+
+    function friendProgressSignature(){
+      const match=state.friendRoomData?.match||{};
+      const interrupt=match.interrupt||null;
+      return JSON.stringify({
+        matchId:state.friendMatchId,
+        rev:Number(match.stateRevision||state.friendLastAppliedRevision||0),
+        serial:Number(match.turnSerial||state.friendTurnSerial||0),
+        owner:match.turnOwner||state.friendTurnOwner||null,
+        started:match.turnStarted===true,
+        applied:Number(match.turnStartAppliedSerial??state.friendTurnStartAppliedSerial??0),
+        interrupt:interrupt?`${interrupt.id}:${interrupt.status}`:null,
+        action:match.action?`${match.action.id}:${match.action.phase}:${match.action.step}`:null,
+        handoff:match.handoff?`${match.handoff.id}:${match.handoff.status}`:null,
+        gameOver:!!(match.state?.gameOver||state.gameOver)
+      });
+    }
+
+    const OnlineInvariantChecker={
+      inspect(){
+        if(state.battleMode!=="friend"||!state.friendMatchStarted||state.gameOver)return {ok:true,reason:"inactive"};
+        const match=state.friendRoomData?.match||{};
+        const interrupt=canonicalFriendInterrupt();
+        const pendingDecision=interrupt?.status==="pending"&&Number(interrupt.decisionDeadlineMs||0)>0;
+        const actionActive=!!match.action&&!["completed","cancelled"].includes(match.action.phase);
+        const handoffActive=!!match.handoff&&match.handoff.status!=="completed";
+        const owner=match.turnOwner||state.friendTurnOwner;
+        const serial=Number(match.turnSerial||state.friendTurnSerial||0);
+        const applied=Number(match.turnStartAppliedSerial??state.friendTurnStartAppliedSerial??0);
+        const ownerCanProgress=!!owner&&(owner!==state.friendRole||applied>=serial||match.turnStarted===false||state.friendTurnClaimInFlight);
+        if(pendingDecision||actionActive||handoffActive||ownerCanProgress)return {ok:true};
+        return {ok:false,reason:"no-progress-path",owner,serial,applied};
+      }
+    };
+
+
+    async function recoverLocalActionFromCanonical(match){
+      const action=match?.action;
+      if(!action||action.actorSide!==state.friendRole||state.gameOver||canonicalFriendInterrupt()?.status==="pending")return false;
+      const age=Date.now()-Number(action.updatedAtMs||action.createdAtMs||0);
+      if(age<2500)return false;
+      state.friendActiveAction=action;
+      // Promise stackは復元しない。canonical stateを正本に、再開可能な通常操作へ収束させる。
+      await updateFriendEngineMeta({action:null,lastCompletedActionId:action.id},{expectedActionId:action.id}).catch(()=>false);
+      state.friendActiveAction=null;
+      if(state.friendTurnOwner!==state.friendRole)return true;
+      state.mode="attack";state.animating=false;clearDecisionUiArtifacts();
+      const attacksUsed=Number(state.temp?.human?.attacksUsed||0),attackLimit=Number(state.temp?.human?.attackLimit??1);
+      if(action.type==="normalAttack"&&attackLimit>0&&attacksUsed>=attackLimit){
+        setMessage("通信復旧後、完了済みの攻撃からターン交代を再開します。");render();
+        setTimeout(()=>{if(state.battleMode==="friend"&&!state.gameOver&&state.friendTurnOwner===state.friendRole)resolveActionDone().catch(error=>console.error("PVP recovered attack finalize failed",error));},0);
+      }else if(action.type==="playCard"&&state.pendingTerminalEnd?.human){
+        setTimeout(()=>{if(state.battleMode==="friend"&&!state.gameOver&&state.friendTurnOwner===state.friendRole)endTurn("recovered terminal card").catch(error=>console.error("PVP recovered card finalize failed",error));},0);
+      }else{
+        setMessage("通信状態を再同期しました。現在のcanonical stateから対戦を続行できます。");render();
+      }
+      return true;
+    }
+
+    const RecoveryManager={
+      async resync(reason="watchdog"){
+        if(state.friendRecoveryBusy||state.battleMode!=="friend"||!state.friendRoomId)return false;
+        state.friendRecoveryBusy=true;state.friendConnectionState="resyncing";
+        try{
+          const fb=firebaseApi();if(!fb)return false;
+          const snap=await fb.getDoc(fb.doc(fb.db,"rooms",state.friendRoomId));if(!snap.exists())return false;
+          const data=snap.data();if(!data?.match||getFriendMatchId(data.match)!==state.friendMatchId)return false;
+          state.friendRoomData=data;
+          const interrupt=data.match.interrupt;
+          if(interrupt?.status==="pending"&&Number(interrupt.decisionDeadlineMs||0)>0&&Date.now()>=Number(interrupt.decisionDeadlineMs))await expireFriendDecision(interrupt);
+          if(interrupt&&friendDecisionIsTerminal(interrupt))cancelIncomingFriendDecision(interrupt.id,interrupt.status);
+          const revision=Number(data.match.stateRevision||0);
+          if(data.match.state&&revision>=Number(state.friendLastAppliedRevision||0))await applyFriendCanonicalSnapshot(data.match.state,revision,data.match);
+          if(!state.gameOver&&data.match.turnOwner===state.friendRole)await ensureFriendLocalTurnStarted({allowRetry:true});
+          await recoverLocalActionFromCanonical(data.match);
+          state.friendConnectionState="ready";
+          return true;
+        }catch(error){state.friendConnectionState="reconnecting";console.warn(`[PVP recovery:${reason}]`,error);return false;}
+        finally{state.friendRecoveryBusy=false;render();}
+      }
+    };
+
+    async function runFriendRecoveryWatchdog(){
+      if(state.friendDecisionWatchdogBusy||state.battleMode!=="friend"||!state.friendRoomId||!state.friendMatchStarted)return;
+      state.friendDecisionWatchdogBusy=true;
+      try{
+        const signature=friendProgressSignature();
+        if(signature!==state.friendLastProgressSignature){state.friendLastProgressSignature=signature;state.friendLastProgressAtMs=Date.now();}
+        const interrupt=canonicalFriendInterrupt();
+        if(interrupt?.status==="pending"&&Number(interrupt.decisionDeadlineMs||0)>0&&Date.now()>=Number(interrupt.decisionDeadlineMs))await expireFriendDecision(interrupt);
+        if(interrupt&&friendDecisionIsTerminal(interrupt))cancelIncomingFriendDecision(interrupt.id,interrupt.status);
+        // turn claim / handoff recovery are idempotent; watchdog may safely poke them.
+        if(!state.gameOver&&state.friendTurnOwner===state.friendRole&&Number(state.friendTurnStartAppliedSerial||0)<Number(state.friendTurnSerial||0))await ensureFriendLocalTurnStarted({allowRetry:true});
+        if(!state.gameOver&&state.turn==="cpu"&&state.friendTurnOwner===otherFriendRole(state.friendRole)&&state.friendTurnStarted===false&&state.friendHandoffRetryTimer==null){
+          // canonical owner already points away from us; no extra write is necessary.
+        }
+        const invariant=OnlineInvariantChecker.inspect();
+        const handoff=state.friendRoomData?.match?.handoff;
+        const staleHandoff=!!handoff&&Date.now()-Number(handoff.updatedAtMs||0)>8000;
+        if(!invariant.ok||staleHandoff||state.friendConnectionState!=="ready"){await RecoveryManager.resync(invariant.reason||"stale-handoff");state.friendLastProgressAtMs=Date.now();}
+      }finally{state.friendDecisionWatchdogBusy=false;}
+    }
+
+    function startFriendRecoveryWatchdog(){
+      if(state.friendDecisionWatchdogTimer)clearInterval(state.friendDecisionWatchdogTimer);
+      state.friendDecisionWatchdogTimer=setInterval(()=>runFriendRecoveryWatchdog().catch(error=>console.warn("PVP watchdog failed",error)),3000);
+    }
+
+    function stopFriendRecoveryWatchdog(){if(state.friendDecisionWatchdogTimer)clearInterval(state.friendDecisionWatchdogTimer);state.friendDecisionWatchdogTimer=null;state.friendDecisionWatchdogBusy=false;}
+    // -----------------------------------------------------------------------
 
     function friendInteractionPrivateRef(actionId){
       const fb=firebaseApi();if(!fb||!state.friendRoomId||!fb.uid)return null;
@@ -5115,7 +5384,7 @@ const CARD_LIBRARY = {
     async function deletePrivateTradeChoice(actionId){const fb=firebaseApi(),ref=friendInteractionPrivateRef(actionId);if(fb&&ref)await fb.deleteDoc(ref).catch(()=>{});}
 
     async function writeFriendInterrupt(interrupt) {
-      if(state.friendTurnStartAtomicActive){state.friendTurnStartPendingInterruptWrites.push(cloneJson(interrupt));return true;}
+      if(state.friendTurnStartAtomicActive && Number(state.friendTurnStartAppliedSerial||0) < Number(state.friendTurnSerial||0)){state.friendTurnStartPendingInterruptWrites.push(cloneJson(interrupt));return true;}
       return writeFriendInterruptNow(interrupt,{matchId:state.friendMatchId});
     }
 
@@ -5132,18 +5401,92 @@ const CARD_LIBRARY = {
         const roomSnap=await transaction.get(roomRef);
         const match=roomSnap.exists()?roomSnap.data()?.match:null;
         if(!canFlushCommittedTurnStartSideEffect(match,{...guard,matchId}))return;
-        transaction.update(roomRef,{"match.version":51,"match.interrupt":interrupt,updatedAt:fb.serverTimestamp()});
+        transaction.update(roomRef,{"match.version":170,"match.interrupt":interrupt,updatedAt:fb.serverTimestamp()});
         committed=true;
       });
       if(committed&&flushId)state.friendTurnStartFlushedSideEffectIds.add(flushId);
       return committed;
     }
 
+    const FRIEND_DECISION_TIMEOUT_DEFAULT_MS = 30000;
+    const FRIEND_DECISION_TIMEOUT_LONG_MS = 45000;
+
+    function friendDecisionTimeoutMs(type, options = {}) {
+      const explicit = Number(options.timeoutMs);
+      if (Number.isFinite(explicit) && explicit >= 5000) return explicit;
+      if (["forceCard", "trade", "conditioning"].includes(type)) return FRIEND_DECISION_TIMEOUT_LONG_MS;
+      return FRIEND_DECISION_TIMEOUT_DEFAULT_MS;
+    }
+
+    async function resolveFriendInterruptAtomically(interruptId, response, { timeout = false } = {}) {
+      const fb = firebaseApi();
+      if (!fb || !state.friendRoomId || !interruptId) return false;
+      const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
+      const expectedMatchId = state.friendMatchId;
+      let committed = false;
+      await fb.runTransaction(fb.db, async transaction => {
+        const roomSnap = await transaction.get(roomRef);
+        const match = roomSnap.exists() ? roomSnap.data()?.match : null;
+        if (!match || getFriendMatchId(match) !== expectedMatchId) return;
+        const current = match.interrupt;
+        if (!current || current.id !== interruptId || current.status !== "pending") return;
+        if (timeout) {
+          const deadline=Number(current.decisionDeadlineMs||0);
+          if (![current.requesterSide,current.targetSide].includes(state.friendRole) || !deadline || Date.now() < deadline) return;
+        } else if (current.targetSide !== state.friendRole) return;
+        transaction.update(roomRef, {
+          "match.version": 170,
+          "match.interrupt": {
+            ...current,
+            status: timeout ? "timed_out" : "resolved",
+            response: cloneJson(response || {}),
+            resolvedBy: timeout ? current.requesterSide : state.friendRole,
+            resolvedAtMs: Date.now(),
+            timedOut: !!timeout
+          },
+          updatedAt: fb.serverTimestamp()
+        });
+        committed = true;
+      });
+      return committed;
+    }
+
+    async function timeoutFriendInterrupt(interruptId, type) {
+      const response = { timeout: true, errorCode: "TIMEOUT" };
+      try {
+        const current=canonicalFriendInterrupt();
+        const committed = current?.id===interruptId ? await expireFriendDecision(current,{retry:true}) : false;
+        if (!committed) return false;
+        addLog(`相手の「${type || "オンライン選択"}」への応答が時間切れになったため、不発として処理を続行した。`);
+        const waiting = state.friendInterruptWaiting;
+        if (waiting?.id === interruptId) {
+          state.friendInterruptWaiting = null;
+          waiting.resolve(response);
+        }
+        setMessage("相手の応答が時間切れになったため、不発として対戦を続行します。");
+        render();
+        return true;
+      } catch (error) {
+        console.error("PVP interrupt timeout finalize failed", error);
+        return false;
+      }
+    }
+
+    async function cleanupTimedOutFriendInteraction(interruptOrId, type = null) {
+      const interruptId = typeof interruptOrId === "string" ? interruptOrId : interruptOrId?.id;
+      const interactionType = type || (typeof interruptOrId === "object" ? interruptOrId?.type : null);
+      if (!interruptId) return;
+      if (interactionType === "trade") await deletePrivateTradeChoice(interruptId);
+      if (["trade", "forceCard"].includes(interactionType)) await deleteSecureFriendInteraction(interruptId);
+      await clearResolvedFriendInterrupt(interruptId);
+    }
+
     async function requestRemoteFriendDecision(type, payload = {}, options = {}) {
       if (state.battleMode !== "friend" || !state.friendRole) return null;
-      if(state.friendTurnStartAtomicActive)throw new Error("ターン開始stateの確定前にはオンライン判断を要求できません。");
+      if (state.friendTurnStartAtomicActive && Number(state.friendTurnStartAppliedSerial||0) < Number(state.friendTurnSerial||0)) throw new Error("ターン開始stateの確定前にはオンライン判断を要求できません。");
       if (state.friendInterruptWaiting) throw new Error("別のオンライン割り込み処理を待っています。");
       const id = options.id || makeFriendInterruptId();
+      const timeoutMs = friendDecisionTimeoutMs(type, options);
       const interrupt = {
         id,
         type,
@@ -5151,42 +5494,44 @@ const CARD_LIBRARY = {
         targetSide: otherFriendRole(),
         status: "pending",
         payload: cloneJson(payload),
-        createdAtMs: Date.now()
+        createdAtMs: Date.now(),
+        decisionDeadlineMs: Date.now() + timeoutMs
       };
+      let timerId = null;
       const resultPromise = new Promise((resolve, reject) => {
-        state.friendInterruptWaiting = { id, resolve, reject, type };
+        state.friendInterruptWaiting = { id, resolve, reject, type, timeoutMs };
       });
       try {
-        const committed=await writeFriendInterrupt(interrupt);
-        if(committed===false)throw new Error("オンライン割り込みを送信できませんでした。");
-      } catch(error) {
-        if(state.friendInterruptWaiting?.id===id)state.friendInterruptWaiting=null;
+        const committed = await writeFriendInterrupt(interrupt);
+        if (committed !== true) throw new Error("オンライン割り込みを送信できませんでした。");
+      } catch (error) {
+        if (state.friendInterruptWaiting?.id === id) state.friendInterruptWaiting = null;
         render();
         throw error;
       }
-      setMessage("相手の判断を待っています…");
+      timerId = setTimeout(() => {
+        timeoutFriendInterrupt(id, type).catch(error => console.error("PVP interrupt timeout failed", error));
+      }, timeoutMs);
+      setMessage(`相手の判断を待っています…（最大${Math.ceil(timeoutMs / 1000)}秒）`);
       render();
-      const response=await resultPromise;
-      if(!options.deferClear && !["forceCard","trade"].includes(type))await clearResolvedFriendInterrupt(id);
-      return response;
+      try {
+        const response = await resultPromise;
+        if (!options.deferClear && !["forceCard", "trade"].includes(type)) await clearResolvedFriendInterrupt(id);
+        return response;
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
     }
 
     async function respondFriendInterrupt(interrupt, response) {
       if (!interrupt?.id) return false;
-      const committed=await writeFriendInterrupt({
-        ...interrupt,
-        status: "resolved",
-        response: cloneJson(response),
-        resolvedBy: state.friendRole,
-        resolvedAtMs: Date.now()
-      });
-      if(committed!==true)throw new Error("オンライン割り込みの回答を確定できませんでした。");
-      return true;
+      // pending の同一割り込みにだけ回答する。タイムアウトと遅延回答が競合しても後勝ちで上書きしない。
+      return resolveFriendInterruptAtomically(interrupt.id, response || {}, { timeout: false });
     }
 
     async function clearResolvedFriendInterrupt(interruptId) {
       if (!interruptId || state.battleMode !== "friend" || !state.friendRoomId) return;
-      if(state.friendTurnStartAtomicActive){state.friendTurnStartPendingInterruptWrites.push({__clearInterruptId:interruptId});return;}
+      if(state.friendTurnStartAtomicActive && Number(state.friendTurnStartAppliedSerial||0) < Number(state.friendTurnSerial||0)){state.friendTurnStartPendingInterruptWrites.push({__clearInterruptId:interruptId});return;}
       return clearResolvedFriendInterruptNow(interruptId,{matchId:state.friendMatchId});
     }
 
@@ -5203,7 +5548,7 @@ const CARD_LIBRARY = {
         await fb.runTransaction(fb.db,async transaction=>{
           const roomSnap=await transaction.get(roomRef);
           const remoteMatch=roomSnap.exists()?roomSnap.data()?.match:null;
-          if(remoteMatch?.interrupt?.id!==interruptId||!canFlushCommittedTurnStartSideEffect(remoteMatch,{...guard,matchId}))return;
+          if(remoteMatch?.interrupt?.id!==interruptId||!["resolved","timed_out","cancelled"].includes(remoteMatch?.interrupt?.status)||!canFlushCommittedTurnStartSideEffect(remoteMatch,{...guard,matchId}))return;
           transaction.update(roomRef,{"match.interrupt":null,updatedAt:fb.serverTimestamp()});
           if(flushId)state.friendTurnStartFlushedSideEffectIds.add(flushId);
         });
@@ -5214,13 +5559,14 @@ const CARD_LIBRARY = {
 
     async function handleIncomingFriendInterrupt(interrupt) {
       if (!interrupt || interrupt.status !== "pending" || interrupt.targetSide !== state.friendRole) return;
+      if(Number(interrupt.decisionDeadlineMs||0)>0&&Date.now()>=Number(interrupt.decisionDeadlineMs)){await expireFriendDecision(interrupt);return;}
       if (state.friendHandledInterruptIds.has(interrupt.id) || state.friendInterruptHandling) return;
       state.friendInterruptHandling = true;
       try {
         let response = null;
         const payload = interrupt.payload || {};
         if (interrupt.type === "nekodamashi") {
-          const use = await askHumanNekodamashi({ attacker: "cpu", targetHand: payload.targetHand || "L", isRapidFire: !!payload.isRapidFire });
+          const use = await runIncomingFriendDecision(interrupt, askHumanNekodamashi({ attacker: "cpu", targetHand: payload.targetHand || "L", isRapidFire: !!payload.isRapidFire }), false);
           response = { use: !!use };
         } else if (interrupt.type === "manualTrap") {
           const localCandidates = (payload.candidates || []).map(item => ({
@@ -5229,21 +5575,21 @@ const CARD_LIBRARY = {
             cardId: item.cardId,
             card: CARD_LIBRARY[item.cardId]
           })).filter(item => item.card);
-          const chosen = await askHumanTrapChoice(localCandidates, {
+          const chosen = await runIncomingFriendDecision(interrupt, askHumanTrapChoice(localCandidates, {
             attacker: "cpu",
             attackHand: payload.attackHand || "L",
             targetHand: payload.targetHand || "L",
             isRapidFire: !!payload.isRapidFire
-          });
+          }), null);
           response = chosen
             ? { chosen: { placedHand: chosen.placedHand, index: chosen.index, cardId: chosen.cardId }, skipped: false }
             : { chosen: null, skipped: true };
         } else if (interrupt.type === "magicMirror") {
-          const use = await askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId);
+          const use = await runIncomingFriendDecision(interrupt, askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId), false);
           response = { use: !!use };
         } else if (interrupt.type === "terminalAppeal") {
           const terminalCard = CARD_LIBRARY[payload.cardId] || { name: payload.cardName || "終端カード" };
-          const cardId = await askHumanTerminalAppeal("human", terminalCard);
+          const cardId = await runIncomingFriendDecision(interrupt, askHumanTerminalAppeal("human", terminalCard), null);
           response = { cardId: cardId || null };
         } else if(interrupt.type==="conditioning"){
           const targetHand=["L","R"].includes(payload.hand)?payload.hand:"L";const eligible=state.hands.human.map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand("human","cpu",targetHand,x.id));
@@ -5262,8 +5608,10 @@ const CARD_LIBRARY = {
           response={matchId:state.friendMatchId,actionId:interrupt.id,targetCommit:commit,targetReveal:{instanceId,nonce}};
           await respondSecureFriendInteraction(interrupt.id,{instanceId,commit,nonce});
         }
-        await respondFriendInterrupt(interrupt, response || {});
+        const answered = await respondFriendInterrupt(interrupt, response || {});
+        // false は requester 側タイムアウト等が先に確定しただけなので正常終了扱い。
         state.friendHandledInterruptIds.add(interrupt.id);
+        if (!answered) setMessage("相手側で選択時間が終了したため、この回答は適用されませんでした。");
       } catch (error) {
         console.error("PVP interrupt handling failed", error);
         try {
@@ -5280,7 +5628,7 @@ const CARD_LIBRARY = {
 
     function consumeResolvedFriendInterrupt(interrupt) {
       const waiting = state.friendInterruptWaiting;
-      if (!waiting || !interrupt || interrupt.id !== waiting.id || interrupt.status !== "resolved") return false;
+      if (!waiting || !interrupt || interrupt.id !== waiting.id || !["resolved","timed_out","cancelled"].includes(interrupt.status)) return false;
       state.friendInterruptWaiting = null;
       if (interrupt.response?.error) waiting.reject(new Error(interrupt.response.error));
       else waiting.resolve(interrupt.response || {});
@@ -5305,8 +5653,13 @@ const CARD_LIBRARY = {
 
     async function resumeOwnedFriendInteraction(interrupt){
       if(!interrupt||interrupt.requesterSide!==state.friendRole)return false;
-      if(interrupt.status==="pending"){setMessage(interrupt.type==="trade"?"相手の貿易選択を待っています…":"相手がカードを選択しています…");render();return true;}
-      if(interrupt.status!=="resolved"||state.friendInterruptWaiting)return false;
+      if(interrupt.status==="pending"){
+        if(Number(interrupt.decisionDeadlineMs||0)>0&&Date.now()>=Number(interrupt.decisionDeadlineMs)){await timeoutFriendInterrupt(interrupt.id,interrupt.type);return true;}
+        const remain=Math.max(1,Math.ceil((Number(interrupt.decisionDeadlineMs||Date.now()+FRIEND_DECISION_TIMEOUT_DEFAULT_MS)-Date.now())/1000));
+        setMessage(interrupt.type==="trade"?`相手の貿易選択を待っています…（最大あと${remain}秒）`:`相手がカードを選択しています…（最大あと${remain}秒）`);render();return true;
+      }
+      if(!["resolved","timed_out","cancelled"].includes(interrupt.status)||state.friendInterruptWaiting)return false;
+      if(interrupt.status==="timed_out"||interrupt.response?.timeout){await cleanupTimedOutFriendInteraction(interrupt);setMessage("オンライン選択が時間切れになったため、不発として対戦を続行します。");return true;}
       const key=`resume:${interrupt.id}`;if(state.friendHandledInterruptIds.has(key))return true;state.friendHandledInterruptIds.add(key);
       try{
         if(interrupt.type==="forceCard")await resolveOnlineForceResponse(interrupt);
@@ -5467,6 +5820,7 @@ const CARD_LIBRARY = {
     function clearFriendRoomLocalState({clearUrl=true}={}){
       clearFriendRoomConnectTimer();
       clearFriendRoomHeartbeat();
+      stopFriendRecoveryWatchdog();
       state.friendUnsubscribe?.();state.friendUnsubscribe=null;
       state.friendRoomId=null;state.friendRoomShortCode=null;state.friendRoomData=null;state.friendRole=null;resetFriendMatchEntryState();
       if(elements.roomEntryControls)elements.roomEntryControls.hidden=false;
@@ -5495,6 +5849,7 @@ const CARD_LIBRARY = {
       },8000);
       const roomRef = fb.doc(fb.db, "rooms", roomId);
       startFriendRoomHeartbeat(roomId);
+      startFriendRecoveryWatchdog();
       state.friendUnsubscribe = fb.onSnapshot(roomRef, (snapshot) => {
         clearFriendRoomConnectTimer();
         if (!snapshot.exists()) {
@@ -5510,6 +5865,7 @@ const CARD_LIBRARY = {
           return;
         }
         state.friendRoomData = data;
+        state.friendConnectionState="ready";state.friendLastProgressAtMs=Date.now();state.friendLastProgressSignature=friendProgressSignature();
         elements.friendLobbyMessage.textContent = "Firebaseと同期中です。別タブや友達の端末で入室すると、この表示が更新されます。";
         updateFriendLobbyView(data);
         updateBattleResultPostMatchView(data?.postMatch);
@@ -5536,6 +5892,7 @@ const CARD_LIBRARY = {
         const fx = data?.match?.fx;
         if (fx) handleIncomingFriendFx(fx);
         const interrupt = data?.match?.interrupt;
+        if (interrupt && friendDecisionIsTerminal(interrupt)) cancelIncomingFriendDecision(interrupt.id, interrupt.status);
         if (interrupt) {
           if (!consumeResolvedFriendInterrupt(interrupt)) {
             const interactionTask=interrupt.requesterSide===state.friendRole?resumeOwnedFriendInteraction(interrupt):handleIncomingFriendInterrupt(interrupt);
@@ -5572,7 +5929,9 @@ const CARD_LIBRARY = {
         }
       }, (error) => {
         clearFriendRoomConnectTimer();
+        state.friendConnectionState="reconnecting";
         console.error("[FriendRoom] listener failed",{operation:"listen",roomId,role:state.friendRole,code:error?.code,message:error?.message});
+        setTimeout(()=>RecoveryManager.resync("listener-error").catch(()=>{}),1200);
         elements.friendLobbyMessage.textContent = "部屋情報を取得できませんでした。もう一度入り直してください。";
         if(elements.roomStatusText)elements.roomStatusText.textContent=`部屋ID：${state.friendRoomShortCode||"------"} / 状態：接続エラー`;
       });
@@ -5920,6 +6279,12 @@ const CARD_LIBRARY = {
       state.friendTurnStartClaimedAtMs = 0;
       state.friendInterruptWaiting = null;
       state.friendInterruptHandling = false;
+      state.friendActiveIncomingDecision = null;
+      state.friendActiveAction = null;
+      state.friendLastProgressAtMs = 0;
+      state.friendLastProgressSignature = "";
+      if(state.friendHandoffRetryTimer)clearTimeout(state.friendHandoffRetryTimer);state.friendHandoffRetryTimer=null;
+      stopFriendRecoveryWatchdog();
       state.friendHandledInterruptIds = new Set();
       state.matchResult = null;
       state.matchResultReason = null;
@@ -5983,7 +6348,8 @@ const CARD_LIBRARY = {
       const createdAtMs = Date.now();
       const nextSequence = Number(data.matchSequence || 0) + 1;
       const match = {
-        version: 153,
+        version: 170,
+        schemaVersion: 170,
         regulation: cloneJson(data.regulation||DEFAULT_REGULATION),
         matchId: `${state.friendRoomId}-${nextSequence}-${createdAtMs}`,
         matchSequence: nextSequence,
@@ -6001,6 +6367,10 @@ const CARD_LIBRARY = {
         host: initialHost,
         guest: initialGuest,
         stateRevision: 1,
+        action: null,
+        handoff: null,
+        lastCompletedActionId: null,
+        interrupt: null,
         state: {
           schemaVersion: 3,
           host: emptySideState(initialHost),
@@ -9281,6 +9651,11 @@ function wrapFinger(value) {
       }
       for (let i = 0; i < draws; i++) drawCard(player);
 
+      // v170: canonicalなターン開始を先に確定し、その後に対話型開始時効果を解決する。
+      // これにより予告状→貿易/強制/仕込み等もturn-start atomicと衝突しない。
+      if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey&&Number(state.friendTurnStartAppliedSerial||0)<Number(options.friendTurnSerial||state.friendTurnSerial||0)){
+        await commitFriendTurnStartApplied(options);
+      }
       await resolveAdvanceNotice(player);
       if(state.furiosoSkipActive[player]){
         state.furiosoSkipActive[player]=false;
@@ -9341,7 +9716,7 @@ function wrapFinger(value) {
       }
       if (state.mode !== "attack") {
         render();
-        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey)await commitFriendTurnStartApplied(options);
+        if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey&&Number(state.friendTurnStartAppliedSerial||0)<Number(options.friendTurnSerial||state.friendTurnSerial||0))await commitFriendTurnStartApplied(options);
         return;
       }
 
@@ -9365,7 +9740,7 @@ function wrapFinger(value) {
       }
 
       render();
-      if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey){
+      if(state.battleMode==="friend"&&player==="human"&&options.friendTurnKey&&Number(state.friendTurnStartAppliedSerial||0)<Number(options.friendTurnSerial||state.friendTurnSerial||0)){
         await commitFriendTurnStartApplied(options);
       }
       if(state.battleMode==="friend"&&player==="human"&&!state.friendApplyingRemoteState&&(!options.friendTurnToken||state.friendTurnStartAppliedSerial>=state.friendTurnSerial)){
@@ -9569,7 +9944,7 @@ function wrapFinger(value) {
     async function resolveV169EndTurnAttachments(player){for(const hand of ["L","R"]){const snapshot=[...state.traps[player][hand]];for(const slot of snapshot){if(state[player][hand]<=0||!state.traps[player][hand].includes(slot))continue;const id=trapCardId(slot);if(id==="homeostasis"){if(state[player][hand]<=0||state[player][otherHand(hand)]<=0)continue;const before=state[player][hand],other=state[player][otherHand(hand)];if(before>other)state[player][hand]=Math.max(0,before-1);else if(before<other)state[player][hand]=normalize(before+1,player,hand);if(before!==state[player][hand])addLog(`「ホメオスタシス」により${handNames[hand]}が${before}→${state[player][hand]}。`);}else if(id==="superEgo"){const before=state[player][hand],decay=Math.max(1,Number(slot.decay||1));state[player][hand]=Math.max(0,before-decay);if(state[player][hand]>0)slot.decay=decay+1;addLog(`「スーパーエゴ」の減衰${decay}：${before}→${state[player][hand]}。`);}if(state[player][hand]===0)clearBrokenTraps(player);}}clearBrokenTraps(player);}
     async function resolveApathyAfterCardUse(player){for(const hand of ["L","R"])for(const slot of state.traps[player][hand])if(trapCardId(slot)==="apathy"&&state[player][hand]>1){const before=state[player][hand];state[player][hand]=before-1;addLog(`「アパシー」により${handNames[player]}の${handNames[hand]}が${before}→${state[player][hand]}。`);}render();}
     async function afterActualCardUseResolved(player,context={}){if(context.effectOnly)return;await resolveApathyAfterCardUse(player);}
-    async function afterTrapResolved(owner,hand){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return;const conditioners=state.traps[owner][hand].filter(slot=>trapCardId(slot)==="conditioning");for(const conditioning of conditioners){const source=attachmentSourcePlayer(conditioning,owner),eligible=state.hands[source].map((id,index)=>({id,index,instanceId:handCardInstanceId(source,index)})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand(source,owner,hand,x.id));if(!eligible.length)continue;let picked=null;if(source==="human"){const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)continue;const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);}else if(state.battleMode==="friend"){const response=await requestRemoteFriendDecision("conditioning",{hand,matchId:state.friendMatchId});if(response?.use&&response.instanceId)picked=eligible.find(x=>x.instanceId===response.instanceId);}else picked=eligible[0];if(picked)await setTrap(source,hand,picked.index,owner,{freeCardAction:true,countsAsActualCardUse:false});break;}}
+    async function afterTrapResolved(owner,hand){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return;const conditioners=state.traps[owner][hand].filter(slot=>trapCardId(slot)==="conditioning");for(const conditioning of conditioners){const source=attachmentSourcePlayer(conditioning,owner),eligible=state.hands[source].map((id,index)=>({id,index,instanceId:handCardInstanceId(source,index)})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand(source,owner,hand,x.id));if(!eligible.length)continue;let picked=null;if(source==="human"){const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)continue;const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);}else if(state.battleMode==="friend"){const response=await DecisionManager.requestRemote("conditioning",{hand,matchId:state.friendMatchId});if(response?.use&&response.instanceId)picked=eligible.find(x=>x.instanceId===response.instanceId);}else picked=eligible[0];if(picked)await setTrap(source,hand,picked.index,owner,{freeCardAction:true,countsAsActualCardUse:false});break;}}
 
     function ensureV168State(){
       state.pendingTrapCardExtraUses ||= {human:0,cpu:0};
@@ -9860,7 +10235,9 @@ function wrapFinger(value) {
       if(state.battleMode==="friend"&&player==="human"){
         const actionId=makeFriendInterruptId();await createSecureFriendInteraction({actionId,type:"forceCard"});
         await forcePublishFriendStateNow("強制の選択待ち開始");
-        const response=await requestRemoteFriendDecision("forceCard",{matchId:state.friendMatchId,turnSerial:Number(state.friendTurnSerial||0)},{id:actionId,deferClear:true}),secure=await readSecureFriendInteraction(actionId);
+        const response=await DecisionManager.requestRemote("forceCard",{matchId:state.friendMatchId,turnSerial:Number(state.friendTurnSerial||0)},{id:actionId,deferClear:true});
+        if(response?.timeout){await cleanupTimedOutFriendInteraction(actionId,"forceCard");addLog("「強制」は相手の選択が時間切れになったため不発。");return false;}
+        const secure=await readSecureFriendInteraction(actionId);
         if(response?.matchId!==state.friendMatchId||response?.actionId!==actionId||secure?.status!=="responded"||secure?.targetInstanceId!==response.instanceId)return;
         const index=state.handCardInstances[o].indexOf(secure.targetInstanceId);if(index<0||!isCountedHandCard(state.hands[o][index]))return;
         state.forcedCard[o]={instanceId:secure.targetInstanceId,cardId:state.hands[o][index],pending:true,active:false};
@@ -9933,7 +10310,8 @@ function wrapFinger(value) {
         await savePrivateTradeChoice({actionId,instanceId:a.instanceId,nonce,commit:sourceCommit});
         await createSecureFriendInteraction({actionId,type:"trade",sourceCommit});
         await forcePublishFriendStateNow("貿易の選択待ち開始");
-        const response=await requestRemoteFriendDecision("trade",{matchId:state.friendMatchId,actionId,turnSerial:Number(state.friendTurnSerial||0),sourceCommit},{id:actionId,deferClear:true});
+        const response=await DecisionManager.requestRemote("trade",{matchId:state.friendMatchId,actionId,turnSerial:Number(state.friendTurnSerial||0),sourceCommit},{id:actionId,deferClear:true});
+        if(response?.timeout){await cleanupTimedOutFriendInteraction(actionId,"trade");addLog("「貿易」は相手の選択が時間切れになったため不発。");return false;}
         await resolveOnlineTradeResponse(actionId,response);return;
       }
       const o=otherPlayer(player),a=await chooseTradeCard(player),b=await chooseTradeCard(o);if(!a||!b)return;
@@ -10529,6 +10907,7 @@ function wrapFinger(value) {
 
     function chooseOneMagicalCard(title, guide, items) {
       return new Promise(resolve => {
+        pendingGameChoiceResolve = value => { pendingGameChoiceResolve = null; resolve(value); };
         const overlay = ensureMagicalChoiceOverlay();
         overlay.querySelector("h2").textContent = title;
         overlay.querySelector(".magical-choice-guide").textContent = guide;
@@ -10539,7 +10918,8 @@ function wrapFinger(value) {
         list.querySelectorAll(".magical-choice-card").forEach(button => {
           button.addEventListener("click", () => {
             overlay.classList.remove("show");
-            resolve(items.find(item => item.key === button.dataset.key));
+            const done=pendingGameChoiceResolve;pendingGameChoiceResolve=null;
+            (done||resolve)(items.find(item => item.key === button.dataset.key));
           }, { once: true });
         });
       });
@@ -10597,6 +10977,7 @@ function wrapFinger(value) {
     let pendingBoardHandSelection = null;
     let pendingHandCardSelection = null;
     let pendingNumberAllocation = null;
+    let pendingGameChoiceResolve = null;
 
     function beginBoardHandSelection(player, { owners = [player], allowZero = false, minimum = allowZero ? 0 : 1, candidateFilter = () => true, message = "手を選んでください。", cpuPick = null } = {}) {
       const candidates = [];
@@ -11428,7 +11809,7 @@ function wrapFinger(value) {
       if (owner === "human") {
         useMirror = await askHumanMagicMirrorChoice(owner, hand, cardId);
       } else if (state.battleMode === "friend") {
-        const response = await requestRemoteFriendDecision("magicMirror", { hand, cardId });
+        const response = await DecisionManager.requestRemote("magicMirror", { hand, cardId });
         useMirror = !!response?.use;
       } else {
         useMirror = true;
@@ -13093,7 +13474,7 @@ function renderLastAction() {
       if (!choices.length) return null;
       if (defender === "human") return await askHumanTerminalAppeal(defender, card);
       if (state.battleMode === "friend") {
-        const response = await requestRemoteFriendDecision("terminalAppeal", { cardId, cardName: card.name });
+        const response = await DecisionManager.requestRemote("terminalAppeal", { cardId, cardName: card.name });
         return choices.some(choice => choice.cardId === response?.cardId) ? response.cardId : null;
       }
       // CPUは強力な終端を基本的に止める。上告を優先する。
@@ -13214,6 +13595,7 @@ function renderLastAction() {
         cardExtraUses: Number(state.temp[player].cardExtraUses || 0)
       };
       if(cardId==="brawl")state.temp[player].brawlAllowanceBeforeUse={...cardAllowanceBeforeUse};
+      const onlineCardAction=(state.battleMode==="friend"&&player==="human")?await OnlineActionManager.begin("playCard",{cardId,rawCardId,handIndex}):null;
       if (state.battleMode === "friend") state.friendCardResolving = true;
       state.hands[player].splice(handIndex, 1);
       const removedHandInstance=state.handCardInstances[player].splice(handIndex,1)[0];forgetHandCardMetadata(player,removedHandInstance);
@@ -13245,6 +13627,7 @@ function renderLastAction() {
         if (player === "human") setMessage(`「${card.name}」は無効化されました。カード使用権は返されましたが、このターン同名カードは使用できません。`);
         else setMessage(`CPUの「${card.name}」は無効化され、カード使用権が返されました。`);
         render();
+        await OnlineActionManager.complete(onlineCardAction);
         return true;
       }
 
@@ -13333,8 +13716,9 @@ function renderLastAction() {
 
       // Promise型の選択効果はcard.effect()が完全解決するまでここへ戻らない。
       // 旧式の選択modeはhelper側のmodeガードにより、選択完了前には終了しない。
-      if (await maybeAutoEndTurnForNoActions(player)) return true;
+      if (await maybeAutoEndTurnForNoActions(player)) { await OnlineActionManager.complete(onlineCardAction); return true; }
 
+      await OnlineActionManager.complete(onlineCardAction);
       return true;
     }
 
@@ -13434,7 +13818,7 @@ function renderLastAction() {
       if (defender === "human") {
         use = await askHumanNekodamashi(context);
       } else if (state.battleMode === "friend") {
-        const response = await requestRemoteFriendDecision("nekodamashi", {
+        const response = await DecisionManager.requestRemote("nekodamashi", {
           targetHand: context.targetHand,
           attackHand: context.attackHand,
           isRapidFire: !!context.isRapidFire
@@ -13462,7 +13846,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       }
       if (state.battleMode === "friend") {
         try {
-          const response = await requestRemoteFriendDecision("manualTrap", {
+          const response = await DecisionManager.requestRemote("manualTrap", {
             candidates: candidates.map(info => ({ placedHand: info.placedHand, index: info.index, cardId: info.cardId })),
             attackHand: context.attackHand,
             targetHand: context.targetHand,
@@ -13727,6 +14111,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return false;
       }
       if (!isAlive(attacker, attackHand) || (!options.allowZeroTarget && !isAlive(defender, targetHand))) return false;
+      const onlineAttackAction=(state.battleMode==="friend"&&attacker==="human"&&!options.cardInternalAttack)?await OnlineActionManager.begin("normalAttack",{attackHand,defenderSide:friendSideForLocalPlayer(defender),targetHand}):null;
+      try {
 
       if (!options.preventTargetChange && hasAttachment(attacker, attackHand, "magicalWrath")) {
         const candidates = [
@@ -14258,6 +14644,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       // 攻撃回数の消費まで確定してからオンラインへ攻撃結果を公開する。
       // 「盤面だけ反映済み・attacksUsed未反映」の中間canonical stateを作らない。
       await completeAttackAttempt();
+      await OnlineActionManager.step(onlineAttackAction,"attack-resolved");
       if (state.battleMode === "friend" && attacker === "human") {
         await emitFriendFx("attackResult", {
           defenderSide: friendSideForLocalPlayer(defender),
@@ -14299,6 +14686,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       clearHighlights();
       render();
       return true;
+      } finally {
+        await OnlineActionManager.complete(onlineAttackAction);
+      }
     }
 
     function clearBrokenTraps(player) {
@@ -14366,12 +14756,15 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
     async function commitFriendHandoffWithRetry(reason="turn handoff") {
       if(state.battleMode!=="friend")return true;
+      const handoffId=`handoff-${state.friendMatchId}-${Math.max(0,Number(state.friendTurnSerial||1)-1)}-${state.friendTurnSerial}-${state.friendRole}`;
+      const handoff={id:handoffId,fromSide:state.friendRole,toSide:otherFriendRole(state.friendRole),toTurnSerial:Number(state.friendTurnSerial||0),status:"committing",reason,updatedAtMs:Date.now()};
+      updateFriendEngineMeta({handoff}).catch(()=>{});
       let lastError=null;
       for(let attempt=1;attempt<=3;attempt++){
         try{
           state.friendLastPublishedSignature="";
           const committed=await publishFriendStateNow();
-          if(committed===true)return true;
+          if(committed===true){updateFriendEngineMeta({handoff:null}).catch(()=>{});if(state.friendHandoffRetryTimer){clearTimeout(state.friendHandoffRetryTimer);state.friendHandoffRetryTimer=null;}return true;}
           lastError=new Error("handoff commit was not accepted");
         }catch(error){lastError=error;}
         if(attempt<3)await delay(250*attempt);
@@ -14379,7 +14772,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       console.error("[friend-handoff-retry-failed]",{reason,error:lastError?.message||String(lastError)});
       setMessage("ターン交代の同期を再試行しています。通信が戻るまでそのままお待ちください。");
       render();
-      setTimeout(()=>{
+      if(state.friendHandoffRetryTimer)clearTimeout(state.friendHandoffRetryTimer);
+      state.friendHandoffRetryTimer=setTimeout(()=>{
+        state.friendHandoffRetryTimer=null;
         if(state.battleMode!=="friend"||state.gameOver||state.turn!=="cpu")return;
         commitFriendHandoffWithRetry(reason).catch(error=>console.error("PVP handoff background retry failed",error));
       },1200);
@@ -14632,7 +15027,7 @@ async function endTurn(reason="unspecified") {
           if(room.status!=="playing"||String(remoteMatchId||"")!==String(state.friendMatchId||""))throw new Error("この試合は既に終了しています。");
           if(match.result||match.state?.gameOver)return {accepted:false,result:match.result||match.state?.result||null};
           const snapshot=cloneJson(match.state||buildFriendCanonicalSnapshot());snapshot.gameOver=true;snapshot.result=winner;snapshot.resultReason="surrender";snapshot.surrenderedBy=loser;
-          transaction.update(roomRef,{"match.version":51,"match.stateRevision":Number(match.stateRevision||0)+1,"match.state":snapshot,"match.result":winner,"match.resultReason":"surrender","match.surrenderedBy":loser,"match.surrenderNoticeAcknowledged":false,updatedAt:fb.serverTimestamp()});
+          transaction.update(roomRef,{"match.version":170,"match.stateRevision":Number(match.stateRevision||0)+1,"match.state":snapshot,"match.result":winner,"match.resultReason":"surrender","match.surrenderedBy":loser,"match.surrenderNoticeAcknowledged":false,updatedAt:fb.serverTimestamp()});
           return {accepted:true,result:winner};
         });
         if(result?.result){applySyncedBattleResult(result.result,"surrender",state.friendRole,false,state.friendMatchId);}
@@ -14655,7 +15050,7 @@ async function endTurn(reason="unspecified") {
         state.friendLastPublishedSignature = JSON.stringify(snapshot);
         const roomRef = fb.doc(fb.db, "rooms", state.friendRoomId);
         const resultUpdate = {
-          "match.version": 51,
+          "match.version": 170,
           "match.stateRevision": nextRevision,
           "match.state": snapshot,
           "match.result": result,
