@@ -888,7 +888,7 @@ const CARD_LIBRARY = {
             return;
           }
           state.temp[player].setupMode = true;
-          state.temp[player].setupFromCopiedEffect = !!state.copiedEffectContext?.ignoreTerminal;
+          state.temp[player].setupFromCopiedEffect = !!state.copiedEffectContext;
           state.mode = "setupTrap";
           state.selectedAttackHand = null;
           state.selectedTrapCardIndex = null;
@@ -2299,9 +2299,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v169c-apathy-theme-fix";
+    const LATEST_NEWS_ID = "v169d-online-stability";
 
     const UPDATE_NEWS = [
+      {id:"v169d-online-stability",version:"v169d",date:"2026-08-31",title:"オンライン対戦を安定化",summary:"攻撃後のターン交代、相手ターン中の選択、オンライン割り込み、予告状からの仕込みを修正しました。",featured:true,tags:["fix","online"],items:["通常攻撃後に相手へターンが渡らず進行不能になる経路を修正","貿易・強制・コンディショニングで相手ターン中でも必要な手札選択ができるよう修正","解決済みオンライン割り込みがターン終了を止め続ける問題を修正","割り込み送信・回答失敗時に永久待機しにくいよう復旧処理を改善","予告状などの効果コピーから仕込みを使った際、仕込み終了で元の効果処理へ戻るよう修正","攻撃結果のcanonical同期を攻撃回数消費後へ整理し、handoff失敗時は攻撃済みターンへ巻き戻さず再試行"]},
       {id:"v169c-apathy-theme-fix",version:"v169c",date:"2026-08-30",title:"アパシーと題目復元を修正",summary:"実カード使用の判定と、題目系特殊加護の復元処理を修正しました。",featured:true,tags:["fix"],items:["アパシーがデバリュエーション・コンディショニングによる効果設置へ誤反応する問題を修正","マジックミラーで反射された呪縛の通常使用後にもアパシーが正しく発動するよう修正","手が0になった後に題目系特殊加護が復元されてもコンプレックスが新規設置として反応しないよう修正","題目復元状態をオンラインcanonical stateへ同期"]},
       {id:"v169b-stability",version:"v169b",date:"2026-08-30",title:"心理学カードと設置処理を安定化",summary:"コピー効果・設置物・オンライン選択の接続不具合を修正しました。",featured:true,tags:["update","fix","online"],items:["びっくり箱のpayloadを選択完了まで待つよう改善し、攻撃で0になった手では発動しないよう修正","孤立・アパシー・フィクゼーションの設置物相互作用を修正","呪縛の除去・押し出し・移動処理を共通化","コンプレックスの題目・反射呪縛・銛の新規設置検知を改善","エゴ・スーパーエゴの相手盤面効果無視とログを修正","グリーフ・コンディショニング・デバリュエーションの処理を安定化"]},
       {id:"v169a-fixes",version:"v169a",date:"2026-08-30",title:"v169 不具合修正",summary:"心理学カードと呪縛処理の不具合・仕様漏れを修正しました。",featured:true,tags:["update","fix"],items:["グリーフが設置物のない手の0化でも発動するよう修正","ホメオスタシスが0の手を復活させないよう修正","ターン終了時に消えた後続設置物を発動しないよう修正","デバリュエーションの満杯時置換と加護個体選択を修正","エゴ・スーパーエゴでトラウマとディスプレイスメントを正しく無視","フラッシュバックの同名呪縛履歴管理を改善"]},
@@ -4817,8 +4818,9 @@ const CARD_LIBRARY = {
     function isFriendInteractionBlocking() {
       if(state.battleMode!=="friend")return false;
       const interrupt=canonicalFriendInterrupt();
+      // resolved は requester が応答を受け取った後の一時状態であり、ターン終了を止めない。
       return !!(state.friendCardResolving||state.friendInterruptWaiting||state.friendInterruptHandling||
-        (interrupt&&["pending","resolved"].includes(interrupt.status)));
+        (interrupt&&interrupt.status==="pending"));
     }
 
     async function publishFriendInteractionFinalState(reason,actionId) {
@@ -5154,21 +5156,32 @@ const CARD_LIBRARY = {
       const resultPromise = new Promise((resolve, reject) => {
         state.friendInterruptWaiting = { id, resolve, reject, type };
       });
-      await writeFriendInterrupt(interrupt);
+      try {
+        const committed=await writeFriendInterrupt(interrupt);
+        if(committed===false)throw new Error("オンライン割り込みを送信できませんでした。");
+      } catch(error) {
+        if(state.friendInterruptWaiting?.id===id)state.friendInterruptWaiting=null;
+        render();
+        throw error;
+      }
       setMessage("相手の判断を待っています…");
       render();
-      return await resultPromise;
+      const response=await resultPromise;
+      if(!options.deferClear && !["forceCard","trade"].includes(type))await clearResolvedFriendInterrupt(id);
+      return response;
     }
 
     async function respondFriendInterrupt(interrupt, response) {
-      if (!interrupt?.id) return;
-      await writeFriendInterrupt({
+      if (!interrupt?.id) return false;
+      const committed=await writeFriendInterrupt({
         ...interrupt,
         status: "resolved",
         response: cloneJson(response),
         resolvedBy: state.friendRole,
         resolvedAtMs: Date.now()
       });
+      if(committed!==true)throw new Error("オンライン割り込みの回答を確定できませんでした。");
+      return true;
     }
 
     async function clearResolvedFriendInterrupt(interruptId) {
@@ -5203,7 +5216,6 @@ const CARD_LIBRARY = {
       if (!interrupt || interrupt.status !== "pending" || interrupt.targetSide !== state.friendRole) return;
       if (state.friendHandledInterruptIds.has(interrupt.id) || state.friendInterruptHandling) return;
       state.friendInterruptHandling = true;
-      state.friendHandledInterruptIds.add(interrupt.id);
       try {
         let response = null;
         const payload = interrupt.payload || {};
@@ -5234,26 +5246,33 @@ const CARD_LIBRARY = {
           const cardId = await askHumanTerminalAppeal("human", terminalCard);
           response = { cardId: cardId || null };
         } else if(interrupt.type==="conditioning"){
-          const eligible=state.hands.human.map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse);
-          if(!eligible.length)response={use:false,instanceId:null};else{const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)response={use:false,instanceId:null};else{const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。"});response={use:true,instanceId:indexes.length?handCardInstanceId("human",indexes[0]):null};}}
+          const targetHand=["L","R"].includes(payload.hand)?payload.hand:"L";const eligible=state.hands.human.map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentOnHand("human","cpu",targetHand,x.id));
+          if(!eligible.length)response={use:false,instanceId:null};else{const use=await showGameConfirmation({title:"コンディショニング",message:"罠の処理後、この手へ呪縛を1枚付与しますか？",confirmLabel:"付与する",cancelLabel:"付与しない"});if(!use)response={use:false,instanceId:null};else{const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"付与する呪縛を選んでください。",allowOffTurn:true});response={use:true,instanceId:indexes.length?handCardInstanceId("human",indexes[0]):null};}}
         } else if(interrupt.type==="forceCard"){
           if(payload.matchId!==state.friendMatchId)throw new Error("試合が更新されています。");
-          const indexes=await beginHandCardSelection({min:1,max:1,filter:id=>isCountedHandCard(id),message:"「強制」：次の自分のターンに使用するカードを1枚選んでください。"});
+          const indexes=await beginHandCardSelection({min:1,max:1,filter:id=>isCountedHandCard(id),message:"「強制」：次の自分のターンに使用するカードを1枚選んでください。",allowOffTurn:true});
           if(!indexes.length)throw new Error("選択できる通常手札がありません。");
           response={matchId:state.friendMatchId,actionId:interrupt.id,instanceId:handCardInstanceId("human",indexes[0])};
           await respondSecureFriendInteraction(interrupt.id,{instanceId:response.instanceId});
         } else if(interrupt.type==="trade"){
           if(payload.matchId!==state.friendMatchId||payload.actionId!==interrupt.id||!payload.sourceCommit)throw new Error("貿易情報が一致しません。");
-          const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>canDiscardHandCard("human",index,"trade"),message:"「貿易」：相手へ渡すカードを1枚選んでください。"});
+          const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>canDiscardHandCard("human",index,"trade"),message:"「貿易」：相手へ渡すカードを1枚選んでください。",allowOffTurn:true});
           if(!indexes.length)throw new Error("貿易できるカードがありません。");
           const instanceId=handCardInstanceId("human",indexes[0]),nonce=randomInteractionNonce(),commit=await makeTradeCommit({matchId:state.friendMatchId,actionId:interrupt.id,role:state.friendRole,instanceId,nonce});
           response={matchId:state.friendMatchId,actionId:interrupt.id,targetCommit:commit,targetReveal:{instanceId,nonce}};
           await respondSecureFriendInteraction(interrupt.id,{instanceId,commit,nonce});
         }
         await respondFriendInterrupt(interrupt, response || {});
+        state.friendHandledInterruptIds.add(interrupt.id);
       } catch (error) {
         console.error("PVP interrupt handling failed", error);
-        await respondFriendInterrupt(interrupt, { error: String(error?.message || error) });
+        try {
+          await respondFriendInterrupt(interrupt, { error: String(error?.message || error) });
+          state.friendHandledInterruptIds.add(interrupt.id);
+        } catch(responseError) {
+          state.friendHandledInterruptIds.delete(interrupt.id);
+          throw responseError;
+        }
       } finally {
         state.friendInterruptHandling = false;
       }
@@ -5289,7 +5308,16 @@ const CARD_LIBRARY = {
       if(interrupt.status==="pending"){setMessage(interrupt.type==="trade"?"相手の貿易選択を待っています…":"相手がカードを選択しています…");render();return true;}
       if(interrupt.status!=="resolved"||state.friendInterruptWaiting)return false;
       const key=`resume:${interrupt.id}`;if(state.friendHandledInterruptIds.has(key))return true;state.friendHandledInterruptIds.add(key);
-      try{if(interrupt.type==="forceCard")await resolveOnlineForceResponse(interrupt);else if(interrupt.type==="trade")await resolveOnlineTradeResponse(interrupt.id,interrupt.response||{});}catch(error){state.friendHandledInterruptIds.delete(key);setMessage(`オンライン選択の復元に失敗：${error.message||error}`);throw error;}return true;
+      try{
+        if(interrupt.type==="forceCard")await resolveOnlineForceResponse(interrupt);
+        else if(interrupt.type==="trade")await resolveOnlineTradeResponse(interrupt.id,interrupt.response||{});
+        else{
+          // 通常の割り込みで元のPromiseスタックが失われた再接続時は、
+          // stale resolvedを除去し、canonicalの割り込み前状態から同じ行動をやり直せるようにする。
+          await clearResolvedFriendInterrupt(interrupt.id);
+          setMessage("オンライン選択の途中で再接続しました。直前の行動をもう一度行ってください。");
+        }
+      }catch(error){state.friendHandledInterruptIds.delete(key);setMessage(`オンライン選択の復元に失敗：${error.message||error}`);throw error;}return true;
     }
 
     function setFriendRoomUi(roomId, role = "host", shortCode = state.friendRoomShortCode) {
@@ -9832,7 +9860,7 @@ function wrapFinger(value) {
       if(state.battleMode==="friend"&&player==="human"){
         const actionId=makeFriendInterruptId();await createSecureFriendInteraction({actionId,type:"forceCard"});
         await forcePublishFriendStateNow("強制の選択待ち開始");
-        const response=await requestRemoteFriendDecision("forceCard",{matchId:state.friendMatchId,turnSerial:Number(state.friendTurnSerial||0)},{id:actionId}),secure=await readSecureFriendInteraction(actionId);
+        const response=await requestRemoteFriendDecision("forceCard",{matchId:state.friendMatchId,turnSerial:Number(state.friendTurnSerial||0)},{id:actionId,deferClear:true}),secure=await readSecureFriendInteraction(actionId);
         if(response?.matchId!==state.friendMatchId||response?.actionId!==actionId||secure?.status!=="responded"||secure?.targetInstanceId!==response.instanceId)return;
         const index=state.handCardInstances[o].indexOf(secure.targetInstanceId);if(index<0||!isCountedHandCard(state.hands[o][index]))return;
         state.forcedCard[o]={instanceId:secure.targetInstanceId,cardId:state.hands[o][index],pending:true,active:false};
@@ -9905,7 +9933,7 @@ function wrapFinger(value) {
         await savePrivateTradeChoice({actionId,instanceId:a.instanceId,nonce,commit:sourceCommit});
         await createSecureFriendInteraction({actionId,type:"trade",sourceCommit});
         await forcePublishFriendStateNow("貿易の選択待ち開始");
-        const response=await requestRemoteFriendDecision("trade",{matchId:state.friendMatchId,actionId,turnSerial:Number(state.friendTurnSerial||0),sourceCommit},{id:actionId});
+        const response=await requestRemoteFriendDecision("trade",{matchId:state.friendMatchId,actionId,turnSerial:Number(state.friendTurnSerial||0),sourceCommit},{id:actionId,deferClear:true});
         await resolveOnlineTradeResponse(actionId,response);return;
       }
       const o=otherPlayer(player),a=await chooseTradeCard(player),b=await chooseTradeCard(o);if(!a||!b)return;
@@ -10606,11 +10634,11 @@ function wrapFinger(value) {
       elements.handCardSelectionHint.textContent = `${count}枚選択中（${pending.min}～${pending.max}枚）`;
     }
 
-    function beginHandCardSelection({ min = 1, max = 1, filter = () => true, message = "手札からカードを選んでください。" } = {}) {
+    function beginHandCardSelection({ min = 1, max = 1, filter = () => true, message = "手札からカードを選んでください。", allowOffTurn = false } = {}) {
       const eligible = state.hands.human.map((id, index) => ({ id, index })).filter(item => filter(item.id, item.index));
       if (eligible.length < min) return Promise.resolve([]);
       return new Promise(resolve => {
-        pendingHandCardSelection = { min, max: Math.min(max, eligible.length), eligible: new Set(eligible.map(item => item.index)), selected: new Set(), resolve };
+        pendingHandCardSelection = { min, max: Math.min(max, eligible.length), eligible: new Set(eligible.map(item => item.index)), selected: new Set(), resolve, allowOffTurn:!!allowOffTurn };
         state.mode = "handCardSelection";
         elements.handCardSelectionLabel.textContent = message;
         elements.handCardSelectionBox.classList.add("active");
@@ -12321,7 +12349,7 @@ function renderLastAction() {
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
         const gunAmmoDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "gunAmmoDiscard";
         const modulationSourceMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "modulationSource";
-        const handCardSelectionMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "handCardSelection";
+        const handCardSelectionMode = !state.gameOver && !state.animating && state.mode === "handCardSelection" && (state.turn === "human" || !!pendingHandCardSelection?.allowOffTurn);
         const boardOrNumberSelectionMode = state.mode === "boardHandSelection" || state.mode === "numberAllocation";
         const cityWillMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "cityWillChoose";
         const advanceNoticeMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "advanceNoticeChoose";
@@ -14227,8 +14255,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         await options.afterResolved({ attacker, attackHand, defender, targetHand, power, total, finalValue: resolvedFinal });
       }
 
-      // オンラインでは最終攻撃結果を勝敗通知より先に送る。
-      // これにより、相手側でもトドメの計算・0化を確認してからリザルトへ進める。
+      // 攻撃回数の消費まで確定してからオンラインへ攻撃結果を公開する。
+      // 「盤面だけ反映済み・attacksUsed未反映」の中間canonical stateを作らない。
+      await completeAttackAttempt();
       if (state.battleMode === "friend" && attacker === "human") {
         await emitFriendFx("attackResult", {
           defenderSide: friendSideForLocalPlayer(defender),
@@ -14237,7 +14266,10 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           finalValue: state[defender][targetHand],
           source: "通常攻撃"
         });
-        await forcePublishFriendStateNow("attack result");
+        const attackLimit=Math.max(0,Number(state.temp[attacker]?.attackLimit??1));
+        const usedAttackCount=Math.max(0,Number(state.temp[attacker]?.attacksUsed||0));
+        // 複数回攻撃の途中だけ盤面stateを送る。通常1回攻撃はhandoffと同じcanonical commitへまとめる。
+        if(usedAttackCount<attackLimit)await forcePublishFriendStateNow("attack intermediate result");
       }
 
       // 捨て身などの攻撃後効果で両手が0になった場合は、ターン終了を待たず即座に勝敗を確定する。
@@ -14245,7 +14277,6 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         state.animating = false;
         clearHighlights();
         render();
-        await completeAttackAttempt();
         return true;
       }
 
@@ -14267,7 +14298,6 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       state.animating = false;
       clearHighlights();
       render();
-      await completeAttackAttempt();
       return true;
     }
 
@@ -14334,10 +14364,31 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       render();
     }
 
+    async function commitFriendHandoffWithRetry(reason="turn handoff") {
+      if(state.battleMode!=="friend")return true;
+      let lastError=null;
+      for(let attempt=1;attempt<=3;attempt++){
+        try{
+          state.friendLastPublishedSignature="";
+          const committed=await publishFriendStateNow();
+          if(committed===true)return true;
+          lastError=new Error("handoff commit was not accepted");
+        }catch(error){lastError=error;}
+        if(attempt<3)await delay(250*attempt);
+      }
+      console.error("[friend-handoff-retry-failed]",{reason,error:lastError?.message||String(lastError)});
+      setMessage("ターン交代の同期を再試行しています。通信が戻るまでそのままお待ちください。");
+      render();
+      setTimeout(()=>{
+        if(state.battleMode!=="friend"||state.gameOver||state.turn!=="cpu")return;
+        commitFriendHandoffWithRetry(reason).catch(error=>console.error("PVP handoff background retry failed",error));
+      },1200);
+      return false;
+    }
+
 async function endTurn(reason="unspecified") {
       if(state.startingRouletteActive)return;
       if(isFriendInteractionBlocking())return false;
-  const friendRollback=state.battleMode==="friend"&&state.friendRole?{snapshot:buildFriendCanonicalSnapshot(),meta:{turnSerial:state.friendTurnSerial,turnOwner:state.friendTurnOwner,turnStarted:state.friendTurnStarted,turnStartAppliedSerial:state.friendTurnStartAppliedSerial,turnStartToken:state.friendTurnStartToken,turnStartClaimedAt:state.friendTurnStartClaimedAtMs}}:null;
   const romanPreparationWasActive=isRomanPreparation();
   if (isTutorialBattle()) {
     freezeTutorialBattleToHumanTurn();
@@ -14411,17 +14462,9 @@ async function endTurn(reason="unspecified") {
           state.friendTurnStartClaimedAtMs=0;
           setMessage("相手の番です。同期を待っています。");
           render();
-          try{
-            const committed=await publishFriendStateNow();
-            if(committed===false)throw new Error("handoff commit was not accepted");
-          }catch(error){
-            const failed={reason,local:{matchId:state.friendMatchId,friendRole:state.friendRole,turn:state.turn,turnSerial:state.friendTurnSerial,turnOwner:state.friendTurnOwner,turnStarted:state.friendTurnStarted,turnStartAppliedSerial:state.friendTurnStartAppliedSerial,turnStartToken:state.friendTurnStartToken,turnStartClaimedAt:state.friendTurnStartClaimedAtMs},remote:state.friendLastPublishRemoteMatch||null,payload:buildFriendCanonicalSnapshot(),error:{code:error?.code||"",message:error?.message||String(error)}};
-            console.error("[friend-handoff-failed]",failed);
-            if(friendRollback?.snapshot){const hydrated=state.friendSnapshotHydrated;state.friendSnapshotHydrated=false;await applyFriendCanonicalSnapshot(friendRollback.snapshot,0,friendRollback.meta);state.friendSnapshotHydrated=hydrated;state.friendLastPublishedSignature="";}
-            setMessage("ターン交代を同期できませんでした。もう一度操作してください。");
-            throw error;
-          }
-          return;
+          const committed=await commitFriendHandoffWithRetry(reason);
+          if(!committed)return false;
+          return true;
         }
         setMessage("CPUの番です。");
         render();
