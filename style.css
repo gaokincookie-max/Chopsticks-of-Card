@@ -4545,3 +4545,6 @@ body.tutorial-split-only #cpuR {
 @media(max-width:430px){.social-confirm-actions button{flex:1 1 42%;min-width:0}}
 .cpu-rule-select{display:grid;gap:8px;margin:16px 0 20px;font-weight:800;color:var(--text)}
 .cpu-rule-select select{width:100%;min-height:44px}
+
+/* v170l: online turn timer */
+.turn-timer-card{min-width:120px;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease}.turn-timer-card:not(.turn-timer-active){opacity:.55}.turn-timer-card #turnTimerValue{font-variant-numeric:tabular-nums}.turn-timer-card.turn-timer-warning{transform:translateY(-1px);box-shadow:0 0 0 1px rgba(255,255,255,.18) inset}.turn-timer-card.turn-timer-danger{animation:turnTimerPulse .8s ease-in-out infinite alternate}.turn-timer-card.turn-timer-danger #turnTimerValue{font-size:1.35em}@keyframes turnTimerPulse{from{transform:scale(1)}to{transform:scale(1.035)}}

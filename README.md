@@ -1,5 +1,131 @@
-# 割り箸カードゲーム v170
+# 割り箸カードゲーム v170n
 
+## v170n: 対戦部屋の破壊テスト / 切断復旧強化
+
+- ホスト解散後にゲストの `activeRooms` が残る経路を修正。
+- stale `activeRooms` を所属判定前に自己修復。
+- closed room からのゲスト退出は所属ロックだけを安全に解放。
+- `starting` 中に相手接続が3分確認できなければ残存開始ロックを解放可能。
+- abandoned room 自動破棄後に battle 画面だけ残る経路を修正。
+- 部屋状態モデルを10万ケース・2000万遷移で破壊テスト。
+
+## v170m: 対戦部屋 / 勝敗画面の復旧強化
+
+- 降参結果のACK待ちは維持しつつ、10秒でタイムアウトして進行可能に変更。
+- `match.surrenderedAt` をserver timestampで保存し、Firestore Rules側でも10秒経過後のACK確定を許可。
+- 勝敗画面の `postMatch.resolvedAction` を再適用可能にして、片側だけbattle画面に残る状態から次snapshotでロビーへ収束。
+- Ready変更とGuest退出を最新roomを読むTransactionへ変更し、古いmembersの書き戻し競合を軽減。
+
+
+## v170l: オンラインのターン制限と切断終了
+
+- オンライン対戦に60秒のターンタイマーを追加。ターン開始処理がcanonicalに確定してからカウントを開始します。
+- 時間切れ時は、残っている通常攻撃回数を合法な対象へランダムに自動消化してターンを渡します。
+- ターン開始時刻はFirestoreへ保存するため、reloadしても60秒へ戻りません。
+- heartbeatを30秒間隔へ変更し、3分間通信確認できない場合は残った側の切断勝利をTransactionで確定します。
+- Firestore Rules側でも3分経過を再検証し、誤った切断勝利を拒否します。
+- 詳細: `V170L_TURN_TIMER_DISCONNECT.md`
+
+## v170k: 再読込時の孤児選択状態を自動復旧
+
+- `handCardSelection` / `boardHandSelection` / `numberAllocation` のような汎用非同期選択は、reloadでPromise/resolve実行体が失われた場合にmodeだけを復元しないよう修正。
+- 孤児選択modeは `attack` へ安全に正規化し、未確定Actionを再試行可能にした。
+- Invariant Checkerも「modeがattack以外」というだけでは進行可能と判定せず、実際の選択executorの存在を確認する。
+- 実ブラウザ疑似Firestore破壊テスト8シナリオと、Action/Handoff/Decisionの400万ランダム遷移を実施。
+
+## v170j: 再接続時のcanonical完全hydrate
+
+- reload/reconnect時も通常同期と同じcanonical snapshot適用処理を使用します。
+- continuation、Action、Decision、Handoffの復旧順序を整理し、孤児Actionによる進行停止を防ぎます。
+- Action開始metadataがFirestoreへ確定できない場合は行動を開始せず、再同期して安全側へ倒します。
+- `v170j-reconnect-hydration-source.test.js` / `model.test.js` を追加しました。
+
+## v170i: 予告状のsecure Decisionをatomic finalize
+
+- `postTurnStart` から発動した「強制」「貿易」は、効果反映後のcanonical state・Decision/interactionの削除・対応する `advance-notice:N:completed` checkpoint を同一Firestore transactionで確定します。
+- commit自体は成功したが応答だけ失われたretryでは、canonical Actionのcompleted step / nextIndexを確認して成功扱いにし、効果stateを再publishしません。
+- 再接続時に同じ予告状indexがすでにcompletedなら再checkpointせず次のindexから復旧します。
+- Firestore Rulesの変更はありません（v170b以降のRulesを継続利用）。
+
+
+
+
+
+## v170h
+
+- オンラインのターン開始後に発動する「予告状」を `postTurnStart` Action としてcanonical管理するよう変更。
+- `turnStartAppliedSerial` の確定と同じFirestore transactionで、予告状queueを通常stateから取り除き `match.action.payload.queue` へ移します。
+- 予告状1枚ごとに `advance-notice:N:completed` checkpointを盤面stateとAction metadataへ原子的に保存し、途中reload時は最後の確定地点から再開します。
+- 予告状由来のオンラインDecisionにはAction/カード位置に基づく安定IDを使い、pending Decisionへの再接続で新しいDecisionを重複生成しないようにしました。
+- 強制・貿易のsecure interaction作成を冪等化し、同じActionの再実行で既存interactionを上書きしません。
+- 貿易は再接続時に保存済みの秘密選択を同じDecision IDから復元し、選択のやり直しによるcommit不一致を防ぎます。
+- 強制・貿易のDecision結果だけ復旧した場合は、対応する予告状カードを完了checkpointして次の開始時カードへ進みます。
+- Firestore Rulesは変更していません。
+- 詳細: `V170H_POST_TURN_START_ACTION.md`
+
+
+## v170g
+
+- オンラインの handoff commit を完全冪等化しました。
+- 初回 handoff は直前の `turnSerial / turnOwner` のときだけ盤面を更新します。
+- handoff が既に成功済み、または試合がさらに先へ進んでいる場合、古い端末の retry は盤面を書き直さず成功扱いになります。
+- 「handoff は成功したが応答だけ消失 → 相手が新ターン開始 → 旧端末が retry」で新ターンのドローや開始時効果を巻き戻す競合を防止しました。
+- 詳細: `V170G_IDEMPOTENT_HANDOFF.md`
+
+## v170f
+
+- handoff bridge metadataのcanonical確定を3回まで再試行し、確定できない場合はturnOwner/stateのhandoff publishへ進まないよう変更。
+- handoff publish transactionは `expectedHandoffId` / fromSide / toSide / toTurnSerial を検証し、対応するbridgeが残っている場合だけターン交代を確定。
+- canonicalの `turnSerial` と `turnOwner` からhandoff成功済みを判定する共通処理を追加。
+- handoff成功後に `action` / `handoff` metadataの掃除だけ失敗した場合、専用retryで再試行。
+- Recovery Manager / Watchdogも成功済みの残留handoffを検出し、どちらの参加者からでも冪等にmetadataを掃除可能。
+- metadata掃除ではhandoffに紐づく `actionId` だけを解除し、後続Actionを誤って消さないよう保護。
+- Firestore Rulesの変更はありません。v170b以降のRulesをデプロイ済みなら再デプロイ不要です。
+
+
+## v170e
+
+- オンライン通常攻撃のActionを `attack()` 終了時に消さず、`resolveActionDone()` からhandoff確定まで保持するよう変更。
+- `Action -> awaiting-handoff` と `handoff=committing` を同一Firestore transactionで記録し、「攻撃確定済み・Actionなし・handoffなし」の空白状態を排除。
+- Recoveryは確定済み通常攻撃Actionを先に削除せず、そのActionを保持したままターン交代を再開。
+- Invariant Checkerがローカル手番の合法な通常攻撃・分ける・カード使用・継続modeを確認し、実際に操作不能な状態を検出。
+- 「行える操作なし」の自動ターン終了判定に「分ける」を含め、再同期時にも合法行動がなければ自動終了を再開。
+- 複数回攻撃の途中や追加行動へ移る場合は、その攻撃Actionを正常完了してから次の操作を許可。
+
+## v170d
+- Action checkpointの盤面stateと `appliedStepIds` を同一Firestore transactionで確定し、「盤面だけ反映・適用済みmetadataだけ欠落」という中間状態を排除しました。
+- checkpoint transactionは同じAction IDを検証してから盤面とAction metadataを書き込むため、古いActionの遅延書き込みや重複処理が正本を上書きしにくくなりました。
+- Actionの通常完了も、手番を保持している場合は最終盤面と `match.action=null` / `lastCompletedActionId` を同一commit経路で確定します。
+- Recoveryは `attack-finalized` が欠けた旧版・異常状態でも、canonicalの `attacksUsed >= attackLimit` とAction phaseを根拠に確定済み攻撃のhandoffを再開します。
+- Firestore Rulesはv170b/v170cと同じです。v170b Rulesをデプロイ済みなら再デプロイ不要です。
+
+## v170c
+- 《強制》《貿易》の時間切れランダム自動選択を `timed_out + auto_random` の正常解決として最終canonical確定できるよう修正。
+- Decision回答側にローカルdeadline timerを追加し、多段選択中にtimeout通知を取り逃してもUIを自動終了。
+- オンラインの選択途中状態（modeと主要pending情報）をcanonical snapshotへ保存し、リロード・再同期後に復元。
+- Action開始metadataを直列化し、遅延したstarted書き込みが完了済みActionを復活させる競合を防止。
+- canonical snapshot schemaVersionを4へ更新。
+
+## v170b
+
+- 《強制》のオンライン選択が45秒で時間切れになった場合、現在の合法な通常手札から1枚をランダム自動選択して効果を続行します。
+- 《貿易》の相手側選択が45秒で時間切れになった場合、現在の交換可能カードから1枚をランダム自動選択して交換を続行します。
+- 《コンディショニング》は時間切れ時に追加の呪縛を置かず、その選択UIを閉じて自動スキップします。
+- secure interaction に `decisionDeadlineAt` を追加し、相手端末が切断していても期限後は効果使用側が安全なtimeout fallbackを確定できるようにしました。
+- Recovery再同期で terminal Decision を発見した際、`friendInterruptWaiting` を単純破棄せず、待機中Promiseへ結果を返してから掃除します。
+- handoff metadata の `committing` 書き込みと完了解除を直列化し、遅延書き込みによる stale handoff 復活を防止しました。
+- この版は `firestore.rules` を変更しています。オンライン公開時はRulesの再デプロイが必要です。
+
+## v170a
+
+- `render()` からオンラインstate publishを分離し、ゲーム状態の確定を `FriendCommitManager` に集約しました。
+- カード固有の `publishFriendStateNow()` / `forcePublishFriendStateNow()` 呼び出しを撤去し、カード側がFirestore同期を直接意識しない構造へ整理しました。
+- `OnlineActionManager` に `resolving / waiting-decision / committing / failed` を導入し、例外発生時はActionをfailedとして記録してRecoveryへ移行します。
+- `card-effect-resolved` と `attack-finalized` をcanonical commit成功後だけ `appliedStepIds` に記録し、再接続時に同じカード効果・攻撃を二重適用しない復旧判定へ変更しました。
+- `friendCardResolving / friendInterruptWaiting / friendInterruptHandling` は進行可否の正本から外し、canonicalのpending Decisionを一次情報にしました。旧フラグはUI入力抑止専用です。
+- 《強制》《貿易》の秘密選択を `SecureDecisionManager` に集約しました。
+- 相手手番のheartbeatが90秒以上更新されない場合は再同期状態へ入り、30分以上切断が続いた残存対戦は既存Firestore Rulesの安全条件に従って自動解除します。
+- CARD_LIBRARY内からオンライン固有分岐を撤去し、今後カード効果へfriend専用処理を直接追加しないsource testを追加しました。
 
 ## v170
 
