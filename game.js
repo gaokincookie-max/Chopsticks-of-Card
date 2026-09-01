@@ -1158,11 +1158,11 @@ const CARD_LIBRARY = {
         name: "乱舞",
         cost: 2,
         type: "補助",
-        text: "このターン、次の自分の攻撃行動を置換攻撃にする。攻撃対象の手の本数を、攻撃した手と同じ本数にする。",
+        text: "このターン、次の自分の通常攻撃で加える本数を0として扱う。その通常攻撃後、攻撃後の罠を処理する前に、攻撃対象の手の本数を攻撃した手と同じ本数にする。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].dance = true;
-          addLog(`${handNames[player]}は「乱舞」を使った。次の攻撃はダメージの代わりに本数を揃える。`);
+          addLog(`${handNames[player]}は「乱舞」を使った。次の通常攻撃で加える本数を0として扱い、攻撃後に対象の本数を揃える。`);
         }
       },
       largo: {
@@ -1418,15 +1418,15 @@ const CARD_LIBRARY = {
         name: "囮",
         cost: 2,
         type: "罠",
-        text: "【攻撃後・自動】この手が攻撃された後、カードを1枚引く。次の自分のターン、カードをあと1枚使用できる。",
+        text: "【攻撃後・自動】この手が攻撃された後、カードを1枚引く。次の自分のターン、一度だけ、罠を設置するときにカード使用回数を消費しない。",
         trap: true,
         manual: false,
         triggerTiming: "after",
         canTrigger: ({ placedHand, targetHand }) => placedHand === targetHand,
         trigger: ({ defender }) => {
           drawCard(defender);
-          state.pendingTrapCardExtraUses[defender]=Number(state.pendingTrapCardExtraUses[defender]||0)+1;
-          addLog(`${handNames[defender]}の罠「囮」発動。1枚引き、次の自分ターンのカード使用回数+1を予約した。`);
+          state.pendingBaitFreeTrapUse[defender]=1;
+          addLog(`${handNames[defender]}の罠「囮」発動。1枚引き、次の自分ターンに一度だけ罠を無料で設置できる。`);
           return {};
         }
       },
@@ -1441,7 +1441,7 @@ const CARD_LIBRARY = {
       fixation: {name:"フィクゼーション",cost:2,type:"補助",text:"相手の両手に合計4枚の互いに異なる呪縛がある場合、その4枚を固定する。固定された呪縛は除去・移動・交換できず、手が0の間だけ同じ手から一時退避し、手が復活すると同じ位置へ戻る。",canPlay:player=>canUseFixation(player),effect:player=>useFixation(player)},
       catharsis: {name:"カタルシス",cost:3,type:"終端",terminal:true,text:"相手の左右それぞれについて、その手にある呪縛の枚数だけ本数を減らす。その後、取り除ける呪縛をすべて捨てる。",canPlay:()=>true,effect:player=>useCatharsis(player)},
       idCurse: {name:"イド",cost:2,type:"呪縛",curse:true,text:"この手で通常攻撃するとき、この手自身を除く0でない全ての手から攻撃対象をランダムに選び直す。通常攻撃以外には作用しない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
-      egoBlessing: {name:"エゴ",cost:3,type:"加護",blessing:true,text:"この手の通常攻撃は相手側の罠・加護・呪縛の効果を受けない。その通常攻撃で相手の手を0にすると、同じ位置で「スーパーエゴ」へ変化する。",transformsTo:["superEgo"],canPlay:player=>canPlaceAttachment(player,player)},
+      egoBlessing: {name:"エゴ",cost:3,type:"加護",blessing:true,text:"この手で通常攻撃するとき、その通常攻撃で加える本数への増減を無効にする。この手の通常攻撃で相手の手を0にすると、同じ位置で「スーパーエゴ」へ変化する。",transformsTo:["superEgo"],canPlay:player=>canPlaceAttachment(player,player)},
       superEgo: {name:"スーパーエゴ",cost:0,type:"加護 / 生成カード",blessing:true,token:true,text:"この手の通常攻撃は相手側の罠・加護・呪縛の効果を受けず、通常攻撃で加える本数への増減も無効にする。持ち主のターン終了時に減衰量だけ本数を減らし、減衰量を1増やす。",canPlay:()=>false},
       repetitionCompulsion: {name:"反復強迫",cost:2,type:"補助",text:"手札の呪縛を1種類選ぶ。このカードの処理中だけ、選んだカードと同名の呪縛を、通常の設置条件を守って好きな枚数だけ追加のカード使用回数を消費せず使用できる。",canPlay:player=>state.hands[player].some(id=>CARD_LIBRARY[id]?.curse),effect:player=>useRepetitionCompulsion(player)},
       homeostasis: {name:"ホメオスタシス",cost:1,type:"呪縛",curse:true,text:"自分の両手が0でない場合のみ、持ち主のターン終了時に、この手がもう片方より多ければ1減らし、少なければ1増やす。同じなら変化しない。0の手は復活させない。",canPlay:player=>canPlaceAttachment(player,otherPlayer(player))},
@@ -1565,7 +1565,7 @@ const CARD_LIBRARY = {
         name: "捨て身",
         cost: 3,
         type: "加護",
-        text: "自分の手に表向きで置く。この手の通常攻撃で加える本数+2。通常攻撃した後、この手に1本加える。",
+        text: "自分の手に表向きで置く。この手の通常攻撃で加える本数+2。通常攻撃した後、その通常攻撃で相手に加えるはずだった本数-1だけ、この手に本数を加える。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -2100,6 +2100,7 @@ const CARD_LIBRARY = {
       noSplit: { human: false, cpu: false },
       extraActions: { human: 0, cpu: 0 },
       pendingTrapCardExtraUses: { human: 0, cpu: 0 },
+      pendingBaitFreeTrapUse: { human: 0, cpu: 0 },
       handCardMetadata: { human: {}, cpu: {} },
       curseDiscardHistory: [],
       curseDiscardSequence: 0,
@@ -2303,15 +2304,23 @@ const CARD_LIBRARY = {
       pendingFriendInviteTarget: null,
       roomCreateBusy: false
       ,playerCardDraft: null
+      ,achievementMastery: {}
+      ,achievementTitleClaims: []
+      ,achievementTab: "completed"
+      ,achievementMasteryOpen: false
+      ,achievementLoading: false
       ,friendVsShownMatchIds: new Set()
     };
 
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v170n-room-chaos-hardening";
+    const LATEST_NEWS_ID = "v172-gift-titles";
 
     const UPDATE_NEWS = [
+      {id:"v172-gift-titles",version:"v172",date:"2026-09-01",title:"ギフト称号を追加",summary:"ギフトコードで獲得できる新しい称号に対応しました。",featured:true,tags:["update","feature"],items:["ギフト報酬の称号「最古参勢」「古参勢」を追加","同一コードの二重受取を防止し、限定コードの使用上限をtransactionで管理","獲得したギフト称号はプレイヤーカード、対戦ロビー、VS表示に反映"]},
+      {id:"v171-card-mastery-achievements",version:"v171",date:"2026-09-01",title:"実績：カード熟練度を追加",summary:"カードを使い込んで称号を獲得できる実績システムの第一弾です。",featured:true,tags:["update","feature"],items:["ログインユーザー限定でカードごとの累計使用回数を記録","10回で「〇〇使い」、50回で「〇〇の熟練者」、100回で「〇〇の達人」、500回で「〇〇の神」を達成","実績画面に達成済み/未達成タブとカード熟練度一覧を追加","未受取報酬には！を表示し、個別受取と一括受取に対応","長押しで実績の条件・進捗・報酬・達成日時を確認可能"]},
+      {id:"v170o-card-rule-update",version:"v170o",date:"2026-09-01",title:"乱舞・囮・捨て身・エゴを調整",summary:"通常攻撃との相互作用と罠テーマの役割を整理しました。",featured:true,tags:["update","balance","fix"],items:["乱舞を通常攻撃扱いへ変更し、加える本数0→攻撃結果置換→攻撃後罠の順に統一","乱舞で共鳴・銛・トラウマなど通常攻撃を参照する効果が進むよう変更","囮を次の自分ターンに一度だけ罠設置のカード使用回数を消費しない効果へ変更","捨て身の反動を、その通常攻撃で相手に加えるはずだった本数-1へ変更","エゴを通常攻撃で加える本数への増減を無効にする効果へ変更し、相手盤面効果無視はスーパーエゴに限定"]},
       {id:"v170n-room-chaos-hardening",version:"v170n",date:"2026-09-01",title:"対戦部屋の切断復旧を強化",summary:"部屋解散後の所属ロック残り、starting中断、古い対戦ロック破棄後の画面取り残しを修正しました。",featured:true,tags:["fix","online","system"],items:["ホスト解散時にゲスト側activeRoomsロックを即時解放し、解散直後の招待・別ルーム操作を妨げないよう改善","activeRoomsが閉鎖済み・参加解除済みの部屋を指している場合、所属判定前に自己修復","既にclosedになった部屋からゲストが退出する場合はroomをlobbyへ戻さず、自分の所属ロックだけ安全に解放","starting中に相手接続が3分間確認できない場合は30分待たず残存開始ロックを破棄可能","Watchdogが古い対戦部屋を自動破棄した後、battle画面へ取り残されず対戦形式画面へ復帰"]},
       {id:"v170j-reconnect-hydration",version:"v170j",date:"2026-09-01",title:"オンライン再接続の完全復旧を強化",summary:"試合中のreload/reconnectでAction・途中選択・Decisionが孤児化して進行不能になる経路を修正しました。",featured:true,tags:["fix","online","system"],items:["初回・再接続時も通常同期と同じcanonical hydrate経路を使用し、continuationを含む全状態を復元","canonical Actionはhydrate後にRecoveryへ再接続し、攻撃確定後などの孤児Actionを即時復旧","Decision処理をmatchId・盤面・continuationのhydrate完了後へ移動し、強制・貿易などの誤エラー確定を防止","Action開始metadataを正本へ記録できない場合はローカル処理を進めず再同期し、不整合をfail-closed化","Invariant Checkerがローカル実行主体を失ったcanonical Actionをorphan-local-actionとして検出"]},
       {id:"v170i-post-start-decision-atomic",version:"v170i",date:"2026-09-01",title:"予告状Decisionの確定を原子化",summary:"予告状から発動した強制・貿易で、効果だけ確定して外側Actionが未完了になる切断境界を解消しました。",tags:["fix","online","system"],items:["強制・貿易の効果state、Decision削除、予告状completed checkpointを同一Firestore transactionで確定","commit成功応答だけ失われた再送も、completed stepを確認して盤面を二重適用せず成功扱い","復旧時は既に完了済みの予告状indexを再checkpointせず次のカードから継続","予告状2枚以上でも1枚ごとのatomic境界を維持し、reloadで強制・貿易が二重発動しないよう強化"]},
@@ -3106,6 +3115,18 @@ const CARD_LIBRARY = {
       realTutorialRetryBtn: document.getElementById("realTutorialRetryBtn"),
       realTutorialChaptersBtn: document.getElementById("realTutorialChaptersBtn"),
       menuDeckBtn: document.getElementById("menuDeckBtn"),
+      menuAchievementsBtn: document.getElementById("menuAchievementsBtn"),
+      achievementsScreen: document.getElementById("achievementsScreen"),
+      achievementsBackBtn: document.getElementById("achievementsBackBtn"),
+      achievementMenuBadge: document.getElementById("achievementMenuBadge"),
+      achievementMasteryOpenBtn: document.getElementById("achievementMasteryOpenBtn"),
+      achievementMasteryCloseBtn: document.getElementById("achievementMasteryCloseBtn"),
+      achievementMasteryPanel: document.getElementById("achievementMasteryPanel"),
+      achievementMasteryList: document.getElementById("achievementMasteryList"),
+      achievementMasteryHint: document.getElementById("achievementMasteryHint"),
+      achievementMasteryBadge: document.getElementById("achievementMasteryBadge"),
+      achievementCompletedBadge: document.getElementById("achievementCompletedBadge"),
+      claimAllAchievementsBtn: document.getElementById("claimAllAchievementsBtn"),
       menuSettingsBtn: document.getElementById("menuSettingsBtn"),
       menuNewsBtn: document.getElementById("menuNewsBtn"),
       newsUnreadBadge: document.getElementById("newsUnreadBadge"),
@@ -3794,7 +3815,24 @@ const CARD_LIBRARY = {
     const PLAYER_CARD_BACKGROUNDS = Object.freeze({
       default:{label:"ノーマル"},blue:{label:"ブルー"},red:{label:"レッド"},green:{label:"グリーン"},purple:{label:"パープル"},gold:{label:"ゴールド"}
     });
-    const PLAYER_TITLES = Object.freeze({rookie:{label:"ルーキー"},operator:{label:"運営者"}});
+    const PLAYER_TITLES = Object.freeze({rookie:{label:"ルーキー"},operator:{label:"運営者"},oldest:{label:"最古参勢"},veteran:{label:"古参勢"}});
+    const GIFT_TITLE_IDS = Object.freeze(["oldest","veteran"]);
+    const CARD_MASTERY_LEVELS = Object.freeze([
+      {threshold:10,suffix:"使い"},{threshold:50,suffix:"の熟練者"},{threshold:100,suffix:"の達人"},{threshold:500,suffix:"の神"}
+    ]);
+    const masteryTitleId=(cardId,threshold)=>`mastery_${cardId}_${threshold}`;
+    function parseMasteryTitleId(id){
+      const match=/^mastery_(.+)_(10|50|100|500)$/.exec(String(id||""));
+      if(!match||!CARD_LIBRARY[match[1]])return null;
+      return {cardId:match[1],threshold:Number(match[2])};
+    }
+    function playerTitleDefinition(id){
+      if(PLAYER_TITLES[id])return PLAYER_TITLES[id];
+      const parsed=parseMasteryTitleId(id);if(!parsed)return null;
+      const level=CARD_MASTERY_LEVELS.find(item=>item.threshold===parsed.threshold);
+      return {label:`${CARD_LIBRARY[parsed.cardId].name}${level?.suffix||""}`,mastery:true,...parsed};
+    }
+    const isKnownPlayerTitleId=id=>!!playerTitleDefinition(id);
     const uniqueKnownIds = (values,definitions,fallback) => [...new Set([...fallBackArray(fallback),...(Array.isArray(values)?values:[])])].filter(id=>Object.hasOwn(definitions,id));
     const fallBackArray = values => [...values];
     function normalizedPlayerCardProfile(profile={}){
@@ -3802,7 +3840,7 @@ const CARD_LIBRARY = {
       const unlockedTitleIds=uniqueKnownIds(profile.unlockedTitleIds,PLAYER_TITLES,DEFAULT_TITLE_IDS);
       const requestedBackground=String(profile.backgroundId||profile.bannerId||"default");
       const requestedTitle=String(profile.titleId||"rookie");
-      return {...profile,backgroundId:unlockedBackgroundIds.includes(requestedBackground)&&PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:unlockedTitleIds.includes(requestedTitle)&&PLAYER_TITLES[requestedTitle]?requestedTitle:"rookie",unlockedBackgroundIds,unlockedTitleIds};
+      return {...profile,backgroundId:unlockedBackgroundIds.includes(requestedBackground)&&PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:isKnownPlayerTitleId(requestedTitle)?requestedTitle:"rookie",unlockedBackgroundIds,unlockedTitleIds};
     }
     function canonicalProfileMigration(storedProfile={}){
       const canonical=normalizedPlayerCardProfile(storedProfile),migration={};
@@ -3815,7 +3853,7 @@ const CARD_LIBRARY = {
     }
     function playerCardPresentation(profile={},fallback="プレイヤー"){
       const requestedBackground=String(profile.backgroundId||profile.bannerId||"default"),requestedTitle=String(profile.titleId||"rookie");
-      return {displayName:String(profile.guestLabel||profile.displayName||fallback),backgroundId:PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:PLAYER_TITLES[requestedTitle]?requestedTitle:"rookie",isGuest:profile.registered===false};
+      return {displayName:String(profile.guestLabel||profile.displayName||fallback),backgroundId:PLAYER_CARD_BACKGROUNDS[requestedBackground]?requestedBackground:"default",titleId:isKnownPlayerTitleId(requestedTitle)?requestedTitle:"rookie",isGuest:profile.registered===false};
     }
     function applyPlayerCardElement(card,presentation,{nameElement=null,titleElement=null}={}){
       if(!card)return;const normalized=playerCardPresentation(presentation,presentation.displayName);
@@ -3823,7 +3861,7 @@ const CARD_LIBRARY = {
       card.classList.toggle("player-card-gold",normalized.backgroundId==="gold");
       card.classList.toggle("is-guest",normalized.isGuest);
       if(nameElement)nameElement.textContent=normalized.displayName;
-      const title=titleElement||card.querySelector("[data-title-slot]");if(title)title.textContent=PLAYER_TITLES[normalized.titleId]?.label||PLAYER_TITLES.rookie.label;
+      const title=titleElement||card.querySelector("[data-title-slot]");if(title)title.textContent=playerTitleDefinition(normalized.titleId)?.label||PLAYER_TITLES.rookie.label;
     }
     const socialTimestampMillis = value => value?.toMillis?.() || Number(value?.seconds||0)*1000 || Number(value||0);
     const authPersistenceEnabled = () => localStorage.getItem("waribashi-auth-persistence") !== "session";
@@ -3889,7 +3927,7 @@ const CARD_LIBRARY = {
             transaction.set(tagRef,{uid:user.uid,tag,displayName:name,publicId,createdAt:fb.serverTimestamp()});
             transaction.set(userRef,publicProfile);return {...publicProfile,createdAt:Date.now()};
           });
-          state.socialProfile=profile;return profile;
+          state.socialProfile=profile;loadAchievementData().catch(()=>{});return profile;
         }catch(error){if(error?.code!=="PLAYER_TAG_TAKEN"&&error?.message!=="PLAYER_TAG_TAKEN")throw error;}
       }
       throw new Error("プレイヤーIDの作成に失敗しました。もう一度お試しください。");
@@ -3904,7 +3942,7 @@ const CARD_LIBRARY = {
       if(!snap.exists()){state.socialProfile=null;renderSocialAccountUi();socialOpen("profileSetupModal");return null;}
       const storedProfile={uid:user.uid,...snap.data()};
       state.socialProfile=normalizedPlayerCardProfile(storedProfile);
-      renderSocialAccountUi();subscribeSocialData();repairOwnRoomStateOnStartup().catch(()=>{});
+      renderSocialAccountUi();subscribeSocialData();repairOwnRoomStateOnStartup().catch(()=>{});loadAchievementData().catch(()=>{});
       const migration={...canonicalProfileMigration(storedProfile),lastLoginAt:fb.serverTimestamp(),updatedAt:fb.serverTimestamp()};
       try{
         await fb.setDoc(fb.doc(fb.db,"users",user.uid),migration,{merge:true});
@@ -3919,11 +3957,107 @@ const CARD_LIBRARY = {
       const ids=(user?.providerData||[]).map(item=>item.providerId);
       if(ids.includes("google.com"))return "Google";if(ids.includes("password"))return "メールアドレス";return user?.isAnonymous?"ゲスト":"アカウント";
     }
+    function masteryRecord(cardId){return state.achievementMastery?.[cardId]||null;}
+    function masteryCompletedAt(record,threshold){return socialTimestampMillis(record?.[`completedAt${threshold}`]||record?.updatedAt||0);}
+    function nextMasteryLevel(uses){return CARD_MASTERY_LEVELS.find(level=>uses<level.threshold)||null;}
+    function claimedMasteryTitleIds(){return new Set((state.achievementTitleClaims||[]).map(item=>String(item.titleId||item.id||"")));}
+    function masteryAchievementRows({completed=false}={}){
+      const claimed=claimedMasteryTitleIds(), rows=[];
+      for(const [cardId,record] of Object.entries(state.achievementMastery||{})){
+        const card=CARD_LIBRARY[cardId];if(!card)continue;const uses=Number(record?.uses||0);if(uses<=0)continue;
+        if(completed){
+          for(const level of CARD_MASTERY_LEVELS){if(uses<level.threshold)continue;const titleId=masteryTitleId(cardId,level.threshold);rows.push({cardId,card,uses,threshold:level.threshold,titleId,title:`${card.name}${level.suffix}`,claimed:claimed.has(titleId),completedAt:masteryCompletedAt(record,level.threshold)});}
+        }else{const level=nextMasteryLevel(uses);if(level)rows.push({cardId,card,uses,threshold:level.threshold,titleId:masteryTitleId(cardId,level.threshold),title:`${card.name}${level.suffix}`,remaining:level.threshold-uses});}
+      }
+      if(completed)return rows.sort((a,b)=>(b.completedAt-a.completedAt)||(b.threshold-a.threshold)||a.card.name.localeCompare(b.card.name,"ja"));
+      return rows.sort((a,b)=>(a.remaining-b.remaining)||(b.uses-a.uses)||a.card.name.localeCompare(b.card.name,"ja"));
+    }
+    function hasUnclaimedAchievements(){return masteryAchievementRows({completed:true}).some(row=>!row.claimed);}
+    function updateAchievementBadges(){
+      const pending=hasUnclaimedAchievements();
+      [elements.achievementMenuBadge,elements.achievementMasteryBadge,elements.achievementCompletedBadge].forEach(el=>{if(el)el.hidden=!pending;});
+      if(elements.claimAllAchievementsBtn)elements.claimAllAchievementsBtn.hidden=!pending||state.achievementTab!=="completed";
+    }
+    async function loadAchievementData(){
+      const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser)){state.achievementMastery={};state.achievementTitleClaims=[];updateAchievementBadges();return;}
+      state.achievementLoading=true;
+      try{
+        const [masterySnap,claimsSnap]=await Promise.all([fb.getDocs(fb.collection(fb.db,"users",profile.uid,"cardMastery")),fb.getDocs(fb.collection(fb.db,"users",profile.uid,"achievementTitleClaims"))]);
+        state.achievementMastery=Object.fromEntries(docsFromSnapshot(masterySnap).map(item=>[item.id,item]));
+        state.achievementTitleClaims=docsFromSnapshot(claimsSnap);
+      }catch(error){console.warn("[Achievements] load",error?.code,error?.message);}
+      finally{state.achievementLoading=false;updateAchievementBadges();if(state.currentScreen==="achievements")renderAchievements();flushMasteryQueue().catch(()=>{});}
+    }
+    function masteryQueueKey(uid){return `waribashi-card-mastery-queue:${uid}`;}
+    function readMasteryQueue(uid){try{const value=JSON.parse(localStorage.getItem(masteryQueueKey(uid))||"[]");return Array.isArray(value)?value:[];}catch(_){return [];}}
+    function writeMasteryQueue(uid,queue){try{if(queue.length)localStorage.setItem(masteryQueueKey(uid),JSON.stringify(queue.slice(-100)));else localStorage.removeItem(masteryQueueKey(uid));}catch(_){}}
+    function enqueueCardMasteryUse(cardId,eventId){const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser)||!CARD_LIBRARY[cardId])return;const queue=readMasteryQueue(profile.uid);if(!queue.some(item=>item.eventId===eventId))queue.push({cardId,eventId,queuedAt:Date.now()});writeMasteryQueue(profile.uid,queue);flushMasteryQueue().catch(()=>{});}
+    function masteryUseEventId(kind,player,cardId,instanceId=""){
+      const scope=state.battleMode==="friend"?(state.friendMatchId||state.friendRoomId||"friend"):(state.gameId||"local");
+      const stable=String(instanceId||"").trim();
+      return stable?`${kind}-${scope}-${player}-${cardId}-${stable}`:`${kind}-${scope}-${player}-${cardId}-${Date.now()}-${Math.random()}`;
+    }
+    function recordSuccessfulCardMasteryUse(player,cardId,{kind="card",instanceId="",eventId=""}={}){
+      if(player!=="human")return;
+      enqueueCardMasteryUse(cardId,eventId||masteryUseEventId(kind,player,cardId,instanceId));
+    }
+    async function flushMasteryQueue(){const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser))return;const uid=profile.uid,queue=readMasteryQueue(uid);if(!queue.length)return;const remaining=[];for(const item of queue){const ok=await recordCardMasteryUse(item.cardId,item.eventId);if(!ok)remaining.push(item);}writeMasteryQueue(uid,remaining);}
+    async function recordCardMasteryUse(cardId,eventId=""){
+      const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser)||!CARD_LIBRARY[cardId])return false;
+      const ref=fb.doc(fb.db,"users",profile.uid,"cardMastery",cardId),dedupe=String(eventId||crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`);
+      try{
+        const result=await fb.runTransaction(fb.db,async transaction=>{
+          const snap=await transaction.get(ref),data=snap.exists()?snap.data():{},recent=Array.isArray(data.recentEventIds)?data.recentEventIds:[];
+          if(recent.includes(dedupe))return {changed:false,data:{id:cardId,...data}};
+          const before=Math.max(0,Number(data.uses||0)),uses=before+1,update={cardId,uses,recentEventIds:[...recent.slice(-99),dedupe],updatedAt:fb.serverTimestamp()};
+          if(!snap.exists())update.createdAt=fb.serverTimestamp();
+          for(const level of CARD_MASTERY_LEVELS)if(before<level.threshold&&uses>=level.threshold&&!data[`completedAt${level.threshold}`])update[`completedAt${level.threshold}`]=fb.serverTimestamp();
+          transaction.set(ref,update,{merge:true});return {changed:true,before,uses,update};
+        });
+        if(result?.changed){const current=state.achievementMastery[cardId]||{id:cardId,cardId},localUpdate={...result.update};for(const level of CARD_MASTERY_LEVELS)if(result.before<level.threshold&&result.uses>=level.threshold)localUpdate[`completedAt${level.threshold}`]=Date.now();state.achievementMastery[cardId]={...current,...localUpdate,uses:result.uses,updatedAt:Date.now()};updateAchievementBadges();}
+        return true;
+      }catch(error){console.warn("[Achievements] mastery write",error?.code,error?.message);return false;}
+    }
+    async function claimMasteryAchievement(row){
+      const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser))throw new Error("ログインしてください。");
+      const titleId=row.titleId,claimRef=fb.doc(fb.db,"users",profile.uid,"achievementTitleClaims",titleId),masteryRef=fb.doc(fb.db,"users",profile.uid,"cardMastery",row.cardId);
+      await fb.runTransaction(fb.db,async transaction=>{const [claimSnap,masterySnap]=await Promise.all([transaction.get(claimRef),transaction.get(masteryRef)]);if(claimSnap.exists())return;if(!masterySnap.exists()||Number(masterySnap.data().uses||0)<row.threshold)throw new Error("まだ達成していません。");transaction.set(claimRef,{uid:profile.uid,titleId,cardId:row.cardId,threshold:row.threshold,claimedAt:fb.serverTimestamp()});});
+      if(!state.achievementTitleClaims.some(item=>item.titleId===titleId))state.achievementTitleClaims.push({id:titleId,uid:profile.uid,titleId,cardId:row.cardId,threshold:row.threshold,claimedAt:Date.now()});
+      updateAchievementBadges();renderAchievements();return row.title;
+    }
+    function showAchievementRewards(rewards){const list=socialEl("achievementRewardList");if(!list)return;if(!rewards.length){list.innerHTML="<p>受け取れる報酬はありません。</p>";}else{list.innerHTML=rewards.map(title=>`<div class="achievement-reward-item"><span>称号</span><strong>${title}</strong></div>`).join("");}socialOpen("achievementRewardModal");}
+    async function claimAllMasteryAchievements(){
+      const rows=masteryAchievementRows({completed:true}).filter(row=>!row.claimed);if(!rows.length)return [];const rewards=[];
+      for(const row of rows){try{rewards.push(await claimMasteryAchievement(row));}catch(error){console.warn("[Achievements] claim all",row.titleId,error?.message);}}
+      renderAchievements();return rewards;
+    }
+    function achievementLongPress(element,callback){let timer=null,long=false;const clear=()=>{if(timer){clearTimeout(timer);timer=null;}};element.addEventListener("pointerdown",()=>{long=false;element.dataset.longPressed="";clear();timer=setTimeout(()=>{long=true;element.dataset.longPressed="1";callback();},600);});["pointerup","pointercancel","pointerleave"].forEach(type=>element.addEventListener(type,clear));element.addEventListener("click",event=>{if(long||element.dataset.longPressed==="1"){event.preventDefault();event.stopPropagation();long=false;element.dataset.longPressed="";}});}
+    function openAchievementDetail(row,{completed=false}={}){
+      const modal=socialEl("achievementDetailModal"),body=socialEl("achievementDetailBody");if(!modal||!body)return;socialEl("achievementDetailTitle").textContent=row.title;
+      body.innerHTML=`<p><strong>条件</strong><br>「${row.card.name}」を${row.threshold}回使用する</p><p><strong>進捗</strong><br>${Math.min(row.uses,row.threshold)} / ${row.threshold}</p><p><strong>報酬</strong><br>称号「${row.title}」</p>${completed&&row.completedAt?`<p><strong>達成日時</strong><br>${new Date(row.completedAt).toLocaleString("ja-JP")}</p>`:""}`;socialOpen("achievementDetailModal");
+    }
+    function renderAchievements(){
+      const formal=isFormalAccount(window.WaribashiFirebase?.authUser)&&!!state.socialProfile;if(!formal){showScreen("menu");return;}
+      document.querySelectorAll("[data-achievement-tab]").forEach(btn=>btn.classList.toggle("active",btn.dataset.achievementTab===state.achievementTab));
+      if(elements.achievementMasteryPanel)elements.achievementMasteryPanel.hidden=!state.achievementMasteryOpen;
+      const empty=socialEl("achievementGeneralEmpty");if(empty)empty.hidden=state.achievementMasteryOpen;
+      const rows=masteryAchievementRows({completed:state.achievementTab==="completed"}),list=elements.achievementMasteryList;if(list&&state.achievementMasteryOpen){list.replaceChildren();
+        if(!rows.length){const div=document.createElement("div");div.className="achievement-empty";div.textContent=state.achievementTab==="completed"?"達成したカード熟練度はまだありません。":"1回以上使用したカードがここに表示されます。";list.append(div);}
+        for(const row of rows){const item=document.createElement("button");item.type="button";item.className="achievement-row";
+          if(state.achievementTab==="completed"){item.innerHTML=`<span class="achievement-row-main"><strong>${row.title}</strong><small>${row.card.name}：${row.uses}回使用</small></span><span class="achievement-row-side">${row.claimed?"受取済み":"<b class=\"achievement-badge\">!</b> 受け取る"}</span>`;if(!row.claimed)item.addEventListener("click",async event=>{if(event.currentTarget.dataset.longPressed==="1")return;try{const reward=await claimMasteryAchievement(row);socialMessage("achievementMessage",`称号「${reward}」を獲得しました。`);}catch(error){socialMessage("achievementMessage",error.message);}});}
+          else item.innerHTML=`<span class="achievement-row-main"><strong>${row.card.name}</strong></span><span class="achievement-progress-text">${row.uses} / ${row.threshold}</span>`;
+          achievementLongPress(item,()=>openAchievementDetail(row,{completed:state.achievementTab==="completed"}));list.append(item);}
+      }
+      if(elements.achievementMasteryHint)elements.achievementMasteryHint.textContent=state.achievementTab==="completed"?"達成した順に表示されます。！の実績を押すと称号を受け取れます。":"次の達成まで残り回数が少ない順です。1回以上使用したカードのみ表示されます。";
+      const summary=socialEl("achievementMasterySummary");if(summary){const used=Object.values(state.achievementMastery||{}).filter(item=>Number(item.uses||0)>0).length;summary.textContent=`${used}種類のカードに使用記録があります`; }updateAchievementBadges();
+    }
+    async function openAchievements(){if(!isFormalAccount(window.WaribashiFirebase?.authUser)||!state.socialProfile)return;state.achievementTab="completed";state.achievementMasteryOpen=false;showScreen("achievements");renderAchievements();await loadAchievementData();}
     function renderSocialAccountUi(){
       const user=window.WaribashiFirebase?.authUser, formal=isFormalAccount(user), profile=state.socialProfile;
       if(socialEl("accountLoading"))socialEl("accountLoading").hidden=!!user;
       if(socialEl("loginOpenBtn"))socialEl("loginOpenBtn").hidden=!user||formal;
       if(socialEl("accountOpenBtn"))socialEl("accountOpenBtn").hidden=!formal;
+      if(elements?.menuAchievementsBtn)elements.menuAchievementsBtn.hidden=!formal||!profile;
       if(socialEl("socialFriendsOpenBtn"))socialEl("socialFriendsOpenBtn").hidden=!formal||!profile;
       if(profile){state.socialProfile=normalizedPlayerCardProfile(profile);socialEl("accountPublicId").textContent=profile.publicId;socialEl("accountDisplayName").textContent=profile.displayName;applyPlayerCardElement(socialEl("accountPlayerCardPreview"),state.socialProfile,{nameElement:socialEl("accountPlayerCardName")});}
       if(socialEl("accountProvider"))socialEl("accountProvider").textContent=authProviderLabel(user);
@@ -3951,13 +4085,14 @@ const CARD_LIBRARY = {
     async function openPlayerCardEditor(){
       await ensureProfileChangeAllowed();const profile=normalizedPlayerCardProfile(state.socialProfile);state.playerCardDraft={backgroundId:profile.backgroundId,titleId:profile.titleId};
       const choices=socialEl("playerCardBackgroundChoices");choices.replaceChildren();for(const id of profile.unlockedBackgroundIds){const def=PLAYER_CARD_BACKGROUNDS[id];if(!def)continue;const button=document.createElement("button");button.type="button";button.className="player-card-choice";button.dataset.backgroundId=id;button.textContent=def.label;button.addEventListener("click",()=>{state.playerCardDraft.backgroundId=id;renderPlayerCardDraft();});choices.append(button);}
-      const select=socialEl("playerCardTitleSelect");select.replaceChildren();for(const id of profile.unlockedTitleIds){const def=PLAYER_TITLES[id];if(!def)continue;const option=document.createElement("option");option.value=id;option.textContent=def.label;select.append(option);}socialMessage("playerCardEditorMessage","");renderPlayerCardDraft();openAccountChildModal("playerCardEditorModal");
+      const select=socialEl("playerCardTitleSelect");select.replaceChildren();const titleIds=[...new Set([...profile.unlockedTitleIds,...claimedMasteryTitleIds()])];for(const id of titleIds){const def=playerTitleDefinition(id);if(!def)continue;const option=document.createElement("option");option.value=id;option.textContent=def.label;select.append(option);}socialMessage("playerCardEditorMessage","");renderPlayerCardDraft();openAccountChildModal("playerCardEditorModal");
     }
     function closePlayerCardEditor(){state.playerCardDraft=null;closeAccountChildModal("playerCardEditorModal");}
     async function savePlayerCard(){
       const fb=await ensureProfileChangeAllowed(),profile=normalizedPlayerCardProfile(state.socialProfile),draft=state.playerCardDraft;if(!draft)throw new Error("編集内容がありません。");
       if(!profile.unlockedBackgroundIds.includes(draft.backgroundId)||!PLAYER_CARD_BACKGROUNDS[draft.backgroundId])throw new Error("所有していない背景は選択できません。");
-      if(!profile.unlockedTitleIds.includes(draft.titleId)||!PLAYER_TITLES[draft.titleId])throw new Error("所有していない称号は選択できません。");
+      if(!profile.unlockedTitleIds.includes(draft.titleId)&&!claimedMasteryTitleIds().has(draft.titleId))throw new Error("所有していない称号は選択できません。");
+      if(!playerTitleDefinition(draft.titleId))throw new Error("不明な称号です。");
       await fb.updateDoc(fb.doc(fb.db,"users",profile.uid),{backgroundId:draft.backgroundId,bannerId:draft.backgroundId,titleId:draft.titleId,updatedAt:fb.serverTimestamp()});
       state.socialProfile=normalizedPlayerCardProfile({...profile,...draft,bannerId:draft.backgroundId});closePlayerCardEditor();renderSocialAccountUi();socialMessage("accountMessage","プレイヤーカードを保存しました。");
     }
@@ -3973,73 +4108,19 @@ const CARD_LIBRARY = {
     function normalizeGiftCode(value){return String(value||"").normalize("NFKC").trim().toUpperCase();}
     async function claimGiftCode(){
       const fb=firebaseApi(),profile=state.socialProfile;if(!fb||!profile||!isFormalAccount(fb.authUser))throw new Error("正式アカウントでログインしてください。");const code=normalizeGiftCode(socialEl("giftCodeInput").value);if(!code)throw new Error("コードを入力してください。");
-      const result=await fb.runTransaction(fb.db,async transaction=>{const codeRef=fb.doc(fb.db,"giftCodes",code),claimRef=fb.doc(fb.db,"giftCodes",code,"claims",profile.uid),userRef=fb.doc(fb.db,"users",profile.uid);const [codeSnap,claimSnap,userSnap]=await Promise.all([transaction.get(codeRef),transaction.get(claimRef),transaction.get(userRef)]);if(!codeSnap.exists())throw new Error("コードが見つかりません。");const gift=codeSnap.data();if(gift.active!==true)throw new Error("このコードは現在使用できません。");if(gift.expiresAt&&socialTimestampMillis(gift.expiresAt)<=Date.now())throw new Error("このコードの有効期限は終了しました。");if(claimSnap.exists())throw new Error("このコードはすでに受け取っています。");const max=gift.type==="single"?1:Number(gift.maxUses||0);if(["limited","single"].includes(gift.type)&&Number(gift.usedCount||0)>=max)throw new Error("このコードの配布は終了しました。");const user=normalizedPlayerCardProfile(userSnap.data()||profile),rewards=gift.rewards||{},titles=[...new Set([...user.unlockedTitleIds,...(rewards.titleIds||[]).filter(id=>PLAYER_TITLES[id])])],backgrounds=[...new Set([...user.unlockedBackgroundIds,...(rewards.backgroundIds||[]).filter(id=>PLAYER_CARD_BACKGROUNDS[id])])];transaction.update(userRef,{unlockedTitleIds:titles,unlockedBackgroundIds:backgrounds,updatedAt:fb.serverTimestamp()});transaction.set(claimRef,{uid:profile.uid,code,claimedAt:fb.serverTimestamp(),rewardsSnapshot:{titleIds:[...(rewards.titleIds||[])],backgroundIds:[...(rewards.backgroundIds||[])]}});if(["limited","single"].includes(gift.type))transaction.update(codeRef,{usedCount:Number(gift.usedCount||0)+1});return {titles,backgrounds,rewards};});
+      const result=await fb.runTransaction(fb.db,async transaction=>{
+        const codeRef=fb.doc(fb.db,"giftCodes",code),claimRef=fb.doc(fb.db,"giftCodes",code,"claims",profile.uid),userRef=fb.doc(fb.db,"users",profile.uid);
+        const [codeSnap,claimSnap,userSnap]=await Promise.all([transaction.get(codeRef),transaction.get(claimRef),transaction.get(userRef)]);
+        if(!codeSnap.exists())throw new Error("コードが見つかりません。");const gift=codeSnap.data();if(gift.active!==true)throw new Error("このコードは現在使用できません。");if(gift.expiresAt&&socialTimestampMillis(gift.expiresAt)<=Date.now())throw new Error("このコードの有効期限は終了しました。");if(claimSnap.exists())throw new Error("このコードはすでに受け取っています。");const max=gift.type==="single"?1:Number(gift.maxUses||0);if(["limited","single"].includes(gift.type)&&Number(gift.usedCount||0)>=max)throw new Error("このコードの配布は終了しました。");
+        const user=normalizedPlayerCardProfile(userSnap.data()||profile),rewards=gift.rewards||{},rewardTitleIds=(rewards.titleIds||[]).filter(id=>PLAYER_TITLES[id]),rewardBackgroundIds=(rewards.backgroundIds||[]).filter(id=>PLAYER_CARD_BACKGROUNDS[id]);
+        const hasNewReward=rewardTitleIds.some(id=>!user.unlockedTitleIds.includes(id))||rewardBackgroundIds.some(id=>!user.unlockedBackgroundIds.includes(id));if(!hasNewReward)throw new Error("この報酬はすでに所持しています。");
+        const titles=[...new Set([...user.unlockedTitleIds,...rewardTitleIds])],backgrounds=[...new Set([...user.unlockedBackgroundIds,...rewardBackgroundIds])];
+        for(const titleId of rewardTitleIds.filter(id=>GIFT_TITLE_IDS.includes(id))){const titleClaimRef=fb.doc(fb.db,"users",profile.uid,"giftTitleClaims",titleId);transaction.set(titleClaimRef,{uid:profile.uid,titleId,code,claimedAt:fb.serverTimestamp()});}
+        transaction.update(userRef,{unlockedTitleIds:titles,unlockedBackgroundIds:backgrounds,updatedAt:fb.serverTimestamp()});transaction.set(claimRef,{uid:profile.uid,code,claimedAt:fb.serverTimestamp(),rewardsSnapshot:{titleIds:[...(rewards.titleIds||[])],backgroundIds:[...(rewards.backgroundIds||[])]}});if(["limited","single"].includes(gift.type))transaction.update(codeRef,{usedCount:Number(gift.usedCount||0)+1});return {titles,backgrounds,rewards};
+      });
       state.socialProfile=normalizedPlayerCardProfile({...profile,unlockedTitleIds:result.titles,unlockedBackgroundIds:result.backgrounds});socialMessage("giftCodeMessage",`報酬を受け取りました：${(result.rewards.titleIds||[]).map(id=>PLAYER_TITLES[id]?.label).filter(Boolean).concat((result.rewards.backgroundIds||[]).map(id=>PLAYER_CARD_BACKGROUNDS[id]?.label).filter(Boolean)).join(" / ")}`);renderSocialAccountUi();
     }
-    async function loginWithGoogle(register=false){
-      const fb=window.WaribashiFirebase;if(!fb?.auth)throw new Error("認証を準備しています。");
-      await applyAuthPersistence(selectedLoginPersistence(register));
-      const provider=new fb.GoogleAuthProvider();let result;
-      try{result=fb.auth.currentUser?.isAnonymous?await fb.linkWithPopup(fb.auth.currentUser,provider):await fb.signInWithPopup(fb.auth,provider);}
-      catch(error){
-        const credential=error?.credential||fb.GoogleAuthProvider.credentialFromError?.(error);
-        if(["auth/credential-already-in-use","auth/account-exists-with-different-credential"].includes(error?.code)&&credential)result=await fb.signInWithCredential(fb.auth,credential);else throw error;
-      }
-      socialClose("authModal");await loadSocialProfile(result.user);return result.user;
-    }
-    async function registerWithEmail(){
-      const fb=window.WaribashiFirebase, name=validatePlayerName(socialEl("registerNameInput").value);
-      const email=socialEl("registerEmailInput").value.trim(),password=socialEl("registerPasswordInput").value,confirmation=socialEl("registerPasswordConfirmInput").value;
-      if(password!==confirmation)throw new Error("確認用パスワードが一致しません。");
-      await applyAuthPersistence(selectedLoginPersistence(true));
-      const credential=fb.EmailAuthProvider.credential(email,password);
-      const result=fb.auth.currentUser?.isAnonymous?await fb.linkWithCredential(fb.auth.currentUser,credential):await fb.signInWithCredential(fb.auth,credential);
-      await createSocialProfile(name,result.user);socialClose("authModal");renderSocialAccountUi();subscribeSocialData();
-    }
-    async function searchPlayerByPublicId(publicId){
-      const fb=firebaseApi();if(!fb||!state.socialProfile)throw new Error("アカウントへログインしてください。");
-      const input=String(publicId||"").normalize("NFKC").trim();if(!/^.+#[0-9]{5}$/u.test(input))throw new Error("プレイヤーIDを 名前#5桁 で入力してください。");
-      const tag=input.slice(-5),reservation=await fb.getDoc(fb.doc(fb.db,"playerTags",tag));if(!reservation.exists())return null;
-      const data=reservation.data();if(normalizePublicId(data.publicId)!==normalizePublicId(input))return null;
-      const snap=await fb.getDoc(fb.doc(fb.db,"users",data.uid));return snap.exists()?{uid:data.uid,...snap.data()}:null;
-    }
-    async function isBlockedByMe(targetUid){
-      const fb=firebaseApi(),me=state.socialProfile;if(!fb||!me)return false;
-      return (await fb.getDoc(fb.doc(fb.db,"users",me.uid,"blocked",targetUid))).exists();
-    }
-    async function findDirectedSocialRecords(collectionName,fromUid,toUid){
-      const fb=firebaseApi();
-      const constrained=fb.query(fb.collection(fb.db,collectionName),fb.where("fromUid","==",fromUid),fb.where("toUid","==",toUid));
-      return docsFromSnapshot(await fb.getDocs(constrained));
-    }
-    async function sendFriendRequest(target){
-      const fb=firebaseApi(),me=state.socialProfile;if(!me||!target)throw new Error("プレイヤーが見つかりません。");
-      if(me.uid===target.uid)throw new Error("自分自身へ申請は送れません。");
-      if(await isBlockedByMe(target.uid))throw new Error("このプレイヤーには現在申請できません。");
-      if(state.socialFriends.some(item=>item.uid===target.uid))throw new Error("すでにフレンドです。");
-      const sameRef=fb.doc(fb.db,"friendRequests",socialRequestId(me.uid,target.uid));
-      const [same,reverse]=await Promise.all([findDirectedSocialRecords("friendRequests",me.uid,target.uid),findDirectedSocialRecords("friendRequests",target.uid,me.uid)]);
-      if(same.some(item=>item.status==="pending"))throw new Error("すでにフレンド申請を送っています。");
-      if(reverse.some(item=>item.status==="pending"))throw new Error("このプレイヤーからフレンド申請が届いています。申請タブから承認してください。");
-      await fb.setDoc(sameRef,{fromUid:me.uid,toUid:target.uid,fromPublicId:me.publicId,toPublicId:target.publicId,fromDisplayName:me.displayName,toDisplayName:target.displayName,status:"pending",createdAt:fb.serverTimestamp()});
-    }
-    async function acceptFriendRequest(request){
-      const fb=firebaseApi(),me=state.socialProfile;if(!me||request.toUid!==me.uid)throw new Error("申請を承認できません。");
-      if(await isBlockedByMe(request.fromUid))throw new Error("このフレンド申請は利用できません。");
-      const batch=fb.writeBatch(fb.db);
-      batch.set(fb.doc(fb.db,"users",me.uid,"friends",request.fromUid),{uid:request.fromUid,publicId:request.fromPublicId,displayName:request.fromDisplayName,createdAt:fb.serverTimestamp()});
-      batch.set(fb.doc(fb.db,"users",request.fromUid,"friends",me.uid),{uid:me.uid,publicId:me.publicId,displayName:me.displayName,createdAt:fb.serverTimestamp()});
-      batch.delete(fb.doc(fb.db,"friendRequests",socialRequestId(request.fromUid,me.uid)));await batch.commit();
-    }
-    async function rejectFriendRequest(request){const fb=firebaseApi();await fb.deleteDoc(fb.doc(fb.db,"friendRequests",socialRequestId(request.fromUid,request.toUid)));}
-    async function removeSocialFriend(target){
-      const fb=firebaseApi(),me=state.socialProfile,batch=fb.writeBatch(fb.db);batch.delete(fb.doc(fb.db,"users",me.uid,"friends",target.uid));batch.delete(fb.doc(fb.db,"users",target.uid,"friends",me.uid));await batch.commit();
-    }
-    async function blockSocialPlayer(target){
-      const fb=firebaseApi(),me=state.socialProfile,batch=fb.writeBatch(fb.db);
-      batch.set(fb.doc(fb.db,"users",me.uid,"blocked",target.uid),{uid:target.uid,publicId:target.publicId,displayName:target.displayName,createdAt:fb.serverTimestamp()});
-      [["users",me.uid,"friends",target.uid],["users",target.uid,"friends",me.uid],["friendRequests",socialRequestId(me.uid,target.uid)],["friendRequests",socialRequestId(target.uid,me.uid)],["battleInvites",socialRequestId(me.uid,target.uid)],["battleInvites",socialRequestId(target.uid,me.uid)]].forEach(path=>batch.delete(fb.doc(fb.db,...path)));await batch.commit();
-    }
+
     function docsFromSnapshot(snapshot){return snapshot.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));}
     function subscribeSocialData(){
       cleanupSocialListeners();const fb=firebaseApi(),me=state.socialProfile;if(!fb||!me)return;
@@ -4365,6 +4446,7 @@ const CARD_LIBRARY = {
         noSplit: !!state.noSplit[player],
         extraActions: Number(state.extraActions[player] || 0),
         pendingTrapCardExtraUses:Number(state.pendingTrapCardExtraUses?.[player]||0),
+        pendingBaitFreeTrapUse:Number(state.pendingBaitFreeTrapUse?.[player]||0),
         handCardMetadata:cloneJson(state.handCardMetadata?.[player]||{}),
         activeExtraAction: !!state.activeExtraAction[player],
         pendingAcceleration: Number(state.pendingAcceleration[player] || 0),
@@ -4783,6 +4865,7 @@ const CARD_LIBRARY = {
       // カード使用権と同名禁止を古い値で上書きすると、使用済み状態が残り続けるため所有者側を優先する。
       const ownedCardActionUsed = !!state.temp?.[player]?.cardActionUsed;
       const ownedCardExtraUses = Number(state.temp?.[player]?.cardExtraUses || 0);
+      const ownedBaitFreeTrapUse = Number(state.temp?.[player]?.baitFreeTrapUse || 0);
       const ownedTerminalCardBanIds = Array.isArray(state.temp?.[player]?.terminalCardBanIds)
         ? [...state.temp[player].terminalCardBanIds]
         : [];
@@ -4804,6 +4887,7 @@ const CARD_LIBRARY = {
         state.temp[player].chargeCardsUsed = ownedChargeCardsUsed;
         state.temp[player].cardActionUsed = ownedCardActionUsed;
         state.temp[player].cardExtraUses = ownedCardExtraUses;
+        state.temp[player].baitFreeTrapUse = ownedBaitFreeTrapUse;
         state.temp[player].terminalCardBanIds = ownedTerminalCardBanIds;
         state.temp[player].attackLimit = ownedAttackLimit;
         state.temp[player].attacksUsed = ownedAttacksUsed;
@@ -4815,7 +4899,7 @@ const CARD_LIBRARY = {
       }
       state.noSplit[player] = !!side.noSplit;
       state.extraActions[player] = Number(side.extraActions || 0);
-      ensureV168State();state.pendingTrapCardExtraUses[player]=Number(side.pendingTrapCardExtraUses||0);state.handCardMetadata[player]=cloneJson(side.handCardMetadata||{});
+      ensureV168State();state.pendingTrapCardExtraUses[player]=Number(side.pendingTrapCardExtraUses||0);state.pendingBaitFreeTrapUse[player]=Number(side.pendingBaitFreeTrapUse||0);state.handCardMetadata[player]=cloneJson(side.handCardMetadata||{});
       state.activeExtraAction[player] = !!side.activeExtraAction;
       state.pendingAcceleration[player] = Number(side.pendingAcceleration || 0);
       state.activeAcceleration[player] = Number(side.activeAcceleration || 0);
@@ -6299,6 +6383,11 @@ const CARD_LIBRARY = {
           await respondSecureFriendInteraction(interrupt.id,{instanceId,commit,nonce});
         }
         const answered = await respondFriendInterrupt(interrupt, response || {});
+        // terminalAppeal は回答側の手札から実際に使う割り込みカード。回答が正式に受理された時点で熟練度を進める。
+        // interrupt.id をイベントIDに使うため、reload / retry でも二重加算されない。
+        if(answered&&interrupt.type==="terminalAppeal"&&response?.cardId){
+          recordSuccessfulCardMasteryUse("human",response.cardId,{kind:"terminal-reaction",eventId:`terminal-reaction-${interrupt.id}`});
+        }
         // false は requester 側タイムアウト等が先に確定しただけなので正常終了扱い。
         state.friendHandledInterruptIds.add(interrupt.id);
         if (!answered) setMessage("相手側で選択時間が終了したため、この回答は適用されませんでした。");
@@ -7920,7 +8009,7 @@ const CARD_LIBRARY = {
       state.decks.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.curseDiscardHistory=[];state.curseDiscardSequence=0;state.fixedCurseRetreats={human:{L:[],R:[]},cpu:{L:[],R:[]}};state.themeRetreats={human:{L:null,R:null},cpu:{L:null,R:null}};state.repetitionFreeCurse={human:null,cpu:null};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
+      state.cardInstanceSequence=0;state.handCardInstances={human:[],cpu:[]};state.handCardMetadata={human:{},cpu:{}};state.pendingTrapCardExtraUses={human:0,cpu:0};state.pendingBaitFreeTrapUse={human:0,cpu:0};state.curseDiscardHistory=[];state.curseDiscardSequence=0;state.fixedCurseRetreats={human:{L:[],R:[]},cpu:{L:[],R:[]}};state.themeRetreats={human:{L:null,R:null},cpu:{L:null,R:null}};state.repetitionFreeCurse={human:null,cpu:null};state.cardLocks={human:[],cpu:[]};state.forcedCard={human:null,cpu:null};state.nobleGasProtected={human:false,cpu:false};state.pendingLateAttackBonus={human:0,cpu:0};state.copiedEffectDepth=0;
       state.traps.human = { L: [], R: [] };
       state.traps.cpu = { L: [], R: [] };
       state.temp.human.cardActionUsed = false;
@@ -8202,6 +8291,7 @@ const CARD_LIBRARY = {
       const showFriendLobby = screen === "friendLobby";
       const showDifficulty = screen === "difficulty";
       const showSettings = screen === "settings";
+      const showAchievements = screen === "achievements";
       const showTutorial = screen === "tutorial";
       const showDeck = screen === "deck";
       const showBattle = screen === "battle";
@@ -8211,6 +8301,7 @@ const CARD_LIBRARY = {
       elements.friendLobbyScreen.classList.toggle("screen-hidden", !showFriendLobby);
       elements.difficultyScreen.classList.toggle("screen-hidden", !showDifficulty);
       elements.settingsScreen.classList.toggle("screen-hidden", !showSettings);
+      elements.achievementsScreen?.classList.toggle("screen-hidden", !showAchievements);
       elements.tutorialScreen.classList.toggle("screen-hidden", !showTutorial);
       elements.deckEditorScreen.classList.toggle("screen-hidden", !showDeck);
       document.querySelectorAll(".battle-screen").forEach(el => {
@@ -8766,7 +8857,7 @@ function wrapFinger(value) {
           <p>攻撃対象が自分の手でも判定されます。「凶弾」で自分のもう片方の手を攻撃した場合も、本数条件を満たせば共鳴します。</p>
           <p>「共鳴調節」が付いている攻撃手は、本数差が<strong>1以下</strong>でも共鳴します。</p>
           <p>受け流し・注目などで攻撃対象が変わった場合は、<strong>変更後の対象</strong>との本数で判定します。</p>
-          <p>「乱舞」は通常攻撃ではない置換攻撃のため、共鳴判定を行いません。</p>`
+          <p>「乱舞」は通常攻撃として共鳴判定を行います。ただし、その通常攻撃で加える本数は0として扱い、攻撃後罠より前に対象の手を攻撃した手と同じ本数へ変更します。</p>`
       }
     };
 
@@ -10085,7 +10176,7 @@ function wrapFinger(value) {
       if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) return false;
       const setupActive = !!state.temp[player]?.setupMode;
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
-      const hasCardAllowance = !state.temp[player]?.cardActionUsed || Number(state.temp[player]?.cardExtraUses || 0) > 0 || lightSpeedChargePlayable || (setupActive && card.trap);
+      const hasCardAllowance = !state.temp[player]?.cardActionUsed || Number(state.temp[player]?.cardExtraUses || 0) > 0 || lightSpeedChargePlayable || (setupActive && card.trap) || hasBaitFreeTrapUse(player, card);
       if (!hasCardAllowance || !canUseChargeCardThisTurn(player, cardId)) return false;
       if (state.activeCostLimit?.[player] !== null && state.activeCostLimit?.[player] !== undefined && card.cost > state.activeCostLimit[player]) return false;
       if (state.berserkerTurns?.[player] > 0 && !state.temp[player]?.berserkerJustUsed) return false;
@@ -10203,7 +10294,7 @@ function wrapFinger(value) {
       const directiveOpponent=otherPlayer(player);
       state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       ensureV168State();
-      state.temp[player].cardExtraUses=Number(state.pendingTrapCardExtraUses[player]||0);state.pendingTrapCardExtraUses[player]=0;
+      state.temp[player].cardExtraUses=0;state.pendingTrapCardExtraUses[player]=0;state.temp[player].baitFreeTrapUse=Number(state.pendingBaitFreeTrapUse[player]||0)>0?1:0;state.pendingBaitFreeTrapUse[player]=0;
       const camouflageDraws=["L","R"].reduce((n,h)=>n+state.traps[player][h].filter(slot=>trapCardId(slot)==="camouflage").length,0);
       if(camouflageDraws){const drawLock=state.activeDrawLock[player];state.activeDrawLock[player]=false;for(let i=0;i<camouflageDraws;i++)drawCard(player);state.activeDrawLock[player]=drawLock;}
       if(camouflageDraws)addLog(`${handNames[player]}の「偽装工作」により、ターン開始時に${camouflageDraws}枚引いた。`);
@@ -10729,6 +10820,7 @@ function wrapFinger(value) {
 
     function ensureV168State(){
       state.pendingTrapCardExtraUses ||= {human:0,cpu:0};
+      state.pendingBaitFreeTrapUse ||= {human:0,cpu:0};
       state.handCardMetadata ||= {human:{},cpu:{}};
       state.handCardMetadata.human ||= {}; state.handCardMetadata.cpu ||= {};
     }
@@ -12397,7 +12489,7 @@ function wrapFinger(value) {
     }
 
     function ignoresOpponentBoardEffects(attacker,attackHand=null) {
-      return !!state.temp[attacker]?.breakthrough||!!(attackHand&&(hasAttachment(attacker,attackHand,"egoBlessing")||hasAttachment(attacker,attackHand,"superEgo")));
+      return !!state.temp[attacker]?.breakthrough||!!(attackHand&&hasAttachment(attacker,attackHand,"superEgo"));
     }
 
     function applyGuardBlessingReduction(defender, targetHand, amount, sourceLabel = "効果") {
@@ -13526,6 +13618,14 @@ function renderLastAction() {
         const berserkLocked = state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed;
         const intemperanceLocked = !!state.activeIntemperanceCardLock?.human;
         const romanRuleLocked = !canUseCardUnderRule("human",cardId,{silent:true});
+        const baitFreeTrapPlayable =
+          state.turn === "human" &&
+          !state.gameOver &&
+          !state.animating &&
+          isTrap &&
+          hasBaitFreeTrapUse("human", card) &&
+          !berserkLocked &&
+          !intemperanceLocked;
         const baseCardActionAvailable =
           state.turn === "human" &&
           !state.gameOver &&
@@ -13572,7 +13672,7 @@ function renderLastAction() {
           !restrictedByCost &&
           !berserkLocked &&
           !intemperanceLocked &&
-          (((baseCardActionAvailable || lightSpeedChargePlayable) && isZoneCard && !setupActive) || (setupActive && isTrap)) &&
+          (((baseCardActionAvailable || lightSpeedChargePlayable || baitFreeTrapPlayable) && isZoneCard && !setupActive) || (setupActive && isTrap)) &&
           canSetAttachmentTarget("human", cardId);
         const discardPlayable = repairDiscardMode && cardId !== "repair" && isExternallyDiscardableHandCard(cardId);
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown" && isExternallyDiscardableHandCard(cardId);
@@ -13626,6 +13726,8 @@ function renderLastAction() {
                   ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
                   : Number(state.temp.human.cardExtraUses || 0) > 0
                     ? `<div class="used charge-ready">黄金狂：追加使用 残り${Number(state.temp.human.cardExtraUses || 0)}回</div>`
+                    : baitFreeTrapPlayable
+                    ? '<div class="used charge-ready">囮：この罠はカード使用回数を消費しない</div>'
                     : '<div class="used">カード関連行動は使用済み</div>')
               : ''}
         `;
@@ -14031,9 +14133,18 @@ function renderLastAction() {
       return ["L", "R"].some(h => state[player][h] > 0 && state.traps[player][h].length < 2);
     }
 
-    function consumeCardActionAllowance(player, { setupActive = false, lightSpeedChargePlayable = false } = {}) {
+    function hasBaitFreeTrapUse(player, card) {
+      return !!card?.trap && Number(state.temp?.[player]?.baitFreeTrapUse || 0) > 0;
+    }
+
+    function consumeCardActionAllowance(player, { setupActive = false, lightSpeedChargePlayable = false, card = null } = {}) {
       if (setupActive) return;
       const temp = state.temp[player];
+      if (hasBaitFreeTrapUse(player, card)) {
+        temp.baitFreeTrapUse = Math.max(0, Number(temp.baitFreeTrapUse || 0) - 1);
+        addLog(`${handNames[player]}は「囮」の効果により、この罠の設置でカード使用回数を消費しなかった。`);
+        return;
+      }
       if (!temp.cardActionUsed) {
         temp.cardActionUsed = true;
         return;
@@ -14068,7 +14179,7 @@ function renderLastAction() {
       if (
         !card ||
         !isAttachmentCard(cardId) ||
-        (state.temp.human.cardActionUsed && Number(state.temp.human.cardExtraUses||0)<=0 && !state.temp.human.setupMode && !lightSpeedChargePlayable)
+        (state.temp.human.cardActionUsed && Number(state.temp.human.cardExtraUses||0)<=0 && !state.temp.human.setupMode && !lightSpeedChargePlayable && !hasBaitFreeTrapUse("human", card))
       ) return;
       if (state.temp.human.setupMode && !card.trap) {
         setMessage("仕込み中に置けるのは罠カードだけです。");
@@ -14128,7 +14239,7 @@ function renderLastAction() {
       if (
         state[owner][hand] <= 0 ||
         !canPlaceAttachmentOnHand(player,owner,hand,cardId) ||
-        (state.temp[player].cardActionUsed && Number(state.temp[player].cardExtraUses||0)<=0 && !setupActive && !lightSpeedChargePlayable&&!repetitionFree)
+        (state.temp[player].cardActionUsed && Number(state.temp[player].cardExtraUses||0)<=0 && !setupActive && !lightSpeedChargePlayable&&!repetitionFree&&!hasBaitFreeTrapUse(player,card))
       ) return false;
       if (card.blessing && hasSealCurse(owner, hand)) {
         if (player === "human") setMessage("封印の呪縛により、その手には新たに加護を置けません。");
@@ -14143,13 +14254,16 @@ function renderLastAction() {
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       if (card.curse && await maybeReflectCurseWithMagicMirror(player, owner, hand, cardId)) {
         if (!setupActive) {
-          consumeCardActionAllowance(player, { lightSpeedChargePlayable });
+          consumeCardActionAllowance(player, { lightSpeedChargePlayable, card });
           state.mode = "attack";
         } else {
           state.mode = "setupTrap";
         }
         state.selectedTrapCardIndex = null;
-        if(countsAsActualCardUse)await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
+        if(countsAsActualCardUse){
+          await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
+          recordSuccessfulCardMasteryUse(player,cardId,{kind:"attachment",instanceId:attachmentInstanceId});
+        }
         render();
         return true;
       }
@@ -14162,7 +14276,7 @@ function renderLastAction() {
       }
       installAttachmentInstance(owner,hand,trapInstance);
       if (!setupActive) {
-        if(!repetitionFree)consumeCardActionAllowance(player, { lightSpeedChargePlayable });
+        if(!repetitionFree)consumeCardActionAllowance(player, { lightSpeedChargePlayable, card });
         state.mode = "attack";
       } else {
         state.mode = "setupTrap";
@@ -14188,7 +14302,10 @@ function renderLastAction() {
       }
       triggerChemicalGeneration(player, cardId);
       recordRondoUse(player,cardId);
-      if(countsAsActualCardUse)await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
+      if(countsAsActualCardUse){
+        await afterActualCardUseResolved(player,{cardId,consumedCardAction:!repetitionFree});
+        recordSuccessfulCardMasteryUse(player,cardId,{kind:"attachment",instanceId:attachmentInstanceId});
+      }
       render();
 
       // 罠・加護・呪縛は、対象の手を選んで設置できた後に
@@ -14276,12 +14393,16 @@ function renderLastAction() {
       if (!reactionId) return false;
       const reactionIndex = state.hands[defender].indexOf(reactionId);
       if (reactionIndex < 0) return false;
+      ensureHandCardInstances(defender);
+      const reactionInstanceId=handCardInstanceId(defender,reactionIndex);
 
       // 使用された終端カードは、この時点では攻撃側の捨て札にある。
       const originalIndex = state.discard[attacker].lastIndexOf(rawCardId);
       if (originalIndex < 0) return false;
       state.discard[attacker].splice(originalIndex, 1);
       state.hands[defender].splice(reactionIndex, 1);
+      state.handCardInstances[defender].splice(reactionIndex,1);
+      forgetHandCardMetadata(defender,reactionInstanceId);
 
       if (!Array.isArray(state.temp[attacker].terminalCardBanIds)) state.temp[attacker].terminalCardBanIds = [];
       if (!state.temp[attacker].terminalCardBanIds.includes(cardId)) state.temp[attacker].terminalCardBanIds.push(cardId);
@@ -14304,6 +14425,7 @@ function renderLastAction() {
         await showCardPopup(defender, CARD_LIBRARY.supremeAppeal, false, 900);
       }
 
+      recordSuccessfulCardMasteryUse(defender,reactionId,{kind:"terminal-reaction",instanceId:reactionInstanceId});
       setLastAction(defender, `「${CARD_LIBRARY[reactionId].name}」`, `「${card.name}」を無効化しました。`, "card");
       state.pendingTerminalEnd[attacker] = false;
       render();
@@ -14391,7 +14513,7 @@ function renderLastAction() {
       const removedHandInstance=state.handCardInstances[player].splice(handIndex,1)[0];forgetHandCardMetadata(player,removedHandInstance);
       if(!card.vanishOnUse)state.discard[player].push(rawCardId);
       markChargeCardUsedThisTurn(player, cardId);
-      if(card.consumesCardAction!==false)consumeCardActionAllowance(player, { lightSpeedChargePlayable });
+      if(card.consumesCardAction!==false)consumeCardActionAllowance(player, { lightSpeedChargePlayable, card });
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
       setLastAction(player, `「${card.name}」`, card.text, "card");
 
@@ -14445,6 +14567,7 @@ function renderLastAction() {
       triggerChemicalGeneration(player, cardId);
       checkWin();
       if(onlineCardAction)await OnlineActionManager.checkpoint(onlineCardAction,"card-effect-resolved");
+      recordSuccessfulCardMasteryUse(player,cardId,{kind:"card",instanceId:rawCardInstanceId,eventId:onlineCardAction?.id||""});
 
       if (isTutorialBattle() && player === "human") {
         tutorialAfterCard(cardId);
@@ -14806,7 +14929,14 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       }
 
       if (hasAttachment(attacker, attackHand, "recklessBlessing") && state[attacker][attackHand] > 0) {
-        await addFingersWithCalculation(attacker, attackHand, 1, "捨て身の反動");
+        const intendedAmount = Math.max(0, Number(state.lastAttackContext?.finalAttackPower || 0));
+        const recoil = Math.max(0, intendedAmount - 1);
+        if (recoil > 0) {
+          await addFingersWithCalculation(attacker, attackHand, recoil, "捨て身の反動");
+          addLog(`「捨て身」の反動：相手に加えるはずだった${intendedAmount}本-1=${recoil}本を自分にも加えた。`);
+        } else {
+          addLog(`「捨て身」の反動は、相手に加えるはずだった本数が${intendedAmount}本のため発生しなかった。`);
+        }
       }
     }
 
@@ -14926,36 +15056,32 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           addLog(`「憤怒」により攻撃対象がランダムに${handNames[defender]}の${handNames[targetHand]}へ変更された。`);
         }
       }
-      if(!options.preventTargetChange&&!state.temp[attacker]?.dance&&hasAttachment(attacker,attackHand,"idCurse")){
+      if(!options.preventTargetChange&&hasAttachment(attacker,attackHand,"idCurse")){
         const candidates=[{owner:attacker,hand:otherHand(attackHand)},{owner:otherPlayer(attacker),hand:"L"},{owner:otherPlayer(attacker),hand:"R"}].filter(x=>!(x.owner===attacker&&x.hand===attackHand)&&isAlive(x.owner,x.hand));
         if(candidates.length){const chosen=candidates[Math.floor(Math.random()*candidates.length)];defender=chosen.owner;targetHand=chosen.hand;addLog(`「イド」により攻撃対象が${handNames[defender]}の${handNames[targetHand]}へ変更された。`);}
       }
 
       const danceActive = !!state.temp[attacker]?.dance;
-      // 乱舞は攻撃行動枠を使う「置換攻撃」であり、通常攻撃の履歴・予約を消費しない。
+      // 乱舞も通常攻撃として扱う。攻撃イベントは共通処理へ流し、加える本数だけ0にして後で結果を置換する。
       if (danceActive) state.temp[attacker].dance = false;
-      if (!danceActive) {
-        state.temp[attacker].attacksOccurredThisTurn=Number(state.temp[attacker].attacksOccurredThisTurn||0)+1;
-      }
+      state.temp[attacker].attacksOccurredThisTurn=Number(state.temp[attacker].attacksOccurredThisTurn||0)+1;
 
-      const frenzyActive = !danceActive && !!state.temp[attacker]?.frenzyAttack;
-      const rationalPowerActive = !danceActive && !!state.temp[attacker]?.rationalPowerAttack;
-      const selfRighteousActive = !danceActive && !!state.temp[attacker]?.selfRighteousAttack;
-      const justiceForEveryoneActive = !danceActive && !!state.temp[attacker]?.justiceForEveryoneAttack;
-      const tearSharpenedSwordActive = !danceActive && !!state.temp[attacker]?.tearSharpenedSwordAttack;
-      const goldRushActive = !danceActive && !!state.temp[attacker]?.goldRushAttack;
-      const balanceBladeActive = !danceActive && !!state.temp[attacker]?.balanceBladeAttack;
-      const canonActive = !danceActive && !!state.temp[attacker]?.canon;
-      if (!danceActive) {
-        state.temp[attacker].canon = false;
-        state.temp[attacker].frenzyAttack = false;
-        state.temp[attacker].rationalPowerAttack = false;
-        state.temp[attacker].selfRighteousAttack = false;
-        state.temp[attacker].justiceForEveryoneAttack = false;
-        state.temp[attacker].tearSharpenedSwordAttack = false;
-        state.temp[attacker].goldRushAttack = false;
-        state.temp[attacker].balanceBladeAttack = false;
-      }
+      const frenzyActive = !!state.temp[attacker]?.frenzyAttack;
+      const rationalPowerActive = !!state.temp[attacker]?.rationalPowerAttack;
+      const selfRighteousActive = !!state.temp[attacker]?.selfRighteousAttack;
+      const justiceForEveryoneActive = !!state.temp[attacker]?.justiceForEveryoneAttack;
+      const tearSharpenedSwordActive = !!state.temp[attacker]?.tearSharpenedSwordAttack;
+      const goldRushActive = !!state.temp[attacker]?.goldRushAttack;
+      const balanceBladeActive = !!state.temp[attacker]?.balanceBladeAttack;
+      const canonActive = !!state.temp[attacker]?.canon;
+      state.temp[attacker].canon = false;
+      state.temp[attacker].frenzyAttack = false;
+      state.temp[attacker].rationalPowerAttack = false;
+      state.temp[attacker].selfRighteousAttack = false;
+      state.temp[attacker].justiceForEveryoneAttack = false;
+      state.temp[attacker].tearSharpenedSwordAttack = false;
+      state.temp[attacker].goldRushAttack = false;
+      state.temp[attacker].balanceBladeAttack = false;
 
       if (frenzyActive && !options.preventTargetChange) {
         const originalOpponent = otherPlayer(attacker);
@@ -14982,7 +15108,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       const attackStartPower = state[attacker][attackHand];
       let targetStartPower = state[defender][targetHand];
-      const prestoModifier = !danceActive && state.pendingPrestoAttack?.[attacker]
+      const prestoModifier = state.pendingPrestoAttack?.[attacker]
         ? [1, 0, -1, -2][randomIndex(4)]
         : null;
       if (prestoModifier !== null) {
@@ -14997,12 +15123,12 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
        * ATTACK CORE RULE:
        * 通常攻撃力 = basePower + attackModifier。
        * 不変の呪縛は、攻撃する手に付いている場合、その通常攻撃のattackModifierを正負とも0にする。
-       * ゴールドラッシュは通常攻撃の加算量置換。乱舞は通常攻撃ではない置換攻撃。
-       * どちらもattackModifierを使用せず、乱舞はreceivedAmountも使用しない。
+       * ゴールドラッシュは通常攻撃の加算量置換。乱舞は通常攻撃だが、加える本数を0にして攻撃結果を後置換する。
+       * どちらも置換対象の数値にはattackModifierを使用しない。
        * 防御側の軽減・増加は、その後のreceivedAmountとして別に処理する。
        */
       const normalBasePower = state[attacker][attackHand];
-      let immutable = hasImmutableCurse(attacker, attackHand)||hasAttachment(attacker,attackHand,"superEgo");
+      let immutable = hasImmutableCurse(attacker, attackHand)||hasAttachment(attacker,attackHand,"egoBlessing")||hasAttachment(attacker,attackHand,"superEgo");
       const goldRushBase = countHandCards(attacker);
       const basePower = goldRushActive ? goldRushBase : normalBasePower;
       const attackReplacementKind = danceActive ? "result" : goldRushActive ? "amount" : null;
@@ -15012,10 +15138,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const pendingDirectiveNextBonus=Number(state.pendingDirectiveNextAttackModifier?.[attacker]||0);
       const directiveHandBonus=pendingDirectiveHandBonus;
       const directiveNextBonus=pendingDirectiveNextBonus;
-      if (!danceActive) {
-        state.pendingDirectiveHandAttackModifier[attacker][attackHand]=0;
-        state.pendingDirectiveNextAttackModifier[attacker]=0;
-      }
+      state.pendingDirectiveHandAttackModifier[attacker][attackHand]=0;
+      state.pendingDirectiveNextAttackModifier[attacker]=0;
       const bonus = rawBonus;
       const berserkerBonus = state.berserkerTurns[attacker] > 0 ? 2 : 0;
       const magicalAttackBonus = (
@@ -15038,7 +15162,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
       const balanceBladeBonus = balanceBladeActive && isBalanced(attacker) ? 2 : 0;
       // 攻撃結果置換でも共鳴した事実は成立し得る。加算ボーナスだけを置換結果へ反映しない。
-      let resonance = !danceActive && isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
+      let resonance = isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, false);
       const sforzandoBonus = Number(state.sforzandoTurnBonus?.[attacker] || 0);
       const betrayedHeartPenalty = state.temp[attacker]?.betrayedHeartPenalty ? -1 : 0;
@@ -15058,11 +15182,11 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       };
       let attackPowerResult = calculateFinalAttackPower();
       let power = attackPowerResult.finalAttackPower;
-      if (!danceActive) state.temp[attacker].attackBonus = 0;
+      state.temp[attacker].attackBonus = 0;
       if (isAttackReplacement && calculateAttackModifier() !== 0) {
         addLog(`攻撃置換中のため、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}は適用されない。`);
       } else if (immutable && calculateAttackModifier() !== 0) {
-        addLog(`${handNames[attacker]}の${handNames[attackHand]}の「不変の呪縛」により、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}を無効化した。`);
+        addLog(`${handNames[attacker]}の${handNames[attackHand]}の${hasAttachment(attacker,attackHand,"superEgo")?"「スーパーエゴ」":hasAttachment(attacker,attackHand,"egoBlessing")?"「エゴ」":"「不変の呪縛」"}により、通常攻撃で加える本数への増減${calculateAttackModifier() >= 0 ? "+" : ""}${calculateAttackModifier()}を無効化した。`);
       }
       const attackModifierLogsApply = !immutable && !isAttackReplacement;
       if (attackModifierLogsApply && blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、通常攻撃で加える本数+1。`);
@@ -15139,18 +15263,18 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         power = Math.max(trapResult.allowZeroPower ? 0 : 1, attackPowerResult.finalAttackPower);
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         if (immutable || isAttackReplacement) {
-          addLog(`${isAttackReplacement ? "攻撃置換" : "「不変の呪縛」"}により、罠による加える本数への増減${trapResult.powerDelta >= 0 ? "+" : ""}${trapResult.powerDelta}を無効化した。`);
+          addLog(`${isAttackReplacement ? "攻撃置換" : hasAttachment(attacker,attackHand,"superEgo") ? "「スーパーエゴ」" : hasAttachment(attacker,attackHand,"egoBlessing") ? "「エゴ」" : "「不変の呪縛」"}により、罠による加える本数への増減${trapResult.powerDelta >= 0 ? "+" : ""}${trapResult.powerDelta}を無効化した。`);
         } else if (oldPower !== power) addLog(`この攻撃で加える本数が${oldPower}→${power}になった。`);
       }
 
       if (trapResult.targetHand) {
         targetHand = trapResult.targetHand;
         targetStartPower = state[defender][targetHand];
-        const redirectedResonance = !danceActive && isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
+        const redirectedResonance = isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
         const redirectedBonus = resonanceAttackBonus(attacker, attackHand, redirectedResonance, false);
         resonanceBonus = redirectedBonus;
         resonance = redirectedResonance;
-        immutable = hasImmutableCurse(attacker, attackHand)||hasAttachment(attacker,attackHand,"superEgo");
+        immutable = hasImmutableCurse(attacker, attackHand)||hasAttachment(attacker,attackHand,"egoBlessing")||hasAttachment(attacker,attackHand,"superEgo");
         attackPowerResult = calculateFinalAttackPower();
         power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
@@ -15167,14 +15291,14 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       // 「銛を埋める」は対象変更後・攻撃結果確定前に最終対象へ付与する。
       // この後に空振り等で無効化されても、付与済みの銛は残る。
-      if (!danceActive && !isRomanOpponentTarget(attacker,defender)) resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
+      if (!isRomanOpponentTarget(attacker,defender)) resolveHarpoonBeforeAttack(attacker,defender,targetHand,{isInternal:!!options.cardInternalAttack});
 
       if (tearSharpenedSwordActive && !isRomanOpponentTarget(attacker,defender)) {
         discardAllBlessingsFromHand(defender, targetHand, "「涙で研ぎ澄まされた剣」");
         render();
       }
 
-      if (!danceActive && !ignoresDefenderBoard && hasAttachment(defender, targetHand, "villainMark")) {
+      if (!ignoresDefenderBoard && hasAttachment(defender, targetHand, "villainMark")) {
         trapPowerDelta += 1;
         attackPowerResult = calculateFinalAttackPower();
         power = attackPowerResult.finalAttackPower;
@@ -15182,18 +15306,16 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         drawCard(attacker);
         const villainMarkReason = isAttackReplacement
           ? "攻撃置換のため適用されない"
-          : immutable ? "「不変の呪縛」により無効" : "適用";
+          : immutable ? (hasAttachment(attacker,attackHand,"superEgo")?"「スーパーエゴ」により無効":hasAttachment(attacker,attackHand,"egoBlessing")?"「エゴ」により無効":"「不変の呪縛」により無効") : "適用";
         addLog(villainMarkReason === "適用"
           ? `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」により、通常攻撃で加える本数+1。${handNames[attacker]}はカードを1枚引いた。`
           : `${handNames[defender]}の${handNames[targetHand]}の「悪党の印」による加える本数+1は${villainMarkReason}。${handNames[attacker]}はカードを1枚引いた。`);
       }
 
-      if (!danceActive) recordDirectiveAttack(attacker, attackHand, defender, targetHand);
-      if (!danceActive) {
-        state.temp[attacker].lightningBonus=0;
-        state.temp[attacker].synapseBonus=0;
-      }
-      const duelUpdate = !danceActive ? updateDuelSurge(attacker, attackHand, defender, targetHand) : { bonus: 0, level: 0 };
+      recordDirectiveAttack(attacker, attackHand, defender, targetHand);
+      state.temp[attacker].lightningBonus=0;
+      state.temp[attacker].synapseBonus=0;
+      const duelUpdate = updateDuelSurge(attacker, attackHand, defender, targetHand);
       if (duelUpdate.bonus > 0) {
         duelSurgeBonus = duelUpdate.bonus;
         attackPowerResult = calculateFinalAttackPower();
@@ -15205,7 +15327,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
 
       if (trapResult.cancelAttack) {
-        if (!danceActive && state.temp[attacker].lightningZeroAtFive) {
+        if (state.temp[attacker].lightningZeroAtFive) {
           state.temp[attacker].lightningZeroAtFive = false;
           state.temp[attacker].lightningNoChargeGain = false;
           addLog(`「雷撃」の充電Lv.10効果は、攻撃が無効になったため消費された。`);
@@ -15213,7 +15335,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         addLog(`${handNames[attacker]}の攻撃は無効になった。`);
         setLastAction(attacker, "攻撃", "攻撃は無効になりました。", "action");
 
-        if (!danceActive) state.temp[attacker].lightningNoChargeGain = false;
+        state.temp[attacker].lightningNoChargeGain = false;
         state.animating = false;
         clearHighlights();
         render();
@@ -15230,33 +15352,18 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         return true;
       }
 
-      if (danceActive) {
-        const before = state[defender][targetHand];
-        const matched = state[attacker][attackHand];
-        let resolvedFinal = wrapFinger(matched);
-        state[defender][targetHand] = resolvedFinal;
-        state.lastAttackContext = {attackKind:"replacement",attacker,sourceHand:attackHand,defender,targetHand,basePower:null,attackModifier:null,finalAttackPower:null,receivedAmount:null,isAttackReplacement:true,attackReplacementKind:"result",isNormalAttack:false,isCardAttack:false};
-        addLog(`${handNames[attacker]}の「乱舞」により、ダメージは発生せず、${handNames[defender]}の${handNames[targetHand]}を${before}→${matched}${matched!==resolvedFinal?`→${resolvedFinal}`:""}に変更した。`);
-        const afterTrapResult = await resolveAfterAttackTraps({attacker,attackHand,defender,targetHand,incomingPower:0,attackTotal:matched,resolvedFinal,trapUsed,ignoresDefenderBoard});
-        trapUsed = afterTrapResult.trapUsed;
-        resolvedFinal = afterTrapResult.resolvedFinal;
-        if(trapResult.deferredCounter&&state[attacker][attackHand]>0){const amount=state[defender][trapResult.deferredCounter.placedHand];await addFingersWithCalculation(attacker,attackHand,amount,"反撃",false,{sourcePlayer:defender,zeroAtSeven:true});}
-        setLastAction(attacker, "乱舞", `${handNames[attackHand]}と${handNames[defender]}の${handNames[targetHand]}の本数を揃えた。`, "card");
-        clearBrokenTraps(defender);
-        clearBrokenTraps(attacker);
-        state.animating = false;
-        clearHighlights();
-        render();
-        await completeAttackAttempt();
-        return true;
-      }
 
       // finalAttackPower確定後、防御側の「受ける本数」補正を適用する。
       // 不変の呪縛はこのreceivedAmountレイヤーには干渉しない。
       attackPowerResult = calculateFinalAttackPower();
       power = attackPowerResult.finalAttackPower;
+      const preReplacementAttackPower = power;
+      if (danceActive) {
+        power = 0;
+        addLog(`${handNames[attacker]}の「乱舞」により、この通常攻撃で加える本数を0として扱う。`);
+      }
       const finalAttackPower = power;
-      if (!ignoresDefenderBoard && power > 0) {
+      if (!danceActive && !ignoresDefenderBoard && power > 0) {
         if (state.temp[defender]?.knightCreed) {
           power = 0;
         } else {
@@ -15282,7 +15389,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         }
       }
       const receivedAmount = power;
-      state.lastAttackContext = {attackKind:"normal",attacker,sourceHand:attackHand,defender,targetHand,basePower,attackModifier:attackPowerResult.attackModifier,finalAttackPower,receivedAmount,appliedAmount:canonActive?0:receivedAmount,canonActive,isAttackReplacement,attackReplacementKind,isNormalAttack:true,isCardAttack:false};
+      state.lastAttackContext = {attackKind:"normal",attacker,sourceHand:attackHand,defender,targetHand,basePower,attackModifier:attackPowerResult.attackModifier,preReplacementAttackPower,finalAttackPower,receivedAmount,appliedAmount:(canonActive||danceActive)?0:receivedAmount,canonActive,danceActive,isAttackReplacement,attackReplacementKind,isNormalAttack:true,isCardAttack:false};
 
       if (power <= 0 && prestoModifier === null && state.temp[defender]?.knightCreed) {
         addLog(`${handNames[defender]}の「騎士の信条」により通常攻撃は無効になった。`);
@@ -15295,7 +15402,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       // カノンは通常攻撃を最後まで成立させる。罠・補正後の「本来加える本数」と
       // 最終対象を保存し、この攻撃で盤面へ実際に加える本数だけを0にする。
-      if(canonActive){
+      if(canonActive && !danceActive){
         if(power!==0){
           state.pendingCanonHits.push({sourcePlayer:attacker,waitForPlayer:otherPlayer(attacker),defender,targetHand,amount:power});
           addLog(`${handNames[attacker]}の「カノン」は${handNames[defender]}の${handNames[targetHand]}へ本来加える${power}本を記録した。この攻撃で実際に加える本数は0。`);
@@ -15362,7 +15469,21 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if(defender===otherPlayer(attacker)&&before>0&&resolvedFinal===0)state.temp[attacker].opponentZeroedThisTurn=true;
       if (guardWouldApply) state.temp[defender].guard = false;
       render();
-      if(!danceActive&&!ignoresDefenderBoard){
+
+      // 乱舞は0本の通常攻撃を解決した直後、攻撃後罠より前に最終対象の本数を攻撃手へ揃える。
+      if(danceActive && !romanOpponentHandProtected){
+        const beforeDance = state[defender][targetHand];
+        const matched = state[attacker][attackHand];
+        resolvedFinal = wrapFinger(matched);
+        state[defender][targetHand] = resolvedFinal;
+        state.lastAttackContext.appliedAmount = 0;
+        state.lastAttackContext.danceReplacementBefore = beforeDance;
+        state.lastAttackContext.danceReplacementAfter = resolvedFinal;
+        addLog(`${handNames[attacker]}の「乱舞」により、${handNames[defender]}の${handNames[targetHand]}を${beforeDance}→${matched}${matched!==resolvedFinal?`→${resolvedFinal}`:""}に変更した。`);
+        render();
+      }
+
+      if(!ignoresDefenderBoard){
         for(const slot of [...state.traps[defender][targetHand]])if(trapCardId(slot)==="trauma"){slot.count=Number(slot.count||0)+1;addLog(`「トラウマ」のカウントが${slot.count}になった。`);if(slot.count>=4){state[defender][targetHand]=0;resolvedFinal=0;clearBrokenTraps(defender);break;}}
         if(state[defender][otherHand(targetHand)]>0&&hasAttachment(defender,targetHand,"displacement"))await addFingersWithCalculation(defender,otherHand(targetHand),1,"ディスプレイスメント",true,{sourcePlayer:defender});
       }
@@ -15387,7 +15508,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       const finalTargetWasOpponent = defender === otherPlayer(attacker);
       const finalTargetWasZero = resolvedFinal === 0;
-      if(!danceActive&&finalTargetWasOpponent&&finalTargetWasZero){const index=state.traps[attacker][attackHand].findIndex(slot=>trapCardId(slot)==="egoBlessing");if(index>=0){const previous=state.traps[attacker][attackHand][index],evolved=makeTrapInstance("superEgo",attacker);evolved.id=trapInstanceId(previous)||evolved.id;state.traps[attacker][attackHand][index]=evolved;addLog(`「エゴ」が「スーパーエゴ」へ変化した。`);}}
+      if(finalTargetWasOpponent&&finalTargetWasZero){const index=state.traps[attacker][attackHand].findIndex(slot=>trapCardId(slot)==="egoBlessing");if(index>=0){const previous=state.traps[attacker][attackHand][index],evolved=makeTrapInstance("superEgo",attacker);evolved.id=trapInstanceId(previous)||evolved.id;state.traps[attacker][attackHand][index]=evolved;addLog(`「エゴ」が「スーパーエゴ」へ変化した。`);}}
 
       if (selfRighteousActive && !finalTargetWasZero && state[attacker][attackHand] > 0) {
         await addFingersWithCalculation(attacker, attackHand, 2, "独善の反動");
@@ -16143,10 +16264,12 @@ async function endTurn(reason="unspecified") {
 
     function cpuBestTrapPlacementScore() {
       const profile = cpuDeckProfile();
+      const baitTrapOnly = !!state.temp?.cpu?.cardActionUsed && Number(state.temp?.cpu?.cardExtraUses||0)<=0 && !state.temp?.cpu?.lightSpeedCircuit && Number(state.temp?.cpu?.baitFreeTrapUse||0)>0;
       let best = null;
       state.hands.cpu.forEach((cardId, index) => {
         const card = CARD_LIBRARY[cardId];
         if (!isAttachmentCard(cardId)) return;
+        if (baitTrapOnly && !card.trap) return;
         if(!canUseCardUnderRule("cpu",cardId,{silent:true}))return;
         if (state.temp.cpu.setupMode && !card.trap) return;
         if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return;
@@ -16184,7 +16307,8 @@ async function endTurn(reason="unspecified") {
       if (isTutorialBattle()) return false;
       if (state.activeIntemperanceCardLock?.cpu) return false;
       const circuitActive = !!state.temp.cpu.lightSpeedCircuit;
-      if (state.temp.cpu.cardActionUsed && Number(state.temp.cpu.cardExtraUses||0)<=0 && !circuitActive) return false;
+      const baitTrapOnly = state.temp.cpu.cardActionUsed && Number(state.temp.cpu.cardExtraUses||0)<=0 && !circuitActive && Number(state.temp.cpu.baitFreeTrapUse||0)>0;
+      if (state.temp.cpu.cardActionUsed && Number(state.temp.cpu.cardExtraUses||0)<=0 && !circuitActive && !baitTrapOnly) return false;
       if (state.berserkerTurns.cpu > 0 && !state.temp.cpu.berserkerJustUsed) return false;
 
       const cfg = cpuConfig();
@@ -16192,6 +16316,7 @@ async function endTurn(reason="unspecified") {
       const candidates = [];
 
       const addCard = (id, score, note = "") => {
+        if (baitTrapOnly && !CARD_LIBRARY[id]?.trap) return;
         if(!canUseCardUnderRule("cpu",id,{silent:true}))return;
         const index = cpuCanUseCardIndex(id);
         if (index >= 0) candidates.push({ id, index, score, note, action: async () => playCard("cpu", index, true) });
@@ -17601,7 +17726,7 @@ async function endTurn(reason="unspecified") {
     socialEl("emailLoginBtn")?.addEventListener("click",async()=>{try{const fb=window.WaribashiFirebase;await applyAuthPersistence(selectedLoginPersistence(false));await fb.signInWithEmailAndPassword(fb.auth,socialEl("loginEmailInput").value.trim(),socialEl("loginPasswordInput").value);socialClose("authModal");await loadSocialProfile();}catch(error){socialMessage("authMessage",firebaseAuthErrorMessage(error));}});
     socialEl("emailRegisterBtn")?.addEventListener("click",()=>registerWithEmail().catch(error=>socialMessage("authMessage",firebaseAuthErrorMessage(error))));
     socialEl("profileSetupSaveBtn")?.addEventListener("click",async()=>{try{await createSocialProfile(socialEl("profileSetupNameInput").value);socialClose("profileSetupModal");renderSocialAccountUi();subscribeSocialData();}catch(error){socialMessage("profileSetupMessage",firebaseAuthErrorMessage(error));}});
-    socialEl("logoutBtn")?.addEventListener("click",async()=>{try{const fb=window.WaribashiFirebase;cleanupSocialListeners();state.socialProfile=null;socialClose("accountModal");await fb.signOut(fb.auth);await fb.signInAnonymously(fb.auth);renderSocialAccountUi();}catch(error){socialMessage("accountMessage",firebaseAuthErrorMessage(error));}});
+    socialEl("logoutBtn")?.addEventListener("click",async()=>{try{const fb=window.WaribashiFirebase;cleanupSocialListeners();state.socialProfile=null;state.achievementMastery={};state.achievementTitleClaims=[];updateAchievementBadges();socialClose("accountModal");await fb.signOut(fb.auth);await fb.signInAnonymously(fb.auth);renderSocialAccountUi();}catch(error){socialMessage("accountMessage",firebaseAuthErrorMessage(error));}});
     socialEl("accountRememberCheckbox")?.addEventListener("change",event=>applyAuthPersistence(event.target.checked,{announce:true}).catch(error=>{event.target.checked=!event.target.checked;socialMessage("accountMessage",firebaseAuthErrorMessage(error));}));
     socialEl("authRememberCheckbox")?.addEventListener("change",event=>{const other=socialEl("registerRememberCheckbox");if(other)other.checked=event.target.checked;});
     socialEl("registerRememberCheckbox")?.addEventListener("change",event=>{const other=socialEl("authRememberCheckbox");if(other)other.checked=event.target.checked;});
@@ -17635,6 +17760,17 @@ async function endTurn(reason="unspecified") {
         elements.friendLobbyMessage.textContent = "コピーできない場合は、表示されたURLを長押し/選択してコピーしてください。";
       }
     });
+    elements.menuAchievementsBtn?.addEventListener("click",()=>openAchievements().catch(error=>socialMessage("achievementMessage",error.message)));
+    elements.achievementsBackBtn?.addEventListener("click",()=>showScreen("menu"));
+    document.querySelectorAll("[data-achievement-tab]").forEach(button=>button.addEventListener("click",()=>{state.achievementTab=button.dataset.achievementTab||"completed";state.achievementMasteryOpen=false;renderAchievements();}));
+    elements.achievementMasteryOpenBtn?.addEventListener("click",()=>{state.achievementMasteryOpen=true;renderAchievements();});
+    elements.achievementMasteryCloseBtn?.addEventListener("click",()=>{state.achievementMasteryOpen=false;renderAchievements();});
+    socialEl("achievementDetailCloseBtn")?.addEventListener("click",()=>socialClose("achievementDetailModal"));
+    socialEl("achievementDetailModal")?.addEventListener("click",event=>{if(event.target===socialEl("achievementDetailModal"))socialClose("achievementDetailModal");});
+    elements.claimAllAchievementsBtn?.addEventListener("click",async()=>{const rewards=await claimAllMasteryAchievements();showAchievementRewards(rewards);socialMessage("achievementMessage",rewards.length?`報酬を${rewards.length}件受け取りました。`:"");});
+    socialEl("achievementRewardCloseBtn")?.addEventListener("click",()=>socialClose("achievementRewardModal"));
+    socialEl("achievementRewardOkBtn")?.addEventListener("click",()=>socialClose("achievementRewardModal"));
+    socialEl("achievementRewardModal")?.addEventListener("click",event=>{if(event.target===socialEl("achievementRewardModal"))socialClose("achievementRewardModal");});
     elements.menuDeckBtn.addEventListener("click", () => {state.deckRuleContext=null;showScreen("deck");});
     elements.menuSettingsBtn.addEventListener("click", () => showScreen("settings"));
     elements.menuNewsBtn?.addEventListener("click", () => openNews("all"));

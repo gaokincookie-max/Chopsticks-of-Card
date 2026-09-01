@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>割り箸カード</title>
-  <link rel="stylesheet" href="style.css?v=170j">
+  <link rel="stylesheet" href="style.css?v=172">
 </head>
 <body>
   <div class="social-modal" id="authModal" aria-hidden="true">
@@ -308,6 +308,7 @@
             お知らせ
             <span class="news-unread-badge" id="newsUnreadBadge">NEW</span>
           </button>
+          <button id="menuAchievementsBtn" class="achievement-menu-btn" hidden>実績<span id="achievementMenuBadge" class="achievement-badge" hidden>!</span></button>
           <div class="account-actions" id="accountActions" aria-live="polite">
             <span class="account-loading" id="accountLoading">認証確認中…</span>
             <button id="loginOpenBtn" hidden>ログイン</button>
@@ -391,6 +392,37 @@
         </div>
       </div>
     </section>
+
+    <section class="screen menu-screen screen-hidden" id="achievementsScreen">
+      <div class="menu-card achievement-shell">
+        <div class="menu-kicker">ACHIEVEMENTS</div>
+        <div class="achievement-head"><h2>実績</h2><button id="achievementsBackBtn" class="secondary">戻る</button></div>
+        <div class="achievement-tabs">
+          <button data-achievement-tab="completed" class="active">達成済み <span id="achievementCompletedBadge" class="achievement-badge" hidden>!</span></button>
+          <button data-achievement-tab="incomplete">未達成</button>
+        </div>
+        <button id="achievementMasteryOpenBtn" class="achievement-category-btn">
+          <span><strong>カード熟練度</strong><small id="achievementMasterySummary">カードを使うと熟練度が上がります</small></span><span id="achievementMasteryBadge" class="achievement-badge" hidden>!</span><b>›</b>
+        </button>
+        <div id="achievementGeneralEmpty" class="achievement-empty">現在、このカテゴリの実績はカード熟練度のみです。</div>
+        <section id="achievementMasteryPanel" class="achievement-mastery-panel" hidden>
+          <div class="achievement-subhead"><button id="achievementMasteryCloseBtn" class="secondary">‹ 戻る</button><h3>カード熟練度</h3><button id="claimAllAchievementsBtn" class="achievement-claim-all" hidden>報酬をすべて受け取る</button></div>
+          <p id="achievementMasteryHint" class="small"></p>
+          <div id="achievementMasteryList" class="achievement-list"></div>
+        </section>
+        <p id="achievementMessage" class="social-message"></p>
+      </div>
+    </section>
+
+    <div class="social-modal" id="achievementRewardModal" aria-hidden="true"><div class="social-dialog compact-dialog">
+      <button class="social-close" id="achievementRewardCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">REWARDS</div><h2>獲得した報酬</h2>
+      <div id="achievementRewardList" class="achievement-reward-list"></div><button id="achievementRewardOkBtn" class="wide-btn">OK</button>
+    </div></div>
+
+    <div class="social-modal" id="achievementDetailModal" aria-hidden="true"><div class="social-dialog compact-dialog achievement-detail-dialog">
+      <button class="social-close" id="achievementDetailCloseBtn" aria-label="閉じる">×</button><div class="menu-kicker">ACHIEVEMENT DETAIL</div><h2 id="achievementDetailTitle">実績詳細</h2>
+      <div id="achievementDetailBody" class="achievement-detail-body"></div>
+    </div></div>
 
     <section class="screen battle-select-screen screen-hidden" id="battleSelectScreen">
       <div class="menu-card">
@@ -971,6 +1003,6 @@
     }
   </script>
 
-  <script src="game.js?v=170n"></script>
+  <script src="game.js?v=172"></script>
 </body>
 </html>
