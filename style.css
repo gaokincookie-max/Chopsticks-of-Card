@@ -1753,7 +1753,7 @@
 }
 
 
-/* v63: 指令テーマ */
+/* v63: 天命テーマ */
 .game-card.directive-card {
   background: linear-gradient(145deg, #1b1d22, #0e0f12);
   border-color: #5f6672;
@@ -1842,7 +1842,7 @@
   white-space: normal;
 }
 
-/* 指令カードは通常カードの色へ戻す */
+/* 天命カードは通常カードの色へ戻す */
 .game-card.directive-card {
   background: var(--panel);
   border-color: var(--line);
@@ -1862,7 +1862,7 @@
   border-color: #b94b5b;
 }
 
-/* 指令の重要部分を短く強調 */
+/* 天命の重要部分を短く強調 */
 .directive-summary {
   display: flex;
   align-items: center;
@@ -2113,7 +2113,7 @@
 }
 
 
-/* v66: 指令における凶弾対応メモ */
+/* v66: 天命における凶弾対応メモ */
 .directive-note {
   margin: -2px 0 5px;
   font-size: 10px;

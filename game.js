@@ -257,7 +257,7 @@ const CARD_LIBRARY = {
       },
       chemicalGeneration: {
         name: "化学発電", cost: 2, type: "加護 / 充電", blessing: true, chargeCard: true,
-        text: "自分が手札からカードを使用するたび、充電1を得る。乱闘・予告状による効果だけの発動は含まない。",
+        text: "自分が手札からカードを使用するたび、充電1を得る。闇鍋・予告状による効果だけの発動は含まない。",
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       solarGeneration: {
@@ -309,28 +309,28 @@ const CARD_LIBRARY = {
       },
 
       brawl: {
-        name: "乱闘",
+        name: "闇鍋",
         cost: 2,
         type: "補助",
-        text: "自分の手札から「乱闘」「指令」「ロジックアトリエ」を除く、効果を持つカードをランダムに1枚選ぶ。そのカードを通常使用するための条件とコストを無視し、効果だけを発動する。効果本文にある発動条件・不発条件・対象・消費・代償は無視しない。選ばれたカードは消費されない。",
+        text: "自分の手札から「闇鍋」「天命」「ロジックアトリエ」を除く、効果を持つカードをランダムに1枚選ぶ。そのカードを通常使用するための条件とコストを無視し、効果だけを発動する。効果本文にある発動条件・不発条件・対象・消費・代償は無視しない。選ばれたカードは消費されない。",
         canPlay: (player) => getBrawlCandidates(player).length > 0,
         effect: async (player) => {
           const candidates = getBrawlCandidates(player);
           if (!candidates.length) {
-            addLog(`${handNames[player]}の「乱闘」は、発動できるカードがなく不発になった。`);
+            addLog(`${handNames[player]}の「闇鍋」は、発動できるカードがなく不発になった。`);
             delete state.temp[player].brawlAllowanceBeforeUse;
             return;
           }
           const picked = candidates[Math.floor(Math.random() * candidates.length)];
           const copied = CARD_LIBRARY[picked.cardId];
-          addLog(`${handNames[player]}の「乱闘」により「${copied.name}」の効果が無償で発動する。元のカードは手札に残る。`);
+          addLog(`${handNames[player]}の「闇鍋」により「${copied.name}」の効果が無償で発動する。元のカードは手札に残る。`);
           await showCardPopup(player, copied, false, player === "cpu" ? 760 : 620);
           try {
-            await activateCopiedCardEffect(player, picked.cardId, "乱闘", { sourceHandIndex: picked.index });
+            await activateCopiedCardEffect(player, picked.cardId, "闇鍋", { sourceHandIndex: picked.index });
             if (copied.consumesCardAction === false && state.temp[player].brawlAllowanceBeforeUse) {
               state.temp[player].cardActionUsed = state.temp[player].brawlAllowanceBeforeUse.cardActionUsed;
               state.temp[player].cardExtraUses = state.temp[player].brawlAllowanceBeforeUse.cardExtraUses;
-              addLog(`${handNames[player]}の「乱闘」は、使用回数を消費しない効果を引いたためカード使用可能回数を1回分返却した。`);
+              addLog(`${handNames[player]}の「闇鍋」は、使用回数を消費しない効果を引いたためカード使用可能回数を1回分返却した。`);
             }
           } finally {
             delete state.temp[player].brawlAllowanceBeforeUse;
@@ -341,7 +341,7 @@ const CARD_LIBRARY = {
         name: "予告状",
         cost: 2,
         type: "補助",
-        text: "現在通常使用できるカードを手札から1枚選び、相手に公開して捨て札にする。次の自分のターン開始時、そのカードを通常使用するための条件とコストを無視し、効果だけを発動する。効果本文にある発動条件・不発条件・対象・消費・代償は、その時点の状態で判定する。「題目設定」「予告状」「指令」「ロジックアトリエ」は選べない。",
+        text: "現在通常使用できるカードを手札から1枚選び、相手に公開して捨て札にする。次の自分のターン開始時、そのカードを通常使用するための条件とコストを無視し、効果だけを発動する。効果本文にある発動条件・不発条件・対象・消費・代償は、その時点の状態で判定する。「題目設定」「予告状」「天命」「ロジックアトリエ」は選べない。",
         canPlay: (player) => getAdvanceNoticeCandidates(player).length > 0,
         effect: async (player) => {
           const candidates = getAdvanceNoticeCandidates(player);
@@ -359,7 +359,7 @@ const CARD_LIBRARY = {
         }
       },
       duelSurge: {
-        name: "決闘高潮",
+        name: "学習",
         cost: 3,
         type: "加護",
         text: "この加護が付いた手で同じ手を連続して通常攻撃するとLvが上がる。別の手を攻撃するとLv1になる。最大Lv5。Lvに応じて通常攻撃で加える本数の増加・受ける本数の軽減を得る。別の自分の手による攻撃では変化しない。",
@@ -442,7 +442,7 @@ const CARD_LIBRARY = {
       },
 
       battlePrep: {
-        name: "戦闘準備",
+        name: "不測の備え",
         cost: 1,
         type: "補助",
         text: "山札からランダムな罠カードを1枚手札に加える。罠カードが山札にない場合、何も起きない。",
@@ -453,13 +453,13 @@ const CARD_LIBRARY = {
             if (CARD_LIBRARY[cardId]?.trap) trapIndexes.push(index);
           });
           if (trapIndexes.length === 0) {
-            addLog(`${handNames[player]}は「戦闘準備」を使ったが、山札に罠カードがなかった。`);
+            addLog(`${handNames[player]}は「不測の備え」を使ったが、山札に罠カードがなかった。`);
             return;
           }
           const deckIndex = trapIndexes[Math.floor(Math.random() * trapIndexes.length)];
           const [cardId] = state.decks[player].splice(deckIndex, 1);
           state.hands[player].push(cardId);
-          addLog(`${handNames[player]}は「戦闘準備」で罠カード「${CARD_LIBRARY[cardId].name}」を手札に加えた。`);
+          addLog(`${handNames[player]}は「不測の備え」で罠カード「${CARD_LIBRARY[cardId].name}」を手札に加えた。`);
         }
       },
       snipe: {
@@ -498,7 +498,7 @@ const CARD_LIBRARY = {
         effect: async (player) => {
           const opponent = otherPlayer(player);
           state.pendingRapidFireExcludedIndex =
-            state.copiedEffectContext?.sourceLabel === "乱闘" && state.copiedEffectContext?.cardId === "rapidFire"
+            state.copiedEffectContext?.sourceLabel === "闇鍋" && state.copiedEffectContext?.cardId === "rapidFire"
               ? Number(state.copiedEffectContext.sourceHandIndex)
               : null;
           const hasDiscard = getRapidFireDiscardCandidates(player).length > 0;
@@ -900,60 +900,60 @@ const CARD_LIBRARY = {
 
 
       directiveAttack: {
-        name: "指令：指定攻撃",
+        name: "天命：指定攻撃",
         cost: 1,
-        type: "指令 / 使用不可",
+        type: "天命 / 使用不可",
         text: "このカードは使用できない。引いた時に右手か左手を指定する。ターン終了時、指定された手で通常攻撃していれば達成：その手の次の通常攻撃で加える本数+1。未達成：その手の次の通常攻撃で加える本数-1。",
         directive: true,
         canPlay: () => false
       },
       directiveTarget: {
-        name: "指令：対象指定",
+        name: "天命：対象指定",
         cost: 1,
-        type: "指令 / 使用不可",
+        type: "天命 / 使用不可",
         text: "このカードは使用できない。引いた時に攻撃する手と攻撃対象の手を指定する。ターン終了時、指定された組み合わせで通常攻撃していれば達成：カードを1枚引く。未達成：指定された自分の攻撃元の手に1本加える。",
         directive: true,
         canPlay: () => false
       },
       directiveSilence: {
-        name: "指令：沈黙",
+        name: "天命：沈黙",
         cost: 1,
-        type: "指令 / 使用不可",
+        type: "天命 / 使用不可",
         text: "このカードは使用できない。ターン終了時、このターンに手札からカードを使用していなければ達成：カードを3枚引く。未達成：次の自分のターン、カードを使用できない。",
         directive: true,
         canPlay: () => false
       },
       directiveReform: {
-        name: "指令：再編成",
+        name: "天命：再編成",
         cost: 1,
-        type: "指令 / 使用不可",
+        type: "天命 / 使用不可",
         text: "このカードは使用できない。ターン終了時、このターンに「分ける」を行っていれば達成：次の自分のターン、最初の「分ける」の後も行動を続けられる。未達成：次の自分のターン、「分ける」を行えない。",
         directive: true,
         canPlay: () => false
       },
-      directiveAnnihilation: { name:"指令：殲滅",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に、自分の攻撃またはカード効果によって相手の手を1つ以上0にしていれば達成。達成：次の自分ターン中、自分の効果で相手の手が7以上になった時0にする。未達成：次の自分の通常攻撃で加える本数-1。",directive:true,canPlay:()=>false },
-      directiveCombo: { name:"指令：連撃",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。このターン中に通常攻撃を2回以上行っていれば達成。達成：次の自分ターンの通常攻撃可能回数+1。未達成：次の自分ターンの通常攻撃可能回数-1（最低0）。",directive:true,canPlay:()=>false },
-      directiveConstant: { name:"指令：定数",cost:1,type:"指令 / 使用不可",text:"このカードは使用できない。引いた時に1～4を指定する。ターン終了時、相手のどちらかの手が指定値なら達成：カードを2枚引く。未達成：相手の0ではないランダムな手を指定値へ1近づける。",directive:true,canPlay:()=>false },
-      reinterpretation: { name:"再解釈",cost:1,type:"補助",text:"自分の手札にあるランダムな指定内容を持つ「指令」を1枚選ぶ。その指令の指定内容を一度だけ引き直す。",canPlay:player=>getReinterpretationCandidates(player).length>0,effect:player=>useReinterpretation(player) },
-      naturalFaith: { name:"当然の信心",cost:2,type:"補助",text:"この試合中に達成した「指令」が5つ以上なら使用できる。このターン、自分の「指令」はすべて達成したものとして扱う。このカードを使用するたび、この試合中のこのカードの使用条件に必要な指令達成数を5増やす。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=5*(Number(state.naturalFaithUses?.[player]||0)+1),effect:player=>useNaturalFaith(player) },
-      divineProof: { name:"神意の証明",cost:3,type:"補助",text:"この試合中に達成した「指令」が10以上なら使用できる。次の自分のターン開始時、「DEUS VULT」を1枚手札に加える。その後、自分の手札と山札にある「神意の証明」をすべて捨てる。この効果は1試合に1度しか発動できない。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=10&&!state.divineProofUsed?.[player],effect:player=>useDivineProof(player) },
-      deusVult: { name:"DEUS VULT",cost:0,type:"終端 / 生成カード",text:"終端。この試合中に達成した「指令」の数の半分（小数点以下切り捨て）の回数だけ、自分と相手の0ではない手からランダムに1つ選び、その手に1本加える。",token:true,terminal:true,canPlay:()=>true,effect:player=>useDeusVult(player) },
+      directiveAnnihilation: { name:"天命：殲滅",cost:1,type:"天命 / 使用不可",text:"このカードは使用できない。このターン中に、自分の攻撃またはカード効果によって相手の手を1つ以上0にしていれば達成。達成：次の自分ターン中、自分の効果で相手の手が7以上になった時0にする。未達成：次の自分の通常攻撃で加える本数-1。",directive:true,canPlay:()=>false },
+      directiveCombo: { name:"天命：連撃",cost:1,type:"天命 / 使用不可",text:"このカードは使用できない。このターン中に通常攻撃を2回以上行っていれば達成。達成：次の自分ターンの通常攻撃可能回数+1。未達成：次の自分ターンの通常攻撃可能回数-1（最低0）。",directive:true,canPlay:()=>false },
+      directiveConstant: { name:"天命：定数",cost:1,type:"天命 / 使用不可",text:"このカードは使用できない。引いた時に1～4を指定する。ターン終了時、相手のどちらかの手が指定値なら達成：カードを2枚引く。未達成：相手の0ではないランダムな手を指定値へ1近づける。",directive:true,canPlay:()=>false },
+      reinterpretation: { name:"再解釈",cost:1,type:"補助",text:"自分の手札にあるランダムな指定内容を持つ「天命」を1枚選ぶ。その天命の指定内容を一度だけ引き直す。",canPlay:player=>getReinterpretationCandidates(player).length>0,effect:player=>useReinterpretation(player) },
+      naturalFaith: { name:"盲信",cost:2,type:"補助",text:"この試合中に達成した「天命」が5つ以上なら使用できる。このターン、自分の「天命」はすべて達成したものとして扱う。このカードを使用するたび、この試合中のこのカードの使用条件に必要な天命達成数を5増やす。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=5*(Number(state.naturalFaithUses?.[player]||0)+1),effect:player=>useNaturalFaith(player) },
+      divineProof: { name:"神意の証明",cost:3,type:"補助",text:"この試合中に達成した「天命」が10以上なら使用できる。次の自分のターン開始時、「DEUS VULT」を1枚手札に加える。その後、自分の手札と山札にある「神意の証明」をすべて捨てる。この効果は1試合に1度しか発動できない。",canPlay:player=>Number(state.directiveTotalClears?.[player]||0)>=10&&!state.divineProofUsed?.[player],effect:player=>useDivineProof(player) },
+      deusVult: { name:"DEUS VULT",cost:0,type:"終端 / 生成カード",text:"終端。この試合中に達成した「天命」の数の半分（小数点以下切り捨て）の回数だけ、自分と相手の0ではない手からランダムに1つ選び、その手に1本加える。",token:true,terminal:true,canPlay:()=>true,effect:player=>useDeusVult(player) },
       meaningOfDirective: {
-        name: "指令の意味",
+        name: "信託を受ける",
         cost: 2,
         type: "補助",
-        text: "次の自分のターン開始時、山札から「指令」カードをランダムに最大2枚手札に加える。",
+        text: "次の自分のターン開始時、山札から「天命」カードをランダムに最大2枚手札に加える。",
         canPlay: () => true,
         effect: (player) => {
           state.pendingDirectiveDraw[player] = (state.pendingDirectiveDraw[player] || 0) + 2;
-          addLog(`${handNames[player]}は「指令の意味」を使用。次の自分のターン開始時、山札から指令を最大2枚加える。`);
+          addLog(`${handNames[player]}は「信託を受ける」を使用。次の自分のターン開始時、山札から天命を最大2枚加える。`);
         }
       },
       circulatingCity: {
-        name: "循環する都市",
+        name: "輪廻する天命",
         cost: 1,
         type: "補助",
-        text: "自分の捨て札にある「指令」カードをすべて山札に戻し、山札をシャッフルする。",
+        text: "自分の捨て札にある「天命」カードをすべて山札に戻し、山札をシャッフルする。",
         canPlay: (player) => state.discard[player].some(id => isDirectiveCard(id)),
         effect: (player) => {
           const returned = [];
@@ -964,42 +964,42 @@ const CARD_LIBRARY = {
           });
           state.decks[player].push(...returned);
           state.decks[player] = shuffle(state.decks[player]);
-          addLog(`${handNames[player]}は「循環する都市」で指令${returned.length}枚を山札に戻した。`);
+          addLog(`${handNames[player]}は「輪廻する天命」で天命${returned.length}枚を山札に戻した。`);
         }
       },
       directiveBlessing: {
-        name: "指令の加護",
+        name: "神の加護",
         cost: 3,
         type: "加護",
-        text: "自分のターン終了時、達成した指令の数を記録する。次の相手ターン中、この手が攻撃・カード効果で加えられる本数をその数だけ減らす。ただし最低1。1本の効果には見た目上の減少が起きない。",
+        text: "自分のターン終了時、達成した天命の数を記録する。次の相手ターン中、この手が攻撃・カード効果で加えられる本数をその数だけ減らす。ただし最低1。1本の効果には見た目上の減少が起きない。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       willBlade: {
-        name: "意志の剣",
+        name: "神意の剣",
         cost: 3,
         type: "加護",
-        text: "前の自分のターンに達成した指令の数だけ、この手を使った通常攻撃で対象に加える本数を増やす。",
+        text: "前の自分のターンに達成した天命の数だけ、この手を使った通常攻撃で対象に加える本数を増やす。",
         blessing: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
       cityWill: {
-        name: "都市の意志",
+        name: "啓示の伝播",
         cost: 2,
         type: "補助",
-        text: "自分の手札にある「指令」カードを1枚選び、相手の手札に移す。指定内容はそのまま引き継ぐ。",
+        text: "自分の手札にある「天命」カードを1枚選び、相手の手札に移す。指定内容はそのまま引き継ぐ。",
         canPlay: (player) => state.hands[player].some(id => isDirectiveCard(id)),
         effect: async (player) => {
           const choices = state.hands[player]
             .map((id, index) => ({ id, index }))
             .filter(x => isDirectiveCard(x.id));
           if (!choices.length) {
-            addLog(`${handNames[player]}の「都市の意志」は対象となる指令が存在しないため不発。`);
+            addLog(`${handNames[player]}の「啓示の伝播」は対象となる天命が存在しないため不発。`);
             return;
           }
           if (player === "human") {
             state.mode = "cityWillChoose";
-            setMessage("「都市の意志」：相手に渡す指令を選んでください。");
+            setMessage("「啓示の伝播」：相手に渡す天命を選んでください。");
             return;
           }
           const picked = choices[Math.floor(Math.random() * choices.length)];
@@ -1009,21 +1009,21 @@ const CARD_LIBRARY = {
 
 
       ominousPower: {
-        name: "不吉な力",
+        name: "神意の代行",
         cost: 2,
         type: "補助",
-        text: "このターン終了時、このターンに達成した「指令」が3つ以上なら、次の自分のターン開始時に「意志の奔流」を1枚手札に加える。",
+        text: "このターン終了時、このターンに達成した「天命」が3つ以上なら、次の自分のターン開始時に「意志の奔流」を1枚手札に加える。",
         canPlay: () => true,
         effect: (player) => {
           state.temp[player].ominousPower = true;
-          addLog(`${handNames[player]}は「不吉な力」を使用。このターンに指令を3つ以上達成すれば、次の自分のターンに「意志の奔流」を得る。`);
+          addLog(`${handNames[player]}は「神意の代行」を使用。このターンに天命を3つ以上達成すれば、次の自分のターンに「意志の奔流」を得る。`);
         }
       },
       willTorrent: {
         name: "意志の奔流",
         cost: 0,
         type: "終端 / 生成カード",
-        text: "山札から「指令」カードをすべて手札に加える。その後、自分の手札にある「指令」カードをすべて相手に渡し、ターンを終了する。",
+        text: "山札から「天命」カードをすべて手札に加える。その後、自分の手札にある「天命」カードをすべて相手に渡し、ターンを終了する。",
         token: true,
         terminal: true,
         canPlay: () => true,
@@ -1098,7 +1098,7 @@ const CARD_LIBRARY = {
         }
       },
       calmDown: {
-        name: "落ち着ける",
+        name: "カードマジック",
         cost: 1,
         type: "補助",
         text: "手札を1枚選んで捨てる。その後、カードを2枚引く。",
@@ -1111,7 +1111,7 @@ const CARD_LIBRARY = {
             state.pendingTrapTargetEffect = null;
             elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
-            setMessage("「落ち着ける」：捨てる手札を1枚選んでください。その後2枚引きます。");
+            setMessage("「カードマジック」：捨てる手札を1枚選んでください。その後2枚引きます。");
             return;
           }
           const discardIndex = chooseCpuDiscardIndex();
@@ -1119,7 +1119,7 @@ const CARD_LIBRARY = {
           const discarded = await discardHandCardByEffect(player, discardIndex);
           drawCard(player);
           drawCard(player);
-          addLog(`${handNames[player]}は「落ち着ける」で「${CARD_LIBRARY[discarded].name}」を捨て、2枚引いた。`);
+          addLog(`${handNames[player]}は「カードマジック」で「${CARD_LIBRARY[discarded].name}」を捨て、2枚引いた。`);
         }
       },
 
@@ -2315,9 +2315,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v172-gift-titles";
+    const LATEST_NEWS_ID = "v173-card-name-refresh";
 
     const UPDATE_NEWS = [
+      {id:"v173-card-name-refresh",version:"v173",date:"2026-09-02",title:"カード名と天命テーマの表記を整理",summary:"能力に合わせてカード名を見直し、天命テーマ全体の用語を統一しました。",featured:true,tags:["update"],items:["カード名を「闇鍋」「不測の備え」「カードマジック」「学習」へ整理","天命カードのカテゴリ名・動的生成名・検索分類を「天命」表記へ統一","関連カードを「信託を受ける」「輪廻する天命」「神の加護」「神意の剣」「啓示の伝播」「神意の代行」「盲信」へ整理","本文・戦闘ログ・選択メッセージ・制限通知・検索表示まで関連表記を一括監査"]},
       {id:"v172-gift-titles",version:"v172",date:"2026-09-01",title:"ギフト称号を追加",summary:"ギフトコードで獲得できる新しい称号に対応しました。",featured:true,tags:["update","feature"],items:["ギフト報酬の称号「最古参勢」「古参勢」を追加","同一コードの二重受取を防止し、限定コードの使用上限をtransactionで管理","獲得したギフト称号はプレイヤーカード、対戦ロビー、VS表示に反映"]},
       {id:"v171-card-mastery-achievements",version:"v171",date:"2026-09-01",title:"実績：カード熟練度を追加",summary:"カードを使い込んで称号を獲得できる実績システムの第一弾です。",featured:true,tags:["update","feature"],items:["ログインユーザー限定でカードごとの累計使用回数を記録","10回で「〇〇使い」、50回で「〇〇の熟練者」、100回で「〇〇の達人」、500回で「〇〇の神」を達成","実績画面に達成済み/未達成タブとカード熟練度一覧を追加","未受取報酬には！を表示し、個別受取と一括受取に対応","長押しで実績の条件・進捗・報酬・達成日時を確認可能"]},
       {id:"v170o-card-rule-update",version:"v170o",date:"2026-09-01",title:"乱舞・囮・捨て身・エゴを調整",summary:"通常攻撃との相互作用と罠テーマの役割を整理しました。",featured:true,tags:["update","balance","fix"],items:["乱舞を通常攻撃扱いへ変更し、加える本数0→攻撃結果置換→攻撃後罠の順に統一","乱舞で共鳴・銛・トラウマなど通常攻撃を参照する効果が進むよう変更","囮を次の自分ターンに一度だけ罠設置のカード使用回数を消費しない効果へ変更","捨て身の反動を、その通常攻撃で相手に加えるはずだった本数-1へ変更","エゴを通常攻撃で加える本数への増減を無効にする効果へ変更し、相手盤面効果無視はスーパーエゴに限定"]},
@@ -2342,12 +2343,12 @@ const CARD_LIBRARY = {
       {id:"v169-psychology-curses",version:"v169",date:"2026-08-30",title:"心理学カードと呪縛システムを拡張",summary:"心理学をモチーフにした新カード15枚と生成カード「スーパーエゴ」を追加しました。",featured:true,tags:["update","new","system"],items:["心理学をモチーフにした新カード15枚を追加","生成カード「スーパーエゴ」を追加","呪縛の設置者・捨て札・履歴・固定状態を共通管理","びっくり箱の仕込み条件をカード単体で分かる本文へ改善","起爆・強制起爆の順番と正面対象を本文へ明記","置き土産の攻撃で0になった時という発動条件を明記","関連UIとオンラインcanonical stateを拡張"]},
       {id:"v168a-detonation-fix",version:"v168a",date:"2026-08-30",title:"起爆・強制起爆の処理を修正",summary:"強制発動できる罠と、起爆中に手が0になった場合の処理を調整しました。",featured:true,tags:["fix","trap"],items:["過剰反応を起爆・強制起爆でも発動するよう修正","逃走装置の本数移動を起爆時にも適用","起爆途中で手が0になった場合、残りの設置カードを通常どおり破棄するよう修正","びっくり箱のpayload解決後に後続罠の存在を再確認するよう改善"]},
       {id:"v168-trap-overhaul",version:"v168",date:"2026-08-30",title:"罠テーマを大幅強化",summary:"既存罠の調整と、強制発動・時限爆弾を含む新カードを追加しました。",featured:true,tags:["update","new","balance"],items:["踏み止まり・ぬかるみ・反撃・囮・スワンプマンを調整","起爆・強制起爆・びっくり箱を追加","過剰反応・偽装工作・残骸回収・自爆を追加","置き土産をリワークし、生成カード「時限爆弾」を追加"]},
-      {id:"v167b-minor-rules-safety",version:"v167b",date:"2026-08-28",title:"カード処理とデッキ表示を調整",summary:"一部カードの細かな仕様と安全性を改善しました。",featured:true,tags:["fix","balance"],items:["compact表示をPC・iPadで最大4列へ調整","カードロックを手札から1～2枚選べるよう変更","援護射撃を狙撃系防御の対象へ変更","乱闘で使用回数を消費しないカードが選ばれた場合に使用可能回数を返却","過加速反動中の通常ドロー計算を加算式へ調整","狙撃の加護付きの手を通常攻撃時に選択不可へ変更","乱闘時に対象が存在しない効果の安全性を改善"]},
+      {id:"v167b-minor-rules-safety",version:"v167b",date:"2026-08-28",title:"カード処理とデッキ表示を調整",summary:"一部カードの細かな仕様と安全性を改善しました。",featured:true,tags:["fix","balance"],items:["compact表示をPC・iPadで最大4列へ調整","カードロックを手札から1～2枚選べるよう変更","援護射撃を狙撃系防御の対象へ変更","闇鍋で使用回数を消費しないカードが選ばれた場合に使用可能回数を返却","過加速反動中の通常ドロー計算を加算式へ調整","狙撃の加護付きの手を通常攻撃時に選択不可へ変更","闇鍋時に対象が存在しない効果の安全性を改善"]},
       {id:"v167a-deck-editor-density",version:"v167a",date:"2026-08-28",title:"デッキ編集の一覧性を改善",summary:"お気に入りとコンパクト表示を見やすく調整しました。",featured:true,tags:["fix","ui"],items:["お気に入りカードを選択中の並び順に関係なく常に上部表示","お気に入りボタンを♡／♥へ変更","コンパクト表示を2行・多列の高密度レイアウトへ改善","フィルター選択時の表示を控えめに調整"]},
       {id:"v167-deck-editor-peek-ui",version:"v167",date:"2026-08-28",title:"デッキ編集と「覗き見」を大幅改善",summary:"カードを探し、調整し、確認する操作がより快適になりました。",featured:true,tags:["update","ui"],items:["デッキ編集画面を大幅改善","カード名に加えて本文・種類・テーマから検索可能","種類・コスト・テーマ・採用状態・お気に入りで絞り込み可能","デッキ詳細からカード枚数を直接調整可能","お気に入り機能とお気に入り優先順を追加","設定に初期OFFのデッキ編集コンパクト表示を追加","「覗き見」の結果を最大3枚の専用確認画面で表示"]},
       {id:"v166c-interaction-modal-stability",version:"v166c",date:"2026-08-28",title:"オンライン待機とアカウント画面を安定化",summary:"相手の選択待ちとアカウント内画面の操作不具合を修正しました。",featured:true,tags:["fix","online","ui"],items:["オンラインで相手の選択待ち中に戦闘操作できてしまう問題を修正","「強制」「貿易」の最終効果を同期してから待機状態を解除するよう改善","interaction中に再接続した際の進行ロックを改善","アカウントのコード入力画面が操作不能になる問題を修正","名前変更・プレイヤーカード編集などの画面切替を改善"]},
       {id:"v166b-online-force-trade",version:"v166b",date:"2026-08-28",title:"オンラインの「強制」と「貿易」を改善",summary:"相手入力と秘密選択をオンライン対戦へ対応しました。",featured:true,tags:["fix","online"],items:["オンライン戦で「強制」の対象プレイヤー本人による選択に対応","オンライン戦で「貿易」の双方選択と同時交換に対応","SHA-256 commitと本人専用保存領域により、選択内容の先読みを防止","選択中の待機・再接続復元処理を改善"]},
-      {id:"v166a-selection-late-fixes",version:"v166a",date:"2026-08-28",title:"新カードの選択操作と「遅刻」を修正",summary:"対象を自分で選べるようにし、次ターンの攻撃回数補正を安定化しました。",featured:true,tags:["fix"],items:["援護射撃・カードロック・強制・交換・貿易などの選択操作を改善","釣り合った天秤と整わないの対象選択を改善","「遅刻」の次ターン攻撃回数増加が指令補正で上書きされる問題を修正","新カードの人間操作とCPU自動選択を分離"]},
+      {id:"v166a-selection-late-fixes",version:"v166a",date:"2026-08-28",title:"新カードの選択操作と「遅刻」を修正",summary:"対象を自分で選べるようにし、次ターンの攻撃回数補正を安定化しました。",featured:true,tags:["fix"],items:["援護射撃・カードロック・強制・交換・貿易などの選択操作を改善","釣り合った天秤と整わないの対象選択を改善","「遅刻」の次ターン攻撃回数増加が天命補正で上書きされる問題を修正","新カードの人間操作とCPU自動選択を分離"]},
       {id:"v166-hand-attributes-new-cards",version:"v166",date:"2026-08-28",title:"新カード14枚と手札属性基盤を追加",summary:"新しい手札操作・設置・本数変化カードを追加し、特殊カードの扱いを整理しました。",featured:true,tags:["new","system"],items:["新カード14枚を追加","狙撃の加護から援護射撃を生成","共鳴×充電の振動発電を追加","強制・覗き見・交換・貿易など新しい手札操作を追加","一部システムカードを通常の手札枚数として数えない仕様へ整理","捨てられないカードを含む全捨て・ランダム捨て処理を安定化"]},
       {id:"v165n-surrender-notice-order",version:"v165n",date:"2026-08-27",title:"オンライン降参時の結果表示を改善",summary:"相手の降参を分かりやすく伝えてから勝敗画面へ進むようにしました。",featured:true,tags:["fix","system"],items:["オンラインで相手が降参した際の表示を改善","降参時は一時通知の後に勝敗画面へ進むよう変更","降参結果の表示順と端末間同期を改善","降参時に勝利理由が正しく表示されないことがある問題を修正"]},
       {id:"v165m-online-surrender-postmatch-ui",version:"v165m",date:"2026-08-27",title:"オンライン対戦の試合中・試合後UIを改善",summary:"オンライン戦の安全な操作と試合部屋へ戻る流れを整理しました。",featured:true,tags:["fix","system"],items:["オンライン戦の不要なテスト・リセット操作を整理","オンライン戦に「降参」を追加","試合後の再戦／デッキ変更／試合部屋復帰を改善","全休符のターン開始説明が旧仕様だった問題を修正"]},
@@ -2374,10 +2375,10 @@ const CARD_LIBRARY = {
       {id:"v158b-dance-canon",version:"v158b",date:"2026-08-19",title:"乱舞とカノンの攻撃処理を整理",summary:"乱舞を置換攻撃として通常攻撃から分離し、カノンを通常攻撃の遅延出力として簡略化しました。",featured:true,tags:["fix"],items:["乱舞は攻撃行動を消費する置換攻撃となり、通常攻撃履歴・通常攻撃限定効果には含まれないよう変更","乱舞でも対象変更・攻撃無効・攻撃後反応の罠は有効、ぬかるみ等の本数補正は不成立","カノン攻撃でも罠・不変・守護等を通常どおり処理し、最終対象と本来加える本数を保存","カノンのその場の加算は0、遅延出力時に対象が0なら不発"]},
       {id:"v158a-dance-after-traps",version:"v158a",date:"2026-08-19",title:"乱舞の罠処理を修正",summary:"乱舞の攻撃後罠を共通処理へ統合しました。",featured:true,tags:["fix"],items:["乱舞で囮・茨・反撃・スワンプマンなどの攻撃後罠を処理","1攻撃1罠を維持し、ぬかるみは乱舞では発動・消費しない","攻撃置換で本数補正が適用されない場合のログ表示を修正"]},
       {id:"v158-normal-attack-wording",version:"v158",date:"2026-08-19",title:"通常攻撃ルールとカード本文を整理",summary:"「攻撃」と「通常攻撃」の表記、一部カードの対象条件、成長と乱舞の処理を調整しました。",featured:true,tags:["update","fix"],items:["通常攻撃は発生経路を問わず同じルールで扱い、自分の手への通常攻撃にも対応","カード本文の攻撃力表記を、加える本数・受ける本数が分かる表現へ整理","成長を、攻撃対象が5になった瞬間に5→0より先に1枚引く効果へ変更","独善・みんなのための正義・悪党の印などの通常攻撃対象条件を整理","乱舞を攻撃結果置換として明確化し、ぬかるみが発動・消費されないよう変更"]},
-      {id:"v157-attack-trap-core",version:"v157",date:"2026-08-19",title:"攻撃・罠の共通仕様を整理",summary:"通常攻撃力、不変の呪縛、攻撃置換、乱射と罠の相互作用を統一しました。",featured:true,tags:["update","fix"],items:["攻撃を通常攻撃とカード攻撃に分類し、乱射を罠対応カード攻撃として整理","通常攻撃力を素の攻撃力・攻撃力補正・最終攻撃力・受ける本数に分離","不変の呪縛は正負すべての攻撃力補正を無効化し、防御側の軽減には干渉しない仕様へ変更","乱舞・ゴールドラッシュなどの攻撃置換へ攻撃力補正を加えないよう統一","1回の攻撃につき罠1枚、手動罠優先、手動不使用時のみ自動罠という共通仕様を明文化","指令：連撃失敗の攻撃回数減少が次の自分ターンだけで消費されるよう同期処理を修正"]},
+      {id:"v157-attack-trap-core",version:"v157",date:"2026-08-19",title:"攻撃・罠の共通仕様を整理",summary:"通常攻撃力、不変の呪縛、攻撃置換、乱射と罠の相互作用を統一しました。",featured:true,tags:["update","fix"],items:["攻撃を通常攻撃とカード攻撃に分類し、乱射を罠対応カード攻撃として整理","通常攻撃力を素の攻撃力・攻撃力補正・最終攻撃力・受ける本数に分離","不変の呪縛は正負すべての攻撃力補正を無効化し、防御側の軽減には干渉しない仕様へ変更","乱舞・ゴールドラッシュなどの攻撃置換へ攻撃力補正を加えないよう統一","1回の攻撃につき罠1枚、手動罠優先、手動不使用時のみ自動罠という共通仕様を明文化","天命：連撃失敗の攻撃回数減少が次の自分ターンだけで消費されるよう同期処理を修正"]},
       {id:"v156-harpoon-theme",version:"v156",date:"2026-08-18",title:"新テーマ「黄針が刻む振動の果て」",summary:"銛を打ち込み、攻撃で振動を育てて回収する新テーマを追加しました。",featured:true,tags:["new","update","fix"],items:["新カード9枚と生成カード「銛」を追加","銛付きの手へ通常攻撃を命中させると「銛-振動」が増加","そのターン最初の命中時に攻撃したプレイヤーが1枚ドロー","銛を回収すると蓄積した振動を現在の付着先へ一気に加算","移動しても振動を保持し、解呪など回収以外の除去では振動は発動しない","「銛を埋める」を次の通常攻撃直前、対象変更後の最終対象へ付与するよう強化","friend戦で銛の所有者が反転する問題を修正し、回収演出を強化"]},
-      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"指令テーマを大幅強化",summary:"新指令と指令テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい指令「殲滅」「連撃」「定数」を追加","既存指令の達成・未達成効果を調整","「再解釈」「当然の信心」「神意の証明」を追加","指令を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての指令カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","ダブルダブルの追加行動で2回目の攻撃ができず、乱闘経由で進行不能になる場合がある問題を修正","指令累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","指令関連のオンライン同期・UIを改善"]},
-      {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["乱闘で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
+      {id:"v155-directive-deus-vult",version:"v155",date:"2026-08-12",title:"天命テーマを大幅強化",summary:"新天命と天命テーマの終着点を追加しました。",featured:true,tags:["new","update"],items:["新しい天命「殲滅」「連撃」「定数」を追加","既存天命の達成・未達成効果を調整","「再解釈」「盲信」「神意の証明」を追加","天命を達成し続けることで「DEUS VULT」へ到達可能","DEUS VULTの宣告終了後に盤面へ戻ってhitが進むよう演出と速度を改善","攻撃回数も使用可能カードもないターンを、カード解決後にも自動終了","リタルダントで相手の手を0まで減らせるよう変更","すべての天命カードのコストを1に統一","カード使用禁止の原因表示と未使用輪舞曲マークを追加","カノンで記録する通常攻撃では罠を一切発動・消費せず、罠以外の補正を攻撃時に確定して最終加算量を記録するよう調整","カノンが特殊な本数処理下で盤面差分をamountとして記録する問題を修正","カノン記録時に実際の盤面が変化していないのに身構え・E=mc²等が発動または消費される問題を修正","カノンと雷撃を組み合わせた際、雷撃の一部効果だけが次の攻撃へ持ち越される問題を修正","ダブルダブルの追加行動で2回目の攻撃ができず、闇鍋経由で進行不能になる場合がある問題を修正","天命累計CLEAR表示と再戦時リセットを修正","ラクリモーサが本文どおり終端にならない問題を修正","天命関連のオンライン同期・UIを改善"]},
+      {id:"v154-restriction-friendfx-glow",version:"v154",date:"2026-08-11",title:"ターン通知・オンライン演出を改善",summary:"行動制約の通知とfriend戦の専用演出を改善しました。",featured:true,tags:["update","fix"],items:["闇鍋で題目設定が発動するよう変更","予告状では題目設定を引き続き除外","Appassionatoに次ターンのカード使用不可を追加","ターン開始時の行動制約通知を改善","friend戦で魔法少女の詠唱演出が相手に見えない問題を修正","演舞による強化カードを水色発光で表示"]},
       {id:"v153-selection-ui",version:"v153",date:"2026-08-11",title:"選択UIを改善",summary:"カード効果の選択操作をゲーム内UIへ統一しました。",featured:true,tags:["update","ui"],items:["カードの手対象選択を盤面クリックへ統一","題目設定・変調などの選択画面をゲーム内カードパネルへ変更","フェルマータなどの確認画面をゲーム内UIへ変更","満ちる心の手札選択とアルペジオの本数配分を改善","ゲーム進行中のブラウザ標準ダイアログを撤去"]},
       {id:"v152-rondo-bullets-internal-attack",version:"v152",date:"2026-08-10",title:"輪舞曲・弾丸カード調整",summary:"輪舞曲と弾丸カードを調整し、内部通常攻撃の共通基盤を拡張しました。",featured:true,tags:["new","update"],items:["回収弾の回収先を山札へ変更","不発弾のコストを0へ変更し、減装弾の対象条件を調整","Lacrimosaに終端を追加","新輪舞曲「ポルタメント」「プレスト」を追加","演舞Ⅴ以上の強化形「ディソナンス」「スフォルツァント」を追加","凶弾と新カードで利用する内部通常攻撃処理を共通化"]},
       {id:"v151-performance-rondo-rebalance",version:"v151",date:"2026-08-10",title:"題目・演舞システム再調整",summary:"題目・演舞・輪舞曲を再調整し、全休符の使用可能判定を修正しました。",featured:true,tags:["update","fix"],items:["演舞の最大値をⅥへ変更し、Ⅴ以上で強化を維持","題目：ロンドの初使用ボーナスを+2へ変更し、変化前後を別履歴化","題目設定使用後にもう1枚カードを使用可能","リタルダントを次の相手ターン中の全ドロー禁止へ強化","Lacrimosa・Requiemの使用可能ターンとAndanteのコストを調整","全休符が設置カードを使用不能と誤判定する問題を修正"]},
@@ -2427,7 +2428,7 @@ const CARD_LIBRARY = {
           "カード効果で手札から捨てられた場合、疲労を除いて「捨てられた時」の効果が発動するよう処理を統一",
           "空虚・傾いた天秤・最終判決：没収・貪欲・憎悪・幸福などのランダム手札破棄にも対応",
           "疲労による手札破棄では、これまで通り捨て札時効果は発動しない仕様を維持",
-          "乱射のコストとして手札に残る別の乱射も捨てられるよう修正し、乱闘時はコピー元の1枚だけを除外",
+          "乱射のコストとして手札に残る別の乱射も捨てられるよう修正し、闇鍋時はコピー元の1枚だけを除外",
           "凶弾による攻撃を通常攻撃として扱い、攻撃力増減・加護・呪縛・防御効果などを適用",
           "凶弾は通常攻撃として処理される一方、空間切断・友情などの攻撃回数は消費しない仕様を維持",
           "凶弾の仕様変更に合わせて一部カードテキストを整理"
@@ -2437,18 +2438,18 @@ const CARD_LIBRARY = {
         id: "v144-update",
         version: "v144",
         date: "2026-08-08",
-        title: "乱闘・予告状の安全性を改善",
-        summary: "乱闘・予告状の安全性と、一部カードの発動条件や表記を改善しました。",
+        title: "闇鍋・予告状の安全性を改善",
+        summary: "闇鍋・予告状の安全性と、一部カードの発動条件や表記を改善しました。",
         featured: false,
         tags: ["fix", "system"],
         items: [
-          "乱闘では通常の使用条件を無視しても、効果内の不発条件・対象・消費・代償を通常通り判定",
+          "闇鍋では通常の使用条件を無視しても、効果内の不発条件・対象・消費・代償を通常通り判定",
           "予告状は予約時に通常の使用条件を確認し、次ターンの発動時には効果内条件を判定する仕様へ整理",
           "対象のない解除・看破・手繰り寄せ・すりかえ・解呪などを特殊発動しても操作不能にならないよう修正",
           "最終判決3種・等価なる断罪などの成立条件を効果発動時にも正しく判定",
           "予告状で弾を捨てた際、「カード効果で捨てられた時」の効果も発動するよう修正",
           "調律を特殊発動した際のCPUとプレイヤーの挙動差を修正",
-          "アンダンテ使用時に予告状・光速回路・充電・指令など無関係な状態が初期化される不具合を修正",
+          "アンダンテ使用時に予告状・光速回路・充電・天命など無関係な状態が初期化される不具合を修正",
           "友情の追加攻撃中に「空間切断」と表示される問題を修正",
           "一部カードの「攻撃」表記を「通常攻撃」へ整理"
         ]
@@ -2861,7 +2862,7 @@ const CARD_LIBRARY = {
         tags: ["balance", "fix"],
         items: [
           "光速回路中でも同名充電カードの重ね掛けを防止",
-          "乱闘は効果コピーのため使用制限の対象外",
+          "闇鍋は効果コピーのため使用制限の対象外",
           "予告状は公開したターンに使用済みとして判定"
         ]
       },
@@ -3375,12 +3376,12 @@ const CARD_LIBRARY = {
       prison: { title: "懲役", text: name => `${name}は「懲役」により、このターンはカードを使用できません。`, accent: "restriction-prison" },
       furioso: { title: "Furiosoの反動", text: name => `${name}はこのターン行動不能です。`, accent: "restriction-furioso" },
       berserker: { title: "バーサーカー", text: name => `${name}はこのターン攻撃が強化されますが、カード使用・罠設置・分けるを行えません。`, accent: "restriction-berserker" }
-      ,directiveSilence:{title:"指令：沈黙",text:name=>`${name}は未達成の「指令：沈黙」により、このターンはカードを使用できません。`,accent:"restriction-prison"}
-      ,directiveReform:{title:"指令：再編成",text:name=>`${name}はこのターン「分ける」を行えません。`,accent:"restriction-quarter-rest"}
-      ,directiveComboSuccess:{title:"指令：連撃",text:name=>`${name}は達成報酬により、このターンの通常攻撃可能回数が1増えます。`,accent:"restriction-furioso"}
-      ,directiveComboFailure:{title:"指令：連撃",text:name=>`${name}は未達成により、このターンの通常攻撃可能回数が1減ります（最低0）。`,accent:"restriction-furioso"}
-      ,directiveReformSuccess:{title:"指令：再編成",text:name=>`${name}はこのターン、最初の「分ける」の後も行動を続けられます。`,accent:"restriction-quarter-rest"}
-      ,directiveAnnihilation:{title:"指令：殲滅",text:name=>`${name}はこのターン、自分の効果で相手の手が7以上になった時、その手を0にします。`,accent:"restriction-appassionato"}
+      ,directiveSilence:{title:"天命：沈黙",text:name=>`${name}は未達成の「天命：沈黙」により、このターンはカードを使用できません。`,accent:"restriction-prison"}
+      ,directiveReform:{title:"天命：再編成",text:name=>`${name}はこのターン「分ける」を行えません。`,accent:"restriction-quarter-rest"}
+      ,directiveComboSuccess:{title:"天命：連撃",text:name=>`${name}は達成報酬により、このターンの通常攻撃可能回数が1増えます。`,accent:"restriction-furioso"}
+      ,directiveComboFailure:{title:"天命：連撃",text:name=>`${name}は未達成により、このターンの通常攻撃可能回数が1減ります（最低0）。`,accent:"restriction-furioso"}
+      ,directiveReformSuccess:{title:"天命：再編成",text:name=>`${name}はこのターン、最初の「分ける」の後も行動を続けられます。`,accent:"restriction-quarter-rest"}
+      ,directiveAnnihilation:{title:"天命：殲滅",text:name=>`${name}はこのターン、自分の効果で相手の手が7以上になった時、その手を0にします。`,accent:"restriction-appassionato"}
     });
 
     function cardUseLockRestrictionType(player) {
@@ -3392,13 +3393,13 @@ const CARD_LIBRARY = {
       if (!state.activeIntemperanceCardLock?.[player]) return "";
       const type = cardUseLockRestrictionType(player);
       if (type === "appassionato") return "Appassionato：このターン使用不可";
-      if (type === "directiveSilence") return "指令：沈黙：このターン使用不可";
+      if (type === "directiveSilence") return "天命：沈黙：このターン使用不可";
       return "無節制：このターン使用不可";
     }
 
     function getCardUseLockMessage(player) {
       const type = cardUseLockRestrictionType(player);
-      const source = type === "appassionato" ? "Appassionatoの反動" : type === "directiveSilence" ? "未達成の「指令：沈黙」" : "「無節制」の代償";
+      const source = type === "appassionato" ? "Appassionatoの反動" : type === "directiveSilence" ? "未達成の「天命：沈黙」" : "「無節制」の代償";
       return `${getPlayerDisplayName(player, { includeYou: state.battleMode === "friend" })}は${source}により、このターンはカードを使用できません。`;
     }
 
@@ -8901,7 +8902,7 @@ function wrapFinger(value) {
         ...deckCardThemes(cardId, card),
         card.trap ? "罠" : "", card.blessing ? "加護" : "",
         card.curse ? "呪縛" : "", card.chargeCard ? "充電" : "",
-        card.directive ? "指令" : "", card.token ? "生成カード" : "",
+        card.directive ? "天命" : "", card.token ? "生成カード" : "",
         card.magicalTransformed ? "変身後 デッキ投入不可" : ""
       ].join(" "));
     }
@@ -8912,7 +8913,7 @@ function wrapFinger(value) {
       (Array.isArray(card.themes) ? card.themes : card.theme ? [card.theme] : []).forEach(add);
       if (card.chargeCard) add("充電");
       if (card.harpoonTheme) add("黄針");
-      if (card.directive) add("指令");
+      if (card.directive) add("天命");
       if (card.magical || card.magicalEvolution || card.magicalTransformed) add("魔法少女");
       const source = `${card.type || ""} ${card.text || ""}`;
       ["共鳴", "銃", "弾", "演舞", "均衡", "輪舞曲"].forEach(theme => { if (source.includes(theme)) add(theme); });
@@ -8997,7 +8998,7 @@ function wrapFinger(value) {
       if (card.trap) return "罠";
       if (card.blessing) return "加護";
       if (card.curse) return "呪縛";
-      if (card.directive) return "指令";
+      if (card.directive) return "天命";
       if (card.chargeCard) return "充電";
       if (String(card.type || "").includes("攻撃")) return "攻撃";
       if (String(card.type || "").includes("状態")) return "状態";
@@ -9020,7 +9021,7 @@ function wrapFinger(value) {
         groups.get(label).push(entry);
       }
 
-      const groupOrder = ["攻撃", "罠", "加護", "呪縛", "充電", "指令", "状態", "制限", "その他"];
+      const groupOrder = ["攻撃", "罠", "加護", "呪縛", "充電", "天命", "状態", "制限", "その他"];
       const stats = getDeckStats(owner);
       const sectionHtml = groupOrder.filter(label => groups.has(label)).map(label => {
         const groupEntries = groups.get(label).sort((a, b) => a.card.name.localeCompare(b.card.name, "ja"));
@@ -9217,7 +9218,7 @@ function wrapFinger(value) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
             cost: 1,
-            name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
+            name: `天命：指定攻撃［${directiveHandLabel(hand)}］`,
             text: `指定：${directiveHandLabel(hand)}手で攻撃。達成：その手の次の通常攻撃+1。未達成：その手の次の通常攻撃-1。`,
             directive: true,
             directiveBase: "directiveAttack",
@@ -9235,7 +9236,7 @@ function wrapFinger(value) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveTarget,
             cost: 1,
-            name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
+            name: `天命：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
             text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を攻撃。達成：1枚引く。未達成：指定された自分の手に1本加える。`,
             directive: true,
             directiveBase: "directiveTarget",
@@ -9248,7 +9249,7 @@ function wrapFinger(value) {
       if (baseId === "directiveConstant") {
         const value = 1 + Math.floor(Math.random() * 4);
         const id = `directiveConstant_${value}${reinterpreted ? "_re" : ""}`;
-        if (!CARD_LIBRARY[id]) CARD_LIBRARY[id] = { ...CARD_LIBRARY.directiveConstant, cost:1, name:`指令：定数［${value}］`, text:`指定：${value}。相手のどちらかの手が${value}なら達成：2枚引く。未達成：相手の生存手を${value}へ1近づける。`, directive:true,directiveBase:"directiveConstant",directiveData:{value,reinterpreted},token:true };
+        if (!CARD_LIBRARY[id]) CARD_LIBRARY[id] = { ...CARD_LIBRARY.directiveConstant, cost:1, name:`天命：定数［${value}］`, text:`指定：${value}。相手のどちらかの手が${value}なら達成：2枚引く。未達成：相手の生存手を${value}へ1近づける。`, directive:true,directiveBase:"directiveConstant",directiveData:{value,reinterpreted},token:true };
         return id;
       }
       return baseId;
@@ -9291,7 +9292,7 @@ function wrapFinger(value) {
           CARD_LIBRARY[id] = {
             ...CARD_LIBRARY.directiveAttack,
             cost: 1,
-            name: `指令：指定攻撃［${directiveHandLabel(hand)}］`,
+            name: `天命：指定攻撃［${directiveHandLabel(hand)}］`,
             text: `指定：${directiveHandLabel(hand)}手で通常攻撃。達成：その手の次の通常攻撃で加える本数+1。未達成：その手の次の通常攻撃で加える本数-1。`,
             directive: true,
             directiveBase: "directiveAttack",
@@ -9307,7 +9308,7 @@ function wrapFinger(value) {
             CARD_LIBRARY[id] = {
               ...CARD_LIBRARY.directiveTarget,
               cost: 1,
-              name: `指令：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
+              name: `天命：対象指定［${directiveHandLabel(attackHand)}→${directiveHandLabel(targetHand)}］`,
               text: `指定：${directiveHandLabel(attackHand)}手 → ${directiveHandLabel(targetHand)}手を通常攻撃。達成：1枚引く。未達成：指定された自分の手に1本加える。`,
               directive: true,
               directiveBase: "directiveTarget",
@@ -9346,7 +9347,7 @@ function wrapFinger(value) {
       const opponent = player === "human" ? "cpu" : "human";
       state.hands[player].splice(handIndex, 1);
       state.hands[opponent].push(materializeDrawnCard(cardId));
-      addLog(`${handNames[player]}は「都市の意志」で「${CARD_LIBRARY[cardId].name}」を${handNames[opponent]}へ渡した。`);
+      addLog(`${handNames[player]}は「啓示の伝播」で「${CARD_LIBRARY[cardId].name}」を${handNames[opponent]}へ渡した。`);
       state.mode = "attack";
       render();
       return true;
@@ -9395,7 +9396,7 @@ function wrapFinger(value) {
         const hand=card.directiveData?.attackHand;if(hand)state.pendingDirectiveHandAttackModifier[player][hand]-=1;
       } else if (base === "directiveTarget") {
         const hand = card.directiveData?.attackHand;
-        if (hand) await addFingersWithCalculation(player, hand, 1, "指令未達成");
+        if (hand) await addFingersWithCalculation(player, hand, 1, "天命未達成");
       } else if (base === "directiveSilence") {
         state.pendingIntemperanceCardLock[player]=true;state.pendingCardUseLockSource[player]="directiveSilence";
       } else if (base === "directiveReform") {
@@ -9435,7 +9436,7 @@ function wrapFinger(value) {
       }
 
       for (const item of cleared) {
-        addLog(`【指令】「${CARD_LIBRARY[item.id].name}」達成。`);
+        addLog(`【天命】「${CARD_LIBRARY[item.id].name}」達成。`);
         const base = directiveBaseId(item.id);
         if (base === "directiveAttack") {
           const hand=CARD_LIBRARY[item.id].directiveData?.attackHand;if(hand)state.pendingDirectiveHandAttackModifier[player][hand]+=1;
@@ -9454,7 +9455,7 @@ function wrapFinger(value) {
       }
 
       for (const item of failed) {
-        addLog(`【指令】「${CARD_LIBRARY[item.id].name}」未達成。`);
+        addLog(`【天命】「${CARD_LIBRARY[item.id].name}」未達成。`);
         await applyDirectiveFailure(player, item.id);
       }
 
@@ -9463,18 +9464,18 @@ function wrapFinger(value) {
       state.activeDirectiveBlessing[player] = cleared.length;
       if (hasAttachment(player, "L", "directiveBlessing") || hasAttachment(player, "R", "directiveBlessing")) {
         if (cleared.length > 0) {
-          addLog(`${handNames[player]}の「指令の加護」に、次の相手ターン用の軽減${cleared.length}が記録された。`);
+          addLog(`${handNames[player]}の「神の加護」に、次の相手ターン用の軽減${cleared.length}が記録された。`);
         } else {
-          addLog(`${handNames[player]}の「指令の加護」は、達成した指令がないため軽減0。`);
+          addLog(`${handNames[player]}の「神の加護」は、達成した天命がないため軽減0。`);
         }
       }
 
       if (state.temp[player]?.ominousPower) {
         if (cleared.length >= 3) {
           state.pendingWillTorrent[player] = (state.pendingWillTorrent[player] || 0) + 1;
-          addLog(`${handNames[player]}の「不吉な力」が成立。次の自分のターンに「意志の奔流」を得る。`);
+          addLog(`${handNames[player]}の「神意の代行」が成立。次の自分のターンに「意志の奔流」を得る。`);
         } else {
-          addLog(`${handNames[player]}の「不吉な力」は不成立。達成した指令は${cleared.length}個だった。`);
+          addLog(`${handNames[player]}の「神意の代行」は不成立。達成した天命は${cleared.length}個だった。`);
         }
         state.temp[player].ominousPower = false;
       }
@@ -9506,7 +9507,7 @@ function wrapFinger(value) {
     async function showWillTorrentFx(player, count = 0) {
       const layer = elements.willTorrentFx;
       if (!layer) return;
-      elements.willTorrentCount.textContent = count > 0 ? `指令 ×${count}` : "指令";
+      elements.willTorrentCount.textContent = count > 0 ? `天命 ×${count}` : "天命";
       layer.classList.add("show");
       await delay(1800);
       layer.classList.remove("show");
@@ -9536,7 +9537,7 @@ function wrapFinger(value) {
       state.hands[opponent].push(...transferred.map(materializeDrawnCard));
       normalizeDirectiveCardsInHand(opponent);
 
-      addLog(`${handNames[player]}は「意志の奔流」を使用。山札から指令${collected.length}枚を集め、手札の指令${transferred.length}枚を${handNames[opponent]}へ渡した。`);
+      addLog(`${handNames[player]}は「意志の奔流」を使用。山札から天命${collected.length}枚を集め、手札の天命${transferred.length}枚を${handNames[opponent]}へ渡した。`);
 
       if (state.battleMode === "friend" && !state.friendApplyingRemoteState) {
         emitFriendFx("willTorrent", {
@@ -9556,14 +9557,14 @@ function wrapFinger(value) {
       let picked;
       if(player==="human"){
         const indexes=new Set(candidates.map(x=>x.index));
-        const chosen=await beginHandCardSelection(player,{min:1,max:1,filter:(_id,index)=>indexes.has(index),message:"再解釈する指令を1枚選んでください。"});
+        const chosen=await beginHandCardSelection(player,{min:1,max:1,filter:(_id,index)=>indexes.has(index),message:"再解釈する天命を1枚選んでください。"});
         if(!chosen?.length)return false;picked=candidates.find(x=>x.index===chosen[0]);
       }else picked=candidates[Math.floor(Math.random()*candidates.length)];
       if(!picked)return false;
       const base=directiveBaseId(picked.id);const replacement=makeDirectiveVariant(base,true);
       state.hands[player][picked.index]=replacement;addLog(`${handNames[player]}は「${CARD_LIBRARY[picked.id].name}」を再解釈し、「${CARD_LIBRARY[replacement].name}」へ変更した。`);render();return true;
     }
-    function useNaturalFaith(player){state.naturalFaithUses[player]=Number(state.naturalFaithUses[player]||0)+1;state.temp[player].naturalFaithActive=true;addLog(`${handNames[player]}は「当然の信心」により、このターンの指令をすべて達成として扱う。`);return true;}
+    function useNaturalFaith(player){state.naturalFaithUses[player]=Number(state.naturalFaithUses[player]||0)+1;state.temp[player].naturalFaithActive=true;addLog(`${handNames[player]}は「盲信」により、このターンの天命をすべて達成として扱う。`);return true;}
     function markDirectiveOpponentZero(sourcePlayer,targetPlayer,before=1){if(targetPlayer===otherPlayer(sourcePlayer)&&before>0&&state.temp?.[sourcePlayer])state.temp[sourcePlayer].opponentZeroedThisTurn=true;}
     async function useDivineProof(player){
       if(state.divineProofUsed[player]||Number(state.directiveTotalClears[player]||0)<10)return false;
@@ -9971,7 +9972,7 @@ function wrapFinger(value) {
         return false;
       }
 
-      // 乱闘・予告状の発動は「カードの効果だけを使う」ため、
+      // 闇鍋・予告状の発動は「カードの効果だけを使う」ため、
       // 充電カードの1ターン1回制限を確認せず、使用済みにも記録しない。
       const previousCopy = state.copiedEffectContext;
       const previousEffectPlayer = state.resolvingEffectPlayer;
@@ -10273,7 +10274,7 @@ function wrapFinger(value) {
       state.wholeRestActive[player]=!!state.wholeRestPending[player]; state.wholeRestPending[player]=false;
       state.furiosoSkipActive[player]=!!state.furiosoSkipPending[player]; state.furiosoSkipPending[player]=false;
       ensureThemeAttachments(player);
-      // 「指令の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
+      // 「神の加護」は直前の相手ターンだけ有効。自分の新しいターン開始時に失効する。
       if (state.activeDirectiveBlessing) state.activeDirectiveBlessing[player] = 0;
       // ターン開始時点ですでに予約されていた反動だけを「今回の反動」として確定する。
       // 予告状など、ターン開始処理の途中で新しく予約された反動は次の自分ターンまで残す。
@@ -10426,7 +10427,7 @@ function wrapFinger(value) {
         state.hands[player].push("willTorrent");
       }
       if (pendingTorrent > 0) {
-        addLog(`${handNames[player]}は「不吉な力」により「意志の奔流」を${pendingTorrent}枚得た。`);
+        addLog(`${handNames[player]}は「神意の代行」により「意志の奔流」を${pendingTorrent}枚得た。`);
       }
 
       const scheduledDirectives = state.pendingDirectiveDraw[player] || 0;
@@ -10435,7 +10436,7 @@ function wrapFinger(value) {
         if (!drawDirectiveFromDeck(player)) break;
       }
       if (scheduledDirectives > 0) {
-        addLog(`${handNames[player]}は「指令の意味」により山札から指令を最大${scheduledDirectives}枚加えた。`);
+        addLog(`${handNames[player]}は「信託を受ける」により山札から天命を最大${scheduledDirectives}枚加えた。`);
       }
 
       if (state.berserkerTurns[player] > 0) {
@@ -10446,7 +10447,7 @@ function wrapFinger(value) {
       if ((state.pendingDirectiveNoDraw[player] || 0) > 0) {
         state.pendingDirectiveNoDraw[player] -= 1;
         draws = 0;
-        addLog(`${handNames[player]}は未達成の「指令：沈黙」により、このターンの通常ドローを行わない。`);
+        addLog(`${handNames[player]}は未達成の「天命：沈黙」により、このターンの通常ドローを行わない。`);
       }
       if (state.pendingStartDrawSkip[player]) {
         state.pendingStartDrawSkip[player] = false;
@@ -10459,7 +10460,7 @@ function wrapFinger(value) {
       }
       if ((state.pendingDirectiveBonusDraw[player] || 0) > 0) {
         draws += state.pendingDirectiveBonusDraw[player];
-        addLog(`${handNames[player]}は達成した「指令：再編成」により追加で${state.pendingDirectiveBonusDraw[player]}枚引く。`);
+        addLog(`${handNames[player]}は達成した「天命：再編成」により追加で${state.pendingDirectiveBonusDraw[player]}枚引く。`);
         state.pendingDirectiveBonusDraw[player] = 0;
       }
       let accelerationTriggered = false;
@@ -11071,7 +11072,7 @@ function wrapFinger(value) {
     function getDiscardCandidates(player,reason="cardEffect"){return state.hands[player].map((cardId,index)=>({cardId,index,instanceId:handCardInstanceId(player,index)})).filter(x=>canDiscardHandCard(player,x.index,reason));}
     function getTradeEligibleCards(player){return getDiscardCandidates(player,"trade");}
     function getCardLockCandidates(player){
-      const excludedIndex=state.copiedEffectContext?.sourceLabel==="乱闘"&&state.copiedEffectContext?.cardId==="cardLock"?state.copiedEffectContext.sourceHandIndex:-1;
+      const excludedIndex=state.copiedEffectContext?.sourceLabel==="闇鍋"&&state.copiedEffectContext?.cardId==="cardLock"?state.copiedEffectContext.sourceHandIndex:-1;
       return getDiscardCandidates(player,"cardEffect").filter(item=>item.index!==excludedIndex);
     }
     function removeCardWithoutDiscard(player,index,reason="消滅"){
@@ -12438,7 +12439,7 @@ function wrapFinger(value) {
       slot.duelTargetOwner = defender;
       slot.duelTargetHand = targetHand;
       const stats = duelSurgeStats(slot.level);
-      addLog(`${handNames[attacker]}の${handNames[attackHand]}の「決闘高潮」がLv.${slot.level}になった。対象：${defender === attacker ? "自分" : handNames[defender]}の${handNames[targetHand]}。`);
+      addLog(`${handNames[attacker]}の${handNames[attackHand]}の「学習」がLv.${slot.level}になった。対象：${defender === attacker ? "自分" : handNames[defender]}の${handNames[targetHand]}。`);
       return { bonus: stats.attack, level: slot.level };
     }
 
@@ -12506,9 +12507,9 @@ function wrapFinger(value) {
       if (directiveReduction > 0 && isOpponentTurn && hasAttachment(defender, targetHand, "directiveBlessing")) {
         const reduced = Math.max(1, finalAmount - directiveReduction);
         if (reduced !== finalAmount) {
-          addLog(`${handNames[defender]}の「指令の加護」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
+          addLog(`${handNames[defender]}の「神の加護」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
         } else {
-          addLog(`${handNames[defender]}の「指令の加護」が働いたが、最低1本のため${sourceLabel}は${finalAmount}本のまま。`);
+          addLog(`${handNames[defender]}の「神の加護」が働いたが、最低1本のため${sourceLabel}は${finalAmount}本のまま。`);
         }
         finalAmount = reduced;
       }
@@ -12526,7 +12527,7 @@ function wrapFinger(value) {
       const duelReduction = duelSurgeDefense(defender, targetHand);
       if (duelReduction > 0) {
         const reduced = Math.max(1, finalAmount - duelReduction);
-        if (reduced !== finalAmount) addLog(`${handNames[defender]}の${handNames[targetHand]}の「決闘高潮」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
+        if (reduced !== finalAmount) addLog(`${handNames[defender]}の${handNames[targetHand]}の「学習」により、${sourceLabel}の本数が${finalAmount}→${reduced}になった。`);
         finalAmount = reduced;
       }
       const kinetic=findAttachmentSlot(defender,targetHand,"kineticConversion");
@@ -12889,7 +12890,7 @@ function wrapFinger(value) {
     }
 
     function beginGunAmmoEffect(player, gunCardId) {
-      const excludedIndex = state.copiedEffectContext?.sourceLabel === "乱闘" && state.copiedEffectContext?.cardId === gunCardId
+      const excludedIndex = state.copiedEffectContext?.sourceLabel === "闇鍋" && state.copiedEffectContext?.cardId === gunCardId
         ? Number(state.copiedEffectContext.sourceHandIndex)
         : null;
       const candidates = getGunAmmoCandidates(player, excludedIndex);
@@ -13717,7 +13718,7 @@ function renderLastAction() {
           ${displaySettings.compactCardDescriptions
             ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
             : `<div class="card-text">${cardId === "magicalChant" && effectiveCardId === "magicalChant" ? `<strong>詠唱進捗：${Number(state.magicalChantProgress?.human || 0)}/3</strong><br>${escapeHtml(card.text)}` : card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
-          ${romanRuleLocked ? '<div class="used">準備時間中使用不可</div>' : advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">都市の意志：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">落ち着ける：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
+          ${romanRuleLocked ? '<div class="used">準備時間中使用不可</div>' : advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">啓示の伝播：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">カードマジック：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
               ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
@@ -14595,7 +14596,7 @@ function renderLastAction() {
         } else if (cardId === "fanning" && state.mode === "fanningTarget") {
           setMessage(`「ファニング」：${state.pendingFanning?.shots || 0}回射撃する相手の0ではない手を選んでください。`);
         } else if (cardId === "calmDown" && state.mode === "calmDownDiscard") {
-          setMessage("「落ち着ける」：捨てる手札を1枚選んでください。");
+          setMessage("「カードマジック」：捨てる手札を1枚選んでください。");
         } else if (cardId === "andante" && state.mode === "andante") {
           setMessage("「アンダンテ」：微調整する自分の0でない手を選んでください。");
         } else if (cardId === "arcanaSlave" && state.mode === "arcanaSlaveTarget") {
@@ -15192,7 +15193,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (attackModifierLogsApply && blessingBonus) addLog(`${handNames[attacker]}の「力の加護」により、通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && magicalAttackBonus) addLog(`${handNames[attacker]}の魔法少女加護により、通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && recklessBonus) addLog(`${handNames[attacker]}の「捨て身」により、通常攻撃で加える本数+2。`);
-      if (attackModifierLogsApply && willBladeBonus) addLog(`${handNames[attacker]}の「意志の剣」により、通常攻撃で加える本数+${willBladeBonus}。`);
+      if (attackModifierLogsApply && willBladeBonus) addLog(`${handNames[attacker]}の「神意の剣」により、通常攻撃で加える本数+${willBladeBonus}。`);
       if (attackModifierLogsApply && dimensionalSlashBonus) addLog(`${handNames[attacker]}の「空間切断」により、通常攻撃で加える本数+${dimensionalSlashBonus}。`);
       if (goldRushActive) addLog(`${handNames[attacker]}の「ゴールドラッシュ」により、攻撃の基本本数が手札枚数の${basePower}になった。`);
       if (attackModifierLogsApply && frenzyBonus) addLog(`${handNames[attacker]}の「狂乱」により、通常攻撃で加える本数+2。`);
@@ -15201,7 +15202,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (attackModifierLogsApply && balanceBladeBonus) addLog(`${handNames[attacker]}の「均衡の刃」により、通常攻撃で加える本数+2。`);
       if (attackModifierLogsApply && justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && sforzandoBonus) addLog(`${handNames[attacker]}の「スフォルツァント」により、通常攻撃で加える本数+${sforzandoBonus}。`);
-      if(attackModifierLogsApply&&(directiveHandBonus||directiveNextBonus))addLog(`${handNames[attacker]}の指令効果により、通常攻撃で加える本数${directiveHandBonus+directiveNextBonus>=0?"+":""}${directiveHandBonus+directiveNextBonus}。`);
+      if(attackModifierLogsApply&&(directiveHandBonus||directiveNextBonus))addLog(`${handNames[attacker]}の天命効果により、通常攻撃で加える本数${directiveHandBonus+directiveNextBonus>=0?"+":""}${directiveHandBonus+directiveNextBonus}。`);
       if (attackModifierLogsApply && resonance && state.temp[attacker]?.crescendo) addLog(`${handNames[attacker]}の「クレッシェンド」により、共鳴した通常攻撃で加える本数+2。`);
       if (attackModifierLogsApply && resonance && hasAttachment(attacker, attackHand, "largo")) addLog(`${handNames[attacker]}の「ラルゴ」により、共鳴した通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && cursePenalty) addLog(`${handNames[attacker]}の「鈍重の呪縛」により、通常攻撃で加える本数-1。`);
@@ -15322,8 +15323,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         power = attackPowerResult.finalAttackPower;
         context = { defender, targetHand, attacker, attackHand, incomingPower: power };
         addLog((immutable || isAttackReplacement)
-          ? `${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}による加える本数+${duelSurgeBonus}は${isAttackReplacement ? "攻撃置換のため適用されない" : "「不変の呪縛」により無効"}。`
-          : `${handNames[attacker]}の「決闘高潮」Lv.${duelUpdate.level}により、通常攻撃で加える本数+${duelSurgeBonus}。`);
+          ? `${handNames[attacker]}の「学習」Lv.${duelUpdate.level}による加える本数+${duelSurgeBonus}は${isAttackReplacement ? "攻撃置換のため適用されない" : "「不変の呪縛」により無効"}。`
+          : `${handNames[attacker]}の「学習」Lv.${duelUpdate.level}により、通常攻撃で加える本数+${duelSurgeBonus}。`);
       }
 
       if (trapResult.cancelAttack) {
@@ -15436,7 +15437,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         resolvedFinal = Math.max(0, total);
       } else if (state.activeDirectiveAnnihilation?.[attacker] && defender===otherPlayer(attacker) && total>=7) {
         resolvedFinal=0;
-        addLog(`達成した「殲滅指令」により、${handNames[defender]}の${handNames[targetHand]}は7以上になったため0になった。`);
+        addLog(`達成した「天命：殲滅」により、${handNames[defender]}の${handNames[targetHand]}は7以上になったため0になった。`);
       } else if (berserkerZeroActive && total >= 7) {
         resolvedFinal = 0;
         addLog(`「バーサーカー」により、${handNames[defender]}の${handNames[targetHand]}は${total}になった時点で、超過処理をせず0になった。`);
@@ -16392,8 +16393,8 @@ async function endTurn(reason="unspecified") {
       addCard("grandioso",240,"Grandioso");
       addCard("portamento",220,"ポルタメント");
       addCard("presto",260,"プレスト");
-      addCard("reinterpretation",180,"指令再解釈");
-      addCard("naturalFaith",420,"指令一括達成");
+      addCard("reinterpretation",180,"天命再解釈");
+      addCard("naturalFaith",420,"天命一括達成");
       addCard("divineProof",760,"神意の証明");
       addCard("deusVult",10000,"DEUS VULT");
       if (["L", "R"].some(h => state.human[h] === 4)) addCard("snipe", wouldCpuWinByZeroing(["L", "R"].find(h => state.human[h] === 4)) ? 10000 : 560, "狙撃");
@@ -16757,15 +16758,15 @@ async function endTurn(reason="unspecified") {
       if (state.mode !== "calmDownDiscard") return;
       const cardId = state.hands.human[index];
       if (!cardId || cardId === "calmDown") {
-        setMessage("落ち着ける自身は捨てられません。別の手札を選んでください。");
+        setMessage("カードマジック自身は捨てられません。別の手札を選んでください。");
         return;
       }
       const discarded = await discardHandCardByEffect("human", index);
       drawCard("human");
       drawCard("human");
       state.mode = "attack";
-      addLog(`あなたは「落ち着ける」で「${CARD_LIBRARY[discarded].name}」を捨て、2枚引いた。`);
-      setMessage(`「落ち着ける」：「${CARD_LIBRARY[discarded].name}」を捨て、2枚引きました。まだ攻撃か分けるができます。`);
+      addLog(`あなたは「カードマジック」で「${CARD_LIBRARY[discarded].name}」を捨て、2枚引いた。`);
+      setMessage(`「カードマジック」：「${CARD_LIBRARY[discarded].name}」を捨て、2枚引きました。まだ攻撃か分けるができます。`);
       render();
     }
 
@@ -16773,7 +16774,7 @@ async function endTurn(reason="unspecified") {
       if (state.mode !== "rapidFireDiscard") return;
       const cardId = state.hands.human[index];
       if (!cardId || !getRapidFireDiscardCandidates("human").some(item => item.index === index)) {
-        setMessage("乱闘でコピー元になった乱射自身や、捨てられないカードは選べません。");
+        setMessage("闇鍋でコピー元になった乱射自身や、捨てられないカードは選べません。");
         return;
       }
       state.pendingRapidFireDiscard = index;
@@ -16816,7 +16817,7 @@ async function endTurn(reason="unspecified") {
         state.activeDirectiveReformContinue[player]=false;
         state.mode="attack";
         elements.splitBox.classList.remove("active");
-        setMessage("達成した「再編成指令」により、分けた後もターンを続行できます。");
+        setMessage("達成した「天命：再編成」により、分けた後もターンを続行できます。");
         render();
         return;
       }
