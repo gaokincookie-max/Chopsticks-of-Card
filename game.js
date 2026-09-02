@@ -878,23 +878,13 @@ const CARD_LIBRARY = {
         type: "終端",
         text: "このターン、罠カードに限りカード関連行動の回数制限を無視して好きなだけ伏せてもよい。攻撃も分けるもできず、仕込み終了で相手にターンを渡す。",
         canPlay: (player) => canSetAnyTrap(player) && state.hands[player].some(id => CARD_LIBRARY[id]?.trap),
-        effect: (player) => {
+        effect: async (player) => {
           if (!canSetAnyTrap(player) || !state.hands[player].some(id => CARD_LIBRARY[id]?.trap)) {
             addLog(`${handNames[player]}の「仕込み」は設置できる罠が存在しないため不発。`);
-            return;
+            return false;
           }
-          state.temp[player].setupMode = true;
-          state.temp[player].setupFromCopiedEffect = !!state.copiedEffectContext;
-          state.mode = "setupTrap";
-          state.selectedAttackHand = null;
-          state.selectedTrapCardIndex = null;
-          state.pendingTrapTargetEffect = null;
-          elements.splitBox.classList.remove("active");
-      elements.andanteBox?.classList.remove("active");
           addLog(`${handNames[player]}は「仕込み」を使った。罠を好きなだけ伏せられる。`);
-          if (player === "human") {
-            setMessage("「仕込み」：このターンは罠カードを好きなだけ伏せられます。終わったら「仕込み終了」を押してください。");
-          }
+          return await runAttachmentPlacementSession(player,{kind:"setupTrap",copiedEffect:!!state.copiedEffectContext});
         }
       },
 
@@ -2079,8 +2069,8 @@ const CARD_LIBRARY = {
       hands: { human: [], cpu: [] },
       discard: { human: [], cpu: [] },
       temp: {
-        human: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false },
-        cpu: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false }
+        human: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null },
+        cpu: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null }
       },
       deckCounts: { human: { ...DEFAULT_DECK_COUNTS }, cpu: { ...DEFAULT_DECK_COUNTS } },
       editingDeckOwner: "human",
@@ -2315,9 +2305,11 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173-card-name-refresh";
+    const LATEST_NEWS_ID = "v173b-handoff-diagnostics-recovery";
 
     const UPDATE_NEWS = [
+      {id:"v173b-handoff-diagnostics-recovery",version:"v173b",date:"2026-09-02",title:"オンラインのターン交代診断と自動復旧を強化",summary:"ゲスト側などでターン交代が同期待ちのまま止まる場合に、正本とのずれを判別して自動復旧しやすくしました。",featured:true,tags:["fix","online","system"],items:["handoff前にFirestore正本のturnOwner・turnSerial・Action・handoffをfresh readして前提条件を診断","owner/serial/Action/handoffの不一致を個別に判定し、正本側へ安全に再hydrate","既にhandoff済み・さらに先のターンまで進行済みなら成功扱いとして古い待機を解除","canonicalで完了済みのActionを古いローカルが保持していた場合は再添付せずhandoffを継続","permission-deniedを通信断と混同せず、Firestore Rules確認が必要と画面に明示","単なる一時通信失敗ではローカルのturn-end結果を巻き戻さずretryを継続"]},
+      {id:"v173a-placement-session-fix",version:"v173a",date:"2026-09-02",title:"仕込み・反復強迫の配置処理を安定化",summary:"びっくり箱などのコピー効果中でも、仕込みと反復強迫を安全に連続配置できるよう共通処理へ整理しました。",featured:true,tags:["fix","trap","online"],items:["仕込みを一時配置セッション化し、相手ターン中のびっくり箱から発動しても罠を選択・設置・終了できるよう修正","カード関連行動が使用済みでも、仕込み中の罠配置は正しく回数制限を無視","反復強迫も同じ配置セッションへ統合し、同名呪縛だけを手札から連続して直接配置できるUIへ変更","オンラインで相手側のびっくり箱から仕込み・反復強迫が発動した場合、配置するカードと設置先を本人へDecisionで確認","びっくり箱が終端カードの効果だけを発動する仕様と、控訴・上告不可の挙動は変更なし"]},
       {id:"v173-card-name-refresh",version:"v173",date:"2026-09-02",title:"カード名と天命テーマの表記を整理",summary:"能力に合わせてカード名を見直し、天命テーマ全体の用語を統一しました。",featured:true,tags:["update"],items:["カード名を「闇鍋」「不測の備え」「カードマジック」「学習」へ整理","天命カードのカテゴリ名・動的生成名・検索分類を「天命」表記へ統一","関連カードを「信託を受ける」「輪廻する天命」「神の加護」「神意の剣」「啓示の伝播」「神意の代行」「盲信」へ整理","本文・戦闘ログ・選択メッセージ・制限通知・検索表示まで関連表記を一括監査"]},
       {id:"v172-gift-titles",version:"v172",date:"2026-09-01",title:"ギフト称号を追加",summary:"ギフトコードで獲得できる新しい称号に対応しました。",featured:true,tags:["update","feature"],items:["ギフト報酬の称号「最古参勢」「古参勢」を追加","同一コードの二重受取を防止し、限定コードの使用上限をtransactionで管理","獲得したギフト称号はプレイヤーカード、対戦ロビー、VS表示に反映"]},
       {id:"v171-card-mastery-achievements",version:"v171",date:"2026-09-01",title:"実績：カード熟練度を追加",summary:"カードを使い込んで称号を獲得できる実績システムの第一弾です。",featured:true,tags:["update","feature"],items:["ログインユーザー限定でカードごとの累計使用回数を記録","10回で「〇〇使い」、50回で「〇〇の熟練者」、100回で「〇〇の達人」、500回で「〇〇の神」を達成","実績画面に達成済み/未達成タブとカード熟練度一覧を追加","未受取報酬には！を表示し、個別受取と一括受取に対応","長押しで実績の条件・進捗・報酬・達成日時を確認可能"]},
@@ -4359,7 +4351,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -4883,7 +4875,7 @@ const CARD_LIBRARY = {
       state.decks[player] = [...(side.deck || [])];
       state.hands[player] = [...(side.hand || [])];
       state.discard[player] = [...(side.discard || [])];
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
       if (preserveOwnerOnlyMeta) {
         state.temp[player].chargeCardsUsed = ownedChargeCardsUsed;
         state.temp[player].cardActionUsed = ownedCardActionUsed;
@@ -5567,23 +5559,88 @@ const CARD_LIBRARY = {
       return action.phase==="awaiting-handoff"&&action.actorSide===handoff.fromSide&&Number(action.turnSerial||0)<Number(handoff.toTurnSerial||0);
     }
 
+    function friendHandoffDiagnostic(match,handoff,handoffAction=null,phase="bridge"){
+      if(!match)return {code:"match-missing",phase};
+      const targetSerial=Number(handoff?.toTurnSerial||0),beforeSerial=Math.max(0,targetSerial-1);
+      const serial=Number(match.turnSerial||0),owner=match.turnOwner||match.turnSide||null;
+      const canonicalHandoff=match.handoff||null,canonicalAction=match.action||null;
+      const base={phase,serial,owner,targetSerial,expectedOwner:handoff?.fromSide||null,nextOwner:handoff?.toSide||null,
+        handoffId:canonicalHandoff?.id||null,actionId:canonicalAction?.id||null,lastCompletedActionId:match.lastCompletedActionId||null};
+      if(serial>targetSerial)return {...base,code:"canonical-ahead"};
+      if(serial===targetSerial&&owner===handoff?.toSide)return {...base,code:"already-applied"};
+      if(canonicalHandoff&&canonicalHandoff.id!==handoff?.id)return {...base,code:"handoff-mismatch"};
+      if(serial!==beforeSerial)return {...base,code:"serial-mismatch",expectedSerial:beforeSerial};
+      if(owner!==handoff?.fromSide)return {...base,code:"owner-mismatch"};
+      if(handoffAction){
+        if(match.lastCompletedActionId===handoffAction.id&&!canonicalAction)return {...base,code:"action-already-completed"};
+        if(!canonicalAction)return {...base,code:"action-missing",expectedActionId:handoffAction.id};
+        if(canonicalAction.id!==handoffAction.id)return {...base,code:"action-mismatch",expectedActionId:handoffAction.id};
+      }
+      if(phase==="commit"&&(!canonicalHandoff||canonicalHandoff.id!==handoff?.id))return {...base,code:"bridge-missing"};
+      return {...base,code:"ready"};
+    }
+
+    function friendHandoffFailureMessage(diag,error=null){
+      const errorCode=String(error?.code||"");
+      if(errorCode.includes("permission-denied"))return "ターン交代がFirestore Rulesに拒否されました。最新版のfirestore.rulesを公開しているか確認してください。";
+      const code=diag?.code||"unknown";
+      if(["canonical-ahead","already-applied"].includes(code))return "正本ではターン交代が完了していました。自動再同期しています。";
+      if(code==="serial-mismatch")return `ターン番号が正本とずれています（正本:${diag.serial} / 予定:${diag.expectedSerial}）。自動再同期しています。`;
+      if(code==="owner-mismatch")return `手番所有者が正本とずれています（正本:${diag.owner||"不明"}）。自動再同期しています。`;
+      if(code==="action-missing"||code==="action-mismatch")return "行動Actionと正本の対応がずれています。確定済み地点から自動復旧しています。";
+      if(code==="handoff-mismatch"||code==="bridge-missing")return "別のターン交代情報を検出しました。正本へ自動再同期しています。";
+      return "ターン交代の同期に失敗しました。正本を再取得して復旧を試みています。";
+    }
+
+    async function readFriendCanonicalMatch(){
+      if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendMatchId)return null;
+      const fb=firebaseApi();if(!fb)return null;
+      const snap=await fb.getDoc(fb.doc(fb.db,"rooms",state.friendRoomId));
+      if(!snap.exists())return null;
+      const data=snap.data();
+      if(!data?.match||getFriendMatchId(data.match)!==state.friendMatchId)return null;
+      state.friendRoomData=data;
+      return data.match;
+    }
+
+    async function recoverFriendHandoffFailure(diag,error=null,reason="turn handoff"){
+      const message=friendHandoffFailureMessage(diag,error);
+      console.warn("[friend-handoff-diagnostic]",{reason,diag,errorCode:error?.code||null,error:error?.message||null,role:state.friendRole,localSerial:state.friendTurnSerial,localOwner:state.friendTurnOwner});
+      setMessage(message);render();
+      const permissionDenied=String(error?.code||"").includes("permission-denied");
+      if(permissionDenied){
+        state.friendConnectionState="reconnecting";
+        return false;
+      }
+      const code=diag?.code||"unknown";
+      const shouldResync=["canonical-ahead","already-applied","serial-mismatch","owner-mismatch","action-missing","action-mismatch","handoff-mismatch","bridge-missing","match-changed"].includes(code);
+      // canonicalと前提が食い違う時だけhydrateする。単なる一時通信失敗でローカルのturn-end結果を巻き戻さない。
+      if(shouldResync){
+        try{await RecoveryManager.resync(`handoff-${code}`);}catch(resyncError){console.warn("PVP handoff auto-resync failed",resyncError);}
+      }
+      return ["canonical-ahead","already-applied"].includes(code);
+    }
+
     async function beginFriendHandoffBridge(handoff,handoffAction=null){
-      if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendMatchId)return false;
-      const fb=firebaseApi();if(!fb)return false;
-      const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let committed=false;
+      if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendMatchId)return {ok:false,diag:{code:"inactive",phase:"bridge"}};
+      const fb=firebaseApi();if(!fb)return {ok:false,diag:{code:"firebase-unavailable",phase:"bridge"}};
+      const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let committed=false,diag={code:"unknown",phase:"bridge"};
       await fb.runTransaction(fb.db,async transaction=>{
-        const snap=await transaction.get(roomRef);if(!snap.exists())return;
-        const match=snap.data()?.match;if(!match||getFriendMatchId(match)!==state.friendMatchId)return;
-        if(match.handoff&&match.handoff.id!==handoff.id)return;
-        // bridge前のcanonical owner/serialが想定と違う場合は古いhandoffなので絶対に作らない。
-        const expectedBeforeSerial=Math.max(0,Number(handoff.toTurnSerial||0)-1);
-        if(!match.handoff&&(match.turnOwner!==handoff.fromSide||Number(match.turnSerial||0)!==expectedBeforeSerial))return;
-        if(handoffAction&&match.action?.id!==handoffAction.id)return;
+        const snap=await transaction.get(roomRef);if(!snap.exists()){diag={code:"room-missing",phase:"bridge"};return;}
+        const match=snap.data()?.match;if(!match||getFriendMatchId(match)!==state.friendMatchId){diag={code:"match-changed",phase:"bridge"};return;}
+        diag=friendHandoffDiagnostic(match,handoff,handoffAction,"bridge");
+        if(diag.code==="already-applied"||diag.code==="canonical-ahead")return;
+        if(diag.code==="action-already-completed"&&handoffAction){
+          // Action本体は既にcanonicalで完了済み。古いローカルActionをhandoffへ再添付しない。
+          handoffAction=null;handoff.actionId=null;
+          diag=friendHandoffDiagnostic(match,handoff,null,"bridge");
+        }
+        if(diag.code!=="ready")return;
         const update={"match.version":170,"match.schemaVersion":170,"match.handoff":cloneJson(handoff),updatedAt:fb.serverTimestamp()};
         if(handoffAction)update["match.action"]=cloneJson(handoffAction);
         transaction.update(roomRef,update);committed=true;
       });
-      return committed;
+      return {ok:committed,diag};
     }
 
     async function cleanupCompletedFriendHandoff(expectedHandoffId=null,{attempts=3}={}){
@@ -6354,6 +6411,27 @@ const CARD_LIBRARY = {
           response = chosen
             ? { chosen: { placedHand: chosen.placedHand, index: chosen.index, cardId: chosen.cardId }, skipped: false }
             : { chosen: null, skipped: true };
+        } else if (interrupt.type === "repetitionCurseType") {
+          const allowedInstances=new Set((payload.candidates||[]).map(x=>String(x?.instanceId||"")));
+          const eligible=state.hands.human.map((id,index)=>({id,index,instanceId:handCardInstanceId("human",index)})).filter(x=>CARD_LIBRARY[x.id]?.curse&&allowedInstances.has(String(x.instanceId)));
+          if(!eligible.length)response={instanceId:null};
+          else{const indexes=await runIncomingFriendDecision(interrupt,beginHandCardSelection({min:1,max:1,filter:(_id,index)=>eligible.some(x=>x.index===index),message:"反復強迫：連続して付与する呪縛を選んでください。",allowOffTurn:true}),[]);const picked=eligible.find(x=>x.index===indexes[0]);response={instanceId:picked?.instanceId||null};}
+        } else if (interrupt.type === "attachmentPlacementStep") {
+          const rawCandidates=Array.isArray(payload.candidates)?payload.candidates:[];
+          const remoteByInstance=new Map(rawCandidates.map(x=>[String(x?.instanceId||""),x]));
+          const allowedInstances=new Set(remoteByInstance.keys());
+          const eligible=state.hands.human.map((id,index)=>({id,index,instanceId:handCardInstanceId("human",index)})).filter(x=>allowedInstances.has(String(x.instanceId)));
+          if(!eligible.length){response={finish:true};}
+          else{
+            const keepGoing=await runIncomingFriendDecision(interrupt,showGameConfirmation({title:String(payload.title||"配置"),message:"追加でカードを設置しますか？",confirmLabel:"設置する",cancelLabel:"終了"}),false);
+            if(!keepGoing)response={finish:true};
+            else{
+              const indexes=await runIncomingFriendDecision(interrupt,beginHandCardSelection({min:1,max:1,filter:(_id,index)=>eligible.some(x=>x.index===index),message:`${String(payload.title||"配置")}：設置するカードを選んでください。`,allowOffTurn:true}),[]);
+              const picked=eligible.find(x=>x.index===indexes[0]);
+              if(!picked)response={finish:true};
+              else{const targetOwner=payload.targetOwner==="opponent"?"cpu":"human",allowedHands=new Set((remoteByInstance.get(String(picked.instanceId))?.hands||[]).filter(h=>h==="L"||h==="R"));const choice=await runIncomingFriendDecision(interrupt,beginBoardHandSelection("human",{owners:[targetOwner],minimum:1,candidateFilter:x=>allowedHands.has(x.hand),message:`${String(payload.title||"配置")}：設置先を選んでください。`,allowOffTurn:true}),null);response=choice?{finish:false,instanceId:picked.instanceId,hand:choice.hand}:{finish:true};}
+            }
+          }
         } else if (interrupt.type === "magicMirror") {
           const use = await runIncomingFriendDecision(interrupt, askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId), false);
           response = { use: !!use };
@@ -7153,7 +7231,7 @@ const CARD_LIBRARY = {
       const initialGuest = createOpeningSideFromShuffledDeck(guestDeck,data.guestDeckCounts);
       const emptySideState = (side) => ({
         L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
-        temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, chargeCardsUsed: [] },
+        temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, chargeCardsUsed: [] },
         noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
         pendingIntemperanceCardLock: false, activeIntemperanceCardLock: false, pendingCardUseLockSource: "", activeCardUseLockSource: "", pendingMagicalHeartDraw: 0,
         magicalChantProgress: 0, magicalChantCompleted: false,
@@ -7328,8 +7406,8 @@ const CARD_LIBRARY = {
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
       resetDirectiveMatchState();
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -10175,14 +10253,19 @@ function wrapFinger(value) {
       const card = CARD_LIBRARY[cardId];
       if (!card || cardId === "performance") return false;
       if (Array.isArray(state.temp[player]?.terminalCardBanIds) && state.temp[player].terminalCardBanIds.includes(cardId)) return false;
-      const setupActive = !!state.temp[player]?.setupMode;
+      const setupActive = isAttachmentPlacementSessionActive(player);
+      const placementSession=getAttachmentPlacementSession(player);
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
-      const hasCardAllowance = !state.temp[player]?.cardActionUsed || Number(state.temp[player]?.cardExtraUses || 0) > 0 || lightSpeedChargePlayable || (setupActive && card.trap) || hasBaitFreeTrapUse(player, card);
+      const hasCardAllowance = !state.temp[player]?.cardActionUsed || Number(state.temp[player]?.cardExtraUses || 0) > 0 || lightSpeedChargePlayable || (setupActive && attachmentPlacementSessionAllowsCard(player,cardId,placementSession)) || hasBaitFreeTrapUse(player, card);
       if (!hasCardAllowance || !canUseChargeCardThisTurn(player, cardId)) return false;
       if (state.activeCostLimit?.[player] !== null && state.activeCostLimit?.[player] !== undefined && card.cost > state.activeCostLimit[player]) return false;
       if (state.berserkerTurns?.[player] > 0 && !state.temp[player]?.berserkerJustUsed) return false;
       if (isAttachmentCard(cardId)) {
-        if (setupActive && !card.trap) return false;
+        if (setupActive) {
+          if(!attachmentPlacementSessionAllowsCard(player,cardId,placementSession)) return false;
+          const owner=attachmentPlacementTargetOwner(player,placementSession);
+          return ["L","R"].some(hand=>canPlaceAttachmentOnHand(player,owner,hand,cardId));
+        }
         return canSetAttachmentTarget(player, cardId);
       }
       if (setupActive) return false;
@@ -10293,7 +10376,7 @@ function wrapFinger(value) {
       state.personalTurnCount[player] = Number(state.personalTurnCount[player] || 0) + 1;
       if(romanBeforeTurnStart&&!isRomanPreparation()){addLog("ロマンギミック杯：双方の準備時間が終了した。戦闘開始。");setMessage("準備時間終了 ― 戦闘開始");}
       const directiveOpponent=otherPlayer(player);
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       ensureV168State();
       state.temp[player].cardExtraUses=0;state.pendingTrapCardExtraUses[player]=0;state.temp[player].baitFreeTrapUse=Number(state.pendingBaitFreeTrapUse[player]||0)>0?1:0;state.pendingBaitFreeTrapUse[player]=0;
       const camouflageDraws=["L","R"].reduce((n,h)=>n+state.traps[player][h].filter(slot=>trapCardId(slot)==="camouflage").length,0);
@@ -10647,7 +10730,9 @@ function wrapFinger(value) {
             card.classList.remove("selected", "hit-target");
           }
 
-          if (!state.gameOver && !state.animating && !state.startingRouletteActive && state.turn === "human") {
+          const offTurnBoardSelection=state.mode==="boardHandSelection"&&!!pendingBoardHandSelection?.allowOffTurn;
+          const offTurnPlacement=isAttachmentPlacementSessionActive("human");
+          if (!state.gameOver && !state.animating && !state.startingRouletteActive && (state.turn === "human" || offTurnBoardSelection || offTurnPlacement)) {
             if (state.mode === "boardHandSelection" && pendingBoardHandSelection?.candidates.some(item => item.owner === player && item.hand === hand)) {
               card.classList.add("trap-target");
             }
@@ -10657,6 +10742,10 @@ function wrapFinger(value) {
             }
             if ((state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing") && player === "human" && value > 0 && state.traps.human[hand].length < 2) {
               card.classList.add("trap-target");
+            }
+            if (state.mode === "attachmentPlacementSession") {
+              const ps=getAttachmentPlacementSession("human"),targetOwner=attachmentPlacementTargetOwner("human",ps),selectedId=state.selectedTrapCardIndex===null?null:state.hands.human[state.selectedTrapCardIndex];
+              if(player===targetOwner&&selectedId&&canPlaceAttachmentOnHand("human",targetOwner,hand,selectedId))card.classList.add("trap-target");
             }
             if (state.mode === "setCurse" && player === "cpu" && value > 0 && state.traps.cpu[hand].length < 2) {
               card.classList.add("trap-target");
@@ -10731,12 +10820,12 @@ function wrapFinger(value) {
       const selectionLock = ["boardHandSelection", "handCardSelection", "numberAllocation"].includes(state.mode);
       const interactionLock=isFriendInteractionBlocking()||!!state.friendCardResolving||!!state.friendInterruptHandling||!!state.friendInterruptWaiting||!!state.friendActiveAction;
       const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver || selectionLock || interactionLock;
-      const setupActive = state.turn === "human" && state.temp.human.setupMode && !state.gameOver;
+      const setupActive = isAttachmentPlacementSessionActive("human") && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive || !canUseNormalAttackAction("human");
       elements.splitBtn.disabled = lock || setupActive || state.noSplit.human || state.berserkerTurns.human > 0 || !canHumanSplit();
       elements.drawBtn.disabled = friendBattle || lock || setupActive;
       elements.cancelBtn.disabled = lock && !setupActive;
-      elements.cancelBtn.textContent = setupActive ? "仕込み終了" : "解除";
+      elements.cancelBtn.textContent = setupActive ? attachmentPlacementSessionEndLabel(getAttachmentPlacementSession("human")) : "解除";
       elements.confirmSplitBtn.disabled = lock || setupActive;
 
       elements.humanDeckCount.textContent = state.decks.human.length;
@@ -10804,8 +10893,74 @@ function wrapFinger(value) {
     function canUseFixation(player){const items=fixationTargets(player);return items.length===4&&new Set(items.map(x=>x.cardId)).size===4;}
     function useFixation(player){if(!canUseFixation(player))return false;for(const item of fixationTargets(player)){item.slot.fixed=true;item.slot.originalHand=item.hand;}addLog(`${handNames[player]}は相手の4種類の呪縛を固定した。`);render();return true;}
     async function useCatharsis(player){const target=otherPlayer(player),counts={L:curseSlots(target,"L").length,R:curseSlots(target,"R").length};for(const hand of ["L","R"]){const before=state[target][hand];state[target][hand]=Math.max(0,before-counts[hand]);addLog(`「カタルシス」：${handNames[target]}の${handNames[hand]} ${before}→${state[target][hand]}。`);}clearBrokenTraps(target);for(const hand of ["L","R"])for(let i=state.traps[target][hand].length-1;i>=0;i--)if(CARD_LIBRARY[trapCardId(state.traps[target][hand][i])]?.curse)discardAttachment(target,hand,i,{reason:"カタルシス"});render();}
-    async function chooseCurseType(player,label){const ids=[...new Set(state.hands[player].filter(id=>CARD_LIBRARY[id]?.curse))];if(!ids.length)return null;if(player!=="human")return ids[0];const chosen=await beginHandCardSelection({min:1,max:1,filter:id=>ids.includes(id),message:label});return chosen.length?state.hands[player][chosen[0]]:null;}
-    async function useRepetitionCompulsion(player){const id=await chooseCurseType(player,"反復強迫：連続して付与する呪縛を選んでください。");if(!id)return false;state.repetitionFreeCurse[player]=id;try{while(state.hands[player].includes(id)){const target=otherPlayer(player),choice=await beginBoardHandSelection(player,{owners:[target],minimum:1,candidateFilter:x=>canPlaceAttachmentOnHand(player,target,x.hand,id),message:`反復強迫：「${CARD_LIBRARY[id].name}」の設置先を選んでください。`,cpuPick:items=>items[0]});if(!choice)break;const index=state.hands[player].indexOf(id);if(index<0||!await setTrap(player,choice.hand,index,target,{freeCardAction:true}))break;if(player==="human"&&state.hands[player].includes(id)){const again=await showGameConfirmation({title:"反復強迫",message:"同名の呪縛を続けて使用しますか？",confirmLabel:"続ける",cancelLabel:"終了"});if(!again)break;}}}finally{state.repetitionFreeCurse[player]=null;state.mode="attack";render();}return true;}
+    const attachmentPlacementSessionResolvers={human:null,cpu:null};
+    function getAttachmentPlacementSession(player){return state.temp?.[player]?.attachmentPlacementSession||null;}
+    function isAttachmentPlacementSessionActive(player){return !!getAttachmentPlacementSession(player);}
+    function attachmentPlacementSessionAllowsCard(player,cardId,session=getAttachmentPlacementSession(player)){
+      if(!session)return false;const card=CARD_LIBRARY[cardId];if(!card)return false;
+      if(session.kind==="setupTrap")return !!card.trap;
+      if(session.kind==="repetitionCompulsion")return !!card.curse&&cardId===session.cardId;
+      return false;
+    }
+    function attachmentPlacementTargetOwner(player,session=getAttachmentPlacementSession(player)){return session?.kind==="repetitionCompulsion"?otherPlayer(player):player;}
+    function attachmentPlacementSessionTitle(session){return session?.kind==="repetitionCompulsion"?"反復強迫":"仕込み";}
+    function attachmentPlacementSessionEndLabel(session){return session?.kind==="repetitionCompulsion"?"反復終了":"仕込み終了";}
+    function getAttachmentPlacementCandidates(player,session=getAttachmentPlacementSession(player)){
+      if(!session)return[];const owner=attachmentPlacementTargetOwner(player,session);
+      return (state.hands[player]||[]).map((cardId,index)=>({cardId,index,instanceId:handCardInstanceId(player,index)})).filter(item=>attachmentPlacementSessionAllowsCard(player,item.cardId,session)&&["L","R"].some(hand=>canPlaceAttachmentOnHand(player,owner,hand,item.cardId)));
+    }
+    function hasAttachmentPlacementCandidates(player,session=getAttachmentPlacementSession(player)){return getAttachmentPlacementCandidates(player,session).length>0;}
+    function beginLocalAttachmentPlacementSession(player,session){
+      state.temp[player].attachmentPlacementSession=cloneJson(session);
+      state.temp[player].setupMode=session.kind==="setupTrap";
+      state.temp[player].setupFromCopiedEffect=!!session.copiedEffect;
+      state.mode="attachmentPlacementSession";state.selectedAttackHand=null;state.selectedTrapCardIndex=null;state.pendingTrapTargetEffect=null;
+      elements.splitBox.classList.remove("active");elements.andanteBox?.classList.remove("active");
+      const title=attachmentPlacementSessionTitle(session);
+      setMessage(session.kind==="repetitionCompulsion"?`「反復強迫」：「${CARD_LIBRARY[session.cardId]?.name||session.cardId}」を好きなだけ設置できます。終わったら「反復終了」を押してください。`:`「仕込み」：罠を好きなだけ伏せられます。終わったら「仕込み終了」を押してください。`);
+      render();
+      return new Promise(resolve=>{attachmentPlacementSessionResolvers[player]=resolve;});
+    }
+    function finishAttachmentPlacementSession(player,{message=true}={}){
+      const session=getAttachmentPlacementSession(player);if(!session)return false;
+      state.temp[player].attachmentPlacementSession=null;state.temp[player].setupMode=false;state.temp[player].setupFromCopiedEffect=false;
+      if(player==="human"){state.mode="attack";state.selectedAttackHand=null;state.selectedTrapCardIndex=null;state.pendingTrapTargetEffect=null;elements.splitBox.classList.remove("active");elements.andanteBox?.classList.remove("active");}
+      const resolve=attachmentPlacementSessionResolvers[player];attachmentPlacementSessionResolvers[player]=null;
+      if(message&&player==="human")setMessage(`${attachmentPlacementSessionTitle(session)}の配置を終了しました。`);
+      render();if(resolve)resolve(true);resolveCompletedCardInteractions();return true;
+    }
+    async function chooseRemoteAttachmentPlacementStep(player,session){
+      const owner=attachmentPlacementTargetOwner(player,session),candidates=getAttachmentPlacementCandidates(player,session);if(!candidates.length)return null;
+      const response=await DecisionManager.requestRemote("attachmentPlacementStep",{
+        kind:session.kind,cardId:session.cardId||null,title:attachmentPlacementSessionTitle(session),
+        candidates:candidates.map(item=>({instanceId:item.instanceId,cardId:item.cardId,hands:["L","R"].filter(hand=>canPlaceAttachmentOnHand(player,owner,hand,item.cardId))})), targetOwner:owner===player?"self":"opponent",matchId:state.friendMatchId
+      });
+      if(!response||response.finish||!response.instanceId||!["L","R"].includes(response.hand))return null;
+      const index=(state.handCardInstances[player]||[]).indexOf(response.instanceId);if(index<0)return null;
+      const cardId=state.hands[player][index];if(!attachmentPlacementSessionAllowsCard(player,cardId,session)||!canPlaceAttachmentOnHand(player,owner,response.hand,cardId))return null;
+      return {index,hand:response.hand,owner};
+    }
+    async function runAttachmentPlacementSession(player,{kind,cardId=null,copiedEffect=false}={}){
+      const session={kind,cardId,copiedEffect:!!copiedEffect};state.temp[player].attachmentPlacementSession=cloneJson(session);state.temp[player].setupMode=kind==="setupTrap";state.temp[player].setupFromCopiedEffect=!!copiedEffect;
+      try{
+        if(player==="human")return await beginLocalAttachmentPlacementSession(player,session);
+        while(hasAttachmentPlacementCandidates(player,session)){
+          let choice=null;
+          if(state.battleMode==="friend")choice=await chooseRemoteAttachmentPlacementStep(player,session);
+          else{const candidates=getAttachmentPlacementCandidates(player,session);if(!candidates.length)break;const item=candidates[0],owner=attachmentPlacementTargetOwner(player,session),hand=["L","R"].find(h=>canPlaceAttachmentOnHand(player,owner,h,item.cardId));if(hand)choice={index:item.index,hand,owner};}
+          if(!choice)break;
+          if(!await setTrap(player,choice.hand,choice.index,choice.owner,{freeCardAction:true,placementSession:session}))break;
+        }
+        return true;
+      }finally{if(player!=="human"){state.temp[player].attachmentPlacementSession=null;state.temp[player].setupMode=false;state.temp[player].setupFromCopiedEffect=false;}}
+    }
+    async function chooseCurseType(player,label){
+      const candidates=state.hands[player].map((id,index)=>({id,index,instanceId:handCardInstanceId(player,index)})).filter(x=>CARD_LIBRARY[x.id]?.curse);if(!candidates.length)return null;
+      if(player==="human"){const ids=[...new Set(candidates.map(x=>x.id))],chosen=await beginHandCardSelection({min:1,max:1,filter:id=>ids.includes(id),message:label,allowOffTurn:!!state.copiedEffectContext});return chosen.length?state.hands[player][chosen[0]]:null;}
+      if(state.battleMode==="friend"){const response=await DecisionManager.requestRemote("repetitionCurseType",{candidates:candidates.map(x=>({instanceId:x.instanceId})),matchId:state.friendMatchId});const index=(state.handCardInstances[player]||[]).indexOf(response?.instanceId||"");return index>=0&&CARD_LIBRARY[state.hands[player][index]]?.curse?state.hands[player][index]:null;}
+      return candidates[0].id;
+    }
+    async function useRepetitionCompulsion(player){const id=await chooseCurseType(player,"反復強迫：連続して付与する呪縛を選んでください。");if(!id)return false;state.repetitionFreeCurse[player]=id;try{return await runAttachmentPlacementSession(player,{kind:"repetitionCompulsion",cardId:id,copiedEffect:!!state.copiedEffectContext});}finally{state.repetitionFreeCurse[player]=null;}}
     function replaceableBlessings(player){const target=otherPlayer(player),out=[];for(const hand of ["L","R"])state.traps[target][hand].forEach((slot,index)=>{if(CARD_LIBRARY[trapCardId(slot)]?.blessing&&canReplaceAttachment(slot))out.push({owner:target,hand,index,slot});});return out;}
     function canPlaceAttachmentAfterReplacement(user,owner,hand,cardId,replacedSlot){if(!replacedSlot||!canReplaceAttachment(replacedSlot)||state[owner][hand]<=0)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;if(card&&(card.trap||card.blessing)&&!card.themeBlessing&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return state.traps[owner][hand].length-1<2;}
     async function chooseDevaluationBlessing(player,items){if(player!=="human")return items[0]||null;return chooseOneMagicalCard("デバリュエーション","置換する加護を選んでください。",items.map(item=>({id:item.cardId,key:trapInstanceId(item.slot),location:`${handNames[item.owner]}の${handNames[item.hand]}・設置枠${item.index+1}`,...item})));}
@@ -11861,7 +12016,7 @@ function wrapFinger(value) {
     let pendingNumberAllocation = null;
     let pendingGameChoiceResolve = null;
 
-    function beginBoardHandSelection(player, { owners = [player], allowZero = false, minimum = allowZero ? 0 : 1, candidateFilter = () => true, message = "手を選んでください。", cpuPick = null } = {}) {
+    function beginBoardHandSelection(player, { owners = [player], allowZero = false, minimum = allowZero ? 0 : 1, candidateFilter = () => true, message = "手を選んでください。", cpuPick = null, allowOffTurn = false } = {}) {
       const candidates = [];
       for (const owner of owners) for (const hand of ["L", "R"]) {
         const value = Number(state[owner]?.[hand] || 0);
@@ -11871,7 +12026,7 @@ function wrapFinger(value) {
       if (!candidates.length) return Promise.resolve(null);
       if (player !== "human") return Promise.resolve(cpuPick ? cpuPick(candidates) : candidates[0]);
       return new Promise(resolve => {
-        pendingBoardHandSelection = { candidates, resolve };
+        pendingBoardHandSelection = { candidates, resolve, allowOffTurn:!!allowOffTurn };
         state.mode = "boardHandSelection";
         setMessage(message);
         render();
@@ -13605,7 +13760,7 @@ function renderLastAction() {
         const card = CARD_LIBRARY[effectiveCardId];
         const isTrap = !!card.trap;
         const isZoneCard = !!(card.trap || card.blessing || card.curse);
-        const setupActive = state.turn === "human" && !state.gameOver && !state.animating && state.temp.human.setupMode;
+        const setupActive = !state.gameOver && !state.animating && isAttachmentPlacementSessionActive("human");
         const repairDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "repairDiscard";
         const calmDownDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "calmDownDiscard";
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
@@ -13673,8 +13828,8 @@ function renderLastAction() {
           !restrictedByCost &&
           !berserkLocked &&
           !intemperanceLocked &&
-          (((baseCardActionAvailable || lightSpeedChargePlayable || baitFreeTrapPlayable) && isZoneCard && !setupActive) || (setupActive && isTrap)) &&
-          canSetAttachmentTarget("human", cardId);
+          (((baseCardActionAvailable || lightSpeedChargePlayable || baitFreeTrapPlayable) && isZoneCard && !setupActive) || (setupActive && attachmentPlacementSessionAllowsCard("human",cardId))) &&
+          (setupActive ? ["L","R"].some(hand=>canPlaceAttachmentOnHand("human",attachmentPlacementTargetOwner("human"),hand,cardId)) : canSetAttachmentTarget("human", cardId));
         const discardPlayable = repairDiscardMode && cardId !== "repair" && isExternallyDiscardableHandCard(cardId);
         const calmDiscardPlayable = calmDownDiscardMode && cardId !== "calmDown" && isExternallyDiscardableHandCard(cardId);
         const rapidDiscardPlayable = rapidFireDiscardMode && getRapidFireDiscardCandidates("human").some(item => item.index === index);
@@ -13718,7 +13873,7 @@ function renderLastAction() {
           ${displaySettings.compactCardDescriptions
             ? '<div class="card-long-press-hint">長押しで効果を表示</div>'
             : `<div class="card-text">${cardId === "magicalChant" && effectiveCardId === "magicalChant" ? `<strong>詠唱進捗：${Number(state.magicalChantProgress?.human || 0)}/3</strong><br>${escapeHtml(card.text)}` : card.directive ? directiveCardTextHtml(cardId, card) : escapeHtml(card.text)}</div>`}
-          ${romanRuleLocked ? '<div class="used">準備時間中使用不可</div>' : advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">啓示の伝播：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">カードマジック：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : state.temp.human.setupMode && isTrap ? '<div class="used">仕込み中：設置可能</div>' : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
+          ${romanRuleLocked ? '<div class="used">準備時間中使用不可</div>' : advanceNoticePlayable ? '<div class="used">予告状：公開して予約</div>' : cityWillPlayable ? '<div class="used">啓示の伝播：相手に渡す</div>' : discardPlayable ? '<div class="used">補修：このカードを捨てる</div>' : calmDiscardPlayable ? '<div class="used">カードマジック：このカードを捨てる</div>' : rapidDiscardPlayable ? '<div class="used">乱射：このカードを捨てる</div>' : gunAmmoPlayable ? '<div class="used">銃：このカードを弾薬にする</div>' : modulationPlayable ? '<div class="used">変調：この銃を変化させる</div>' : intemperanceLocked ? `<div class="used">${escapeHtml(getCardUseLockDisplayText("human"))}</div>` : restrictedByCost ? '<div class="used">倹約令：使用不可</div>' : berserkLocked ? '<div class="used">バーサーカー中：使用不可</div>' : setupActive && attachmentPlacementSessionAllowsCard("human",cardId) ? `<div class="used">${escapeHtml(attachmentPlacementSessionTitle(getAttachmentPlacementSession("human")))}中：設置可能</div>` : cardId === "lightSpeedCircuit" && state.lightSpeedCircuitUsed.human
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
               ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
@@ -14177,13 +14332,14 @@ function renderLastAction() {
         setMessage(`「${card?.name || "このカード"}」はこのターンすでに使用しています。`);
         return;
       }
+      const placementSession=getAttachmentPlacementSession("human");
       if (
         !card ||
         !isAttachmentCard(cardId) ||
-        (state.temp.human.cardActionUsed && Number(state.temp.human.cardExtraUses||0)<=0 && !state.temp.human.setupMode && !lightSpeedChargePlayable && !hasBaitFreeTrapUse("human", card))
+        (state.temp.human.cardActionUsed && Number(state.temp.human.cardExtraUses||0)<=0 && !placementSession && !lightSpeedChargePlayable && !hasBaitFreeTrapUse("human", card))
       ) return;
-      if (state.temp.human.setupMode && !card.trap) {
-        setMessage("仕込み中に置けるのは罠カードだけです。");
+      if (placementSession && !attachmentPlacementSessionAllowsCard("human",cardId,placementSession)) {
+        setMessage(`「${attachmentPlacementSessionTitle(placementSession)}」中には指定された種類のカードだけ設置できます。`);
         return;
       }
       if (state.berserkerTurns.human > 0 && !state.temp.human.berserkerJustUsed) {
@@ -14194,12 +14350,13 @@ function renderLastAction() {
         setMessage("倹約令の効果で、コスト2以下のカードしか使えません。");
         return;
       }
-      state.mode = state.temp.human.setupMode ? "setupTrap" : card.curse ? "setCurse" : card.blessing ? "setBlessing" : "setTrap";
+      state.mode = placementSession ? "attachmentPlacementSession" : card.curse ? "setCurse" : card.blessing ? "setBlessing" : "setTrap";
       state.selectedAttackHand = null;
       state.selectedTrapCardIndex = index;
       elements.splitBox.classList.remove("active");
       elements.andanteBox?.classList.remove("active");
-      const target = card.curse ? "相手の手" : "自分の手";
+      const targetOwner=placementSession?attachmentPlacementTargetOwner("human",placementSession):(card.curse?"cpu":"human");
+      const target = targetOwner==="cpu" ? "相手の手" : "自分の手";
       setMessage(`「${card.name}」を設置する${target}を選んでください。`);
       render();
 
@@ -14218,10 +14375,11 @@ function renderLastAction() {
       const card = CARD_LIBRARY[cardId];
       if (!card || !isAttachmentCard(cardId)) return false;
       if(!canUseCardUnderRule(player,cardId,{silent:player!=="human"}))return false;
-      const setupActive = !!state.temp[player].setupMode;
-      const repetitionFree=!!options.freeCardAction||!!(card.curse&&state.repetitionFreeCurse?.[player]===cardId);
+      const placementSession=options.placementSession||getAttachmentPlacementSession(player);
+      const setupActive=!!placementSession;
+      const repetitionFree=!!options.freeCardAction||!!placementSession||!!(card.curse&&state.repetitionFreeCurse?.[player]===cardId);
       const countsAsActualCardUse=options.countsAsActualCardUse!==false;
-      if (setupActive && !card.trap) return false;
+      if (setupActive && !attachmentPlacementSessionAllowsCard(player,cardId,placementSession)) return false;
       if (card.blessing && owner !== player) return false;
       if (card.curse && owner === player) return false;
       if (state.berserkerTurns[player] > 0 && !state.temp[player].berserkerJustUsed) {
@@ -14258,7 +14416,7 @@ function renderLastAction() {
           consumeCardActionAllowance(player, { lightSpeedChargePlayable, card });
           state.mode = "attack";
         } else {
-          state.mode = "setupTrap";
+          if(player==="human")state.mode = "attachmentPlacementSession";
         }
         state.selectedTrapCardIndex = null;
         if(countsAsActualCardUse){
@@ -14280,7 +14438,7 @@ function renderLastAction() {
         if(!repetitionFree)consumeCardActionAllowance(player, { lightSpeedChargePlayable, card });
         state.mode = "attack";
       } else {
-        state.mode = "setupTrap";
+        if(player==="human")state.mode = "attachmentPlacementSession";
       }
       state.selectedTrapCardIndex = null;
 
@@ -14296,7 +14454,8 @@ function renderLastAction() {
       }
       if (player === "human") {
         if (setupActive) {
-          setMessage(`「${card.name}」を${handNames[hand]}の下に伏せました。続けて罠を伏せるか、「仕込み終了」を押してください。`);
+          const sessionTitle=attachmentPlacementSessionTitle(placementSession),endLabel=attachmentPlacementSessionEndLabel(placementSession);
+          setMessage(`「${card.name}」を${handNames[hand]}の下に設置しました。続けて配置するか、「${endLabel}」を押してください。`);
         } else {
           setMessage(`「${card.name}」を${handNames[owner]}の${handNames[hand]}の下に${faceText}。`);
         }
@@ -14308,12 +14467,13 @@ function renderLastAction() {
         recordSuccessfulCardMasteryUse(player,cardId,{kind:"attachment",instanceId:attachmentInstanceId});
       }
       render();
+      if(player==="human"&&setupActive&&!hasAttachmentPlacementCandidates(player,placementSession))finishAttachmentPlacementSession(player,{message:true});
 
       // 罠・加護・呪縛は、対象の手を選んで設置できた後に
       // tutorialAfterHandClick 側で次のステップへ進む。
 
       // 罠・加護・呪縛の設置は相手側の表示に直結するため、オンラインでは即時同期する。
-      if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState) {
+      if (state.battleMode === "friend" && player === "human" && !state.friendApplyingRemoteState && !setupActive) {
         await FriendCommitManager.commit("attachment placement");
       }
       return true;
@@ -14607,7 +14767,7 @@ function renderLastAction() {
           setMessage("「裏切られた心」：1本増やす自分の0でない手を選んでください。");
         } else if (cardId === "dimensionalSlash" && state.mode === "dimensionalSlashSacrifice") {
           setMessage("「空間切断」：代償として0にする自分の手を選んでください。");
-        } else if (cardId === "setupTrap" && state.temp.human.setupMode) {
+        } else if (cardId === "setupTrap" && isAttachmentPlacementSessionActive("human")) {
           setMessage("「仕込み」：罠を好きなだけ伏せられます。終わったら「仕込み終了」を押してください。");
         } else {
           setMessage(`「${card.name}」を使いました。まだ攻撃か分けるができます。`);
@@ -15689,9 +15849,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
     async function commitFriendHandoffWithRetry(reason="turn handoff") {
       if(state.battleMode!=="friend")return true;
-      // v170g: handoff bridge確定後も、handoff本体はcanonical owner/serialをCASして完全冪等に適用する。
-      // 成功済みhandoffのmetadata掃除はゲーム進行と分離し、失敗時も両端末のRecovery/Watchdogから収束させる。
-      const handingOffAction=state.friendActiveAction?.actorSide===state.friendRole?state.friendActiveAction:null;
+      // v173b: handoff前にcanonicalを読み、owner/serial/actionのズレを診断して安全に自己修復する。
+      // permission-denied は通信断扱いで無限retryせず、Rules不一致として明示する。
+      let handingOffAction=state.friendActiveAction?.actorSide===state.friendRole?state.friendActiveAction:null;
       const handoffId=`handoff-${state.friendMatchId}-${Math.max(0,Number(state.friendTurnSerial||1)-1)}-${state.friendTurnSerial}-${state.friendRole}`;
       let handoffAction=null;
       if(handingOffAction){
@@ -15700,33 +15860,62 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
       const handoff={id:handoffId,fromSide:state.friendRole,toSide:otherFriendRole(state.friendRole),toTurnSerial:Number(state.friendTurnSerial||0),status:"committing",reason,actionId:handoffAction?.id||null,updatedAtMs:Date.now()};
 
-      let bridged=false,bridgeError=null;
+      // fresh canonical preflight: 成功済みhandoffやstale local Actionをlistener待ちせず回収する。
+      try{
+        const canonical=await readFriendCanonicalMatch();
+        if(canonical){
+          let preflight=friendHandoffDiagnostic(canonical,handoff,handoffAction,"preflight");
+          if(preflight.code==="action-already-completed"&&handoffAction){
+            state.friendActiveAction=null;handoffAction=null;handoff.actionId=null;
+            preflight=friendHandoffDiagnostic(canonical,handoff,null,"preflight");
+          }
+          if(["already-applied","canonical-ahead"].includes(preflight.code)){
+            await recoverFriendHandoffFailure(preflight,null,reason);
+            state.friendActiveAction=null;
+            return true;
+          }
+          if(!["ready"].includes(preflight.code)){
+            await recoverFriendHandoffFailure(preflight,null,reason);
+            return false;
+          }
+        }
+      }catch(error){
+        const diag={code:String(error?.code||"").includes("permission-denied")?"permission-denied":"preflight-read-failed",phase:"preflight"};
+        await recoverFriendHandoffFailure(diag,error,reason);
+        return false;
+      }
+
+      let bridged=false,bridgeError=null,bridgeDiag={code:"unknown",phase:"bridge"};
       for(let attempt=1;attempt<=3&&!bridged;attempt++){
-        try{bridged=await beginFriendHandoffBridge(handoff,handoffAction);}
-        catch(error){bridgeError=error;}
+        try{
+          const bridgeResult=await beginFriendHandoffBridge(handoff,handoffAction);
+          bridged=bridgeResult?.ok===true;bridgeDiag=bridgeResult?.diag||bridgeDiag;
+          if(!bridged&&["already-applied","canonical-ahead"].includes(bridgeDiag.code)){
+            await recoverFriendHandoffFailure(bridgeDiag,null,reason);state.friendActiveAction=null;return true;
+          }
+          if(!bridged&&!["ready","unknown"].includes(bridgeDiag.code))break;
+        }catch(error){bridgeError=error;if(String(error?.code||"").includes("permission-denied"))break;}
         if(!bridged&&attempt<3)await delay(250*attempt);
       }
       if(!bridged){
-        console.error("[friend-handoff-bridge-failed]",{reason,error:bridgeError?.message||String(bridgeError||"bridge was not accepted")});
-        setMessage("ターン交代の準備同期を再試行しています。通信が戻るまでそのままお待ちください。");
-        render();
+        await recoverFriendHandoffFailure(bridgeDiag,bridgeError,reason);
+        if(String(bridgeError?.code||"").includes("permission-denied"))return false;
         if(state.friendHandoffRetryTimer)clearTimeout(state.friendHandoffRetryTimer);
         state.friendHandoffRetryTimer=setTimeout(()=>{
           state.friendHandoffRetryTimer=null;
           if(state.battleMode!=="friend"||state.gameOver||state.turn!=="cpu")return;
           commitFriendHandoffWithRetry(reason).catch(error=>console.error("PVP handoff bridge background retry failed",error));
-        },1200);
+        },1500);
         return false;
       }
 
-      let lastError=null;
+      let lastError=null,lastDiag={code:"ready",phase:"commit"};
       for(let attempt=1;attempt<=3;attempt++){
         try{
           state.friendLastPublishedSignature="";
           const committed=await publishFriendStateNow(state.friendMatchId,{handoffCommit:{expectedHandoffId:handoffId,fromSide:handoff.fromSide,toSide:handoff.toSide,toTurnSerial:handoff.toTurnSerial}});
           if(committed===true){
             if(state.friendHandoffRetryTimer){clearTimeout(state.friendHandoffRetryTimer);state.friendHandoffRetryTimer=null;}
-            // turnOwner/turnSerialのcommitが正本。metadata掃除失敗でゲーム進行を巻き戻さない。
             state.friendActiveAction=null;
             const cleanup=await cleanupCompletedFriendHandoff(handoffId,{attempts:3});
             if(!cleanup.ok){
@@ -15737,19 +15926,29 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
             }
             return true;
           }
+          const remote=state.friendLastPublishRemoteMatch||await readFriendCanonicalMatch().catch(()=>null);
+          lastDiag=friendHandoffDiagnostic(remote,handoff,handoffAction,"commit");
+          if(["already-applied","canonical-ahead"].includes(lastDiag.code)){
+            await recoverFriendHandoffFailure(lastDiag,null,reason);state.friendActiveAction=null;return true;
+          }
+          if(!["ready"].includes(lastDiag.code))break;
           lastError=new Error("handoff commit was not accepted");
-        }catch(error){lastError=error;}
+        }catch(error){
+          lastError=error;
+          const remote=state.friendLastPublishRemoteMatch||null;
+          lastDiag=friendHandoffDiagnostic(remote,handoff,handoffAction,"commit");
+          if(String(error?.code||"").includes("permission-denied"))break;
+        }
         if(attempt<3)await delay(250*attempt);
       }
-      console.error("[friend-handoff-retry-failed]",{reason,error:lastError?.message||String(lastError)});
-      setMessage("ターン交代の同期を再試行しています。通信が戻るまでそのままお待ちください。");
-      render();
+      await recoverFriendHandoffFailure(lastDiag,lastError,reason);
+      if(String(lastError?.code||"").includes("permission-denied"))return false;
       if(state.friendHandoffRetryTimer)clearTimeout(state.friendHandoffRetryTimer);
       state.friendHandoffRetryTimer=setTimeout(()=>{
         state.friendHandoffRetryTimer=null;
         if(state.battleMode!=="friend"||state.gameOver||state.turn!=="cpu")return;
         commitFriendHandoffWithRetry(reason).catch(error=>console.error("PVP handoff background retry failed",error));
-      },1200);
+      },1500);
       return false;
     }
 
@@ -16999,12 +17198,15 @@ async function endTurn(reason="unspecified") {
       const card = event.currentTarget;
       const owner = card.dataset.owner;
       const hand = card.dataset.hand;
-      if(isFriendInteractionBlocking())return;
+      const allowPlacementInput=isAttachmentPlacementSessionActive("human")||!!pendingBoardHandSelection?.allowOffTurn;
+      if(isFriendInteractionBlocking()&&!allowPlacementInput)return;
 
       if (!tutorialExpectedHand(owner, hand)) return;
       if (tutorial.usingRealBattle && state.battleMode === "tutorial") tutorialAfterHandClick(owner, hand);
 
-      if (state.gameOver || state.animating || state.turn !== "human") return;
+      const offTurnBoardSelection=state.mode==="boardHandSelection"&&!!pendingBoardHandSelection?.allowOffTurn;
+      const offTurnPlacement=isAttachmentPlacementSessionActive("human");
+      if (state.gameOver || state.animating || (state.turn !== "human"&&!offTurnBoardSelection&&!offTurnPlacement)) return;
 
       if (state.mode === "boardHandSelection") {
         if (!finishBoardHandSelection(owner, hand)) setMessage("ハイライトされた手を選んでください。");
@@ -17322,9 +17524,12 @@ async function endTurn(reason="unspecified") {
         return;
       }
 
-      if (state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing" || state.mode === "setCurse") {
-        const targetOwner = state.mode === "setCurse" ? "cpu" : "human";
-        const label = state.mode === "setCurse" ? "呪縛" : state.mode === "setBlessing" ? "加護" : "罠";
+      if (state.mode === "setTrap" || state.mode === "setupTrap" || state.mode === "setBlessing" || state.mode === "setCurse" || state.mode === "attachmentPlacementSession") {
+        const placementSession=getAttachmentPlacementSession("human");
+        const targetOwner = state.mode === "attachmentPlacementSession" ? attachmentPlacementTargetOwner("human",placementSession) : state.mode === "setCurse" ? "cpu" : "human";
+        const selectedId=state.selectedTrapCardIndex===null?null:state.hands.human[state.selectedTrapCardIndex];
+        const selectedDef=CARD_LIBRARY[selectedId];
+        const label = state.mode === "attachmentPlacementSession" ? (selectedDef?.curse?"呪縛":selectedDef?.blessing?"加護":"罠") : state.mode === "setCurse" ? "呪縛" : state.mode === "setBlessing" ? "加護" : "罠";
         if (owner !== targetOwner) {
           setMessage(`${label}は${targetOwner === "human" ? "自分" : "相手"}の手の下に設置します。設置する手を選んでください。`);
           return;
@@ -17412,8 +17617,8 @@ async function endTurn(reason="unspecified") {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;
@@ -17844,7 +18049,7 @@ async function endTurn(reason="unspecified") {
 
     elements.attackBtn.addEventListener("click", () => {
       if(isFriendInteractionBlocking())return;
-      if (state.temp.human.setupMode) return;
+      if (isAttachmentPlacementSessionActive("human")) return;
       state.mode = "attack";
       state.selectedAttackHand = null;
       state.selectedTrapCardIndex = null;
@@ -17863,7 +18068,7 @@ async function endTurn(reason="unspecified") {
         }
         setTimeout(() => { tutorial.step++; renderRealTutorialStep(); }, 120);
       }
-      if (state.temp.human.setupMode) return;
+      if (isAttachmentPlacementSessionActive("human")) return;
       if (
         (state.temp.human?.attackLimit || 1) > 1 &&
         (state.temp.human?.attacksUsed || 0) > 0 &&
@@ -17896,31 +18101,17 @@ async function endTurn(reason="unspecified") {
 
     elements.drawBtn.addEventListener("click", () => {
       if(state.battleMode==="friend")return;
-      if (state.turn !== "human" || state.gameOver || state.animating || state.temp.human.setupMode) return;
+      if (state.turn !== "human" || state.gameOver || state.animating || isAttachmentPlacementSessionActive("human")) return;
       drawCard("human");
       setMessage("手札を1枚引きました。これはテスト用ボタンです。");
       render();
     });
 
     elements.cancelBtn.addEventListener("click", async () => {
-      if(isFriendInteractionBlocking())return;
-      if (state.turn === "human" && state.temp.human.setupMode && !state.gameOver) {
-        const copiedSetup=!!state.temp.human.setupFromCopiedEffect;
-        state.temp.human.setupMode = false;
-        state.temp.human.setupFromCopiedEffect = false;
-        state.mode = "attack";
-        state.selectedAttackHand = null;
-        state.selectedTrapCardIndex = null;
-        state.pendingTrapTargetEffect = null;
-        state.pendingRepairDiscard = null;
-        state.pendingEqualTradeSelf = null;
-        state.pendingRapidFireDiscard = null;
-        state.pendingSwapFirst = null;
-        elements.splitBox.classList.remove("active");
-      elements.andanteBox?.classList.remove("active");
-        setMessage(copiedSetup?"仕込みの効果処理を完了しました。":"仕込みを終了しました。相手にターンを渡します。");
-        render();
-        if(!copiedSetup)await endTurn();
+      const placementSession=getAttachmentPlacementSession("human");
+      if(isFriendInteractionBlocking()&&!placementSession)return;
+      if (placementSession && !state.gameOver) {
+        finishAttachmentPlacementSession("human",{message:true});
         return;
       }
       state.mode = "attack";
