@@ -617,3 +617,8 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 
 ## v173b
 オンラインのターン交代が同期待ちで停止した際の診断・自己復旧を強化しました。handoff前にFirestore正本のowner/serial/Action/handoffを検査し、不一致時はcanonicalへ再同期します。permission-deniedは通信待ちと混同せず、Firestore Rules確認が必要と表示します。詳細は `V173B_HANDOFF_DIAGNOSTICS_RECOVERY.md` を参照してください。
+
+
+## v173c
+- オンラインのターン開始ドロー・開始時効果がcanonicalへ確定するまで操作を完全ロック。
+- 未適用ターンでのカード使用・攻撃・分ける・ターン終了を入口でも拒否し、handoffのRules拒否を防止。

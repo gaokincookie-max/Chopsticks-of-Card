@@ -2305,9 +2305,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173b-handoff-diagnostics-recovery";
+    const LATEST_NEWS_ID = "v173c-turn-start-input-lock";
 
     const UPDATE_NEWS = [
+      {id:"v173c-turn-start-input-lock",version:"v173c",date:"2026-09-02",title:"オンラインのターン開始完了前の操作を完全ロック",summary:"ターン開始ドローや開始時効果のcanonical確定前に操作できる競合を防ぎ、未開始ターンのhandoffがRulesに拒否される経路を修正しました。",featured:true,tags:["fix","online","system"],items:["自分のturnOwnerを受信してもturnStartAppliedSerialが現serialへ到達するまでは『ターン開始同期中』として操作を完全ロック","通常攻撃・分ける・カード使用・設置・行動確定・ターン終了の各入口に二重ガードを追加","ターン開始待機中は盤面の攻撃対象・手札カードを選択可能表示にせず、ドローと開始時効果の確定後だけ入力を解禁","canonical反映直後に『ターン開始を同期しています』を表示し、startTurn確定後に『あなたの番です』へ遷移"]},
       {id:"v173b-handoff-diagnostics-recovery",version:"v173b",date:"2026-09-02",title:"オンラインのターン交代診断と自動復旧を強化",summary:"ゲスト側などでターン交代が同期待ちのまま止まる場合に、正本とのずれを判別して自動復旧しやすくしました。",featured:true,tags:["fix","online","system"],items:["handoff前にFirestore正本のturnOwner・turnSerial・Action・handoffをfresh readして前提条件を診断","owner/serial/Action/handoffの不一致を個別に判定し、正本側へ安全に再hydrate","既にhandoff済み・さらに先のターンまで進行済みなら成功扱いとして古い待機を解除","canonicalで完了済みのActionを古いローカルが保持していた場合は再添付せずhandoffを継続","permission-deniedを通信断と混同せず、Firestore Rules確認が必要と画面に明示","単なる一時通信失敗ではローカルのturn-end結果を巻き戻さずretryを継続"]},
       {id:"v173a-placement-session-fix",version:"v173a",date:"2026-09-02",title:"仕込み・反復強迫の配置処理を安定化",summary:"びっくり箱などのコピー効果中でも、仕込みと反復強迫を安全に連続配置できるよう共通処理へ整理しました。",featured:true,tags:["fix","trap","online"],items:["仕込みを一時配置セッション化し、相手ターン中のびっくり箱から発動しても罠を選択・設置・終了できるよう修正","カード関連行動が使用済みでも、仕込み中の罠配置は正しく回数制限を無視","反復強迫も同じ配置セッションへ統合し、同名呪縛だけを手札から連続して直接配置できるUIへ変更","オンラインで相手側のびっくり箱から仕込み・反復強迫が発動した場合、配置するカードと設置先を本人へDecisionで確認","びっくり箱が終端カードの効果だけを発動する仕様と、控訴・上告不可の挙動は変更なし"]},
       {id:"v173-card-name-refresh",version:"v173",date:"2026-09-02",title:"カード名と天命テーマの表記を整理",summary:"能力に合わせてカード名を見直し、天命テーマ全体の用語を統一しました。",featured:true,tags:["update"],items:["カード名を「闇鍋」「不測の備え」「カードマジック」「学習」へ整理","天命カードのカテゴリ名・動的生成名・検索分類を「天命」表記へ統一","関連カードを「信託を受ける」「輪廻する天命」「神の加護」「神意の剣」「啓示の伝播」「神意の代行」「盲信」へ整理","本文・戦闘ログ・選択メッセージ・制限通知・検索表示まで関連表記を一括監査"]},
@@ -5003,9 +5004,12 @@ const CARD_LIBRARY = {
 
       if (options.deferProgress) return;
       if (!state.gameOver && state.turn === "human" && state.friendTurnStartAppliedSerial<state.friendTurnSerial) {
+        setMessage("ターン開始を同期しています。ドローと開始時効果の確定まで操作できません。");
+        render();
         const pendingAttackDeltaBeforeStart = Number(state.pendingDirectiveAttackLimitDelta?.human || 0);
         const turnBeforeStart = state.turn;
-        await ensureFriendLocalTurnStarted();
+        const turnStartedApplied=await ensureFriendLocalTurnStarted();
+        if(turnStartedApplied&&state.turn==="human"&&Number(state.friendTurnStartAppliedSerial||0)>=Number(state.friendTurnSerial||0))render();
         // remote apply終了後にstartTurnを実行する。連撃失敗のdelta消費や、
         // attackLimit=0による即時auto-endでstateが進んだ場合も必ずroomへ返す。
         if (pendingAttackDeltaBeforeStart !== Number(state.pendingDirectiveAttackLimitDelta?.human || 0) || turnBeforeStart !== state.turn) {
@@ -5173,6 +5177,22 @@ const CARD_LIBRARY = {
       if(!interrupt||!state.friendMatchId)return null;
       const interruptMatchId=interrupt.payload?.matchId||state.friendRoomData?.match?.matchId||state.friendRoomData?.match?.id;
       return interruptMatchId&&interruptMatchId!==state.friendMatchId?null:interrupt;
+    }
+
+    function isFriendTurnStartPendingForLocal(){
+      return state.battleMode==="friend"
+        && state.friendMatchStarted
+        && !state.gameOver
+        && state.friendTurnOwner===state.friendRole
+        && Number(state.friendTurnSerial||0)>0
+        && Number(state.friendTurnStartAppliedSerial||0)<Number(state.friendTurnSerial||0);
+    }
+
+    function guardFriendLocalTurnReady(actionLabel="操作"){
+      if(!isFriendTurnStartPendingForLocal())return true;
+      if(state.turn==="human")setMessage(`ターン開始を同期しています。${actionLabel}は開始処理の完了後に行えます。`);
+      render();
+      return false;
     }
 
     function isFriendInteractionBlocking() {
@@ -10732,7 +10752,8 @@ function wrapFinger(value) {
 
           const offTurnBoardSelection=state.mode==="boardHandSelection"&&!!pendingBoardHandSelection?.allowOffTurn;
           const offTurnPlacement=isAttachmentPlacementSessionActive("human");
-          if (!state.gameOver && !state.animating && !state.startingRouletteActive && (state.turn === "human" || offTurnBoardSelection || offTurnPlacement)) {
+          const localTurnStartPending=isFriendTurnStartPendingForLocal();
+          if (!state.gameOver && !state.animating && !state.startingRouletteActive && ((state.turn === "human" && !localTurnStartPending) || offTurnBoardSelection || offTurnPlacement)) {
             if (state.mode === "boardHandSelection" && pendingBoardHandSelection?.candidates.some(item => item.owner === player && item.hand === hand)) {
               card.classList.add("trap-target");
             }
@@ -10800,8 +10821,9 @@ function wrapFinger(value) {
         }
       }
 
+      const localTurnStartPending=isFriendTurnStartPendingForLocal();
       elements.humanState.textContent =
-        state.gameOver ? "" : state.startingRouletteActive ? "先攻決定中" : state.turn === "human" ? "あなたのターン" : `${getPlayerDisplayName("cpu")}のターン`;
+        state.gameOver ? "" : state.startingRouletteActive ? "先攻決定中" : localTurnStartPending ? "ターン開始同期中" : state.turn === "human" ? "あなたのターン" : `${getPlayerDisplayName("cpu")}のターン`;
       elements.cpuState.textContent =
         state.gameOver ? "" : state.startingRouletteActive ? "先攻決定中" : state.turn === "cpu" ? `${getPlayerDisplayName("cpu")}のターン` : "待機中";
 
@@ -10818,7 +10840,7 @@ function wrapFinger(value) {
         elements.battleResultReopenBtn.classList.toggle("screen-hidden", !(state.battleMode === "friend" && state.gameOver && state.matchResult));
       }
       const selectionLock = ["boardHandSelection", "handCardSelection", "numberAllocation"].includes(state.mode);
-      const interactionLock=isFriendInteractionBlocking()||!!state.friendCardResolving||!!state.friendInterruptHandling||!!state.friendInterruptWaiting||!!state.friendActiveAction;
+      const interactionLock=localTurnStartPending||isFriendInteractionBlocking()||!!state.friendCardResolving||!!state.friendInterruptHandling||!!state.friendInterruptWaiting||!!state.friendActiveAction;
       const lock = state.animating || state.startingRouletteActive || state.turn !== "human" || state.gameOver || selectionLock || interactionLock;
       const setupActive = isAttachmentPlacementSessionActive("human") && !state.gameOver;
       elements.attackBtn.disabled = lock || setupActive || !canUseNormalAttackAction("human");
@@ -13755,13 +13777,14 @@ function renderLastAction() {
         return;
       }
 
+      const localTurnStartPending=isFriendTurnStartPendingForLocal();
       state.hands.human.forEach((cardId, index) => {
         const effectiveCardId = effectiveCardIdForPlayer("human", cardId);
         const card = CARD_LIBRARY[effectiveCardId];
         const isTrap = !!card.trap;
         const isZoneCard = !!(card.trap || card.blessing || card.curse);
         const setupActive = !state.gameOver && !state.animating && isAttachmentPlacementSessionActive("human");
-        const repairDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "repairDiscard";
+        const repairDiscardMode = state.turn === "human" && !localTurnStartPending && !state.gameOver && !state.animating && state.mode === "repairDiscard";
         const calmDownDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "calmDownDiscard";
         const rapidFireDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "rapidFireDiscard";
         const gunAmmoDiscardMode = state.turn === "human" && !state.gameOver && !state.animating && state.mode === "gunAmmoDiscard";
@@ -13776,6 +13799,7 @@ function renderLastAction() {
         const romanRuleLocked = !canUseCardUnderRule("human",cardId,{silent:true});
         const baitFreeTrapPlayable =
           state.turn === "human" &&
+          !localTurnStartPending &&
           !state.gameOver &&
           !state.animating &&
           isTrap &&
@@ -13784,6 +13808,7 @@ function renderLastAction() {
           !intemperanceLocked;
         const baseCardActionAvailable =
           state.turn === "human" &&
+          !localTurnStartPending &&
           !state.gameOver &&
           !state.animating &&
           (!state.temp.human.cardActionUsed || Number(state.temp.human.cardExtraUses || 0) > 0 || card.consumesCardAction===false) &&
@@ -13791,6 +13816,7 @@ function renderLastAction() {
           !intemperanceLocked;
         const lightSpeedChargePlayable =
           state.turn === "human" &&
+          !localTurnStartPending &&
           !state.gameOver &&
           !state.animating &&
           !berserkLocked &&
@@ -14370,6 +14396,7 @@ function renderLastAction() {
 
     async function setTrap(player, hand, handIndex, owner = player, options = {}) {
       if(state.startingRouletteActive)return false;
+      if(player==="human"&&state.turn==="human"&&!options.placementSession&&!getAttachmentPlacementSession(player)&&!guardFriendLocalTurnReady("設置"))return false;
       if(state.quarterRestActive?.[player]){if(player==="human")setMessage("4分休符により、このターンは手札からカードを使用できません。");return false;}
       const cardId = state.hands[player][handIndex];
       const card = CARD_LIBRARY[cardId];
@@ -14598,6 +14625,7 @@ function renderLastAction() {
 
     async function playCard(player, handIndex, showPopup = true) {
       if(state.startingRouletteActive)return false;
+      if(player==="human"&&state.turn==="human"&&!guardFriendLocalTurnReady("カード使用"))return false;
       if(player==="human"&&isFriendInteractionBlocking())return false;
       if (state.gameOver || state.turn !== player) return false;
       if(state.furiosoSkipActive?.[player])return false;
@@ -15185,6 +15213,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
 
 async function attack(attacker, attackHand, defender, targetHand, options = {}) {
       if(state.startingRouletteActive)return false;
+      if(attacker==="human"&&!options.cardInternalAttack&&!guardFriendLocalTurnReady("通常攻撃"))return false;
       if(attacker==="human"&&!options.cardInternalAttack&&isFriendInteractionBlocking())return false;
       if(!options.cardInternalAttack&&!canUseNormalAttackAction(attacker)){if(attacker==="human")setMessage("このターンは通常攻撃できません。");return false;}
       if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
@@ -15797,6 +15826,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
     }
 
     async function split(player, left, right, show = true) {
+      if(player==="human"&&!guardFriendLocalTurnReady("分ける"))return false;
       if(player==="human"&&isFriendInteractionBlocking())return false;
       const before = `${state[player].L}-${state[player].R}`;
       if (show) {
@@ -15954,6 +15984,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
 async function endTurn(reason="unspecified") {
       if(state.startingRouletteActive)return;
+      if(state.turn==="human"&&!guardFriendLocalTurnReady("ターン終了"))return false;
       if(isFriendInteractionBlocking())return false;
   const romanPreparationWasActive=isRomanPreparation();
   if (isTutorialBattle()) {
@@ -16997,6 +17028,7 @@ async function endTurn(reason="unspecified") {
     }
 
     async function resolveActionDone() {
+      if(state.turn==="human"&&!guardFriendLocalTurnReady("行動確定"))return false;
       if (isTutorialBattle()) {
         freezeTutorialBattleToHumanTurn();
         return;
@@ -18048,6 +18080,7 @@ async function endTurn(reason="unspecified") {
     });
 
     elements.attackBtn.addEventListener("click", () => {
+      if(!guardFriendLocalTurnReady("通常攻撃"))return;
       if(isFriendInteractionBlocking())return;
       if (isAttachmentPlacementSessionActive("human")) return;
       state.mode = "attack";
@@ -18060,6 +18093,7 @@ async function endTurn(reason="unspecified") {
     });
 
     elements.splitBtn.addEventListener("click", () => {
+      if(!guardFriendLocalTurnReady("分ける"))return;
       if(isFriendInteractionBlocking())return;
       if (isTutorialBattle()) {
         if (tutorial.expected !== "split") {
@@ -18138,6 +18172,7 @@ async function endTurn(reason="unspecified") {
     elements.handCardSelectionConfirmBtn.addEventListener("click", finishHandCardSelection);
 
     elements.confirmSplitBtn.addEventListener("click", async () => {
+      if(!guardFriendLocalTurnReady("分ける"))return;
       if (tutorial.usingRealBattle && state.battleMode === "tutorial" && tutorial.expected === "confirmSplit") {
         setTimeout(() => { tutorial.step++; renderRealTutorialStep(); }, 700);
       }
