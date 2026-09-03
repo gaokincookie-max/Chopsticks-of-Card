@@ -661,3 +661,14 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 - turn-start claim/recoveryを一般runtime更新から分離し、host/guest対称の専用Rules経路 `isSafeTurnStartClaimUpdate()` を追加。
 - claim時は盤面 `match.state` を完全不変、変更可能なmatch項目を3項目だけに限定。
 - v173eのturnStartApplied専用経路と合わせて、ターン開始の claim → apply を両方専用Rulesで検証。
+
+## v173i
+
+- 過充電・光速回路・Furioso等でターン開始直後に行動不能となる場合、開始盤面を一度操作可能状態として公開せず、`turnStartApplied + handoff` を1回のcanonical更新にまとめる経路を追加。
+- 即時終了処理中は入力ロックを維持し、過充電反動中の余分な盤面publishを削除。
+- 通常handoff送信前に `turnOwner / turnSide / turnSerial` のローカルsnapshot整合性を検査し、食い違い時は送信せず再同期。
+- 相手が手番を受け取った直後に開始せずheartbeatも止まった場合、45秒で切断救済可能にした（通常の開始済みターンは従来どおり3分）。
+- 強制・貿易のtimeout時に対象カードが0枚ならsecure interactionをcleanupし、「対象なし」の不発へ収束。
+- postMatchのreadyリセットをslot欠落/null対応にし、退出済みゲストがいてもホストがロビーへ戻せるよう修正。
+- 降参ACK待ち中は結果画面の移動ボタンを無効化し、同期中表示を追加。
+- `index.html` のキャッシュキーを `v173i` に更新。
