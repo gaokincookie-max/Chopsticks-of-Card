@@ -639,6 +639,16 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 - 他人のターン、token 改竄、serial 飛ばし、二重 apply は拒否する方針を維持します。
 - 既存 Emulator テストが guest の「claim」と「handoff」は確認していた一方、guest 自身の turnStartApplied 成功ケースを持っていなかったため、今回専用回帰ケースを追加しました。
 
+
+## v173h
+
+- オンライン対戦のFirestore更新経路を全体監査。
+- 通常Action/handoff、降参・切断、postMatchから無関係なroom/member identity helper依存を除去。
+- postMatchのmembers変更は `ready` だけをmap diffで検証。
+- 通常勝敗のresult確定とpostMatchロビー移行を2段階に統一。
+- プレイヤーカードの背景・称号変更はactiveRoomsロックから分離し、対戦ルーム参加中でも保存可能。現在ルームの表示は次回参加時から反映。
+- `index.html` のキャッシュキーを `v173h` に更新。
+
 ## v173g
 - turn-start claim/apply の Firestore Rules を、ロビー/メンバー/room metadata の共通 helper から完全に分離。
 - claim は `match.turnStarted` / `match.turnStartToken` / `match.turnStartClaimedAt` と `updatedAt` 以外を変更できない専用遷移として認可。

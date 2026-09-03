@@ -2307,10 +2307,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173g-turn-start-minimal-rules";
+    const LATEST_NEWS_ID = "v173h-online-rules-full-audit";
 
     const UPDATE_NEWS = [
-      {id:"v173g-turn-start-minimal-rules",version:"v173g",date:"2026-09-03",title:"ターン開始Rulesを必要最小限の独立判定へ整理",summary:"turn claim/applyが無関係なroom/member helperの評価で403になり得る経路を除き、実際に変更するフィールドだけで認可するよう修正しました。",featured:true,tags:["fix","online","system"],items:["turn-start claimはmatch内のturnStarted/turnStartToken/turnStartClaimedAtとupdatedAt以外を変更不可にし、room/member helperへの依存を撤廃","turn-start applyもstate/stateRevision/turnStartAppliedSerial/turnTimerStartedAtだけを専用経路で検査","host/guestとも現在のturnOwner本人・正しいserial/tokenを必須とし、他人のclaim/applyや改竄は引き続き拒否","専用Rulesが共通helperを参照しないことを検査する回帰テストを追加"]},
+      {id:"v173h-online-rules-full-audit",version:"v173h",date:"2026-09-03",title:"オンラインRules全経路を再監査",summary:"ターン交代・試合後遷移・プレイヤーカード編集を含むFirestore更新経路を再監査し、無関係な旧形式フィールドで正当な更新が拒否される経路を整理しました。",featured:true,tags:["fix","online","system"],items:["通常のAction/handoff更新からroom/member identityの再検査を外し、match/postMatch/updatedAtだけの更新はそのdiffだけで保護","降参・切断結果の確定も同じく無関係なroom/member helper依存を撤廃","試合後ロビー移行ではmembers全体のidentity再検査ではなくready以外が変化していないことだけを検証","通常勝敗のresult確定とpostMatchロビー移行を2段階へ分離し、降参・切断と同じ安定した経路へ統一","背景・称号だけのプレイヤーカード編集はactiveRoomsロックと切り離し、対戦ルーム参加中でも保存可能（現在ルーム表示は次回参加時から反映）"]},
       {id:"v173f-turn-start-claim-rules",version:"v173f",date:"2026-09-03",title:"オンラインのターン開始claim Rulesをhost/guest対称化",summary:"ゲスト側でturnStarted/token/claimedAtのclaim書き込み自体が403になる問題へ、claim専用の厳密なRules経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turn-start claim/recoveryを一般runtime更新から独立させ、現在のturnOwner本人だけがleaseを取得できる専用Rulesへ整理","claimでは盤面stateや他のmatch項目を一切変更できないよう厳密に制限","host/guestの初回claimを同一条件にし、ゲストだけ403になる非対称経路を除去","v173eで追加したturnStartApplied専用経路と合わせ、claim→applyの両段階を専用Rulesで保護"]},
       {id:"v173e-turn-start-rules-symmetry",version:"v173e",date:"2026-09-03",title:"オンラインのターン開始確定Rulesをhost/guest対称化",summary:"ゲスト側のターン開始ドロー後のcanonical確定がFirestore Rulesに拒否される問題へ、専用のturnStartApplied許可経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turnStartAppliedを一般runtime更新から独立させ、現在のturnOwner本人だけが正しいserial/tokenで確定できる専用Rulesへ整理","host/guestの双方が同一条件でターン開始盤面を確定できるよう対称化","他人のターン・token改竄・serial飛ばし・二重applyは引き続き拒否","実Firestore Rules用のguest turnStartApplied回帰ケースを追加し、従来テストの盲点も修正"]},
       {id:"v173d-turn-start-convergence",version:"v173d",date:"2026-09-03",title:"オンラインのターン開始同期を収束型へ変更",summary:"ターン開始claim/applyを数回で諦めず、Firestore正本を再確認しながら復旧し続ける方式へ変更しました。",featured:true,tags:["fix","online","system"],items:["turn-start再試行回数上限を撤廃し、正本を読みながら安全に再試行","自端末claimは同じtokenで再開し、他端末の停止claimはlease後に回収","正本ですでに開始処理が完了していれば即座に盤面を取り込んで入力ロック解除","同期状況を画面上で詳細表示し、Rules拒否と一時的な待機を区別"]},
@@ -4062,7 +4062,8 @@ const CARD_LIBRARY = {
       if(profile){state.socialProfile=normalizedPlayerCardProfile(profile);socialEl("accountPublicId").textContent=profile.publicId;socialEl("accountDisplayName").textContent=profile.displayName;applyPlayerCardElement(socialEl("accountPlayerCardPreview"),state.socialProfile,{nameElement:socialEl("accountPlayerCardName")});}
       if(socialEl("accountProvider"))socialEl("accountProvider").textContent=authProviderLabel(user);
       if(socialEl("accountCreatedAt"))socialEl("accountCreatedAt").textContent=profile?.createdAt?new Date(socialTimestampMillis(profile.createdAt)).toLocaleDateString("ja-JP"):"-";
-      for(const id of ["playerCardEditBtn","playerNameChangeBtn"]){const button=socialEl(id);if(button){button.disabled=false;button.setAttribute("aria-disabled",state.friendRoomId?"true":"false");button.title=state.friendRoomId?"対戦ルームに参加している間は変更できません。":"";}}
+      const cardEdit=socialEl("playerCardEditBtn");if(cardEdit){cardEdit.disabled=false;cardEdit.setAttribute("aria-disabled","false");cardEdit.title=state.friendRoomId?"現在の対戦ルームには次回参加時から反映されます。":"";}
+      const nameEdit=socialEl("playerNameChangeBtn");if(nameEdit){nameEdit.disabled=false;nameEdit.setAttribute("aria-disabled",state.friendRoomId?"true":"false");nameEdit.title=state.friendRoomId?"対戦ルームに参加している間は変更できません。":"";}
       ["authRememberCheckbox","registerRememberCheckbox","accountRememberCheckbox"].forEach(id=>{const input=socialEl(id);if(input)input.checked=authPersistenceEnabled();});
       renderSocialLists();
     }
@@ -4070,6 +4071,10 @@ const CARD_LIBRARY = {
       const fb=firebaseApi();if(!fb||!state.socialProfile||!isFormalAccount(fb.authUser))throw new Error("正式アカウントへログインしてください。");
       let record=await getActiveRoomRecord();if(record&&await cleanupActiveRoomRecordIfStale(record))record=null;
       if(record||state.friendRoomId)throw new Error("対戦ルームに参加している間は変更できません。");
+      return fb;
+    }
+    function ensurePlayerCardChangeAllowed(){
+      const fb=firebaseApi();if(!fb||!state.socialProfile||!isFormalAccount(fb.authUser))throw new Error("正式アカウントへログインしてください。");
       return fb;
     }
     function showProfileActionError(error){
@@ -4083,18 +4088,18 @@ const CARD_LIBRARY = {
       if(socialEl("playerCardTitleSelect"))socialEl("playerCardTitleSelect").value=draft.titleId;
     }
     async function openPlayerCardEditor(){
-      await ensureProfileChangeAllowed();const profile=normalizedPlayerCardProfile(state.socialProfile);state.playerCardDraft={backgroundId:profile.backgroundId,titleId:profile.titleId};
+      ensurePlayerCardChangeAllowed();const profile=normalizedPlayerCardProfile(state.socialProfile);state.playerCardDraft={backgroundId:profile.backgroundId,titleId:profile.titleId};
       const choices=socialEl("playerCardBackgroundChoices");choices.replaceChildren();for(const id of profile.unlockedBackgroundIds){const def=PLAYER_CARD_BACKGROUNDS[id];if(!def)continue;const button=document.createElement("button");button.type="button";button.className="player-card-choice";button.dataset.backgroundId=id;button.textContent=def.label;button.addEventListener("click",()=>{state.playerCardDraft.backgroundId=id;renderPlayerCardDraft();});choices.append(button);}
       const select=socialEl("playerCardTitleSelect");select.replaceChildren();const titleIds=[...new Set([...profile.unlockedTitleIds,...claimedMasteryTitleIds()])];for(const id of titleIds){const def=playerTitleDefinition(id);if(!def)continue;const option=document.createElement("option");option.value=id;option.textContent=def.label;select.append(option);}socialMessage("playerCardEditorMessage","");renderPlayerCardDraft();openAccountChildModal("playerCardEditorModal");
     }
     function closePlayerCardEditor(){state.playerCardDraft=null;closeAccountChildModal("playerCardEditorModal");}
     async function savePlayerCard(){
-      const fb=await ensureProfileChangeAllowed(),profile=normalizedPlayerCardProfile(state.socialProfile),draft=state.playerCardDraft;if(!draft)throw new Error("編集内容がありません。");
+      const fb=ensurePlayerCardChangeAllowed(),profile=normalizedPlayerCardProfile(state.socialProfile),draft=state.playerCardDraft;if(!draft)throw new Error("編集内容がありません。");
       if(!profile.unlockedBackgroundIds.includes(draft.backgroundId)||!PLAYER_CARD_BACKGROUNDS[draft.backgroundId])throw new Error("所有していない背景は選択できません。");
       if(!profile.unlockedTitleIds.includes(draft.titleId)&&!claimedMasteryTitleIds().has(draft.titleId))throw new Error("所有していない称号は選択できません。");
       if(!playerTitleDefinition(draft.titleId))throw new Error("不明な称号です。");
       await fb.updateDoc(fb.doc(fb.db,"users",profile.uid),{backgroundId:draft.backgroundId,bannerId:draft.backgroundId,titleId:draft.titleId,updatedAt:fb.serverTimestamp()});
-      state.socialProfile=normalizedPlayerCardProfile({...profile,...draft,bannerId:draft.backgroundId});closePlayerCardEditor();renderSocialAccountUi();socialMessage("accountMessage","プレイヤーカードを保存しました。");
+      state.socialProfile=normalizedPlayerCardProfile({...profile,...draft,bannerId:draft.backgroundId});closePlayerCardEditor();renderSocialAccountUi();socialMessage("accountMessage",state.friendRoomId?"プレイヤーカードを保存しました。現在の対戦ルームには次回参加時から反映されます。":"プレイヤーカードを保存しました。");
     }
     function openPlayerNameEditor(){socialEl("playerNameCurrent").textContent=state.socialProfile?.displayName||"-";socialEl("playerNameInput").value=state.socialProfile?.displayName||"";socialMessage("playerNameMessage","");openAccountChildModal("playerNameModal");}
     async function changePlayerName(){
@@ -16374,21 +16379,11 @@ async function endTurn(reason="unspecified") {
           "match.result": result,
           updatedAt: fb.serverTimestamp()
         };
-        if (state.friendRole === "host") {
-          Object.assign(resultUpdate, {
-            "postMatch.matchId": state.friendMatchId,
-            "postMatch.hostChoice": null,
-            "postMatch.guestChoice": null,
-            "postMatch.resolvedAction": null,
-            "postMatch.resolutionId": null,
-            status: "lobby",
-            hostReady: false,
-            guestReady: false,
-            "members.slot0.ready": false,
-            "members.slot1.ready": false
-          });
-        }
+        // v173h: result確定とpostMatch遷移を同一writeに混ぜない。
+        // まずplayingのままcanonical resultを確定し、その後hostの専用postMatch遷移へ進む。
+        // これにより通常勝敗・降参・切断で同じpostMatch経路を使い、Rulesも単純化する。
         await fb.runTransaction(fb.db,async transaction=>{const roomSnap=await transaction.get(roomRef);if(!roomSnap.exists())throw new Error("試合部屋が見つかりません。");const room=roomSnap.data()||{},match=room.match||{};if(String(getFriendMatchId(match)||"")!==String(state.friendMatchId||""))throw new Error("別の試合へ切り替わっています。");if(match.result||match.state?.gameOver)return;transaction.update(roomRef,resultUpdate);});
+        if(state.friendRole==="host")await initializeFriendPostMatchAsHost(result);
       } finally {
         state.friendResultPublishing = false;
       }
@@ -18011,7 +18006,7 @@ async function endTurn(reason="unspecified") {
     socialEl("authCloseBtn")?.addEventListener("click",()=>socialClose("authModal"));
     socialEl("accountOpenBtn")?.addEventListener("click",()=>socialOpen("accountModal"));
     socialEl("accountCloseBtn")?.addEventListener("click",()=>socialClose("accountModal"));
-    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await prepareProfileChange(openPlayerCardEditor);}catch(error){showProfileActionError(error);}});
+    socialEl("playerCardEditBtn")?.addEventListener("click",async()=>{try{await openPlayerCardEditor();}catch(error){showProfileActionError(error);}});
     socialEl("playerCardTitleSelect")?.addEventListener("change",event=>{if(state.playerCardDraft){state.playerCardDraft.titleId=event.target.value;renderPlayerCardDraft();}});
     socialEl("playerCardSaveBtn")?.addEventListener("click",async()=>{try{await savePlayerCard();}catch(error){socialMessage("playerCardEditorMessage",error.message);}});
     socialEl("playerCardCancelBtn")?.addEventListener("click",closePlayerCardEditor);socialEl("playerCardEditorCloseBtn")?.addEventListener("click",closePlayerCardEditor);
