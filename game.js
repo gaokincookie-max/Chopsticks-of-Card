@@ -2307,9 +2307,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173e-turn-start-rules-symmetry";
+    const LATEST_NEWS_ID = "v173f-turn-start-claim-rules";
 
     const UPDATE_NEWS = [
+      {id:"v173f-turn-start-claim-rules",version:"v173f",date:"2026-09-03",title:"オンラインのターン開始claim Rulesをhost/guest対称化",summary:"ゲスト側でturnStarted/token/claimedAtのclaim書き込み自体が403になる問題へ、claim専用の厳密なRules経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turn-start claim/recoveryを一般runtime更新から独立させ、現在のturnOwner本人だけがleaseを取得できる専用Rulesへ整理","claimでは盤面stateや他のmatch項目を一切変更できないよう厳密に制限","host/guestの初回claimを同一条件にし、ゲストだけ403になる非対称経路を除去","v173eで追加したturnStartApplied専用経路と合わせ、claim→applyの両段階を専用Rulesで保護"]},
       {id:"v173e-turn-start-rules-symmetry",version:"v173e",date:"2026-09-03",title:"オンラインのターン開始確定Rulesをhost/guest対称化",summary:"ゲスト側のターン開始ドロー後のcanonical確定がFirestore Rulesに拒否される問題へ、専用のturnStartApplied許可経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turnStartAppliedを一般runtime更新から独立させ、現在のturnOwner本人だけが正しいserial/tokenで確定できる専用Rulesへ整理","host/guestの双方が同一条件でターン開始盤面を確定できるよう対称化","他人のターン・token改竄・serial飛ばし・二重applyは引き続き拒否","実Firestore Rules用のguest turnStartApplied回帰ケースを追加し、従来テストの盲点も修正"]},
       {id:"v173d-turn-start-convergence",version:"v173d",date:"2026-09-03",title:"オンラインのターン開始同期を収束型へ変更",summary:"ターン開始claim/applyを数回で諦めず、Firestore正本を再確認しながら復旧し続ける方式へ変更しました。",featured:true,tags:["fix","online","system"],items:["turn-start再試行回数上限を撤廃し、正本を読みながら安全に再試行","自端末claimは同じtokenで再開し、他端末の停止claimはlease後に回収","正本ですでに開始処理が完了していれば即座に盤面を取り込んで入力ロック解除","同期状況を画面上で詳細表示し、Rules拒否と一時的な待機を区別"]},
       {id:"v173c-turn-start-input-lock",version:"v173c",date:"2026-09-02",title:"オンラインのターン開始完了前の操作を完全ロック",summary:"ターン開始ドローや開始時効果のcanonical確定前に操作できる競合を防ぎ、未開始ターンのhandoffがRulesに拒否される経路を修正しました。",featured:true,tags:["fix","online","system"],items:["自分のturnOwnerを受信してもturnStartAppliedSerialが現serialへ到達するまでは『ターン開始同期中』として操作を完全ロック","通常攻撃・分ける・カード使用・設置・行動確定・ターン終了の各入口に二重ガードを追加","ターン開始待機中は盤面の攻撃対象・手札カードを選択可能表示にせず、ドローと開始時効果の確定後だけ入力を解禁","canonical反映直後に『ターン開始を同期しています』を表示し、startTurn確定後に『あなたの番です』へ遷移"]},

@@ -638,3 +638,9 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 - turnStartApplied は host / guest 共通で、現在の turnOwner 本人・同一 serial・同一 token・正しい appliedSerial のときだけ許可されます。
 - 他人のターン、token 改竄、serial 飛ばし、二重 apply は拒否する方針を維持します。
 - 既存 Emulator テストが guest の「claim」と「handoff」は確認していた一方、guest 自身の turnStartApplied 成功ケースを持っていなかったため、今回専用回帰ケースを追加しました。
+
+## v173f
+- ゲスト側のターン開始で `turnStarted / turnStartToken / turnStartClaimedAt` のclaim書き込み自体がFirestore Rulesに403拒否される問題を修正。
+- turn-start claim/recoveryを一般runtime更新から分離し、host/guest対称の専用Rules経路 `isSafeTurnStartClaimUpdate()` を追加。
+- claim時は盤面 `match.state` を完全不変、変更可能なmatch項目を3項目だけに限定。
+- v173eのturnStartApplied専用経路と合わせて、ターン開始の claim → apply を両方専用Rulesで検証。
