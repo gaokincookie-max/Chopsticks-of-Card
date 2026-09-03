@@ -2307,9 +2307,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173f-turn-start-claim-rules";
+    const LATEST_NEWS_ID = "v173g-turn-start-minimal-rules";
 
     const UPDATE_NEWS = [
+      {id:"v173g-turn-start-minimal-rules",version:"v173g",date:"2026-09-03",title:"ターン開始Rulesを必要最小限の独立判定へ整理",summary:"turn claim/applyが無関係なroom/member helperの評価で403になり得る経路を除き、実際に変更するフィールドだけで認可するよう修正しました。",featured:true,tags:["fix","online","system"],items:["turn-start claimはmatch内のturnStarted/turnStartToken/turnStartClaimedAtとupdatedAt以外を変更不可にし、room/member helperへの依存を撤廃","turn-start applyもstate/stateRevision/turnStartAppliedSerial/turnTimerStartedAtだけを専用経路で検査","host/guestとも現在のturnOwner本人・正しいserial/tokenを必須とし、他人のclaim/applyや改竄は引き続き拒否","専用Rulesが共通helperを参照しないことを検査する回帰テストを追加"]},
       {id:"v173f-turn-start-claim-rules",version:"v173f",date:"2026-09-03",title:"オンラインのターン開始claim Rulesをhost/guest対称化",summary:"ゲスト側でturnStarted/token/claimedAtのclaim書き込み自体が403になる問題へ、claim専用の厳密なRules経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turn-start claim/recoveryを一般runtime更新から独立させ、現在のturnOwner本人だけがleaseを取得できる専用Rulesへ整理","claimでは盤面stateや他のmatch項目を一切変更できないよう厳密に制限","host/guestの初回claimを同一条件にし、ゲストだけ403になる非対称経路を除去","v173eで追加したturnStartApplied専用経路と合わせ、claim→applyの両段階を専用Rulesで保護"]},
       {id:"v173e-turn-start-rules-symmetry",version:"v173e",date:"2026-09-03",title:"オンラインのターン開始確定Rulesをhost/guest対称化",summary:"ゲスト側のターン開始ドロー後のcanonical確定がFirestore Rulesに拒否される問題へ、専用のturnStartApplied許可経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turnStartAppliedを一般runtime更新から独立させ、現在のturnOwner本人だけが正しいserial/tokenで確定できる専用Rulesへ整理","host/guestの双方が同一条件でターン開始盤面を確定できるよう対称化","他人のターン・token改竄・serial飛ばし・二重applyは引き続き拒否","実Firestore Rules用のguest turnStartApplied回帰ケースを追加し、従来テストの盲点も修正"]},
       {id:"v173d-turn-start-convergence",version:"v173d",date:"2026-09-03",title:"オンラインのターン開始同期を収束型へ変更",summary:"ターン開始claim/applyを数回で諦めず、Firestore正本を再確認しながら復旧し続ける方式へ変更しました。",featured:true,tags:["fix","online","system"],items:["turn-start再試行回数上限を撤廃し、正本を読みながら安全に再試行","自端末claimは同じtokenで再開し、他端末の停止claimはlease後に回収","正本ですでに開始処理が完了していれば即座に盤面を取り込んで入力ロック解除","同期状況を画面上で詳細表示し、Rules拒否と一時的な待機を区別"]},
