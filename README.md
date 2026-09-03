@@ -630,3 +630,11 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 - claim再試行2回上限を撤廃し、Firestore正本をfresh readしながら継続復旧。
 - 正本で開始済みならドロー後盤面を採用し、古いowner/serialなら正本へ追従。
 - 自端末tokenの再開、5秒経過した他端末claimのrecovery claim、状態別診断メッセージを追加。
+
+
+## v173e
+
+- Firestore Rules に `isSafeTurnStartAppliedUpdate()` を追加し、ターン開始ドロー・開始時効果の canonical 確定を一般 runtime 更新から分離しました。
+- turnStartApplied は host / guest 共通で、現在の turnOwner 本人・同一 serial・同一 token・正しい appliedSerial のときだけ許可されます。
+- 他人のターン、token 改竄、serial 飛ばし、二重 apply は拒否する方針を維持します。
+- 既存 Emulator テストが guest の「claim」と「handoff」は確認していた一方、guest 自身の turnStartApplied 成功ケースを持っていなかったため、今回専用回帰ケースを追加しました。
