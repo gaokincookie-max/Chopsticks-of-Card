@@ -2239,6 +2239,8 @@ const CARD_LIBRARY = {
       friendTurnClaimRetryTimer: null,
       friendTurnClaimRetryKey: "",
       friendTurnClaimRetryCount: 0,
+      friendTurnClaimRetryStartedAtMs: 0,
+      friendOwnedTurnStartTokens: new Set(),
       friendCardResolving: false,
       friendLastPublishedSignature: "",
       friendPublishTimer: null,
@@ -2305,7 +2307,7 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173c-turn-start-input-lock";
+    const LATEST_NEWS_ID = "v173d-turn-start-convergence";
 
     const UPDATE_NEWS = [
       {id:"v173c-turn-start-input-lock",version:"v173c",date:"2026-09-02",title:"オンラインのターン開始完了前の操作を完全ロック",summary:"ターン開始ドローや開始時効果のcanonical確定前に操作できる競合を防ぎ、未開始ターンのhandoffがRulesに拒否される経路を修正しました。",featured:true,tags:["fix","online","system"],items:["自分のturnOwnerを受信してもturnStartAppliedSerialが現serialへ到達するまでは『ターン開始同期中』として操作を完全ロック","通常攻撃・分ける・カード使用・設置・行動確定・ターン終了の各入口に二重ガードを追加","ターン開始待機中は盤面の攻撃対象・手札カードを選択可能表示にせず、ドローと開始時効果の確定後だけ入力を解禁","canonical反映直後に『ターン開始を同期しています』を表示し、startTurn確定後に『あなたの番です』へ遷移"]},
@@ -4583,7 +4585,7 @@ const CARD_LIBRARY = {
         if(currentSerial!==Number(turnSerial)||currentOwner!==state.friendRole||match.turnStarted===true)return;
         transaction.update(roomRef,{"match.turnStarted":true,"match.turnStartToken":token,"match.turnStartClaimedAt":fb.serverTimestamp(),updatedAt:fb.serverTimestamp()});claimed=true;
       });
-      if(claimed){state.friendTurnSerial=Number(turnSerial);state.friendTurnOwner=turnOwner;state.friendTurnStarted=true;state.friendTurnStartToken=token;state.friendTurnStartClaimedAtMs=Date.now();}
+      if(claimed){state.friendTurnSerial=Number(turnSerial);state.friendTurnOwner=turnOwner;state.friendTurnStarted=true;state.friendTurnStartToken=token;state.friendTurnStartClaimedAtMs=Date.now();state.friendOwnedTurnStartTokens.add(token);}
       return claimed;
     }
 
@@ -4789,7 +4791,7 @@ const CARD_LIBRARY = {
         if(serial!==Number(turnSerial)||owner!==state.friendRole||match.turnStarted!==true||applied>=serial||!claimedAt||Date.now()-claimedAt<5000)return;
         transaction.update(roomRef,{"match.turnStartToken":token,"match.turnStartClaimedAt":fb.serverTimestamp(),updatedAt:fb.serverTimestamp()});claimed=true;
       });
-      if(claimed){state.friendTurnStartToken=token;state.friendTurnStartClaimedAtMs=Date.now();}
+      if(claimed){state.friendTurnStartToken=token;state.friendTurnStartClaimedAtMs=Date.now();state.friendOwnedTurnStartTokens.add(token);}
       return claimed;
     }
 
@@ -4800,46 +4802,110 @@ const CARD_LIBRARY = {
 
     function clearFriendTurnClaimRetry(){
       if(state.friendTurnClaimRetryTimer)clearTimeout(state.friendTurnClaimRetryTimer);
-      state.friendTurnClaimRetryTimer=null;state.friendTurnClaimRetryKey="";state.friendTurnClaimRetryCount=0;
+      state.friendTurnClaimRetryTimer=null;state.friendTurnClaimRetryKey="";state.friendTurnClaimRetryCount=0;state.friendTurnClaimRetryStartedAtMs=0;
     }
 
-    function scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,delayMs=250){
+    function scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,delayMs=350){
       const key=`${matchId}:${turnSerial}:${turnOwner}`;
-      if(state.friendTurnClaimRetryKey!==key){clearFriendTurnClaimRetry();state.friendTurnClaimRetryKey=key;}
-      if(state.friendTurnClaimRetryTimer||state.friendTurnClaimRetryCount>=2)return;
+      if(state.friendTurnClaimRetryKey!==key){clearFriendTurnClaimRetry();state.friendTurnClaimRetryKey=key;state.friendTurnClaimRetryStartedAtMs=Date.now();}
+      if(state.friendTurnClaimRetryTimer)return;
       state.friendTurnClaimRetryCount+=1;
+      // v173d: never give up solely because a transient claim/apply failed. Back off, but keep converging.
+      const progressive=Math.min(2000,250+Math.max(0,state.friendTurnClaimRetryCount-1)*250);
+      const wait=Math.max(Number(delayMs)||0,progressive);
       state.friendTurnClaimRetryTimer=setTimeout(()=>{
         state.friendTurnClaimRetryTimer=null;
-        if(state.friendMatchId!==matchId||state.friendTurnSerial!==turnSerial||state.friendTurnOwner!==turnOwner||state.friendTurnStartAppliedSerial>=turnSerial)return;
+        if(state.friendMatchId!==matchId||Number(state.friendTurnSerial)!==Number(turnSerial)||state.friendTurnOwner!==turnOwner||Number(state.friendTurnStartAppliedSerial||0)>=Number(turnSerial))return;
         ensureFriendLocalTurnStarted({allowRetry:true}).catch(error=>console.error("[FriendRoom] turn retry failed",{turnSerial,turnOwner,code:error?.code,message:error?.message}));
-      },Math.max(delayMs,250*state.friendTurnClaimRetryCount));
+      },wait);
+    }
+
+    async function readFriendTurnStartCanonical(){
+      const fb=firebaseApi();if(!fb||!state.friendRoomId)return null;
+      const snap=await fb.getDoc(fb.doc(fb.db,"rooms",state.friendRoomId));
+      if(!snap.exists())return null;
+      const data=snap.data()||{},match=data.match||null;
+      if(!match||getFriendMatchId(match)!==state.friendMatchId)return null;
+      state.friendRoomData=data;
+      return {data,match,revision:Number(match.stateRevision||0),serial:Number(match.turnSerial||match.state?.turnSerial||0),owner:match.turnOwner||match.state?.turnOwner||match.turnSide||null,started:match.turnStarted===true,applied:Number(match.turnStartAppliedSerial??match.state?.turnStartAppliedSerial??0),token:match.turnStartToken||null,claimedAtMs:friendTimestampMillis(match.turnStartClaimedAt)};
+    }
+
+    async function adoptFreshFriendTurnCanonical(fresh){
+      if(!fresh?.match?.state)return false;
+      await applyFriendCanonicalSnapshot(fresh.match.state,fresh.revision,fresh.match,{force:true,deferProgress:true});
+      return true;
+    }
+
+    function setFriendTurnStartSyncMessage(text){
+      if(state.battleMode!=="friend"||state.gameOver||state.friendTurnOwner!==state.friendRole)return;
+      setMessage(text);render();
     }
 
     async function ensureFriendLocalTurnStarted({allowRetry=true}={}){
       if(state.battleMode!=="friend"||state.gameOver||!state.friendMatchStarted||state.friendTurnOwner!==state.friendRole)return false;
-      const turnSerial=Number(state.friendTurnSerial||0),turnOwner=state.friendTurnOwner,matchId=state.friendMatchId;
-      if(!turnSerial||!matchId||state.friendTurnClaimInFlight)return false;
-      const turnKey=`${turnSerial}:${turnOwner}`;
-      if(Number(state.friendTurnStartAppliedSerial||0)>=turnSerial){clearFriendTurnClaimRetry();return true;}
+      const requestedSerial=Number(state.friendTurnSerial||0),requestedOwner=state.friendTurnOwner,matchId=state.friendMatchId;
+      if(!requestedSerial||!matchId||state.friendTurnClaimInFlight)return false;
+      if(Number(state.friendTurnStartAppliedSerial||0)>=requestedSerial){clearFriendTurnClaimRetry();return true;}
       state.friendTurnClaimInFlight=true;
       try{
+        // Always inspect the authoritative room before deciding whether to claim, wait, recover, or adopt.
+        const fresh=await readFriendTurnStartCanonical();
+        if(!fresh){
+          setFriendTurnStartSyncMessage("ターン開始の正本を取得できません。通信を待ちながら再試行しています…");
+          if(allowRetry)scheduleFriendTurnClaimRetry(requestedSerial,requestedOwner,matchId,1000);
+          return false;
+        }
+        // The canonical match moved while our local snapshot was waiting. Adopt it instead of retrying stale metadata forever.
+        if(fresh.serial!==requestedSerial||fresh.owner!==requestedOwner){
+          setFriendTurnStartSyncMessage("正本のターン状態が更新されました。最新状態へ再同期しています…");
+          await adoptFreshFriendTurnCanonical(fresh);
+          if(Number(state.friendTurnStartAppliedSerial||0)>=Number(state.friendTurnSerial||0)||state.friendTurnOwner!==state.friendRole){clearFriendTurnClaimRetry();return state.friendTurnOwner===state.friendRole&&Number(state.friendTurnStartAppliedSerial||0)>=Number(state.friendTurnSerial||0);}
+          if(allowRetry)scheduleFriendTurnClaimRetry(Number(state.friendTurnSerial||0),state.friendTurnOwner,state.friendMatchId,350);
+          return false;
+        }
+        // Another execution (or this tab after an ambiguous response) may already have committed the draw/start effects.
+        if(fresh.applied>=fresh.serial){
+          setFriendTurnStartSyncMessage("ターン開始は正本で確定済みです。ドロー後の盤面を取り込んでいます…");
+          await adoptFreshFriendTurnCanonical(fresh);
+          clearFriendTurnClaimRetry();
+          return Number(state.friendTurnStartAppliedSerial||0)>=Number(state.friendTurnSerial||0);
+        }
+
+        // Refresh local lifecycle metadata from the fresh room without touching the pre-start board.
+        state.friendTurnSerial=fresh.serial;state.friendTurnOwner=fresh.owner;state.friendTurnStarted=fresh.started;state.friendTurnStartToken=fresh.token;state.friendTurnStartClaimedAtMs=fresh.claimedAtMs;
         let started=false;
-        if(!state.friendTurnStarted){
-          started=await claimAndStartFriendTurn({turnSerial,turnOwner});
+        if(!fresh.started){
+          setFriendTurnStartSyncMessage("ターン開始を同期しています。開始権を確定しています…");
+          started=await claimAndStartFriendTurn({turnSerial:fresh.serial,turnOwner:fresh.owner});
+        }else if(fresh.token&&state.friendOwnedTurnStartTokens.has(fresh.token)){
+          // This tab owns the claim. If the prior apply response was lost/failed, replay from the canonical pre-start baseline with the same token.
+          setFriendTurnStartSyncMessage("ターン開始処理を再開しています。ドローと開始時効果を確定しています…");
+          await executeClaimedFriendTurnStart({turnSerial:fresh.serial,turnOwner:fresh.owner,turnStartToken:fresh.token});
+          started=Number(state.friendTurnStartAppliedSerial||0)>=fresh.serial;
         }else{
-          const leaseRemaining=Math.max(0,Number(state.friendTurnStartClaimedAtMs||0)+5000-Date.now());
+          const leaseAge=fresh.claimedAtMs?Date.now()-fresh.claimedAtMs:Infinity;
+          const leaseRemaining=Math.max(0,5000-leaseAge);
           if(leaseRemaining>0){
-            if(allowRetry)scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,leaseRemaining+100);
+            setFriendTurnStartSyncMessage(`ターン開始を同期しています。開始処理の確定を待っています（約${Math.max(1,Math.ceil(leaseRemaining/1000))}秒）…`);
+            if(allowRetry)scheduleFriendTurnClaimRetry(fresh.serial,fresh.owner,matchId,leaseRemaining+120);
             return false;
           }
-          started=await recoverAndStartFriendTurn({turnSerial,turnOwner});
+          setFriendTurnStartSyncMessage("ターン開始を復旧しています。停止した開始権を回収しています…");
+          started=await recoverAndStartFriendTurn({turnSerial:fresh.serial,turnOwner:fresh.owner});
         }
-        if(started){clearFriendTurnClaimRetry();return true;}
-        if(allowRetry&&state.friendMatchId===matchId&&state.friendTurnStartAppliedSerial<turnSerial)scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,500);
+        if(started||Number(state.friendTurnStartAppliedSerial||0)>=fresh.serial){clearFriendTurnClaimRetry();return true;}
+        // Claim may have lost a race without throwing. Re-read on the next pass and converge to whichever canonical state won.
+        if(allowRetry&&state.friendMatchId===matchId&&Number(state.friendTurnStartAppliedSerial||0)<fresh.serial){
+          setFriendTurnStartSyncMessage("ターン開始の確定を再確認しています…");
+          scheduleFriendTurnClaimRetry(fresh.serial,fresh.owner,matchId,500);
+        }
         return false;
       }catch(error){
-        console.warn("[FriendRoom] turn claim failed",{turnSerial,turnOwner,localRole:state.friendRole,code:error?.code,message:error?.message});
-        if(allowRetry&&state.friendMatchId===matchId&&state.friendTurnStartAppliedSerial<turnSerial)scheduleFriendTurnClaimRetry(turnSerial,turnOwner,matchId,500);
+        const code=String(error?.code||"");
+        console.warn("[FriendRoom] turn claim failed",{turnSerial:requestedSerial,turnOwner:requestedOwner,localRole:state.friendRole,code,message:error?.message});
+        if(code.includes("permission-denied"))setFriendTurnStartSyncMessage("ターン開始の書き込みがFirestore Rulesに拒否されました。正本を再確認しながら再試行します…");
+        else setFriendTurnStartSyncMessage("ターン開始の通信に失敗しました。正本を再確認しながら再試行しています…");
+        if(allowRetry&&state.friendMatchId===matchId&&Number(state.friendTurnStartAppliedSerial||0)<requestedSerial)scheduleFriendTurnClaimRetry(requestedSerial,requestedOwner,matchId,code.includes("permission-denied")?2000:800);
         return false;
       }finally{state.friendTurnClaimInFlight=false;}
     }
@@ -7193,6 +7259,7 @@ const CARD_LIBRARY = {
       state.friendTurnStartAppliedSerial = 0;
       state.friendTurnStartToken = null;
       state.friendTurnStartClaimedAtMs = 0;
+      state.friendOwnedTurnStartTokens.clear();
       state.friendTurnTimerStartedAtMs = 0;
       stopFriendTurnClock();
       state.friendInterruptWaiting = null;

@@ -622,3 +622,11 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 ## v173c
 - オンラインのターン開始ドロー・開始時効果がcanonicalへ確定するまで操作を完全ロック。
 - 未適用ターンでのカード使用・攻撃・分ける・ターン終了を入口でも拒否し、handoffのRules拒否を防止。
+
+
+## v173d
+
+- オンラインのターン開始同期を収束型へ変更。
+- claim再試行2回上限を撤廃し、Firestore正本をfresh readしながら継続復旧。
+- 正本で開始済みならドロー後盤面を採用し、古いowner/serialなら正本へ追従。
+- 自端末tokenの再開、5秒経過した他端末claimのrecovery claim、状態別診断メッセージを追加。
