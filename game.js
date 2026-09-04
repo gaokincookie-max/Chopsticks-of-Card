@@ -14811,9 +14811,9 @@ function renderLastAction() {
       addLog(`【カード】${visibleText}`);
       render();
 
-      if (state.battleMode === "friend" && player === "human" && cardId !== "finale") {
-        emitFriendFx("card", { playerSide: friendSideForLocalPlayer(player), cardId }).catch(error => console.error("PVP card fx failed", error));
-      }
+      const shouldEmitOnlineCardFx = state.battleMode === "friend" && player === "human" && cardId !== "finale";
+      // v173l: 同じ room document への fire-and-forget FX 書き込みを、
+      // card checkpoint transaction と並走させない。FX は canonical checkpoint 成功後に直列送信する。
       if (showPopup && cardId !== "finale") await showCardPopup(player, card, false, player === "cpu" ? 760 : 520);
 
       if (card.terminal && await maybeResolveTerminalAppeal(player, rawCardId, cardId, card)) {
@@ -14855,7 +14855,14 @@ function renderLastAction() {
       if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") state.pendingTerminalEnd[player] = true;
       triggerChemicalGeneration(player, cardId);
       checkWin();
-      if(onlineCardAction)await OnlineActionManager.checkpoint(onlineCardAction,"card-effect-resolved");
+      if(onlineCardAction){
+        const checkpointed=await OnlineActionManager.checkpoint(onlineCardAction,"card-effect-resolved");
+        if(checkpointed!==true)throw new Error("カード効果のcanonical確定に失敗しました。");
+      }
+      if(shouldEmitOnlineCardFx){
+        await emitFriendFx("card", { playerSide: friendSideForLocalPlayer(player), cardId })
+          .catch(error => console.error("PVP card fx failed", error));
+      }
       recordSuccessfulCardMasteryUse(player,cardId,{kind:"card",instanceId:rawCardInstanceId,eventId:onlineCardAction?.id||""});
 
       if (isTutorialBattle() && player === "human") {
@@ -14919,7 +14926,8 @@ function renderLastAction() {
       // 旧式の選択modeはhelper側のmodeガードにより、選択完了前には終了しない。
       if (await maybeAutoEndTurnForNoActions(player)) { await OnlineActionManager.complete(onlineCardAction); return true; }
 
-      await OnlineActionManager.complete(onlineCardAction);
+      const completedOnlineCardAction=await OnlineActionManager.complete(onlineCardAction);
+      if(onlineCardAction&&completedOnlineCardAction===false)throw new Error("カード使用のcanonical完了を確認できませんでした。");
       return true;
       } catch(error) {
         onlineCardError=error;
