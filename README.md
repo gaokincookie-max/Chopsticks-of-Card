@@ -680,3 +680,7 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 - turn-start / handoff / postMatch / カード処理には変更なし。
 - 準備完了 Rules の退行を検出する source regression test を追加。
 - `index.html` のキャッシュキーを `v173j` に更新。
+
+## v173m 安定化基盤
+
+v173mではゲーム仕様を変更せず、オンラインphase診断・Invariant診断履歴・公開前必須回帰テストを追加した。公開前は `npm run verify` を実行し、必須セットが失敗0であることを確認する。詳細は `V173M_STABILITY_FOUNDATION.md` を参照。

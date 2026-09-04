@@ -2308,9 +2308,12 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173i-online-turn-edge-hardening";
+    const LATEST_NEWS_ID = "v173o-endurance-stability";
 
     const UPDATE_NEWS = [
+      {id:"v173o-endurance-stability",version:"v173o",date:"2026-09-04",title:"長時間シミュレーションとオンライン耐久試験を追加",summary:"ゲーム仕様を変えず、seed再現可能な長期戦モデルとオンライン通信乱れを想定した耐久検証を公開前テストへ追加しました。",featured:true,tags:["fix","online","system"],items:["全242カードIDを使うseed固定の長期戦モデルで1万試合を自動検証","カード領域の重複・消失、手の値、ターン所有者など長期進行中の不変条件を継続監査","host/guest間で10万回のhandoffを行い、reload、Decision、重複再送、ターン開始直後の即時終了をランダム混在","失敗時にseedを表示して同じ耐久シナリオを再現できる仕組みを追加","npm run verifyに耐久試験を統合し、通常回帰テストと一括実行"]},
+      {id:"v173n-regression-audit",version:"v173n",date:"2026-09-04",title:"全カード回帰監査とオンライン実戦シナリオ検証を追加",summary:"ゲーム仕様を変えず、カード共通処理とオンラインの主要ターン移行を自動検証する回帰テストを強化しました。",featured:false,tags:["fix","online","system"],items:["全242カードのID・表示情報・コスト定義を自動監査し、カード定義からオンライン正本更新を直接呼ぶ実装を検出","カード使用の共通パイプラインで手札除去・捨て札移動・効果解決・canonical checkpoint・Action完了の順序を固定検査","host/guest双方のclaim→turn-start apply→通常Action→handoffを同一モデルで検証","行動不能によるターン開始直後のauto-handoff、Decision待機、Action checkpoint、handoff途中のreload/reconnect復旧シナリオを追加","npm run verifyへv173n監査を組み込み、公開前の必須回帰セットを拡張"]},
+      {id:"v173m-stability-foundation",version:"v173m",date:"2026-09-04",title:"安定化基盤とオンライン診断を強化",summary:"ゲーム仕様を変えず、オンライン状態のphase診断・異常記録・公開前回帰テストを追加しました。",featured:true,tags:["fix","online","system"],items:["オンライン対戦のcanonical状態をturn-start・active・Action・Decision・handoffなどのphaseへ分類する診断器を追加","Watchdogが異常を検出した際、phase・turnSerial・owner・Action・Decision・handoffを直近50件までメモリ上へ記録","診断はゲーム進行を止めずconsoleへ警告するfail-open方式とし、既存の復旧処理・Firestore書き込み順序は変更なし","v170以降の重要なオンライン回帰テストとv173系修正を一括確認するnpm run verifyを追加","リリース前検証では現行仕様と食い違う旧テストを必須セットから分離し、失敗0を基準にできるよう整理"]},
       {id:"v173i-online-turn-edge-hardening",version:"v173i",date:"2026-09-04",title:"即時行動不能・未開始ターン・試合後境界を強化",summary:"過充電・光速回路・Furioso等の即時ターン終了とオンライン境界条件をまとめて安定化しました。",featured:true,tags:["fix","online","system"],items:["ターン開始直後の行動不能は入力ロックを維持し、turnStartAppliedとhandoffを単一canonical更新へまとめる経路を追加","handoff送信前にturnOwner/turnSide/turnSerialの外側・盤面側整合性をpreflightし、不一致なら送信せず再同期","相手が未開始ターンのままheartbeat停止した場合は45秒で切断救済できる専用条件を追加","強制・貿易で対象手札0枚のtimeout時はsecure interactionを明示cleanupして不発へ収束","postMatchはslot1が既に退出済み(null)でもロビー復帰できるようreadyリセットをnull-safe化","降参ACK待ち中は結果ボタンを無効化し、同期待ちであることを明示"]},
       {id:"v173h-online-rules-full-audit",version:"v173h",date:"2026-09-03",title:"オンラインRules全経路を再監査",summary:"ターン交代・試合後遷移・プレイヤーカード編集を含むFirestore更新経路を再監査し、無関係な旧形式フィールドで正当な更新が拒否される経路を整理しました。",featured:true,tags:["fix","online","system"],items:["通常のAction/handoff更新からroom/member identityの再検査を外し、match/postMatch/updatedAtだけの更新はそのdiffだけで保護","降参・切断結果の確定も同じく無関係なroom/member helper依存を撤廃","試合後ロビー移行ではmembers全体のidentity再検査ではなくready以外が変化していないことだけを検証","通常勝敗のresult確定とpostMatchロビー移行を2段階へ分離し、降参・切断と同じ安定した経路へ統一","背景・称号だけのプレイヤーカード編集はactiveRoomsロックと切り離し、対戦ルーム参加中でも保存可能（現在ルーム表示は次回参加時から反映）"]},
       {id:"v173f-turn-start-claim-rules",version:"v173f",date:"2026-09-03",title:"オンラインのターン開始claim Rulesをhost/guest対称化",summary:"ゲスト側でturnStarted/token/claimedAtのclaim書き込み自体が403になる問題へ、claim専用の厳密なRules経路を追加しました。",featured:true,tags:["fix","online","system"],items:["turn-start claim/recoveryを一般runtime更新から独立させ、現在のturnOwner本人だけがleaseを取得できる専用Rulesへ整理","claimでは盤面stateや他のmatch項目を一切変更できないよう厳密に制限","host/guestの初回claimを同一条件にし、ゲストだけ403になる非対称経路を除去","v173eで追加したturnStartApplied専用経路と合わせ、claim→applyの両段階を専用Rulesで保護"]},
@@ -6089,6 +6092,56 @@ const CARD_LIBRARY = {
       });
     }
 
+    const ONLINE_DIAGNOSTIC_LIMIT=50;
+    const onlineDiagnosticLog=[];
+    let lastOnlineDiagnosticKey="";
+
+    const OnlinePhaseClassifier={
+      classify(match=state.friendRoomData?.match||{}){
+        if(state.battleMode!=="friend"||!state.friendMatchStarted)return "inactive";
+        if(state.gameOver||match.state?.gameOver)return "game-over";
+        const interrupt=canonicalFriendInterrupt();
+        if(interrupt?.status==="pending")return "decision-pending";
+        if(match.handoff&&match.handoff.status!=="completed")return "handoff";
+        if(match.action&&!['completed','cancelled','failed'].includes(match.action.phase))return match.action.actorSide===state.friendRole?"local-action":"remote-action";
+        const owner=match.turnOwner||state.friendTurnOwner||null;
+        const serial=Number(match.turnSerial||state.friendTurnSerial||0);
+        const applied=Number(match.turnStartAppliedSerial??state.friendTurnStartAppliedSerial??0);
+        const started=match.turnStarted===true;
+        if(!owner||serial<=0)return "invalid-no-owner";
+        if(owner===state.friendRole){
+          if(!started)return "local-turn-unclaimed";
+          if(applied<serial||state.friendTurnClaimInFlight||state.friendTurnStartAtomicActive)return "local-turn-starting";
+          return "local-turn-active";
+        }
+        if(!started)return "remote-turn-unstarted";
+        if(applied<serial)return "remote-turn-starting";
+        return "remote-turn-active";
+      }
+    };
+
+    function recordOnlineDiagnostic(reason,phase,invariant){
+      const match=state.friendRoomData?.match||{};
+      const interrupt=canonicalFriendInterrupt();
+      const entry={
+        at:new Date().toISOString(),reason:String(reason||"unknown"),phase,
+        invariantReason:invariant?.reason||null,matchId:state.friendMatchId||null,role:state.friendRole||null,
+        owner:match.turnOwner||state.friendTurnOwner||null,serial:Number(match.turnSerial||state.friendTurnSerial||0),
+        started:match.turnStarted===true,applied:Number(match.turnStartAppliedSerial??state.friendTurnStartAppliedSerial??0),
+        action:match.action?{id:match.action.id||null,type:match.action.type||null,phase:match.action.phase||null,step:match.action.step||null,actorSide:match.action.actorSide||null}:null,
+        decision:interrupt?{id:interrupt.id||null,type:interrupt.type||null,status:interrupt.status||null,targetSide:interrupt.targetSide||null}:null,
+        handoff:match.handoff?{id:match.handoff.id||null,status:match.handoff.status||null,fromSide:match.handoff.fromSide||null,toSide:match.handoff.toSide||null,targetTurnSerial:Number(match.handoff.targetTurnSerial||0)}:null
+      };
+      const key=JSON.stringify([entry.reason,entry.phase,entry.invariantReason,entry.owner,entry.serial,entry.started,entry.applied,entry.action?.id,entry.action?.phase,entry.decision?.id,entry.decision?.status,entry.handoff?.id,entry.handoff?.status]);
+      if(key===lastOnlineDiagnosticKey)return entry;
+      lastOnlineDiagnosticKey=key;
+      onlineDiagnosticLog.push(entry);
+      if(onlineDiagnosticLog.length>ONLINE_DIAGNOSTIC_LIMIT)onlineDiagnosticLog.splice(0,onlineDiagnosticLog.length-ONLINE_DIAGNOSTIC_LIMIT);
+      if(typeof window!=="undefined")window.__waribashiOnlineDiagnostics=onlineDiagnosticLog.slice();
+      console.warn("[PVP invariant]",entry);
+      return entry;
+    }
+
     const OnlineInvariantChecker={
       inspect(){
         if(state.battleMode!=="friend"||!state.friendMatchStarted||state.gameOver)return {ok:true,reason:"inactive"};
@@ -6122,6 +6175,14 @@ const CARD_LIBRARY = {
         return {ok:false,reason:"no-progress-path",owner,serial,applied};
       }
     };
+
+    function inspectOnlineRuntime(reason="manual"){
+      const phase=OnlinePhaseClassifier.classify();
+      const invariant=OnlineInvariantChecker.inspect();
+      if(!invariant.ok||phase.startsWith("invalid-"))recordOnlineDiagnostic(reason,phase,invariant);
+      return {phase,invariant};
+    }
+    if(typeof window!=="undefined")window.waribashiOnlineDiagnostics=()=>({current:inspectOnlineRuntime("manual"),history:onlineDiagnosticLog.slice()});
 
 
     async function recoverLocalActionFromCanonical(match,options={}){
@@ -6235,7 +6296,8 @@ const CARD_LIBRARY = {
         if(!state.gameOver&&state.turn==="cpu"&&state.friendTurnOwner===otherFriendRole(state.friendRole)&&state.friendTurnStarted===false&&state.friendHandoffRetryTimer==null){
           // canonical owner already points away from us; no extra write is necessary.
         }
-        const invariant=OnlineInvariantChecker.inspect();
+        const runtimeInspection=inspectOnlineRuntime("watchdog");
+        const invariant=runtimeInspection.invariant;
         let handoff=state.friendRoomData?.match?.handoff;
         if(handoff&&friendHandoffIsCanonicallyComplete(state.friendRoomData?.match,handoff)){
           const cleanup=await cleanupCompletedFriendHandoff(handoff.id,{attempts:1});
