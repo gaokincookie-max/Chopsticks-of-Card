@@ -672,3 +672,11 @@ Firebase Consoleで`giftCodes/WARIBASHI_ADMIN`を作成します（本リポジ�
 - postMatchのreadyリセットをslot欠落/null対応にし、退出済みゲストがいてもホストがロビーへ戻せるよう修正。
 - 降参ACK待ち中は結果画面の移動ボタンを無効化し、同期中表示を追加。
 - `index.html` のキャッシュキーを `v173i` に更新。
+
+## v173j
+
+- v173i で誤って削除されていた `memberReadyOnlyChanged()` を Firestore Rules に復元。
+- ロビーのホスト/ゲスト準備完了・準備解除で、本人側 member の `ready` だけを変更できる従来仕様を復旧。
+- turn-start / handoff / postMatch / カード処理には変更なし。
+- 準備完了 Rules の退行を検出する source regression test を追加。
+- `index.html` のキャッシュキーを `v173j` に更新。
