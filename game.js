@@ -16101,7 +16101,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
 async function endTurn(reason="unspecified", options={}) {
       if(state.startingRouletteActive)return;
-      if(state.turn==="human"&&!guardFriendLocalTurnReady("ターン終了"))return false;
+      const isInternalStartAutoHandoff=!!options.friendStartAutoHandoff;
+      if(state.turn==="human"&&!isInternalStartAutoHandoff&&!guardFriendLocalTurnReady("ターン終了"))return false;
       if(isFriendInteractionBlocking())return false;
   const romanPreparationWasActive=isRomanPreparation();
   if (isTutorialBattle()) {
