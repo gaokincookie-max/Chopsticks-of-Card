@@ -2308,10 +2308,11 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173o-endurance-stability";
+    const LATEST_NEWS_ID = "v173p-cursed-bullet-cleanup";
 
     const UPDATE_NEWS = [
-      {id:"v173o-endurance-stability",version:"v173o",date:"2026-09-04",title:"長時間シミュレーションとオンライン耐久試験を追加",summary:"ゲーム仕様を変えず、seed再現可能な長期戦モデルとオンライン通信乱れを想定した耐久検証を公開前テストへ追加しました。",featured:true,tags:["fix","online","system"],items:["全242カードIDを使うseed固定の長期戦モデルで1万試合を自動検証","カード領域の重複・消失、手の値、ターン所有者など長期進行中の不変条件を継続監査","host/guest間で10万回のhandoffを行い、reload、Decision、重複再送、ターン開始直後の即時終了をランダム混在","失敗時にseedを表示して同じ耐久シナリオを再現できる仕組みを追加","npm run verifyに耐久試験を統合し、通常回帰テストと一括実行"]},
+      {id:"v173p-cursed-bullet-cleanup",version:"v173p",date:"2026-09-06",title:"凶弾で倒した手の設置カード残留を修正",summary:"凶弾の+3効果で手が0になった際、加護・呪縛・罠が内部に残る不具合を修正しました。",featured:true,tags:["fix","card"],items:["凶弾の追加効果で0になった手に通常の撃破時と同じ設置物クリーンアップを適用","補修などで手を復活させた際に、撃破前の加護・呪縛・罠が復活しないよう修正","手を0にできる他の直接変更経路も横断監査し、同型のクリーンアップ漏れがないことを確認"]},
+      {id:"v173o-endurance-stability",version:"v173o",date:"2026-09-04",title:"長時間シミュレーションとオンライン耐久試験を追加",summary:"ゲーム仕様を変えず、seed再現可能な長期戦モデルとオンライン通信乱れを想定した耐久検証を公開前テストへ追加しました。",featured:false,tags:["fix","online","system"],items:["全242カードIDを使うseed固定の長期戦モデルで1万試合を自動検証","カード領域の重複・消失、手の値、ターン所有者など長期進行中の不変条件を継続監査","host/guest間で10万回のhandoffを行い、reload、Decision、重複再送、ターン開始直後の即時終了をランダム混在","失敗時にseedを表示して同じ耐久シナリオを再現できる仕組みを追加","npm run verifyに耐久試験を統合し、通常回帰テストと一括実行"]},
       {id:"v173n-regression-audit",version:"v173n",date:"2026-09-04",title:"全カード回帰監査とオンライン実戦シナリオ検証を追加",summary:"ゲーム仕様を変えず、カード共通処理とオンラインの主要ターン移行を自動検証する回帰テストを強化しました。",featured:false,tags:["fix","online","system"],items:["全242カードのID・表示情報・コスト定義を自動監査し、カード定義からオンライン正本更新を直接呼ぶ実装を検出","カード使用の共通パイプラインで手札除去・捨て札移動・効果解決・canonical checkpoint・Action完了の順序を固定検査","host/guest双方のclaim→turn-start apply→通常Action→handoffを同一モデルで検証","行動不能によるターン開始直後のauto-handoff、Decision待機、Action checkpoint、handoff途中のreload/reconnect復旧シナリオを追加","npm run verifyへv173n監査を組み込み、公開前の必須回帰セットを拡張"]},
       {id:"v173m-stability-foundation",version:"v173m",date:"2026-09-04",title:"安定化基盤とオンライン診断を強化",summary:"ゲーム仕様を変えず、オンライン状態のphase診断・異常記録・公開前回帰テストを追加しました。",featured:true,tags:["fix","online","system"],items:["オンライン対戦のcanonical状態をturn-start・active・Action・Decision・handoffなどのphaseへ分類する診断器を追加","Watchdogが異常を検出した際、phase・turnSerial・owner・Action・Decision・handoffを直近50件までメモリ上へ記録","診断はゲーム進行を止めずconsoleへ警告するfail-open方式とし、既存の復旧処理・Firestore書き込み順序は変更なし","v170以降の重要なオンライン回帰テストとv173系修正を一括確認するnpm run verifyを追加","リリース前検証では現行仕様と食い違う旧テストを必須セットから分離し、失敗0を基準にできるよう整理"]},
       {id:"v173i-online-turn-edge-hardening",version:"v173i",date:"2026-09-04",title:"即時行動不能・未開始ターン・試合後境界を強化",summary:"過充電・光速回路・Furioso等の即時ターン終了とオンライン境界条件をまとめて安定化しました。",featured:true,tags:["fix","online","system"],items:["ターン開始直後の行動不能は入力ロックを維持し、turnStartAppliedとhandoffを単一canonical更新へまとめる経路を追加","handoff送信前にturnOwner/turnSide/turnSerialの外側・盤面側整合性をpreflightし、不一致なら送信せず再同期","相手が未開始ターンのままheartbeat停止した場合は45秒で切断救済できる専用条件を追加","強制・貿易で対象手札0枚のtimeout時はsecure interactionを明示cleanupして不発へ収束","postMatchはslot1が既に退出済み(null)でもロビー復帰できるようreadyリセットをnull-safe化","降参ACK待ち中は結果ボタンを無効化し、同期待ちであることを明示"]},
@@ -17015,6 +17016,9 @@ async function endTurn(reason="unspecified", options={}) {
         state[opponent][hand] = finalValue;
         addLog(`${handNames[opponent]}の${handNames[hand]}：${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
       }
+      // v173p: 凶弾の追加効果で0になった手も、通常の撃破と同じく設置物を即時整理する。
+      // これを欠くと、補修などで復活した際に古い加護・呪縛・罠が残留して再有効化される。
+      clearBrokenTraps(opponent);
       if (!targets.length) addLog("対象になる1以上の手がなかったため、凶弾の追加効果は不発。");
     }
 
