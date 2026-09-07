@@ -308,6 +308,77 @@ const CARD_LIBRARY = {
         }
       },
 
+
+      oath: {
+        name:"誓い",cost:2,type:"補助 / 復讐",theme:"復讐",
+        text:"前のターン、相手の通常攻撃またはカードの効果によって0になった手がある時使用できる。通常攻撃で0にされた場合は、その攻撃に使われた相手の手へ「復讐対象」を付与する。カードの効果で0にされた場合は、相手の0でない手を1つ選び「復讐対象」を付与する。設置枠が埋まっている場合、外部効果で除去可能なカードをランダムに1枚捨ててから付与する。相手に復讐対象がある時、すべての「誓い」は「刻まれた屈辱」に変化する。",
+        canPlay:player=>canUseOath(player),effect:player=>useOath(player)
+      },
+      engravedHumiliation: {
+        name:"刻まれた屈辱",cost:2,type:"終端 / 復讐",theme:"復讐",token:true,terminal:true,
+        text:"終端。手札からカードを1枚選んで捨て、2枚引く。その後、自分の0でない手を1つ選び1にする。",
+        canPlay:player=>getDiscardCandidates(player,"cardEffect").length>=2&&(state[player].L>0||state[player].R>0),effect:player=>useEngravedHumiliation(player)
+      },
+      revengeTarget: {
+        name:"復讐対象",cost:2,type:"呪縛 / 復讐",theme:"復讐",curse:true,token:true,
+        text:"デッキ投入不可。この呪縛を付与したプレイヤーに両手があるなら即座に破棄される。この手が0になった時、付与したプレイヤーに「リベリオン」を1枚与える。",
+        canPlay:()=>false
+      },
+      forgetNever: {
+        name:"忘却？巫山戯るな",cost:1,type:"補助 / 復讐",theme:"復讐",
+        text:"前のターン、相手がカードの効果で「復讐対象」を取り除いた時に使用できる。相手の両手へ「復讐対象」を付与する。設置枠が埋まっている場合、外部効果で除去可能なカードをランダムに1枚捨ててから付与する。この効果は将来追加される「封印」による除去制限も無視する。",
+        canPlay:player=>canUseForgetNever(player),effect:player=>useForgetNever(player)
+      },
+      indomitable: {
+        name:"不屈",cost:2,type:"手札誘発 / 復讐",theme:"復讐",
+        text:"相手に復讐対象があり、自分の手が0になる攻撃によって敗北する時、手札から自動発動する。敗北せず、その手を4にする。その後、手札・山札の「不屈」をすべて「執念」に変換する。",
+        canPlay:()=>false
+      },
+      obsession: {
+        name:"執念",cost:2,type:"補助 / 復讐",theme:"復讐",token:true,
+        text:"次の相手ターン、相手は「復讐対象」が付いている手を通常攻撃に使用できない。発動後、手札・山札の「執念」をすべて「身に余る思い」に変換する。",
+        canPlay:player=>hasAnyRevengeTarget(otherPlayer(player),player),effect:player=>useObsession(player)
+      },
+      unbearableThought: {
+        name:"身に余る思い",cost:2,type:"終端 / 復讐",theme:"復讐",token:true,terminal:true,
+        text:"終端。相手に復讐対象がある時使用できる。自分の0でない手で、相手のランダムな0でない手へ通常攻撃を2回行う。この攻撃で相手の手が6以上になった場合、超過処理をせず0にする。2回終了後、復讐対象を持つ相手の手が生存していた場合、自分の全ての手を0にする。この試合中に「怒り」と「涙」を使用済みなら、攻撃する手と対象を選択できる。",
+        canPlay:player=>hasAnyRevengeTarget(otherPlayer(player),player)&&(state[player].L>0||state[player].R>0),effect:player=>useUnbearableThought(player)
+      },
+      ruthlessScheme: {
+        name:"無慈悲な企み",cost:3,type:"補助 / 復讐",theme:"復讐",
+        text:"相手の手に「復讐対象」があるなら使える。山札からランダムに罠カードを1枚選び、選択した自分の手へ直接設置する。このターン、通常攻撃で加える本数+1。",
+        canPlay:player=>hasAnyRevengeTarget(otherPlayer(player),player)&&hasRuthlessSchemeTarget(player),effect:player=>useRuthlessScheme(player)
+      },
+      killingBlade: {
+        name:"必殺の刃",cost:3,type:"終端 / 復讐",theme:"復讐",terminal:true,
+        text:"終端。自分の0でない手1つと、相手の復讐対象が付いた0でない手1つの数字の和が6以上なら、その相手の手を0にする。発動後、次の自分のターン開始時まで自分の通常の加護・罠の効果は発動しない。特殊加護は影響を受けない。",
+        canPlay:player=>getKillingBladePairs(player).length>0,effect:player=>useKillingBlade(player)
+      },
+      rage: {
+        name:"怒り",cost:2,type:"補助 / 復讐",theme:"復讐",
+        text:"相手に復讐対象があるなら使える。自分の0でない手を1つ選び本数+2。次の自分のターン開始時まで、相手から受ける本数+3。",
+        canPlay:player=>hasAnyRevengeTarget(otherPlayer(player),player)&&(state[player].L>0||state[player].R>0),effect:player=>useRage(player)
+      },
+      tears: {
+        name:"涙",cost:2,type:"補助 / 復讐",theme:"復讐",
+        text:"相手に復讐対象があるなら使える。自分の0でない手を1つ選び本数-2（最低0）。次の自分のターン開始時まで、相手の復讐対象が付いた手から通常攻撃の本数を受けない。",
+        canPlay:player=>hasAnyRevengeTarget(otherPlayer(player),player)&&(state[player].L>0||state[player].R>0),effect:player=>useTears(player)
+      },
+      vengeanceHeart: {
+        name:"復讐心",cost:3,type:"加護 / 復讐",theme:"復讐",blessing:true,
+        text:"相手に復讐対象がある間だけ効果を発動する。通常攻撃で加える本数+1、受ける本数-1（最低0）。この手で通常攻撃する時、攻撃対象の手にある外部効果で除去可能な通常の加護・罠をランダムに1枚捨てる。復讐対象でない相手の手をこの攻撃で0にした場合、次の自分のターン行動不能になる。",
+        canPlay:player=>hasAnyRevengeTarget(otherPlayer(player),player)&&canPlaceAttachment(player,player)
+      },
+      rebellion: {
+        name:"リベリオン",cost:3,type:"終端 / 復讐",theme:"復讐",token:true,terminal:true,
+        text:"終端。相手の0でない手を1つ選び、その手の数字と5の差分だけその手に本数を加える。その後、自分の0でない手を1つ選び、同じ本数を加える。",
+        canPlay:player=>(state[player].L>0||state[player].R>0)&&(state[otherPlayer(player)].L>0||state[otherPlayer(player)].R>0),effect:player=>useRebellion(player)
+      },
+      fillTheMoat: {
+        name:"外堀を埋める",cost:2,type:"補助 / 復讐",theme:"復讐",
+        text:"このターン、通常攻撃で加える本数+1。このターン相手の復讐対象が付いた手を0にできたなら、次の相手ターンは分けるを行えない。",
+        canPlay:()=>true,effect:player=>{state.temp[player].attackBonus=Number(state.temp[player].attackBonus||0)+1;state.temp[player].fillTheMoat=true;addLog(`${handNames[player]}は「外堀を埋める」を使用。通常攻撃で加える本数+1。`);}
+      },
       brawl: {
         name: "闇鍋",
         cost: 2,
@@ -2077,6 +2148,7 @@ const CARD_LIBRARY = {
       deckRuleContext: null,
       currentRegulation: { ...DEFAULT_REGULATION },
       resolvingEffectPlayer: null,
+      resolvingEffectCardId: null,
       deckSortMode: "implementation",
       deckSearch: "",
       deckNameSearch: "", deckKeywordSearch: "", // 旧保存・回帰テスト互換（UIは単一検索欄）
@@ -2108,6 +2180,17 @@ const CARD_LIBRARY = {
       judgmentPrisonTurns: { human: 0, cpu: 0 },
       pendingAppealExecution: { human: 0, cpu: 0 },
       personalTurnCount: { human: 0, cpu: 0 },
+      revengeZeroHistory: { human: [], cpu: [] },
+      revengeRemovalHistory: { human: [], cpu: [] },
+      revengeZeroEpoch: { human: {L:0,R:0}, cpu: {L:0,R:0} },
+      revengeHandWasZero: { human: {L:false,R:false}, cpu: {L:false,R:false} },
+      revengeAttackLockTurn: { human: 0, cpu: 0 },
+      revengeSuppressAttachmentsUntilTurn: { human: 0, cpu: 0 },
+      revengeIncomingBonusUntilTurn: { human: 0, cpu: 0 },
+      revengeTearsUntilTurn: { human: 0, cpu: 0 },
+      revengeUsedRage: { human: false, cpu: false },
+      revengeUsedTears: { human: false, cpu: false },
+      revengePendingNoSplit: { human: 0, cpu: 0 },
       magicalChantProgress: { human: 0, cpu: 0 },
       magicalChantCompleted: { human: false, cpu: false },
       costLimitNextTurn: { human: null, cpu: null },
@@ -2308,9 +2391,11 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v173p-cursed-bullet-cleanup";
+    const LATEST_NEWS_ID = "v174a-revenge-fixes";
 
     const UPDATE_NEWS = [
+      {id:"v174a-revenge-fixes",version:"v174a",date:"2026-09-07",title:"復讐テーマの境界挙動を修正",summary:"復讐対象の退避中失効やコピー発動時の条件再確認など、v174の境界挙動を修正しました。",featured:true,tags:["update","fix"],items:["フィクゼーションで退避中の復讐対象も、付与者の両手が揃った時点で失効するよう修正","予告状・びっくり箱等から怒り・涙・無慈悲な企みが発動した際、復讐対象が消えていれば安全に不発するよう修正","復讐対象の除去履歴が同一条件で重複記録されることがある問題を修正"]},
+      {id:"v174-revenge-theme",version:"v174",date:"2026-09-07",title:"新テーマ「復讐」を追加",summary:"倒された手への誓いから復讐対象を刻み、執念とリベリオンで逆転を狙う新テーマを追加しました。",featured:true,tags:["update","new","card"],items:["新テーマ「復讐」と関連カード14種を追加","呪縛「復讐対象」は付与者を保持し、すりかえ・フィクゼーション・コンプレックスなど既存カードとの相互作用に対応","不屈はE=mc²型の敗北直前自動発動として実装し、執念→身に余る思いへ変化","闇鍋・予告状・びっくり箱では条件不足時に安全に不発し、オンラインの相手側選択は本人へDecisionを返すよう対応","必殺の刃・復讐心は通常の加護・罠だけを対象とし、題目などの特殊加護を保護"]},
       {id:"v173p-cursed-bullet-cleanup",version:"v173p",date:"2026-09-06",title:"凶弾で倒した手の設置カード残留を修正",summary:"凶弾の+3効果で手が0になった際、加護・呪縛・罠が内部に残る不具合を修正しました。",featured:true,tags:["fix","card"],items:["凶弾の追加効果で0になった手に通常の撃破時と同じ設置物クリーンアップを適用","補修などで手を復活させた際に、撃破前の加護・呪縛・罠が復活しないよう修正","手を0にできる他の直接変更経路も横断監査し、同型のクリーンアップ漏れがないことを確認"]},
       {id:"v173o-endurance-stability",version:"v173o",date:"2026-09-04",title:"長時間シミュレーションとオンライン耐久試験を追加",summary:"ゲーム仕様を変えず、seed再現可能な長期戦モデルとオンライン通信乱れを想定した耐久検証を公開前テストへ追加しました。",featured:false,tags:["fix","online","system"],items:["全242カードIDを使うseed固定の長期戦モデルで1万試合を自動検証","カード領域の重複・消失、手の値、ターン所有者など長期進行中の不変条件を継続監査","host/guest間で10万回のhandoffを行い、reload、Decision、重複再送、ターン開始直後の即時終了をランダム混在","失敗時にseedを表示して同じ耐久シナリオを再現できる仕組みを追加","npm run verifyに耐久試験を統合し、通常回帰テストと一括実行"]},
       {id:"v173n-regression-audit",version:"v173n",date:"2026-09-04",title:"全カード回帰監査とオンライン実戦シナリオ検証を追加",summary:"ゲーム仕様を変えず、カード共通処理とオンラインの主要ターン移行を自動検証する回帰テストを強化しました。",featured:false,tags:["fix","online","system"],items:["全242カードのID・表示情報・コスト定義を自動監査し、カード定義からオンライン正本更新を直接呼ぶ実装を検出","カード使用の共通パイプラインで手札除去・捨て札移動・効果解決・canonical checkpoint・Action完了の順序を固定検査","host/guest双方のclaim→turn-start apply→通常Action→handoffを同一モデルで検証","行動不能によるターン開始直後のauto-handoff、Decision待機、Action checkpoint、handoff途中のreload/reconnect復旧シナリオを追加","npm run verifyへv173n監査を組み込み、公開前の必須回帰セットを拡張"]},
@@ -4472,6 +4557,15 @@ const CARD_LIBRARY = {
         judgmentPrisonTurns: Number(state.judgmentPrisonTurns?.[player] || 0),
         pendingAppealExecution: Number(state.pendingAppealExecution?.[player] || 0),
         personalTurnCount: Number(state.personalTurnCount?.[player] || 0),
+        revengeZeroHistory: (state.revengeZeroHistory?.[player]||[]).map(e=>{const x=cloneJson(e);x.sourceSide=friendSideForLocalPlayer(e.sourcePlayer);delete x.sourcePlayer;return x;}),
+        revengeRemovalHistory: (state.revengeRemovalHistory?.[player]||[]).map(e=>{const x=cloneJson(e);x.removerSide=friendSideForLocalPlayer(e.removerPlayer);delete x.removerPlayer;return x;}),
+        revengeZeroEpoch: cloneJson(state.revengeZeroEpoch?.[player]||{L:0,R:0}),
+        revengeHandWasZero: cloneJson(state.revengeHandWasZero?.[player]||{L:false,R:false}),
+        revengeAttackLockTurn:Number(state.revengeAttackLockTurn?.[player]||0),
+        revengeSuppressAttachmentsUntilTurn:Number(state.revengeSuppressAttachmentsUntilTurn?.[player]||0),
+        revengeIncomingBonusUntilTurn:Number(state.revengeIncomingBonusUntilTurn?.[player]||0),
+        revengeTearsUntilTurn:Number(state.revengeTearsUntilTurn?.[player]||0),
+        revengeUsedRage:!!state.revengeUsedRage?.[player],revengeUsedTears:!!state.revengeUsedTears?.[player],revengePendingNoSplit:Number(state.revengePendingNoSplit?.[player]||0),
         pendingMagicalHeartDraw: Number(state.pendingMagicalHeartDraw?.[player] || 0),
         magicalChantProgress: Number(state.magicalChantProgress?.[player] || 0),
         magicalChantCompleted: !!state.magicalChantCompleted?.[player],
@@ -5002,6 +5096,11 @@ const CARD_LIBRARY = {
       state.judgmentPrisonTurns[player] = Number(side.judgmentPrisonTurns || 0);
       state.pendingAppealExecution[player] = Number(side.pendingAppealExecution || 0);
       state.personalTurnCount[player] = preserveOwnerOnlyMeta ? ownedPersonalTurnCount : Number(side.personalTurnCount || 0);
+      ensureRevengeState();
+      state.revengeZeroHistory[player]=(side.revengeZeroHistory||[]).map(e=>({...cloneJson(e),sourcePlayer:localPlayerForFriendSide(e.sourceSide)||e.sourcePlayer}));
+      state.revengeRemovalHistory[player]=(side.revengeRemovalHistory||[]).map(e=>({...cloneJson(e),removerPlayer:localPlayerForFriendSide(e.removerSide)||e.removerPlayer}));
+      state.revengeZeroEpoch[player]=cloneJson(side.revengeZeroEpoch||{L:0,R:0});state.revengeHandWasZero[player]=cloneJson(side.revengeHandWasZero||{L:false,R:false});
+      state.revengeAttackLockTurn[player]=Number(side.revengeAttackLockTurn||0);state.revengeSuppressAttachmentsUntilTurn[player]=Number(side.revengeSuppressAttachmentsUntilTurn||0);state.revengeIncomingBonusUntilTurn[player]=Number(side.revengeIncomingBonusUntilTurn||0);state.revengeTearsUntilTurn[player]=Number(side.revengeTearsUntilTurn||0);state.revengeUsedRage[player]=!!side.revengeUsedRage;state.revengeUsedTears[player]=!!side.revengeUsedTears;state.revengePendingNoSplit[player]=Number(side.revengePendingNoSplit||0);
       state.pendingMagicalHeartDraw[player] = Number(side.pendingMagicalHeartDraw || 0);
       state.magicalChantProgress[player] = Math.max(0, Math.min(3, Number(side.magicalChantProgress || 0)));
       state.magicalChantCompleted[player] = !!side.magicalChantCompleted;
@@ -6603,6 +6702,16 @@ const CARD_LIBRARY = {
               else{const targetOwner=payload.targetOwner==="opponent"?"cpu":"human",allowedHands=new Set((remoteByInstance.get(String(picked.instanceId))?.hands||[]).filter(h=>h==="L"||h==="R"));const choice=await runIncomingFriendDecision(interrupt,beginBoardHandSelection("human",{owners:[targetOwner],minimum:1,candidateFilter:x=>allowedHands.has(x.hand),message:`${String(payload.title||"配置")}：設置先を選んでください。`,allowOffTurn:true}),null);response=choice?{finish:false,instanceId:picked.instanceId,hand:choice.hand}:{finish:true};}
             }
           }
+        } else if (interrupt.type === "revengeBoardHand") {
+          const targetOwner=payload.targetOwner==="opponent"?"cpu":"human";
+          const allowed=new Set((payload.allowedHands||[]).filter(hand=>hand==="L"||hand==="R"));
+          const choice=await runIncomingFriendDecision(interrupt,beginBoardHandSelection("human",{owners:[targetOwner],minimum:1,candidateFilter:x=>allowed.has(x.hand),message:String(payload.message||"手を選んでください。"),allowOffTurn:true}),null);
+          response={hand:choice?.hand||null};
+        } else if (interrupt.type === "revengeHandCard") {
+          const allowed=new Set((payload.instanceIds||[]).map(String));
+          const eligible=state.hands.human.map((id,index)=>({id,index,instanceId:handCardInstanceId("human",index)})).filter(x=>allowed.has(String(x.instanceId)));
+          if(!eligible.length)response={instanceId:null};
+          else{const indexes=await runIncomingFriendDecision(interrupt,beginHandCardSelection({min:1,max:1,filter:(_id,index)=>eligible.some(x=>x.index===index),message:String(payload.message||"カードを選んでください。"),allowOffTurn:true}),[]);response={instanceId:indexes.length?handCardInstanceId("human",indexes[0]):null};}
         } else if (interrupt.type === "magicMirror") {
           const use = await runIncomingFriendDecision(interrupt, askHumanMagicMirrorChoice("human", payload.hand || "L", payload.cardId), false);
           response = { use: !!use };
@@ -7578,6 +7687,17 @@ const CARD_LIBRARY = {
       state.judgmentPrisonTurns = { human: 0, cpu: 0 };
       state.pendingAppealExecution = { human: 0, cpu: 0 };
       state.personalTurnCount = { human: 0, cpu: 0 };
+      state.revengeZeroHistory = { human: [], cpu: [] };
+      state.revengeRemovalHistory = { human: [], cpu: [] };
+      state.revengeZeroEpoch = { human: {L:0,R:0}, cpu: {L:0,R:0} };
+      state.revengeHandWasZero = { human: {L:false,R:false}, cpu: {L:false,R:false} };
+      state.revengeAttackLockTurn = { human: 0, cpu: 0 };
+      state.revengeSuppressAttachmentsUntilTurn = { human: 0, cpu: 0 };
+      state.revengeIncomingBonusUntilTurn = { human: 0, cpu: 0 };
+      state.revengeTearsUntilTurn = { human: 0, cpu: 0 };
+      state.revengeUsedRage = { human: false, cpu: false };
+      state.revengeUsedTears = { human: false, cpu: false };
+      state.revengePendingNoSplit = { human: 0, cpu: 0 };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
@@ -9977,8 +10097,17 @@ function wrapFinger(value) {
       }
     }
 
-    async function maybePreventLethalWithEmc2(player, hand, finalValue, sourceLabel = "攻撃", isLogicAtelier = false) {
+    async function maybePreventLethalWithEmc2(player, hand, finalValue, sourceLabel = "攻撃", isLogicAtelier = false, isAttack = false) {
       if (finalValue !== 0 || state[player][otherHand(hand)] > 0) return finalValue;
+
+      if(isAttack&&hasAnyRevengeTarget(otherPlayer(player),player)){
+        const indomitableIndex=state.hands[player].indexOf("indomitable");
+        if(indomitableIndex>=0){
+          ensureHandCardInstances(player);const iid=handCardInstanceId(player,indomitableIndex);state.hands[player].splice(indomitableIndex,1);state.handCardInstances[player].splice(indomitableIndex,1);forgetHandCardMetadata(player,iid);state.discard[player].push("indomitable");transformHandDeckCards(player,"indomitable","obsession");
+          addLog(`${handNames[player]}は「不屈」を自動発動。${sourceLabel}による敗北を防ぎ、${handNames[hand]}で4に踏みとどまった。`);
+          await showCardPopup(player,CARD_LIBRARY.indomitable,false,900);return 4;
+        }
+      }
 
       const handIndex = state.hands[player].indexOf("emc2");
       const required = isLogicAtelier ? 10 : 6;
@@ -10010,6 +10139,7 @@ function wrapFinger(value) {
       finalValue = await maybePreventLethalWithEmc2(defender, targetHand, finalValue, sourceLabel, isLogicAtelier);
       await animateCalculation(defender, targetHand, total, finalValue);
       state[defender][targetHand] = finalValue;
+      if(before>0&&finalValue===0&&attacker!==defender)recordRevengeZeroEvent(defender,attacker,{kind:"card",cardId:state.resolvingEffectCardId||null});
       addLog(`${handNames[attacker]}の「${sourceLabel}」：${handNames[defender]}の${handNames[targetHand]} ${before}→${total}${total >= 5 ? `→${finalValue}` : ""}。`);
       clearBrokenTraps(defender);
       render();
@@ -10230,8 +10360,10 @@ function wrapFinger(value) {
       // 充電カードの1ターン1回制限を確認せず、使用済みにも記録しない。
       const previousCopy = state.copiedEffectContext;
       const previousEffectPlayer = state.resolvingEffectPlayer;
+      const previousEffectCardId = state.resolvingEffectCardId;
       state.copiedEffectContext = { sourceLabel, cardId, ...context };
       state.resolvingEffectPlayer = player;
+      state.resolvingEffectCardId = effectiveId;
       try {
         recordRondoUse(player, effectiveId);
         await card.effect(player);
@@ -10243,6 +10375,7 @@ function wrapFinger(value) {
       } finally {
         state.copiedEffectContext = previousCopy;
         state.resolvingEffectPlayer = previousEffectPlayer;
+        state.resolvingEffectCardId = previousEffectCardId;
       }
     }
 
@@ -11052,8 +11185,105 @@ function wrapFinger(value) {
       state.repetitionFreeCurse||={human:null,cpu:null};
     }
     function attachmentSourcePlayer(slot,attachedOwner){return typeof slot==="object"&&slot?.sourcePlayer?slot.sourcePlayer:attachedOwner;}
+    function ensureRevengeState(){
+      state.revengeZeroHistory||={human:[],cpu:[]};state.revengeRemovalHistory||={human:[],cpu:[]};
+      state.revengeZeroEpoch||={human:{L:0,R:0},cpu:{L:0,R:0}};state.revengeHandWasZero||={human:{L:false,R:false},cpu:{L:false,R:false}};
+      state.revengeAttackLockTurn||={human:0,cpu:0};state.revengeSuppressAttachmentsUntilTurn||={human:0,cpu:0};state.revengeIncomingBonusUntilTurn||={human:0,cpu:0};state.revengeTearsUntilTurn||={human:0,cpu:0};
+      state.revengeUsedRage||={human:false,cpu:false};state.revengeUsedTears||={human:false,cpu:false};state.revengePendingNoSplit||={human:0,cpu:0};
+      for(const p of ["human","cpu"]){state.revengeZeroHistory[p]||=[];state.revengeRemovalHistory[p]||=[];state.revengeZeroEpoch[p]||={L:0,R:0};state.revengeHandWasZero[p]||={L:false,R:false};}
+    }
+    function transformCardsEverywhere(player,fromId,toId){
+      for(const zone of [state.hands[player],state.decks[player],state.discard[player]])for(let i=0;i<zone.length;i++)if(zone[i]===fromId)zone[i]=toId;
+    }
+    function transformHandDeckCards(player,fromId,toId){
+      for(const zone of [state.hands[player],state.decks[player]])for(let i=0;i<zone.length;i++)if(zone[i]===fromId)zone[i]=toId;
+    }
+    function revengeTargetSlots(owner,sourcePlayer=null){
+      const out=[];for(const hand of ["L","R"])for(let index=0;index<state.traps[owner][hand].length;index++){const slot=state.traps[owner][hand][index];if(trapCardId(slot)!=="revengeTarget")continue;if(sourcePlayer&&attachmentSourcePlayer(slot,owner)!==sourcePlayer)continue;out.push({owner,hand,index,slot});}return out;
+    }
+    function hasAnyRevengeTarget(owner,sourcePlayer=null){return revengeTargetSlots(owner,sourcePlayer).length>0;}
+    function handHasRevengeTarget(owner,hand,sourcePlayer=null){return revengeTargetSlots(owner,sourcePlayer).some(x=>x.hand===hand);}
+    function currentRevengeTurn(player){return Number(state.personalTurnCount?.[player]||0);}
+    function recordRevengeZeroEvent(victim,sourcePlayer,{kind="card",attackHand=null,cardId=null}={}){
+      ensureRevengeState();if(!victim||!sourcePlayer||victim===sourcePlayer)return;
+      const eligibleTurn=currentRevengeTurn(victim)+1;
+      const entry={eligibleTurn,sourcePlayer,kind,attackHand:attackHand||null,cardId:cardId||null};
+      state.revengeZeroHistory[victim].push(entry);if(state.revengeZeroHistory[victim].length>12)state.revengeZeroHistory[victim].splice(0,state.revengeZeroHistory[victim].length-12);
+    }
+    function validRevengeZeroEvent(player){ensureRevengeState();const turn=currentRevengeTurn(player);return [...state.revengeZeroHistory[player]].reverse().find(e=>Number(e.eligibleTurn)===turn&&e.sourcePlayer===otherPlayer(player))||null;}
+    function recordRevengeRemovalEvent(sourcePlayer,removerPlayer){ensureRevengeState();if(!sourcePlayer||!removerPlayer||sourcePlayer===removerPlayer)return;const eligibleTurn=currentRevengeTurn(sourcePlayer)+1;const history=state.revengeRemovalHistory[sourcePlayer];if(history.some(e=>Number(e.eligibleTurn)===eligibleTurn&&e.removerPlayer===removerPlayer))return;history.push({eligibleTurn,removerPlayer});if(history.length>12)history.splice(0,history.length-12);}
+    function canUseForgetNever(player){ensureRevengeState();const turn=currentRevengeTurn(player),o=otherPlayer(player);return state.revengeRemovalHistory[player].some(e=>Number(e.eligibleTurn)===turn&&e.removerPlayer===o);}
+    function canUseOath(player){return !!validRevengeZeroEvent(player)&&!hasAnyRevengeTarget(otherPlayer(player),player);}
+    function addGeneratedCardToHand(player,cardId){ensureHandCardInstances(player);state.hands[player].push(cardId);ensureHandCardInstances(player);return true;}
+    function removeRandomReplaceableAttachment(owner,hand,reason){const items=(state.traps[owner][hand]||[]).map((slot,index)=>({slot,index})).filter(x=>canExternallyRemoveAttachment(x.slot));if(!items.length)return false;const picked=items[Math.floor(Math.random()*items.length)];return !!discardAttachment(owner,hand,picked.index,{reason});}
+    function placeRevengeTarget(sourcePlayer,targetPlayer,hand,{forceReplace=true}={}){
+      ensureRevengeState();if(state[targetPlayer][hand]<=0)return false;
+      if(state.traps[targetPlayer][hand].length>=2&&forceReplace&&!removeRandomReplaceableAttachment(targetPlayer,hand,"復讐対象の付与"))return false;
+      if(state.traps[targetPlayer][hand].length>=2)return false;
+      const slot=makeTrapInstance("revengeTarget",sourcePlayer);slot.sourcePlayer=sourcePlayer;
+      if(!installAttachmentInstance(targetPlayer,hand,slot))return false;
+      const remains=state.traps[targetPlayer][hand].includes(slot),fulfilled=!!slot.revengeTriggeredKey;
+      if(!remains&&!fulfilled)return false;
+      transformCardsEverywhere(sourcePlayer,"oath","engravedHumiliation");
+      addLog(fulfilled&&!remains?`${handNames[targetPlayer]}の${handNames[hand]}へ刻まれた「復讐対象」は即座に遂げられた。`:`${handNames[targetPlayer]}の${handNames[hand]}に「復讐対象」が刻まれた。`);refreshRevengeTargets();return true;
+    }
+    function refreshRevengeTargets(){
+      ensureRevengeState();ensureV169State();for(const owner of ["human","cpu"])for(const hand of ["L","R"]){for(let i=state.traps[owner][hand].length-1;i>=0;i--){const slot=state.traps[owner][hand][i];if(trapCardId(slot)!=="revengeTarget")continue;const source=attachmentSourcePlayer(slot,owner);if(state[source]?.L>0&&state[source]?.R>0){discardAttachment(owner,hand,i,{reason:"復讐対象の誓約失効",allowFixed:true});addLog(`「復讐対象」は付与者の両手が揃ったため破棄された。`);}}
+        const retreat=state.fixedCurseRetreats?.[owner]?.[hand]||[];for(let i=retreat.length-1;i>=0;i--){const slot=retreat[i];if(trapCardId(slot)!=="revengeTarget")continue;const source=attachmentSourcePlayer(slot,owner);if(!(state[source]?.L>0&&state[source]?.R>0))continue;retreat.splice(i,1);state.discard[source].push("revengeTarget");recordCurseDiscard(slot,owner,hand,source);addLog(`退避中の「復讐対象」は付与者の両手が揃ったため破棄された。`);}}
+      for(const source of ["human","cpu"])if(hasAnyRevengeTarget(otherPlayer(source),source))transformCardsEverywhere(source,"oath","engravedHumiliation");
+    }
+    function processRevengeTargetZero(owner,hand){
+      ensureRevengeState();if(state[owner][hand]!==0)return;
+      if(!state.revengeHandWasZero[owner][hand]){state.revengeHandWasZero[owner][hand]=true;state.revengeZeroEpoch[owner][hand]=Number(state.revengeZeroEpoch[owner][hand]||0)+1;}
+      const epoch=state.revengeZeroEpoch[owner][hand],triggerKey=`${owner}:${hand}:${epoch}`;for(const slot of [...state.traps[owner][hand]]){if(trapCardId(slot)!=="revengeTarget")continue;if(String(slot.revengeTriggeredKey||"")===triggerKey)continue;slot.revengeTriggeredKey=triggerKey;const source=attachmentSourcePlayer(slot,owner);addGeneratedCardToHand(source,"rebellion");addLog(`「復讐対象」が遂げられ、${handNames[source]}は「リベリオン」を得た。`);}
+    }
+    function updateRevengeZeroSeen(owner){ensureRevengeState();for(const hand of ["L","R"])if(state[owner][hand]>0)state.revengeHandWasZero[owner][hand]=false;}
+    async function chooseRevengeBoardHand(player,owner,message,filter=()=>true){
+      const candidates=["L","R"].map(hand=>({owner,hand,value:Number(state[owner]?.[hand]||0)})).filter(x=>x.value>0&&filter(x));if(!candidates.length)return null;
+      if(player==="human")return await beginBoardHandSelection(player,{owners:[owner],message,candidateFilter:filter,allowOffTurn:!!state.copiedEffectContext,cpuPick:items=>items[0]});
+      if(state.battleMode==="friend"){
+        const response=await DecisionManager.requestRemote("revengeBoardHand",{targetOwner:owner===player?"self":"opponent",allowedHands:candidates.map(x=>x.hand),message,matchId:state.friendMatchId});
+        const hand=String(response?.hand||"");return candidates.find(x=>x.hand===hand)||null;
+      }
+      return candidates[0];
+    }
+    async function chooseRevengeHandCard(player,candidates,message){
+      if(!candidates.length)return null;if(player==="human"){const selected=await beginHandCardSelection({min:1,max:1,filter:(_id,index)=>candidates.some(x=>x.index===index),message,allowOffTurn:!!state.copiedEffectContext});return candidates.find(x=>x.index===selected[0])||null;}
+      if(state.battleMode==="friend"){const response=await DecisionManager.requestRemote("revengeHandCard",{instanceIds:candidates.map(x=>x.instanceId||handCardInstanceId(player,x.index)).filter(Boolean),message,matchId:state.friendMatchId});const index=(state.handCardInstances[player]||[]).indexOf(String(response?.instanceId||""));return candidates.find(x=>x.index===index)||null;}
+      return candidates[0];
+    }
+    async function useOath(player){
+      const event=validRevengeZeroEvent(player);if(!event){addLog(`${handNames[player]}の「誓い」は復讐すべき出来事がなく不発。`);return false;}const o=otherPlayer(player);let hand=null;
+      if(event.kind==="normal"){
+        if(!event.attackHand||state[o][event.attackHand]<=0){addLog(`${handNames[player]}の「誓い」は復讐すべき攻撃手が既に0のため不発。`);return false;}
+        hand=event.attackHand;
+      }else{const pick=await chooseRevengeBoardHand(player,o,"「誓い」：復讐対象を付与する相手の手を選んでください。");hand=pick?.hand||null;}
+      if(!hand||!placeRevengeTarget(player,o,hand)){addLog(`${handNames[player]}の「誓い」は復讐対象を付与できず不発。`);return false;}return true;
+    }
+    async function useForgetNever(player){
+      if(!canUseForgetNever(player)){addLog(`${handNames[player]}の「忘却？巫山戯るな」は復讐対象を取り除かれた履歴がなく不発。`);return false;}const o=otherPlayer(player);let placed=0;for(const hand of ["L","R"])if(placeRevengeTarget(player,o,hand))placed++;if(!placed)addLog(`「忘却？巫山戯るな」は付与できる手がなく不発。`);return placed>0;
+    }
+    async function useEngravedHumiliation(player){
+      const candidates=getDiscardCandidates(player,"cardEffect");if(!candidates.length){addLog(`「刻まれた屈辱」は捨てる手札がなく不発。`);return false;}let item=await chooseRevengeHandCard(player,candidates,"「刻まれた屈辱」：捨てるカードを1枚選んでください。");if(!item)return false;ensureHandCardInstances(player);const iid=handCardInstanceId(player,item.index);const [removed]=state.hands[player].splice(item.index,1);state.handCardInstances[player].splice(item.index,1);forgetHandCardMetadata(player,iid);if(removed)state.discard[player].push(removed);drawCard(player);drawCard(player);const pick=await chooseRevengeBoardHand(player,player,"「刻まれた屈辱」：1にする自分の手を選んでください。");if(!pick)return false;state[player][pick.hand]=1;clearBrokenTraps(player);render();return true;
+    }
+    function hasRuthlessSchemeTarget(player){return ["L","R"].some(h=>state[player][h]>0&&state.traps[player][h].length<2)&&state.decks[player].some(id=>CARD_LIBRARY[id]?.trap);}
+    async function useRuthlessScheme(player){
+      const o=otherPlayer(player);if(!hasAnyRevengeTarget(o,player)){addLog(`「無慈悲な企み」は復讐対象がなく不発。`);return false;}
+      const hands=["L","R"].filter(h=>state[player][h]>0&&state.traps[player][h].length<2);if(!hands.length){addLog(`「無慈悲な企み」は設置できる手がなく、罠の設置は不発。`);state.temp[player].attackBonus=Number(state.temp[player].attackBonus||0)+1;return false;}const pick=await chooseRevengeBoardHand(player,player,"「無慈悲な企み」：罠を直接設置する自分の手を選んでください。",x=>hands.includes(x.hand));const hand=pick?.hand;if(!hand)return false;
+      const candidates=state.decks[player].map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.trap);if(candidates.length){const item=candidates[Math.floor(Math.random()*candidates.length)];const [id]=state.decks[player].splice(item.index,1);const slot=makeTrapInstance(id,player);if(id==="jackInTheBox"){const payload=await chooseJackInTheBoxPayload(player);if(payload)slot.payload=payload;else{state.decks[player].push(id);shuffle(state.decks[player]);addLog(`「無慈悲な企み」で選ばれた「びっくり箱」は仕込めるカードがなく設置不発。`);state.temp[player].attackBonus=Number(state.temp[player].attackBonus||0)+1;return false;}}installAttachmentInstance(player,hand,slot);addLog(`「無慈悲な企み」により山札から罠カードを${handNames[hand]}へ直接設置した。`);}else addLog(`「無慈悲な企み」は山札に罠がなく設置不発。`);state.temp[player].attackBonus=Number(state.temp[player].attackBonus||0)+1;render();return true;
+    }
+    function getKillingBladePairs(player){const o=otherPlayer(player),out=[];for(const a of ["L","R"])if(state[player][a]>0)for(const target of revengeTargetSlots(o,player))if(state[o][target.hand]>0&&state[player][a]+state[o][target.hand]>=6)out.push({ownHand:a,targetHand:target.hand});return out;}
+    async function useKillingBlade(player){const pairs=getKillingBladePairs(player);if(!pairs.length){addLog(`「必殺の刃」は条件を満たす組み合わせがなく不発。`);return false;}const own=await chooseRevengeBoardHand(player,player,"「必殺の刃」：使用する自分の手を選んでください。",x=>pairs.some(p=>p.ownHand===x.hand));if(!own)return false;const target=await chooseRevengeBoardHand(player,otherPlayer(player),"「必殺の刃」：破壊する復讐対象の手を選んでください。",x=>pairs.some(p=>p.ownHand===own.hand&&p.targetHand===x.hand));if(!target)return false;const o=otherPlayer(player);state[o][target.hand]=0;clearBrokenTraps(o);ensureRevengeState();state.revengeSuppressAttachmentsUntilTurn[player]=currentRevengeTurn(player)+1;addLog(`「必殺の刃」により${handNames[o]}の${handNames[target.hand]}を0にした。次の自分ターン開始時まで通常の加護・罠は無効。`);render();return true;}
+    async function useRage(player){const o=otherPlayer(player);if(!hasAnyRevengeTarget(o,player)){addLog(`「怒り」は復讐対象がなく不発。`);return false;}const pick=await chooseRevengeBoardHand(player,player,"「怒り」：+2する自分の手を選んでください。");if(!pick){addLog(`「怒り」は対象がなく不発。`);return false;}await addFingersWithCalculation(player,pick.hand,2,"怒り",true,{sourcePlayer:player});ensureRevengeState();state.revengeIncomingBonusUntilTurn[player]=currentRevengeTurn(player)+1;state.revengeUsedRage[player]=true;render();return true;}
+    async function useTears(player){const o=otherPlayer(player);if(!hasAnyRevengeTarget(o,player)){addLog(`「涙」は復讐対象がなく不発。`);return false;}const pick=await chooseRevengeBoardHand(player,player,"「涙」：-2する自分の手を選んでください。");if(!pick){addLog(`「涙」は対象がなく不発。`);return false;}const before=state[player][pick.hand];state[player][pick.hand]=Math.max(0,before-2);ensureRevengeState();state.revengeTearsUntilTurn[player]=currentRevengeTurn(player)+1;state.revengeUsedTears[player]=true;addLog(`「涙」により${handNames[player]}の${handNames[pick.hand]}が${before}→${state[player][pick.hand]}。`);clearBrokenTraps(player);render();return true;}
+    function revengeEffectActiveUntilNextOwnTurn(player,map){ensureRevengeState();return Number(map?.[player]||0)>currentRevengeTurn(player);}
+    function vengeanceHeartIsActive(owner,hand){return hasAttachment(owner,hand,"vengeanceHeart")&&hasAnyRevengeTarget(otherPlayer(owner),owner);}
+    function removeVengeanceHeartTargetAttachment(attacker,attackHand,defender,targetHand){if(!vengeanceHeartIsActive(attacker,attackHand))return false;const candidates=(state.traps[defender][targetHand]||[]).map((slot,index)=>({slot,index,card:CARD_LIBRARY[trapCardId(slot)]})).filter(x=>(x.card?.trap||x.card?.blessing)&&!x.card?.themeBlessing&&canExternallyRemoveAttachment(x.slot));if(!candidates.length)return false;const picked=candidates[Math.floor(Math.random()*candidates.length)];const id=trapCardId(picked.slot);discardAttachment(defender,targetHand,picked.index,{reason:"復讐心"});addLog(`「復讐心」により、攻撃対象の${attachmentLabel(id)}「${CARD_LIBRARY[id]?.name||id}」を捨てた。`);return true;}
+    async function useObsession(player){const o=otherPlayer(player);ensureRevengeState();if(!hasAnyRevengeTarget(o,player)){addLog(`「執念」は復讐対象がなく不発。`);return false;}state.revengeAttackLockTurn[o]=currentRevengeTurn(o)+1;transformHandDeckCards(player,"obsession","unbearableThought");addLog(`「執念」により次の${handNames[o]}のターン、復讐対象の手は通常攻撃に使用できない。`);return true;}
+    async function useUnbearableThought(player){const o=otherPlayer(player);if(!hasAnyRevengeTarget(o,player)){addLog(`「身に余る思い」は復讐対象がなく不発。`);return false;}ensureRevengeState();const precise=!!state.revengeUsedRage[player]&&!!state.revengeUsedTears[player];for(let i=0;i<2;i++){const attackHands=getNormalAttackSourceHands(player);const targetHands=["L","R"].filter(h=>state[o][h]>0);if(!attackHands.length||!targetHands.length)break;let a=attackHands[Math.floor(Math.random()*attackHands.length)],t=targetHands[Math.floor(Math.random()*targetHands.length)];if(precise){const ap=await chooseRevengeBoardHand(player,player,`「身に余る思い」${i+1}回目：攻撃する自分の手を選んでください。`,x=>attackHands.includes(x.hand));if(!ap)break;a=ap.hand;const tp=await chooseRevengeBoardHand(player,o,`「身に余る思い」${i+1}回目：攻撃対象を選んでください。`,x=>targetHands.includes(x.hand));if(!tp)break;t=tp.hand;}await resolveInternalNormalAttack({attackerPlayer:player,attackerHand:a,targetPlayer:o,targetHand:t,sourceCardId:"unbearableThought",zeroAtSix:true,preventTargetChange:false});if(state.gameOver)break;}if(!state.gameOver&&revengeTargetSlots(o,player).some(x=>state[o][x.hand]>0)){state[player].L=0;state[player].R=0;addLog(`「身に余る思い」で復讐対象を仕留められず、${handNames[player]}の両手が0になった。`);clearBrokenTraps(player);checkWin();}render();return true;}
+    async function useRebellion(player){const o=otherPlayer(player);const target=await chooseRevengeBoardHand(player,o,"「リベリオン」：5へ到達させる相手の手を選んでください。");if(!target){addLog(`「リベリオン」は相手の生存手がなく不発。`);return false;}const amount=Math.max(0,5-state[o][target.hand]);await addFingersWithCalculation(o,target.hand,amount,"リベリオン",true,{sourcePlayer:player});const own=await chooseRevengeBoardHand(player,player,"「リベリオン」：同じ本数を加える自分の0でない手を選んでください。");if(own&&amount>0)await addFingersWithCalculation(player,own.hand,amount,"リベリオン",true,{sourcePlayer:player});render();return true;}
     function isFixedAttachment(slot){return typeof slot==="object"&&slot.fixed===true;}
-    function isAttachmentEffectActive(owner,hand,slot){const id=trapCardId(slot),card=CARD_LIBRARY[id];if(!card)return false;if(card.curse||card.themeBlessing)return true;if((card.trap||card.blessing)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;}
+    function isAttachmentEffectActive(owner,hand,slot){const id=trapCardId(slot),card=CARD_LIBRARY[id];if(!card)return false;if(card.curse||card.themeBlessing)return true;ensureRevengeState();if((card.trap||card.blessing)&&Number(state.revengeSuppressAttachmentsUntilTurn?.[owner]||0)>currentRevengeTurn(owner))return false;if((card.trap||card.blessing)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;}
     function hasAttachmentRaw(owner,hand,cardId){return state.traps[owner][hand].some(slot=>trapCardId(slot)===cardId);}
     function canExternallyRemoveAttachment(slot){const id=trapCardId(slot)||slot;return !!id&&!CARD_LIBRARY[id]?.themeBlessing&&!isFixedAttachment(slot);}
     function canMoveAttachment(slot){return canExternallyRemoveAttachment(slot);}
@@ -11062,11 +11292,11 @@ function wrapFinger(value) {
       const cardId=trapCardId(slot);if(!CARD_LIBRARY[cardId]?.curse)return;ensureV169State();const entry={entryId:`curse-discard-${++state.curseDiscardSequence}`,cardId,sourcePlayer:attachmentSourcePlayer(slot,attachedOwner),attachedPlayer:attachedOwner,attachedHand,discardOwner,sequence:state.curseDiscardSequence,active:true};state.curseDiscardHistory.push(entry);state.curseDiscardLedger[discardOwner].push({entryId:entry.entryId,cardId,active:true});
     }
     function discardAttachment(owner,hand,index,{reason="効果",allowFixed=false,noDiscard=false}={}){
-      const slot=state.traps[owner][hand]?.[index];if(!slot||(!allowFixed&&!canExternallyRemoveAttachment(slot)))return null;state.traps[owner][hand].splice(index,1);const id=trapCardId(slot),iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);if(!noDiscard&&id){const discardOwner=CARD_LIBRARY[id]?.curse?attachmentSourcePlayer(slot,owner):owner;state.discard[discardOwner].push(id);recordCurseDiscard(slot,owner,hand,discardOwner);}return slot;
+      const slot=state.traps[owner][hand]?.[index];if(!slot||(!allowFixed&&!canExternallyRemoveAttachment(slot)))return null;const id=trapCardId(slot),source=id==="revengeTarget"?attachmentSourcePlayer(slot,owner):null;state.traps[owner][hand].splice(index,1);const iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);if(!noDiscard&&id){const discardOwner=CARD_LIBRARY[id]?.curse?attachmentSourcePlayer(slot,owner):owner;state.discard[discardOwner].push(id);recordCurseDiscard(slot,owner,hand,discardOwner);}if(id==="revengeTarget"&&reason!=="手が0"&&reason!=="復讐対象の誓約失効"&&state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==source)recordRevengeRemovalEvent(source,state.resolvingEffectPlayer);return slot;
     }
     function restoreFixedCurses(owner){ensureV169State();for(const hand of ["L","R"]){if(state[owner][hand]<=0)continue;const queue=state.fixedCurseRetreats[owner][hand];if(!queue.length)continue;let restored=0;while(queue.length&&state.traps[owner][hand].length<2){const slot=queue.shift();if(trapCardId(slot)==="trauma")slot.count=0;if(installAttachmentInstance(owner,hand,slot,{notify:false}))restored++;}if(restored)addLog(`${handNames[owner]}の${handNames[hand]}へ固定呪縛が復帰した。`);}}
     function notifyAttachmentInstalled(owner,hand,newSlot){const existing=state.traps[owner][hand].filter(slot=>slot!==newSlot&&trapCardId(slot)==="complexCurse"&&isAttachmentEffectActive(owner,hand,slot));for(const slot of existing){if(state[owner][hand]>0){const before=state[owner][hand];state[owner][hand]=normalize(before+1,owner,hand);addLog(`「コンプレックス」により${handNames[owner]}の${handNames[hand]}が${before}→${state[owner][hand]}。`);}}if(state[owner][hand]===0)clearBrokenTraps(owner);}
-    function installAttachmentInstance(owner,hand,slot,{notify=true}={}){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return false;if(typeof slot==="object"){slot.attachedPlayer=owner;slot.attachedHand=hand;slot.originalHand||=hand;if(trapCardId(slot)==="grief"&&state[owner][otherHand(hand)]===0)slot.otherZeroActive=true;}state.traps[owner][hand].push(slot);if(notify)notifyAttachmentInstalled(owner,hand,slot);return true;}
+    function installAttachmentInstance(owner,hand,slot,{notify=true}={}){if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return false;if(typeof slot==="object"){slot.attachedPlayer=owner;slot.attachedHand=hand;slot.originalHand||=hand;if(trapCardId(slot)==="grief"&&state[owner][otherHand(hand)]===0)slot.otherZeroActive=true;}state.traps[owner][hand].push(slot);if(notify)notifyAttachmentInstalled(owner,hand,slot);if(trapCardId(slot)==="revengeTarget")refreshRevengeTargets();return true;}
     function isDeckEligibleCard(cardId){const card=CARD_LIBRARY[cardId];return !!card&&!card.token&&!card.generatedOnly&&!card.magicalEvolution;}
     function curseSlots(owner,hand){return state.traps[owner][hand].map((slot,index)=>({slot,index,cardId:trapCardId(slot)})).filter(x=>CARD_LIBRARY[x.cardId]?.curse);}
     function consumeCurseDiscardHistoryEntry(player,entry){ensureV169State();const ledger=state.curseDiscardLedger[player].find(item=>item.entryId===entry.entryId&&item.active);if(!ledger||ledger.cardId!==entry.cardId)return false;const index=state.discard[player].indexOf(entry.cardId);if(index<0){ledger.active=false;entry.active=false;return false;}state.discard[player].splice(index,1);ledger.active=false;entry.active=false;return true;}
@@ -11192,7 +11422,8 @@ function wrapFinger(value) {
     async function chooseJackInTheBoxPayload(player){
       const candidates=getJackInTheBoxCandidates(player);if(!candidates.length)return null;
       let picked;
-      if(player==="human"){const chosen=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>candidates.some(x=>x.index===index),message:"びっくり箱に仕込むカードを選んでください。"});picked=candidates.find(x=>x.index===chosen[0]);}
+      if(player==="human"){const chosen=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>candidates.some(x=>x.index===index),message:"びっくり箱に仕込むカードを選んでください。",allowOffTurn:!!state.copiedEffectContext});picked=candidates.find(x=>x.index===chosen[0]);}
+      else if(state.battleMode==="friend")picked=await chooseRevengeHandCard(player,candidates,"びっくり箱に仕込むカードを選んでください。");
       else picked=candidates[Math.floor(Math.random()*candidates.length)];
       if(!picked)return null;ensureHandCardInstances(player);const instanceId=handCardInstanceId(player,picked.index),metadata=cloneJson(handCardMetadata(player,picked.index)||{});const [cardId]=state.hands[player].splice(picked.index,1);state.handCardInstances[player].splice(picked.index,1);forgetHandCardMetadata(player,instanceId);state.discard[player].push(cardId);return{cardId,instanceMetadata:metadata};
     }
@@ -11421,7 +11652,7 @@ function wrapFinger(value) {
     function vanishTurnEndCards(player){for(let i=state.hands[player].length-1;i>=0;i--)if(CARD_LIBRARY[state.hands[player][i]]?.vanishAtTurnEnd)removeCardWithoutDiscard(player,i,"ターン終了時に消滅");}
     function v166HandTotal(player){return Number(state[player].L||0)+Number(state[player].R||0);}
     function v166NormalizeForHand(value,player,hand){if(value>=5&&hasAttachment(player,hand,"sniperBlessing"))return 0;return normalize(Math.max(0,value),player,hand);}
-    function v166ApplyFingerValue(targetPlayer,hand,value,sourcePlayer,label){if(state.nobleGasProtected?.[targetPlayer]&&sourcePlayer&&sourcePlayer!==targetPlayer){addLog(`${label}は「貴ガス」に防がれた。`);return state[targetPlayer][hand];}const before=state[targetPlayer][hand];state[targetPlayer][hand]=v166NormalizeForHand(value,targetPlayer,hand);if(before!==state[targetPlayer][hand])addLog(`${label}：${handNames[targetPlayer]}の${handNames[hand]} ${before}→${state[targetPlayer][hand]}。`);clearBrokenTraps(targetPlayer);return state[targetPlayer][hand];}
+    function v166ApplyFingerValue(targetPlayer,hand,value,sourcePlayer,label){if(state.nobleGasProtected?.[targetPlayer]&&sourcePlayer&&sourcePlayer!==targetPlayer){addLog(`${label}は「貴ガス」に防がれた。`);return state[targetPlayer][hand];}const before=state[targetPlayer][hand];state[targetPlayer][hand]=v166NormalizeForHand(value,targetPlayer,hand);if(before>0&&state[targetPlayer][hand]===0&&sourcePlayer&&sourcePlayer!==targetPlayer)recordRevengeZeroEvent(targetPlayer,sourcePlayer,{kind:"card",cardId:state.resolvingEffectCardId||null});if(before!==state[targetPlayer][hand])addLog(`${label}：${handNames[targetPlayer]}の${handNames[hand]} ${before}→${state[targetPlayer][hand]}。`);clearBrokenTraps(targetPlayer);return state[targetPlayer][hand];}
     async function useSupportFire(player){
       const o=otherPlayer(player),picked=await beginBoardHandSelection(player,{owners:[o],minimum:1,message:"「援護射撃」：1本加える相手の手を選んでください。",cpuPick:candidates=>[...candidates].sort((a,b)=>b.value-a.value)[0]});
       if(!picked){addLog("「援護射撃」は対象が存在せず不発。");return false;}
@@ -12773,7 +13004,7 @@ function wrapFinger(value) {
 
     function updateDuelSurge(attacker, attackHand, defender, targetHand) {
       const slot = findAttachmentSlot(attacker, attackHand, "duelSurge");
-      if (!slot || typeof slot === "string") return { bonus: 0, level: 0 };
+      if (!slot || typeof slot === "string" || !isAttachmentEffectActive(attacker,attackHand,slot)) return { bonus: 0, level: 0 };
       const sameTarget = slot.duelTargetOwner === defender && slot.duelTargetHand === targetHand;
       slot.level = sameTarget ? Math.min(5, (Number(slot.level) || 0) + 1) : 1;
       slot.duelTargetOwner = defender;
@@ -12785,7 +13016,7 @@ function wrapFinger(value) {
 
     function duelSurgeDefense(owner, hand) {
       const slot = findAttachmentSlot(owner, hand, "duelSurge");
-      if (!slot || typeof slot === "string") return 0;
+      if (!slot || typeof slot === "string" || !isAttachmentEffectActive(owner,hand,slot)) return 0;
       return duelSurgeStats(slot.level).defense;
     }
 
@@ -12871,7 +13102,8 @@ function wrapFinger(value) {
         finalAmount = reduced;
       }
       const kinetic=findAttachmentSlot(defender,targetHand,"kineticConversion");
-      if(kinetic&&originalIncoming>0){ gainCharge(defender,originalIncoming,"運動エネルギー変換"); const reduced=Math.max(0,finalAmount-1); addLog(`${handNames[defender]}の「運動エネルギー変換」により${sourceLabel}が${finalAmount}→${reduced}。`); finalAmount=reduced; const slots=state.traps[defender][targetHand]; const idx=slots.indexOf(kinetic); if(idx>=0)slots.splice(idx,1); }
+      if(kinetic&&isAttachmentEffectActive(defender,targetHand,kinetic)&&originalIncoming>0){ gainCharge(defender,originalIncoming,"運動エネルギー変換"); const reduced=Math.max(0,finalAmount-1); addLog(`${handNames[defender]}の「運動エネルギー変換」により${sourceLabel}が${finalAmount}→${reduced}。`); finalAmount=reduced; const slots=state.traps[defender][targetHand]; const idx=slots.indexOf(kinetic); if(idx>=0)slots.splice(idx,1); }
+      if(state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==defender&&revengeEffectActiveUntilNextOwnTurn(defender,state.revengeIncomingBonusUntilTurn)){finalAmount+=3;addLog(`${handNames[defender]}の「怒り」により、${sourceLabel}で受ける本数+3。`);}
       return finalAmount;
     }
 
@@ -12896,7 +13128,9 @@ function wrapFinger(value) {
       const slot = state.traps[player][hand][index];
       const cardId = trapCardId(slot);
       if (!isCurseCard(cardId)||!canExternallyRemoveAttachment(slot)) return false;
+      const revengeSource=cardId==="revengeTarget"?attachmentSourcePlayer(slot,player):null;
       if(!discardAttachment(player,hand,index,{reason:"解呪"}))return false;
+      if(revengeSource&&revengeSource!==player)recordRevengeRemovalEvent(revengeSource,player);
       setLastAction(player, "解呪", `${handNames[hand]}の呪縛「${CARD_LIBRARY[cardId].name}」を捨て札にしました。`, "card");
       addLog(`${handNames[player]}は「解呪」で${handNames[hand]}の呪縛「${CARD_LIBRARY[cardId].name}」を捨て札にした。`);
       if (player === "human") {
@@ -14357,11 +14591,13 @@ function renderLastAction() {
     }
 
     function getNormalAttackSourceHands(player) {
-      return ["L", "R"].filter(hand => isAlive(player, hand) && !hasAttachment(player, hand, "sniperBlessing"));
+      ensureRevengeState();const revengeLocked=Number(state.revengeAttackLockTurn?.[player]||0)===currentRevengeTurn(player);
+      return ["L", "R"].filter(hand => isAlive(player, hand) && !hasAttachment(player, hand, "sniperBlessing") && !(revengeLocked&&handHasRevengeTarget(player,hand,otherPlayer(player))));
     }
 
     function canUseSplitAction(player) {
-      return !state.noSplit?.[player] && Number(state.berserkerTurns?.[player] || 0) <= 0 && getSplitOptions(player).length > 0;
+      ensureRevengeState();const revengeNoSplit=Number(state.revengePendingNoSplit?.[player]||0)===currentRevengeTurn(player);
+      return !state.noSplit?.[player] && !revengeNoSplit && Number(state.berserkerTurns?.[player] || 0) <= 0 && getSplitOptions(player).length > 0;
     }
 
     function consumeActiveExtraAction(player) {
@@ -14859,6 +15095,7 @@ function renderLastAction() {
       const onlineCardAction=(state.battleMode==="friend"&&player==="human")?await OnlineActionManager.begin("playCard",{cardId,rawCardId,handIndex}):null;
       if (state.battleMode === "friend") state.friendCardResolving = true;
       const previousEffectPlayerBeforeCard=state.resolvingEffectPlayer;
+      const previousEffectCardIdBeforeCard=state.resolvingEffectCardId;
       let onlineCardError=null;
       try {
       state.hands[player].splice(handIndex, 1);
@@ -14896,6 +15133,7 @@ function renderLastAction() {
 
       const previousEffectPlayer=previousEffectPlayerBeforeCard;
       state.resolvingEffectPlayer=player;
+      state.resolvingEffectCardId=cardId;
       const judgmentVerdictMap = {
         finalJudgmentConfiscation: "没収",
         finalJudgmentDeath: "死刑",
@@ -14914,6 +15152,7 @@ function renderLastAction() {
       recordRondoUse(player, cardId);
       await card.effect(player);
       state.resolvingEffectPlayer=previousEffectPlayer;
+      state.resolvingEffectCardId=previousEffectCardIdBeforeCard;
       await resolveApathyAfterCardUse(player);
       if (card.terminal && !state.pendingTerminalEnd[player] && state.mode === "attack") state.pendingTerminalEnd[player] = true;
       triggerChemicalGeneration(player, cardId);
@@ -14995,6 +15234,7 @@ function renderLastAction() {
       } catch(error) {
         onlineCardError=error;
         state.resolvingEffectPlayer=previousEffectPlayerBeforeCard;
+        state.resolvingEffectCardId=previousEffectCardIdBeforeCard;
         console.error("Card action failed; recovering from canonical state",error);
         setMessage("カード処理中にエラーが発生しました。オンライン状態を自動復旧します。");
         return false;
@@ -15170,7 +15410,11 @@ async function maybeChooseManualTrap(defender, candidates, context) {
         emitFriendFx("trapReveal", { playerSide: friendSideForLocalPlayer(defender), cardId }).catch(error => console.error("PVP trap fx failed", error));
       }
       await showCardPopup(defender, card, true, 760);
-      const result = await resolveTrapEffect({owner:defender,hand:placedHand,trapInstance:removedSlot,triggerContext:context,forcedDetonation:false});
+      const previousEffectPlayer=state.resolvingEffectPlayer,previousEffectCardId=state.resolvingEffectCardId;
+      state.resolvingEffectPlayer=attachmentSourcePlayer(removedSlot,defender);state.resolvingEffectCardId=cardId;
+      let result;
+      try{result=await resolveTrapEffect({owner:defender,hand:placedHand,trapInstance:removedSlot,triggerContext:context,forcedDetonation:false});}
+      finally{state.resolvingEffectPlayer=previousEffectPlayer;state.resolvingEffectCardId=previousEffectCardId;}
       await afterTrapResolved(defender,placedHand);
       render();
 
@@ -15206,6 +15450,7 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       const finalValue=(options.zeroAtSeven&&total>=7)||annihilationActive&&total>=7?0:normalize(total,player,hand);
       await animateCalculation(player, hand, total, finalValue);
       state[player][hand] = finalValue;
+      if(before>0&&finalValue===0&&effectActor&&effectActor!==player)recordRevengeZeroEvent(player,effectActor,{kind:"card",cardId:state.resolvingEffectCardId||options.sourceCardId||null});
       if(player===otherPlayer(directiveActor)&&before>0&&finalValue===0&&state.temp?.[directiveActor])state.temp[directiveActor].opponentZeroedThisTurn=true;
       addLog(`${sourceLabel}により、${handNames[player]}の${handNames[hand]}：${before}→${total}${total >= 5 ? `→${finalValue}` : ""}`);
       clearBrokenTraps(player);
@@ -15370,14 +15615,15 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       return { completedAttacks, attackLimit, hasRemainingAttack };
     }
 
-    async function resolveInternalNormalAttack({attackerPlayer,attackerHand,targetPlayer,targetHand,allowZeroTarget=false,sourceCardId=null,afterResolved=null}) {
+    async function resolveInternalNormalAttack({attackerPlayer,attackerHand,targetPlayer,targetHand,allowZeroTarget=false,sourceCardId=null,afterResolved=null,zeroAtSix=false,preventTargetChange=true}) {
       return await attack(attackerPlayer,attackerHand,targetPlayer,targetHand,{
         countAttackAttempt:false,
         cardInternalAttack:true,
         allowZeroTarget,
         sourceCardId,
         sourceLabel:CARD_LIBRARY[sourceCardId]?.name||"内部通常攻撃",
-        preventTargetChange:true,
+        preventTargetChange:!!preventTargetChange,
+        zeroAtSix:!!zeroAtSix,
         afterResolved
       });
     }
@@ -15402,6 +15648,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
       if (!isAlive(attacker, attackHand) || (!options.allowZeroTarget && !isAlive(defender, targetHand))) return false;
       const onlineAttackAction=(state.battleMode==="friend"&&attacker==="human"&&!options.cardInternalAttack)?await OnlineActionManager.begin("normalAttack",{attackHand,defenderSide:friendSideForLocalPlayer(defender),targetHand}):null;
+      state.revengeAttackDepth=Number(state.revengeAttackDepth||0)+1;
       try {
 
       if (!options.preventTargetChange && hasAttachment(attacker, attackHand, "magicalWrath")) {
@@ -15522,6 +15769,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const justiceForEveryoneBonus = justiceForEveryoneActive ? 1 : 0;
       const dischargeBonus=hasAttachment(attacker,attackHand,"dischargeBlessing")&&getChargeLevel(attacker)>=10?1:0;
       const balanceBladeBonus = balanceBladeActive && isBalanced(attacker) ? 2 : 0;
+      const vengeanceHeartBonus = vengeanceHeartIsActive(attacker,attackHand) ? 1 : 0;
       // 攻撃結果置換でも共鳴した事実は成立し得る。加算ボーナスだけを置換結果へ反映しない。
       let resonance = isResonanceAttackAtStart(attacker, attackHand, attackStartPower, targetStartPower);
       let resonanceBonus = resonanceAttackBonus(attacker, attackHand, resonance, false);
@@ -15529,7 +15777,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       const betrayedHeartPenalty = state.temp[attacker]?.betrayedHeartPenalty ? -1 : 0;
       const prestoAttackModifier = prestoModifier ?? 0;
       let trapPowerDelta = 0;
-      const calculateAttackModifier = () => bonus + directiveHandBonus + directiveNextBonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + cursePenalty + resonanceBonus + sforzandoBonus + betrayedHeartPenalty + prestoAttackModifier + trapPowerDelta;
+      const calculateAttackModifier = () => bonus + directiveHandBonus + directiveNextBonus + berserkerBonus + blessingBonus + magicalAttackBonus + recklessBonus + willBladeBonus + duelSurgeBonus + lightningBonus + synapseBonus + dimensionalSlashBonus + frenzyBonus + rationalPowerBonus + selfRighteousBonus + justiceForEveryoneBonus + dischargeBonus + balanceBladeBonus + vengeanceHeartBonus + cursePenalty + resonanceBonus + sforzandoBonus + betrayedHeartPenalty + prestoAttackModifier + trapPowerDelta;
       const calculateFinalAttackPower = () => {
         const modifier = calculateAttackModifier();
         const modifiersBlocked = immutable || isAttackReplacement;
@@ -15560,6 +15808,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if (attackModifierLogsApply && rationalPowerBonus) addLog(`${handNames[attacker]}の「理性ある力」により、通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && selfRighteousBonus) addLog(`${handNames[attacker]}の「独善」により、通常攻撃で加える本数+2。`);
       if (attackModifierLogsApply && balanceBladeBonus) addLog(`${handNames[attacker]}の「均衡の刃」により、通常攻撃で加える本数+2。`);
+      if (attackModifierLogsApply && vengeanceHeartBonus) addLog(`${handNames[attacker]}の「復讐心」により、通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && justiceForEveryoneBonus) addLog(`${handNames[attacker]}の「みんなのための正義」により、通常攻撃で加える本数+1。`);
       if (attackModifierLogsApply && sforzandoBonus) addLog(`${handNames[attacker]}の「スフォルツァント」により、通常攻撃で加える本数+${sforzandoBonus}。`);
       if(attackModifierLogsApply&&(directiveHandBonus||directiveNextBonus))addLog(`${handNames[attacker]}の天命効果により、通常攻撃で加える本数${directiveHandBonus+directiveNextBonus>=0?"+":""}${directiveHandBonus+directiveNextBonus}。`);
@@ -15572,6 +15821,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         addLog(`${handNames[attacker]}の「${reason}」により、相手側の設置効果を無視する。`);
       }
 
+      const targetHadRevengeAtAttackResolution=defender===otherPlayer(attacker)&&handHasRevengeTarget(defender,targetHand,attacker);
+      if(!ignoresDefenderBoard)removeVengeanceHeartTargetAttachment(attacker,attackHand,defender,targetHand);
       let context = { defender, targetHand, attacker, attackHand, incomingPower: power };
       let trapUsed = false;
       let trapResult = {};
@@ -15748,6 +15999,14 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           power=Math.max(1,power-2);
           addLog(`${handNames[defender]}の「正義」により、受ける本数-2。`);
         }
+        if(vengeanceHeartIsActive(defender,targetHand)){
+          const beforeVengeance=power;power=Math.max(0,power-1);addLog(`${handNames[defender]}の「復讐心」により、受ける本数が${beforeVengeance}→${power}。`);
+        }
+      }
+      if(revengeEffectActiveUntilNextOwnTurn(defender,state.revengeTearsUntilTurn)&&handHasRevengeTarget(attacker,attackHand,defender)){
+        if(power!==0)addLog(`${handNames[defender]}の「涙」により、復讐対象の手から受ける本数は0。`);power=0;
+      }else if(attacker!==defender&&revengeEffectActiveUntilNextOwnTurn(defender,state.revengeIncomingBonusUntilTurn)){
+        power+=3;addLog(`${handNames[defender]}の「怒り」により、受ける本数+3。`);
       }
       const receivedAmount = power;
       state.lastAttackContext = {attackKind:"normal",attacker,sourceHand:attackHand,defender,targetHand,basePower,attackModifier:attackPowerResult.attackModifier,preReplacementAttackPower,finalAttackPower,receivedAmount,appliedAmount:(canonActive||danceActive)?0:receivedAmount,canonActive,danceActive,isAttackReplacement,attackReplacementKind,isNormalAttack:true,isCardAttack:false};
@@ -15795,6 +16054,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         resolvedFinal=before;
       } else if (reducingAttack) {
         resolvedFinal = Math.max(0, total);
+      } else if (options.zeroAtSix && total >= 6) {
+        resolvedFinal=0;
+        addLog(`「${options.sourceLabel||"身に余る思い"}」により、${handNames[defender]}の${handNames[targetHand]}は6以上になったため超過処理をせず0になった。`);
       } else if (state.activeDirectiveAnnihilation?.[attacker] && defender===otherPlayer(attacker) && total>=7) {
         resolvedFinal=0;
         addLog(`達成した「天命：殲滅」により、${handNames[defender]}の${handNames[targetHand]}は7以上になったため0になった。`);
@@ -15823,7 +16085,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       state.temp[attacker].lightningZeroAtFive = false;
 
       // ここでいったん攻撃判定を反映する。罠破壊は攻撃判定後罠のあと。
-      if(!romanOpponentHandProtected)resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃");
+      if(!romanOpponentHandProtected)resolvedFinal = await maybePreventLethalWithEmc2(defender, targetHand, resolvedFinal, "通常攻撃", false, true);
       await animateCalculation(defender, targetHand, total, resolvedFinal);
       state[defender][targetHand] = resolvedFinal;
       if(resonance&&hasAttachment(attacker,attackHand,"vibrationGeneration"))gainCharge(attacker,3,"振動発電");
@@ -15869,7 +16131,13 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
 
       const finalTargetWasOpponent = defender === otherPlayer(attacker);
       const finalTargetWasZero = resolvedFinal === 0;
-      if(finalTargetWasOpponent&&finalTargetWasZero){const index=state.traps[attacker][attackHand].findIndex(slot=>trapCardId(slot)==="egoBlessing");if(index>=0){const previous=state.traps[attacker][attackHand][index],evolved=makeTrapInstance("superEgo",attacker);evolved.id=trapInstanceId(previous)||evolved.id;state.traps[attacker][attackHand][index]=evolved;addLog(`「エゴ」が「スーパーエゴ」へ変化した。`);}}
+      const finalTargetHadRevenge = finalTargetWasOpponent&&targetHadRevengeAtAttackResolution;
+      if(finalTargetWasOpponent&&finalTargetWasZero){
+        recordRevengeZeroEvent(defender,attacker,{kind:"normal",attackHand,cardId:options.sourceCardId||null});
+        if(state.temp[attacker]?.fillTheMoat&&finalTargetHadRevenge){ensureRevengeState();state.revengePendingNoSplit[defender]=currentRevengeTurn(defender)+1;addLog(`「外堀を埋める」により、次の${handNames[defender]}のターンは分けるを行えない。`);}
+        if(vengeanceHeartBonus>0&&!finalTargetHadRevenge){state.pendingChargeStun[attacker]=true;state.pendingChargeStunSource[attacker]="復讐心";addLog(`「復讐心」の代償により、次の${handNames[attacker]}のターンは行動不能になる。`);}
+        const index=state.traps[attacker][attackHand].findIndex(slot=>trapCardId(slot)==="egoBlessing");if(index>=0){const previous=state.traps[attacker][attackHand][index],evolved=makeTrapInstance("superEgo",attacker);evolved.id=trapInstanceId(previous)||evolved.id;state.traps[attacker][attackHand][index]=evolved;addLog(`「エゴ」が「スーパーエゴ」へ変化した。`);}
+      }
 
       if (selfRighteousActive && !finalTargetWasZero && state[attacker][attackHand] > 0) {
         await addFingersWithCalculation(attacker, attackHand, 2, "独善の反動");
@@ -15976,6 +16244,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         await OnlineActionManager.fail(onlineAttackAction,error);
         return false;
       } finally {
+        state.revengeAttackDepth=Math.max(0,Number(state.revengeAttackDepth||0)-1);
         // v170e: 成功した通常攻撃Actionは resolveActionDone()/handoff まで保持する。
         // ここで消すと「攻撃確定済み・Actionなし・handoff前」という復旧不能な空白が生まれる。
         if(state.gameOver&&onlineAttackAction&&state.friendActiveAction?.id===onlineAttackAction.id){
@@ -15985,7 +16254,12 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
     }
 
     function clearBrokenTraps(player) {
+      ensureRevengeState();
       for (const hand of ["L", "R"]) {
+        if (state[player][hand] > 0) { state.revengeHandWasZero[player][hand]=false; continue; }
+        const freshZero=!state.revengeHandWasZero[player][hand];
+        if(freshZero&&!Number(state.revengeAttackDepth||0)&&state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==player){recordRevengeZeroEvent(player,state.resolvingEffectPlayer,{kind:"card",cardId:state.resolvingEffectCardId||null});}
+        processRevengeTargetZero(player,hand);
         if (state[player][hand] === 0) { ensureV169State(); processGriefZero(player,hand); }
         if (state[player][hand] === 0 && state.traps[player][hand].length > 0) {
           const count=state.traps[player][hand].length;
@@ -15993,7 +16267,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下のカード${count}枚が捨て札になった。`);
         }
       }
-      restoreFixedCurses(player);refreshGriefState(player);
+      restoreFixedCurses(player);refreshGriefState(player);refreshRevengeTargets();updateRevengeZeroSeen(player);
     }
 
     async function split(player, left, right, show = true) {
@@ -17869,6 +18143,17 @@ async function endTurn(reason="unspecified", options={}) {
       state.judgmentPrisonTurns = { human: 0, cpu: 0 };
       state.pendingAppealExecution = { human: 0, cpu: 0 };
       state.personalTurnCount = { human: 0, cpu: 0 };
+      state.revengeZeroHistory = { human: [], cpu: [] };
+      state.revengeRemovalHistory = { human: [], cpu: [] };
+      state.revengeZeroEpoch = { human: {L:0,R:0}, cpu: {L:0,R:0} };
+      state.revengeHandWasZero = { human: {L:false,R:false}, cpu: {L:false,R:false} };
+      state.revengeAttackLockTurn = { human: 0, cpu: 0 };
+      state.revengeSuppressAttachmentsUntilTurn = { human: 0, cpu: 0 };
+      state.revengeIncomingBonusUntilTurn = { human: 0, cpu: 0 };
+      state.revengeTearsUntilTurn = { human: 0, cpu: 0 };
+      state.revengeUsedRage = { human: false, cpu: false };
+      state.revengeUsedTears = { human: false, cpu: false };
+      state.revengePendingNoSplit = { human: 0, cpu: 0 };
       state.pendingMagicalHeartDraw = { human: 0, cpu: 0 };
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
