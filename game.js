@@ -2394,9 +2394,10 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v174b-roman-randomdice-fixes";
+    const LATEST_NEWS_ID = "v174c-online-race-hardening";
 
     const UPDATE_NEWS = [
+      {id:"v174c-online-race-hardening",version:"v174c",date:"2026-09-08",title:"オンライン競合と切断後復帰を修正",summary:"通信遅延時の二重Action開始を防ぎ、切断勝利後も残存プレイヤーが試合部屋へ戻れるようオンライン基盤を強化しました。",featured:true,tags:["update","fix","online"],items:["カード使用・通常攻撃のAction開始を正本上で単一化し、通信待ち中の連打や二重入力で同じ効果が複数回進む競合を防止","ローカルでも未完了Actionがある間は新しいカード使用・通常攻撃を開始できないよう入力ガードを追加","ホスト切断でゲストが勝利した場合も、勝者側がpostMatchを初期化して同じ対戦部屋のロビーへ戻れるよう修正","独善など攻撃後反動を含む通常攻撃が二重Action競合で欠落しないよう、Action開始のsingle-writer条件を強化" ]},
       {id:"v174b-roman-randomdice-fixes",version:"v174b",date:"2026-09-08",title:"ロマンギミック杯とランダムダイスを修正",summary:"準備時間中の相手側保護を強化し、ランダムダイスの多重発動を修正しました。",featured:true,tags:["update","fix"],items:["ランダムダイスの演出中に別の手を選ぶと複数回発動できる不具合を修正","ロマンギミック杯の準備時間中使用不可カードに、心理系・罠操作・復讐系などの相手専用効果カードを追加","釣り合った天秤・交換・整わない等は使用可能のまま、相手側への本数変更だけ無効になるよう共通保護を追加","ロマンギミック杯のルール説明を現在の準備時間仕様に合わせて更新"]},
       {id:"v174a-revenge-fixes",version:"v174a",date:"2026-09-07",title:"復讐テーマの境界挙動を修正",summary:"復讐対象の退避中失効やコピー発動時の条件再確認など、v174の境界挙動を修正しました。",featured:true,tags:["update","fix"],items:["フィクゼーションで退避中の復讐対象も、付与者の両手が揃った時点で失効するよう修正","予告状・びっくり箱等から怒り・涙・無慈悲な企みが発動した際、復讐対象が消えていれば安全に不発するよう修正","復讐対象の除去履歴が同一条件で重複記録されることがある問題を修正"]},
       {id:"v174-revenge-theme",version:"v174",date:"2026-09-07",title:"新テーマ「復讐」を追加",summary:"倒された手への誓いから復讐対象を刻み、執念とリベリオンで逆転を狙う新テーマを追加しました。",featured:true,tags:["update","new","card"],items:["新テーマ「復讐」と関連カード14種を追加","呪縛「復讐対象」は付与者を保持し、すりかえ・フィクゼーション・コンプレックスなど既存カードとの相互作用に対応","不屈はE=mc²型の敗北直前自動発動として実装し、執念→身に余る思いへ変化","闇鍋・予告状・びっくり箱では条件不足時に安全に不発し、オンラインの相手側選択は本人へDecisionを返すよう対応","必殺の刃・復讐心は通常の加護・罠だけを対象とし、題目などの特殊加護を保護"]},
@@ -4882,7 +4883,10 @@ const CARD_LIBRARY = {
           transaction.update(roomRef,{"match.version":170,"match.stateRevision":Number(match.stateRevision||0)+1,"match.state":snapshot,"match.result":winner,"match.resultReason":"disconnect","match.disconnectedBy":loser,updatedAt:fb.serverTimestamp()});
           return {result:winner,accepted:true};
         });
-        if(outcome?.result)applySyncedBattleResult(outcome.result,"disconnect",null,true,state.friendMatchId);
+        if(outcome?.result){
+          applySyncedBattleResult(outcome.result,"disconnect",null,true,state.friendMatchId);
+          if(outcome.result===state.friendRole)await initializeFriendPostMatchAsHost(outcome.result).catch(error=>console.error("PVP disconnect post-match initialization failed",error));
+        }
         return !!outcome?.accepted;
       }catch(error){console.warn("PVP disconnect resolution failed",error?.code,error?.message);return false;}
       finally{state.friendDisconnectResolutionBusy=false;}
@@ -5901,15 +5905,40 @@ const CARD_LIBRARY = {
       },1200);
     }
 
+    async function beginFriendActionCanonically(action){
+      if(state.battleMode!=="friend"||!state.friendRoomId||!state.friendMatchId||!action)return false;
+      const fb=firebaseApi();if(!fb)return false;
+      const roomRef=fb.doc(fb.db,"rooms",state.friendRoomId);let accepted=false;
+      await fb.runTransaction(fb.db,async transaction=>{
+        const snap=await transaction.get(roomRef);if(!snap.exists())return;
+        const room=snap.data()||{},match=room.match||{};
+        if(room.status!=="playing"||String(getFriendMatchId(match)||"")!==String(state.friendMatchId||""))return;
+        const serial=Number(match.turnSerial||match.state?.turnSerial||0),owner=match.turnOwner||match.state?.turnOwner||match.turnSide||null;
+        const applied=Number(match.turnStartAppliedSerial??match.state?.turnStartAppliedSerial??0);
+        if(owner!==action.actorSide||serial!==Number(action.turnSerial||0)||match.turnStarted!==true||applied<serial)return;
+        if(match.interrupt?.status==="pending"||match.handoff)return;
+        if(match.action){
+          if(match.action.id===action.id){accepted=true;}
+          return;
+        }
+        transaction.update(roomRef,{"match.version":170,"match.schemaVersion":170,"match.action":cloneJson(action),updatedAt:fb.serverTimestamp()});
+        accepted=true;
+      });
+      return accepted;
+    }
+
     const OnlineActionManager={
       async begin(type,payload={}){
         if(state.battleMode!=="friend"||state.friendApplyingRemoteState)return null;
         const actorSide=state.friendRole, id=makeFriendActionId(type);
         const action={id,type,actorSide,turnSerial:Number(state.friendTurnSerial||0),phase:"resolving",step:"started",payload:cloneJson(payload),appliedStepIds:[],createdAtMs:Date.now(),updatedAtMs:Date.now(),error:null};
+        if(state.friendActiveAction){
+          throw new Error("別のオンライン行動が確定中です。完了後にもう一度操作してください。");
+        }
         state.friendActiveAction=action;
         let recorded=false;
         for(let attempt=0;attempt<2&&!recorded;attempt++){
-          try{recorded=await updateFriendEngineMeta({action});}
+          try{recorded=await beginFriendActionCanonically(action);}
           catch(error){if(attempt===1)console.warn("PVP action begin metadata failed",error);}
           if(!recorded&&attempt===0)await new Promise(resolve=>setTimeout(resolve,150));
         }
@@ -7059,7 +7088,8 @@ const CARD_LIBRARY = {
         if ((data?.status === "playing" || data?.status === "lobby") && remoteResult && sameStartedMatch) {
           applySyncedBattleResult(remoteResult, remoteResultReason, remoteSurrenderedBy, remoteSurrenderNoticeAcknowledged, remoteMatchId, remoteSurrenderedAt);
           const surrenderGateOpen = remoteResultReason !== "surrender" || remoteSurrenderNoticeAcknowledged === true;
-          if(state.friendRole==="host"&&data.status==="playing"&&!data.postMatch&&surrenderGateOpen){
+          const canRecoverDisconnectPostMatch = remoteResultReason === "disconnect" && remoteResult === state.friendRole;
+          if((state.friendRole==="host"||canRecoverDisconnectPostMatch)&&data.status==="playing"&&!data.postMatch&&surrenderGateOpen){
             initializeFriendPostMatchAsHost(remoteResult).catch(error=>console.error("PVP post-match initialization failed",error));
           }
         }
@@ -15034,6 +15064,7 @@ function renderLastAction() {
       if(state.startingRouletteActive)return false;
       if(player==="human"&&state.turn==="human"&&!guardFriendLocalTurnReady("カード使用"))return false;
       if(player==="human"&&isFriendInteractionBlocking())return false;
+      if(state.battleMode==="friend"&&player==="human"&&state.friendActiveAction)return false;
       if (state.gameOver || state.turn !== player) return false;
       if(state.furiosoSkipActive?.[player])return false;
       if(state.quarterRestActive?.[player]){if(player==="human")setMessage("4分休符により、このターンは手札からカードを使用できません。");return false;}
@@ -15640,6 +15671,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       if(state.startingRouletteActive)return false;
       if(attacker==="human"&&!options.cardInternalAttack&&!guardFriendLocalTurnReady("通常攻撃"))return false;
       if(attacker==="human"&&!options.cardInternalAttack&&isFriendInteractionBlocking())return false;
+      if(state.battleMode==="friend"&&attacker==="human"&&!options.cardInternalAttack&&state.friendActiveAction)return false;
       if(!options.cardInternalAttack&&!canUseNormalAttackAction(attacker)){if(attacker==="human")setMessage("このターンは通常攻撃できません。");return false;}
       if(state.furiosoSkipActive?.[attacker]&&!options.cardInternalAttack)return false;
       if(state.temp[attacker]?.multiAttackSource==="Furioso"&&Number(state.temp[attacker]?.attackLimit)===0&&!options.cardInternalAttack)return false;
@@ -16737,7 +16769,8 @@ async function endTurn(reason="unspecified", options={}) {
     }
 
     async function initializeFriendPostMatchAsHost(result = state.matchResult) {
-      if (state.battleMode !== "friend" || state.friendRole !== "host" || !state.friendRoomId || !state.friendMatchId || !result) return;
+      const disconnectWinnerCanRecover = state.matchResultReason === "disconnect" && result === state.friendRole;
+      if (state.battleMode !== "friend" || (state.friendRole !== "host" && !disconnectWinnerCanRecover) || !state.friendRoomId || !state.friendMatchId || !result) return;
       if (state.matchResultReason === "surrender" && state.friendSurrenderNoticeAcknowledged !== true) return;
       const fb = firebaseApi();
       if (!fb) return;
