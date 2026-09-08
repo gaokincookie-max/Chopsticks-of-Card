@@ -86,9 +86,9 @@ const CARD_LIBRARY = {
       },
 
       charge: {
-        name: "充電", cost: 1, type: "使用不可 / 生成カード / 充電",
+        name: "充電", cost: 1, type: "リソース / 充電",
         text: "Lv.1～10。コストはレベルと同じ。充電効果以外では捨てたり移動できない。充電を得る時はレベルが上がり、Lv.10ではそれ以上得られない。",
-        token: true, chargeResource: true, countsAsHandCard:false, discardable:false, canPlay: () => false
+        token: true, resourceCard:true, resourceKey:"charge", chargeResource: true, countsAsHandCard:false, discardable:false, canPlay: () => false
       },
       timedBomb: {
         name: "時限爆弾", cost: 0, type: "補助 / 生成カード",
@@ -311,7 +311,7 @@ const CARD_LIBRARY = {
 
       oath: {
         name:"誓い",cost:2,type:"補助 / 復讐",theme:"復讐",
-        text:"前のターン、相手の通常攻撃またはカードの効果によって0になった手がある時使用できる。通常攻撃で0にされた場合は、その攻撃に使われた相手の手へ「復讐対象」を付与する。カードの効果で0にされた場合は、相手の0でない手を1つ選び「復讐対象」を付与する。設置枠が埋まっている場合、外部効果で除去可能なカードをランダムに1枚捨ててから付与する。相手に復讐対象がある時、すべての「誓い」は「刻まれた屈辱」に変化する。",
+        text:"前のターン、相手の通常攻撃またはカードの効果によって自分の手が0になった時使用できる。相手の通常攻撃による0化で攻撃に使われた手が特定でき、その手が0でない場合はその手へ「復讐対象」を付与する。攻撃手が特定できない、すでに0、またはカード効果による0化の場合は、相手の0でない手を1つ選び付与する。設置枠が埋まっている場合、外部効果で除去可能なカードをランダムに1枚捨ててから付与する。相手に復讐対象がある時、すべての「誓い」は「刻まれた屈辱」に変化する。",
         canPlay:player=>canUseOath(player),effect:player=>useOath(player)
       },
       engravedHumiliation: {
@@ -868,23 +868,9 @@ const CARD_LIBRARY = {
         name: "看破",
         cost: 1,
         type: "補助",
-        text: "相手の伏せカードを1枚選んで確認する。確認したカードは伏せたままにする。",
+        text: "相手の両手についているすべての伏せカードを確認する。確認したカードは伏せたままにする。",
         canPlay: (player) => hasOpponentTrap(player),
-        effect: (player) => {
-          if (!hasOpponentTrap(player)) { addLog(`${handNames[player]}の「看破」は対象が存在しないため不発。`); return; }
-          if (player === "human") {
-            state.mode = "chooseOpponentTrap";
-            state.pendingTrapTargetEffect = "reveal";
-            state.selectedAttackHand = null;
-            state.selectedTrapCardIndex = null;
-            elements.splitBox.classList.remove("active");
-      elements.andanteBox?.classList.remove("active");
-            setMessage("「看破」：確認する相手の伏せカードをタップしてください。");
-            return;
-          }
-          const target = chooseCpuOpponentTrap("human");
-          if (target) revealOpponentTrap(player, target.owner, target.hand, target.index);
-        }
+        effect: (player) => revealAllOpponentTraps(player)
       },
       pullTrap: {
         name: "手繰り寄せ",
@@ -1294,10 +1280,10 @@ const CARD_LIBRARY = {
       },
       encore: { name:"アンコール",cost:1,type:"補助",text:"自分の捨て札にある「フィナーレ」をランダムに1枚山札に戻し、山札をシャッフルする。",canPlay:()=>true,effect:player=>useEncore(player) },
       daCapo: { name:"ダ・カーポ",cost:3,type:"終端",text:"終端。残りの手札をすべて捨て、同じ枚数引く。その後、両手を1にし、手札と山札の「ダ・カーポ」をすべて捨てる。",terminal:true,canPlay:()=>true,effect:player=>useDaCapo(player) },
-      themeSetting: { name:"題目設定",cost:1,type:"特殊",text:"デッキ1枚制限。初期手札へ追加され、通常の手札枚数に数えず、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与し、このターン手札からカードをあと1枚使用できる。演舞は最大Ⅵで、Ⅴ以上の間は一部の輪舞曲が強化される。",protectedSpecial:true,countsAsHandCard:false,discardable:false,advanceNoticeExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseThemeV153(player) },
-      serenadeTheme: { name:"題目：セレナーデ",cost:0,type:"加護 / 題目",text:"共鳴が発生するたび「演舞」を2上げる。自分のターン中に一度も共鳴が発生しなかった場合、ターン終了時に「演舞」を1下げる。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。外部効果で除去・交換されない。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
-      rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目",text:"初めて使用する「輪舞曲」カードで「演舞」を2上げる。使用済みの「輪舞曲」の再使用、または輪舞曲ではないカードの使用で1下げる。変化前と変化後は別カードとして数える。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
-      performance: { name:"演舞",cost:0,type:"特殊状態",text:"デッキ投入不可。通常の手札枚数に数えない。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,countsAsHandCard:false,discardable:false,token:true,canPlay:()=>false },
+      themeSetting: { name:"題目設定",cost:1,type:"特殊 / 定義",definitionCard:true,text:"デッキ1枚制限。初期手札へ追加され、通常の手札枚数に数えず、外部効果で捨てられない。使用時、題目：セレナーデか題目：ロンドを両手へ付与し、このターン手札からカードをあと1枚使用できる。演舞は最大Ⅵで、Ⅴ以上の間は一部の輪舞曲が強化される。",protectedSpecial:true,countsAsHandCard:false,discardable:false,advanceNoticeExcluded:true,maxDeckCopies:1,canPlay:player=>!state.selectedTheme?.[player],effect:player=>chooseThemeV153(player) },
+      serenadeTheme: { name:"題目：セレナーデ",cost:0,type:"加護 / 題目 / 定義",definitionBlessing:true,text:"共鳴が発生するたび「演舞」を2上げる。自分のターン中に一度も共鳴が発生しなかった場合、ターン終了時に「演舞」を1下げる。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。外部効果で除去・交換されない。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
+      rondoTheme: { name:"題目：ロンド",cost:0,type:"加護 / 題目 / 定義",definitionBlessing:true,text:"初めて使用する「輪舞曲」カードで「演舞」を2上げる。使用済みの「輪舞曲」の再使用、または輪舞曲ではないカードの使用で1下げる。変化前と変化後は別カードとして数える。「演舞」は最大Ⅵで、Ⅴ以上の間は一部の「輪舞曲」が強化される。",blessing:true,themeBlessing:true,token:true,canPlay:()=>false },
+      performance: { name:"演舞",cost:0,type:"リソース / 演舞",resourceCard:true,resourceKey:"performance",text:"デッキ投入不可。通常の手札枚数に数えない。演舞Ⅰ～Ⅵのレベルを持ち、Ⅴ以上の間は一部の輪舞曲が強化される。外部効果で捨てられず、レベルが0になると消滅する。",protectedSpecial:true,countsAsHandCard:false,discardable:false,token:true,canPlay:()=>false },
       fermata: { name:"フェルマータ",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。カードを1枚引く。その後、望むならさらに1枚引き、ターンを終了する。",rondo:true,rondoFamily:"fermata",canPlay:()=>true,effect:player=>useFermataV153(player) },
       canon: { name:"カノン",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の通常攻撃で本来加える最終的な本数と最終対象を記録し、その攻撃で実際に加える本数を0にする。次の相手ターン終了時、記録対象が0でなければ記録した本数を加える。",rondo:true,rondoFamily:"canon",canPlay:()=>true,effect:player=>{state.temp[player].canon=true;} },
       quarterRest: { name:"4分休符",cost:2,type:"補助 / 輪舞曲",text:"輪舞曲。次の相手ターンと自分の次のターン、手札からカードを使用できない。",rondo:true,rondoFamily:"rest",canPlay:()=>true,effect:player=>useQuarterRest(player) },
@@ -1646,7 +1632,7 @@ const CARD_LIBRARY = {
       },
       magicalDespair: {
         name: "絶望", cost: 2, type: "加護 / 魔法少女",
-        text: "この手が攻撃を受けるとき本数-1（最低0）。攻撃後、自分のもう片方の手に1本加える。虚無で「正義」へ変化する。",
+        text: "自分のもう片方の手が0でない場合、この手が攻撃を受けるとき本数-1（最低0）。攻撃後、自分のもう片方の手に1本加える。虚無で「正義」へ変化する。",
         blessing: true, magicalCore: true,
         canPlay: (player) => canPlaceAttachment(player, player)
       },
@@ -2065,7 +2051,7 @@ const CARD_LIBRARY = {
       harpoonEmbed: { name:"銛を埋める",cost:1,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"このターンの次の通常攻撃の直前、最終的な攻撃対象の手の罠・加護・呪縛ゾーンに空きがあるなら、その手に自分の「銛」をつける。",canPlay:()=>true,effect:(p)=>{state.temp[p].harpoonEmbed=true;} },
       harpoon: { name:"銛",cost:0,type:"呪縛 / 生成カード・黄針",curse:true,token:true,harpoonTheme:true,text:"この手へ通常攻撃が命中するたび「銛-振動」を1増やす。そのターン最初の命中時のみ攻撃したプレイヤーは1枚引く。回収時、振動分を現在の付着先へ加える。" },
       harpoonThrow: { name:"銛投擲",cost:2,type:"補助 / 黄針",harpoonTheme:true,harpoonAttach:true,text:"相手の0でない手を1つ選び、自分の「銛」をつける。設置ゾーンが埋まっている場合、ランダムに1枚を捨ててからつける。",canPlay:p=>state[otherPlayer(p)].L>0||state[otherPlayer(p)].R>0,effect:async p=>await chooseAndAttachHarpoon(p,true) },
-      harpoonRecover: { name:"銛回収",cost:1,type:"終端 / 補助・黄針",terminal:true,harpoonTheme:true,text:"終端。自分が付与した銛を回収する。加算前の本数と実際に加える本数の合計が7以上なら、その手を0にする。",canPlay:p=>!!findOwnedHarpoon(p),effect:async p=>await recoverHarpoon(p,{sourceLabel:"銛回収",zeroAtSeven:true}) },
+      harpoonRecover: { name:"銛回収",cost:1,type:"終端 / 補助・黄針",terminal:true,harpoonTheme:true,text:"終端。自分が付与した銛を回収する。加算前の本数と実際に加える本数の合計が5以上なら、その手を0にする。",canPlay:p=>!!findOwnedHarpoon(p),effect:async p=>await recoverHarpoon(p,{sourceLabel:"銛回収",zeroThreshold:5}) },
       harpoonReuse: { name:"銛の再利用",cost:2,type:"補助 / 黄針",harpoonTheme:true,text:"自分の捨て札から、銛を付与する効果を持つカードをランダムに1枚山札へ戻し、山札をシャッフルする。",canPlay:()=>true,effect:p=>reuseHarpoonCard(p) },
       strikeBack: { name:"打ち返す",cost:2,type:"罠 / 黄針",trap:true,manual:true,harpoonTheme:true,text:"この手が、自分の銛がついている手から通常攻撃された時に発動できる。その銛を回収し、この攻撃で受ける本数を1減らす。",triggerTiming:"before",canTrigger:c=>!!findOwnedHarpoonAt(c.defender,c.attacker,c.attackHand),trigger:async c=>{await recoverHarpoon(c.defender,{sourceLabel:"打ち返す"});return{powerDelta:-1,allowZeroPower:true};} },
       yellowWaspNeedle: { name:"黄蜂針",cost:3,type:"補助 / 黄針",harpoonTheme:true,text:"次の自分のターン開始時、自分が付与した銛を回収する。この回収によって相手の手を0にしたなら、カードを2枚引く。",canPlay:()=>true,effect:p=>{state.pendingYellowWaspNeedle[p]=true;} },
@@ -2142,8 +2128,8 @@ const CARD_LIBRARY = {
       hands: { human: [], cpu: [] },
       discard: { human: [], cpu: [] },
       temp: {
-        human: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null },
-        cpu: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null }
+        human: { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null },
+        cpu: { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null }
       },
       deckCounts: { human: { ...DEFAULT_DECK_COUNTS }, cpu: { ...DEFAULT_DECK_COUNTS } },
       editingDeckOwner: "human",
@@ -2394,9 +2380,12 @@ const CARD_LIBRARY = {
     const DISPLAY_SETTINGS_STORAGE_KEY = "waribashi_card_display_settings_v1";
     const NEWS_STORAGE_KEY = "waribashi_card_last_seen_news";
     const MAJOR_UPDATE_STORAGE_KEY = "waribashi_card_major_update_v156";
-    const LATEST_NEWS_ID = "v174c-online-race-hardening";
+    const LATEST_NEWS_ID = "v177-card-adjustments";
 
     const UPDATE_NEWS = [
+      {id:"v177-card-adjustments",version:"v177",date:"2026-09-08",title:"誓い・看破・銛回収・絶望を調整",summary:"復讐の0化原因追跡を強化し、複数カードの仕様調整と設置カード詳細表示の不具合修正を行いました。",featured:true,tags:["update","fix","balance"],items:["誓いが相手の通常攻撃中に過剰反応やびっくり箱内カードで自分の手が0になった場合も、その攻撃を原因として認識するよう改善","誓いは攻撃手が特定できない・すでに0の場合、相手の0でない手を選んで復讐対象を付与するよう変更","看破を相手の両手についているすべての伏せカードを一度に確認する効果へ強化","銛回収は加算前の本数と実際に加える本数の合計が5以上なら0にするよう強化","絶望はもう片方の手が0でない場合だけ効果を発動するよう変更","設置中の加護・呪縛・自分の罠・公開済み相手罠をタップした際の詳細モーダルが開かない不具合を修正"]},
+      {id:"v176-resource-category",version:"v176",date:"2026-09-08",title:"「リソース」カテゴリを追加",summary:"充電・演舞を、他カード効果で値が増減する共通の「リソースカード」として正式カテゴリ化しました。",featured:true,tags:["update","rule"],items:["「充電」「演舞」をリソースカードとして正式カテゴリ化し、カード属性に「リソース」を追加","リソースカードはデッキ投入不可・通常手札枚数に数えない・通常使用不可・外部効果で捨てたり移動できない共通ルールへ接続","リソース値0では手札に存在せず、0から値を得た場合は対応する値のリソースカードを生成し、0へ戻ると消滅する仕様を共通化","充電は既存のLv.1～10、演舞は既存のⅠ～Ⅵの数値管理を維持しつつ共通リソースAPIへ接続","定義加護はカテゴリとして原則デッキ投入不可になるようデッキ正規化・追加判定を強化" ]},
+      {id:"v175-definition-category",version:"v175",date:"2026-09-08",title:"「定義」カテゴリを追加",summary:"題目設定と題目系加護を、今後拡張可能な「定義カード」「定義加護」として正式カテゴリ化しました。",featured:true,tags:["update","rule"],items:["「題目設定」を定義カードとして正式カテゴリ化し、カード属性に「定義」を追加","「題目：セレナーデ」「題目：ロンド」を定義加護として正式カテゴリ化","定義カードは同名1枚制限・初期手札保証・通常手札枚数に数えない・1ターン1枚までを共通ルール化","定義カードは通常使用時も最初のターン終了時の自壊時も捨て札へ行かず消滅するよう統一","定義加護は外部除去不能・手が0の間は退避・復活時に同じ加護が戻る既存仕様を共通カテゴリへ接続" ]},
       {id:"v174c-online-race-hardening",version:"v174c",date:"2026-09-08",title:"オンライン競合と切断後復帰を修正",summary:"通信遅延時の二重Action開始を防ぎ、切断勝利後も残存プレイヤーが試合部屋へ戻れるようオンライン基盤を強化しました。",featured:true,tags:["update","fix","online"],items:["カード使用・通常攻撃のAction開始を正本上で単一化し、通信待ち中の連打や二重入力で同じ効果が複数回進む競合を防止","ローカルでも未完了Actionがある間は新しいカード使用・通常攻撃を開始できないよう入力ガードを追加","ホスト切断でゲストが勝利した場合も、勝者側がpostMatchを初期化して同じ対戦部屋のロビーへ戻れるよう修正","独善など攻撃後反動を含む通常攻撃が二重Action競合で欠落しないよう、Action開始のsingle-writer条件を強化" ]},
       {id:"v174b-roman-randomdice-fixes",version:"v174b",date:"2026-09-08",title:"ロマンギミック杯とランダムダイスを修正",summary:"準備時間中の相手側保護を強化し、ランダムダイスの多重発動を修正しました。",featured:true,tags:["update","fix"],items:["ランダムダイスの演出中に別の手を選ぶと複数回発動できる不具合を修正","ロマンギミック杯の準備時間中使用不可カードに、心理系・罠操作・復讐系などの相手専用効果カードを追加","釣り合った天秤・交換・整わない等は使用可能のまま、相手側への本数変更だけ無効になるよう共通保護を追加","ロマンギミック杯のルール説明を現在の準備時間仕様に合わせて更新"]},
       {id:"v174a-revenge-fixes",version:"v174a",date:"2026-09-07",title:"復讐テーマの境界挙動を修正",summary:"復讐対象の退避中失効やコピー発動時の条件再確認など、v174の境界挙動を修正しました。",featured:true,tags:["update","fix"],items:["フィクゼーションで退避中の復讐対象も、付与者の両手が揃った時点で失効するよう修正","予告状・びっくり箱等から怒り・涙・無慈悲な企みが発動した際、復讐対象が消えていれば安全に不発するよう修正","復讐対象の除去履歴が同一条件で重複記録されることがある問題を修正"]},
@@ -4459,7 +4448,7 @@ const CARD_LIBRARY = {
       if (!state.temp || typeof state.temp !== "object") state.temp = {};
       for (const player of ["human", "cpu"]) {
         if (!state.temp[player] || typeof state.temp[player] !== "object") {
-          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+          state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
         }
         for (const key of ["pendingNoDraw", "activeNoDraw", "pendingAcceleration", "activeAcceleration", "extraActions", "berserkerTurns"]) {
           if (typeof state[key][player] !== "number" || Number.isNaN(state[key][player])) state[key][player] = 0;
@@ -5065,7 +5054,7 @@ const CARD_LIBRARY = {
       state.decks[player] = [...(side.deck || [])];
       state.hands[player] = [...(side.hand || [])];
       state.discard[player] = [...(side.discard || [])];
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ...(side.temp || {}) };
       if (preserveOwnerOnlyMeta) {
         state.temp[player].chargeCardsUsed = ownedChargeCardsUsed;
         state.temp[player].cardActionUsed = ownedCardActionUsed;
@@ -7550,7 +7539,7 @@ const CARD_LIBRARY = {
       const initialGuest = createOpeningSideFromShuffledDeck(guestDeck,data.guestDeckCounts);
       const emptySideState = (side) => ({
         L: side.L, R: side.R, traps: { L: [], R: [] }, deck: side.deck, hand: side.hand, discard: side.discard,
-        temp: { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, chargeCardsUsed: [] },
+        temp: { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, chargeCardsUsed: [] },
         noSplit: false, extraActions: 0, pendingAcceleration: 0, activeAcceleration: 0, pendingNoDraw: 0, activeNoDraw: 0, pendingTerminalEnd: false,
         pendingIntemperanceCardLock: false, activeIntemperanceCardLock: false, pendingCardUseLockSource: "", activeCardUseLockSource: "", pendingMagicalHeartDraw: 0,
         magicalChantProgress: 0, magicalChantCompleted: false,
@@ -7736,8 +7725,8 @@ const CARD_LIBRARY = {
       state.magicalChantProgress = { human: 0, cpu: 0 };
       state.magicalChantCompleted = { human: false, cpu: false };
       resetDirectiveMatchState();
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.noSplit = state.noSplit || { human: false, cpu: false };
       state.extraActions = state.extraActions || { human: 0, cpu: 0 };
       state.pendingAcceleration = state.pendingAcceleration || { human: 0, cpu: 0 };
@@ -8860,9 +8849,11 @@ function wrapFinger(value) {
       }
       return deck;
     }
-    function extractThemeSettingFromOpeningDeck(deck){const index=deck.indexOf("themeSetting");if(index<0)return false;deck.splice(index,1);return true;}
-    function createOpeningSideFromShuffledDeck(deck,deckCounts){const copy=[...deck],has=extractThemeSettingFromOpeningDeck(copy);return{L:1,R:1,deckCounts,deck:copy.slice(3),hand:copy.slice(0,3).concat(has?["themeSetting"]:[]),discard:[]};}
-    function moveThemeSettingToOpeningHand(player){if(extractThemeSettingFromOpeningDeck(state.decks[player])&&!state.hands[player].includes("themeSetting"))state.hands[player].push("themeSetting");}
+    function extractDefinitionCardsFromOpeningDeck(deck){const found=[];for(let i=deck.length-1;i>=0;i--){if(isDefinitionCard(deck[i]))found.unshift(deck.splice(i,1)[0]);}return found;}
+    function extractThemeSettingFromOpeningDeck(deck){return extractDefinitionCardsFromOpeningDeck(deck).includes("themeSetting");}
+    function createOpeningSideFromShuffledDeck(deck,deckCounts){const copy=[...deck],definitions=extractDefinitionCardsFromOpeningDeck(copy);return{L:1,R:1,deckCounts,deck:copy.slice(3),hand:copy.slice(0,3).concat(definitions),discard:[]};}
+    function moveDefinitionCardsToOpeningHand(player){const definitions=extractDefinitionCardsFromOpeningDeck(state.decks[player]);for(const id of definitions)if(!state.hands[player].includes(id))state.hands[player].push(id);}
+    function moveThemeSettingToOpeningHand(player){moveDefinitionCardsToOpeningHand(player);}
 
     function getDeckStats(owner = state.editingDeckOwner) {
       let count = 0;
@@ -9019,9 +9010,9 @@ function wrapFinger(value) {
     function cloneValidDeckCounts(counts) {
       const fixed = {};
       for (const cardId of Object.keys(CARD_LIBRARY)) {
-        if (CARD_LIBRARY[cardId].token) continue;
+        if (CARD_LIBRARY[cardId].token || isDefinitionBlessingCard(cardId) || isResourceCard(cardId)) continue;
         const raw = counts && Object.prototype.hasOwnProperty.call(counts, cardId) ? Number(counts[cardId]) : 0;
-        const maxCopies=CARD_LIBRARY[cardId]?.maxDeckCopies||3;
+        const maxCopies=CARD_LIBRARY[cardId]?.definitionCard?1:(CARD_LIBRARY[cardId]?.maxDeckCopies||3);
         const value = Number.isFinite(raw) ? Math.max(0, Math.min(maxCopies, Math.floor(raw))) : 0;
         fixed[cardId] = value;
       }
@@ -9377,10 +9368,10 @@ function wrapFinger(value) {
 
     function canAddDeckCard(owner, cardId) {
       const card = CARD_LIBRARY[cardId], counts = currentDeckCounts(owner), current = counts[cardId] || 0;
-      if (!card || card.token || card.magicalTransformed) return false;
+      if (!card || card.token || card.magicalTransformed || isDefinitionBlessingCard(cardId) || isResourceCard(cardId)) return false;
       if (state.deckRuleContext?.ruleId && getDeckRestrictionReason(state.deckRuleContext.ruleId, cardId)) return false;
       const stats = getDeckStats(owner);
-      return current < (card.maxDeckCopies || 3) && stats.count < DECK_MAX_COUNT && stats.cost + Number(card.cost || 0) <= state.costLimit;
+      return current < (card.definitionCard ? 1 : (card.maxDeckCopies || 3)) && stats.count < DECK_MAX_COUNT && stats.cost + Number(card.cost || 0) <= state.costLimit;
     }
 
     function changeDeckCardCount(owner, cardId, delta) {
@@ -10001,7 +9992,7 @@ function wrapFinger(value) {
     }
 
     function chargeLevelFromId(cardId){ const m=/^charge_(\d+)$/.exec(cardId||""); return m?Math.max(1,Math.min(10,Number(m[1])||1)):(cardId==="charge"?1:0); }
-    function ensureChargeDefinition(level){ const lv=Math.max(1,Math.min(10,Number(level)||1)); const id=`charge_${lv}`; if(!CARD_LIBRARY[id]) CARD_LIBRARY[id]={...CARD_LIBRARY.charge,name:`充電 Lv.${lv}`,cost:lv,text:`現在Lv.${lv}。コスト${lv}。充電効果以外では捨てたり移動できない。`,token:true,chargeResource:true,chargeLevel:lv}; return id; }
+    function ensureChargeDefinition(level){ const lv=Math.max(1,Math.min(10,Number(level)||1)); const id=`charge_${lv}`; if(!CARD_LIBRARY[id]) CARD_LIBRARY[id]={...CARD_LIBRARY.charge,name:`充電 Lv.${lv}`,cost:lv,text:`現在Lv.${lv}。コスト${lv}。充電効果以外では捨てたり移動できない。`,token:true,resourceCard:true,resourceKey:"charge",chargeResource:true,chargeLevel:lv}; return id; }
     function getChargeEntries(player){ return state.hands[player].map((cardId,index)=>({cardId,index,level:chargeLevelFromId(cardId)})).filter(x=>x.level>0); }
     function getChargeLevel(player){ const e=getChargeEntries(player); return e.length?Math.max(...e.map(x=>x.level)):0; }
     function countOwnAttachment(player, cardId) {
@@ -10719,7 +10710,7 @@ function wrapFinger(value) {
       state.personalTurnCount[player] = Number(state.personalTurnCount[player] || 0) + 1;
       if(romanBeforeTurnStart&&!isRomanPreparation()){addLog("ロマンギミック杯：双方の準備時間が終了した。戦闘開始。");setMessage("準備時間終了 ― 戦闘開始");}
       const directiveOpponent=otherPlayer(player);
-      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp[player] = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0, naturalFaithActive:false, opponentZeroedThisTurn:false, opponentHandsAtTurnStart:{L:state[directiveOpponent].L,R:state[directiveOpponent].R}, chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       ensureV168State();
       state.temp[player].cardExtraUses=0;state.pendingTrapCardExtraUses[player]=0;state.temp[player].baitFreeTrapUse=Number(state.pendingBaitFreeTrapUse[player]||0)>0?1:0;state.pendingBaitFreeTrapUse[player]=0;
       const camouflageDraws=["L","R"].reduce((n,h)=>n+state.traps[player][h].filter(slot=>trapCardId(slot)==="camouflage").length,0);
@@ -11238,11 +11229,19 @@ function wrapFinger(value) {
     function hasAnyRevengeTarget(owner,sourcePlayer=null){return revengeTargetSlots(owner,sourcePlayer).length>0;}
     function handHasRevengeTarget(owner,hand,sourcePlayer=null){return revengeTargetSlots(owner,sourcePlayer).some(x=>x.hand===hand);}
     function currentRevengeTurn(player){return Number(state.personalTurnCount?.[player]||0);}
+    function revengeAttackContextForVictim(victim){
+      const attacker=otherPlayer(victim),ctx=state.temp?.[attacker]?.revengeAttackContext;
+      if(!ctx||ctx.targetSide!=="opponent")return null;
+      return {attacker,attackHand:["L","R"].includes(ctx.attackHand)?ctx.attackHand:null};
+    }
     function recordRevengeZeroEvent(victim,sourcePlayer,{kind="card",attackHand=null,cardId=null}={}){
       ensureRevengeState();if(!victim||!sourcePlayer||victim===sourcePlayer)return;
       const eligibleTurn=currentRevengeTurn(victim)+1;
       const entry={eligibleTurn,sourcePlayer,kind,attackHand:attackHand||null,cardId:cardId||null};
-      state.revengeZeroHistory[victim].push(entry);if(state.revengeZeroHistory[victim].length>12)state.revengeZeroHistory[victim].splice(0,state.revengeZeroHistory[victim].length-12);
+      const history=state.revengeZeroHistory[victim];
+      const last=history[history.length-1];
+      if(last&&Number(last.eligibleTurn)===eligibleTurn&&last.sourcePlayer===sourcePlayer&&last.kind===entry.kind&&(last.attackHand||null)===entry.attackHand&&(last.cardId||null)===entry.cardId)return;
+      history.push(entry);if(history.length>12)history.splice(0,history.length-12);
     }
     function validRevengeZeroEvent(player){ensureRevengeState();const turn=currentRevengeTurn(player);return [...state.revengeZeroHistory[player]].reverse().find(e=>Number(e.eligibleTurn)===turn&&e.sourcePlayer===otherPlayer(player))||null;}
     function recordRevengeRemovalEvent(sourcePlayer,removerPlayer){ensureRevengeState();if(!sourcePlayer||!removerPlayer||sourcePlayer===removerPlayer)return;const eligibleTurn=currentRevengeTurn(sourcePlayer)+1;const history=state.revengeRemovalHistory[sourcePlayer];if(history.some(e=>Number(e.eligibleTurn)===eligibleTurn&&e.removerPlayer===removerPlayer))return;history.push({eligibleTurn,removerPlayer});if(history.length>12)history.splice(0,history.length-12);}
@@ -11289,10 +11288,12 @@ function wrapFinger(value) {
     async function useOath(player){
       if(isRomanOpponentTarget(player,otherPlayer(player))){addLog(`「誓い」は準備時間中のため不発。`);return false;}
       const event=validRevengeZeroEvent(player);if(!event){addLog(`${handNames[player]}の「誓い」は復讐すべき出来事がなく不発。`);return false;}const o=otherPlayer(player);let hand=null;
-      if(event.kind==="normal"){
-        if(!event.attackHand||state[o][event.attackHand]<=0){addLog(`${handNames[player]}の「誓い」は復讐すべき攻撃手が既に0のため不発。`);return false;}
+      if(event.kind==="normal"&&event.attackHand&&state[o][event.attackHand]>0){
         hand=event.attackHand;
-      }else{const pick=await chooseRevengeBoardHand(player,o,"「誓い」：復讐対象を付与する相手の手を選んでください。");hand=pick?.hand||null;}
+      }else{
+        const pick=await chooseRevengeBoardHand(player,o,"「誓い」：復讐対象を付与する相手の0でない手を選んでください。");
+        hand=pick?.hand||null;
+      }
       if(!hand||!placeRevengeTarget(player,o,hand)){addLog(`${handNames[player]}の「誓い」は復讐対象を付与できず不発。`);return false;}return true;
     }
     async function useForgetNever(player){
@@ -11314,21 +11315,21 @@ function wrapFinger(value) {
     async function useTears(player){const o=otherPlayer(player);if(!hasAnyRevengeTarget(o,player)){addLog(`「涙」は復讐対象がなく不発。`);return false;}const pick=await chooseRevengeBoardHand(player,player,"「涙」：-2する自分の手を選んでください。");if(!pick){addLog(`「涙」は対象がなく不発。`);return false;}const before=state[player][pick.hand];state[player][pick.hand]=Math.max(0,before-2);ensureRevengeState();state.revengeTearsUntilTurn[player]=currentRevengeTurn(player)+1;state.revengeUsedTears[player]=true;addLog(`「涙」により${handNames[player]}の${handNames[pick.hand]}が${before}→${state[player][pick.hand]}。`);clearBrokenTraps(player);render();return true;}
     function revengeEffectActiveUntilNextOwnTurn(player,map){ensureRevengeState();return Number(map?.[player]||0)>currentRevengeTurn(player);}
     function vengeanceHeartIsActive(owner,hand){return hasAttachment(owner,hand,"vengeanceHeart")&&hasAnyRevengeTarget(otherPlayer(owner),owner);}
-    function removeVengeanceHeartTargetAttachment(attacker,attackHand,defender,targetHand){if(isRomanOpponentTarget(attacker,defender))return false;if(!vengeanceHeartIsActive(attacker,attackHand))return false;const candidates=(state.traps[defender][targetHand]||[]).map((slot,index)=>({slot,index,card:CARD_LIBRARY[trapCardId(slot)]})).filter(x=>(x.card?.trap||x.card?.blessing)&&!x.card?.themeBlessing&&canExternallyRemoveAttachment(x.slot));if(!candidates.length)return false;const picked=candidates[Math.floor(Math.random()*candidates.length)];const id=trapCardId(picked.slot);discardAttachment(defender,targetHand,picked.index,{reason:"復讐心"});addLog(`「復讐心」により、攻撃対象の${attachmentLabel(id)}「${CARD_LIBRARY[id]?.name||id}」を捨てた。`);return true;}
+    function removeVengeanceHeartTargetAttachment(attacker,attackHand,defender,targetHand){if(isRomanOpponentTarget(attacker,defender))return false;if(!vengeanceHeartIsActive(attacker,attackHand))return false;const candidates=(state.traps[defender][targetHand]||[]).map((slot,index)=>({slot,index,card:CARD_LIBRARY[trapCardId(slot)]})).filter(x=>(x.card?.trap||x.card?.blessing)&&!isDefinitionBlessingCard(trapCardId(x.slot))&&canExternallyRemoveAttachment(x.slot));if(!candidates.length)return false;const picked=candidates[Math.floor(Math.random()*candidates.length)];const id=trapCardId(picked.slot);discardAttachment(defender,targetHand,picked.index,{reason:"復讐心"});addLog(`「復讐心」により、攻撃対象の${attachmentLabel(id)}「${CARD_LIBRARY[id]?.name||id}」を捨てた。`);return true;}
     async function useObsession(player){const o=otherPlayer(player);if(isRomanOpponentTarget(player,o)){addLog(`「執念」は準備時間中のため不発。`);return false;}ensureRevengeState();if(!hasAnyRevengeTarget(o,player)){addLog(`「執念」は復讐対象がなく不発。`);return false;}state.revengeAttackLockTurn[o]=currentRevengeTurn(o)+1;transformHandDeckCards(player,"obsession","unbearableThought");addLog(`「執念」により次の${handNames[o]}のターン、復讐対象の手は通常攻撃に使用できない。`);return true;}
     async function useUnbearableThought(player){const o=otherPlayer(player);if(isRomanOpponentTarget(player,o)){addLog(`「身に余る思い」は準備時間中のため不発。`);return false;}if(!hasAnyRevengeTarget(o,player)){addLog(`「身に余る思い」は復讐対象がなく不発。`);return false;}ensureRevengeState();const precise=!!state.revengeUsedRage[player]&&!!state.revengeUsedTears[player];for(let i=0;i<2;i++){const attackHands=getNormalAttackSourceHands(player);const targetHands=["L","R"].filter(h=>state[o][h]>0);if(!attackHands.length||!targetHands.length)break;let a=attackHands[Math.floor(Math.random()*attackHands.length)],t=targetHands[Math.floor(Math.random()*targetHands.length)];if(precise){const ap=await chooseRevengeBoardHand(player,player,`「身に余る思い」${i+1}回目：攻撃する自分の手を選んでください。`,x=>attackHands.includes(x.hand));if(!ap)break;a=ap.hand;const tp=await chooseRevengeBoardHand(player,o,`「身に余る思い」${i+1}回目：攻撃対象を選んでください。`,x=>targetHands.includes(x.hand));if(!tp)break;t=tp.hand;}await resolveInternalNormalAttack({attackerPlayer:player,attackerHand:a,targetPlayer:o,targetHand:t,sourceCardId:"unbearableThought",zeroAtSix:true,preventTargetChange:false});if(state.gameOver)break;}if(!state.gameOver&&revengeTargetSlots(o,player).some(x=>state[o][x.hand]>0)){state[player].L=0;state[player].R=0;addLog(`「身に余る思い」で復讐対象を仕留められず、${handNames[player]}の両手が0になった。`);clearBrokenTraps(player);checkWin();}render();return true;}
     async function useRebellion(player){const o=otherPlayer(player);const target=await chooseRevengeBoardHand(player,o,"「リベリオン」：5へ到達させる相手の手を選んでください。");if(!target){addLog(`「リベリオン」は相手の生存手がなく不発。`);return false;}const amount=Math.max(0,5-state[o][target.hand]);await addFingersWithCalculation(o,target.hand,amount,"リベリオン",true,{sourcePlayer:player});const own=await chooseRevengeBoardHand(player,player,"「リベリオン」：同じ本数を加える自分の0でない手を選んでください。");if(own&&amount>0)await addFingersWithCalculation(player,own.hand,amount,"リベリオン",true,{sourcePlayer:player});render();return true;}
     function isFixedAttachment(slot){return typeof slot==="object"&&slot.fixed===true;}
-    function isAttachmentEffectActive(owner,hand,slot){const id=trapCardId(slot),card=CARD_LIBRARY[id];if(!card)return false;if(card.curse||card.themeBlessing)return true;ensureRevengeState();if((card.trap||card.blessing)&&Number(state.revengeSuppressAttachmentsUntilTurn?.[owner]||0)>currentRevengeTurn(owner))return false;if((card.trap||card.blessing)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;}
+    function isAttachmentEffectActive(owner,hand,slot){const id=trapCardId(slot),card=CARD_LIBRARY[id];if(!card)return false;if(card.curse||isDefinitionBlessingCard(id))return true;ensureRevengeState();if((card.trap||card.blessing)&&Number(state.revengeSuppressAttachmentsUntilTurn?.[owner]||0)>currentRevengeTurn(owner))return false;if((card.trap||card.blessing)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;}
     function hasAttachmentRaw(owner,hand,cardId){return state.traps[owner][hand].some(slot=>trapCardId(slot)===cardId);}
-    function canExternallyRemoveAttachment(slot){const id=trapCardId(slot)||slot;return !!id&&!CARD_LIBRARY[id]?.themeBlessing&&!isFixedAttachment(slot);}
+    function canExternallyRemoveAttachment(slot){const id=trapCardId(slot)||slot;return !!id&&!isDefinitionBlessingCard(id)&&!isFixedAttachment(slot);}
     function canMoveAttachment(slot){return canExternallyRemoveAttachment(slot);}
     function canReplaceAttachment(slot){return canExternallyRemoveAttachment(slot);}
     function recordCurseDiscard(slot,attachedOwner,attachedHand,discardOwner){
       const cardId=trapCardId(slot);if(!CARD_LIBRARY[cardId]?.curse)return;ensureV169State();const entry={entryId:`curse-discard-${++state.curseDiscardSequence}`,cardId,sourcePlayer:attachmentSourcePlayer(slot,attachedOwner),attachedPlayer:attachedOwner,attachedHand,discardOwner,sequence:state.curseDiscardSequence,active:true};state.curseDiscardHistory.push(entry);state.curseDiscardLedger[discardOwner].push({entryId:entry.entryId,cardId,active:true});
     }
     function discardAttachment(owner,hand,index,{reason="効果",allowFixed=false,noDiscard=false}={}){
-      const slot=state.traps[owner][hand]?.[index];if(!slot||(!allowFixed&&!canExternallyRemoveAttachment(slot)))return null;const id=trapCardId(slot),source=id==="revengeTarget"?attachmentSourcePlayer(slot,owner):null;state.traps[owner][hand].splice(index,1);const iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);if(!noDiscard&&id){const discardOwner=CARD_LIBRARY[id]?.curse?attachmentSourcePlayer(slot,owner):owner;state.discard[discardOwner].push(id);recordCurseDiscard(slot,owner,hand,discardOwner);}if(id==="revengeTarget"&&reason!=="手が0"&&reason!=="復讐対象の誓約失効"&&state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==source)recordRevengeRemovalEvent(source,state.resolvingEffectPlayer);return slot;
+      const slot=state.traps[owner][hand]?.[index];if(!slot)return null;const id=trapCardId(slot);if(isDefinitionBlessingCard(id)&&reason!=="手が0")return null;if(!allowFixed&&!canExternallyRemoveAttachment(slot))return null;if(isDefinitionBlessingCard(id))noDiscard=true;const source=id==="revengeTarget"?attachmentSourcePlayer(slot,owner):null;state.traps[owner][hand].splice(index,1);const iid=trapInstanceId(slot);if(iid)state.revealedTrapIds.delete(iid);if(!noDiscard&&id){const discardOwner=CARD_LIBRARY[id]?.curse?attachmentSourcePlayer(slot,owner):owner;state.discard[discardOwner].push(id);recordCurseDiscard(slot,owner,hand,discardOwner);}if(id==="revengeTarget"&&reason!=="手が0"&&reason!=="復讐対象の誓約失効"&&state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==source)recordRevengeRemovalEvent(source,state.resolvingEffectPlayer);return slot;
     }
     function restoreFixedCurses(owner){ensureV169State();for(const hand of ["L","R"]){if(state[owner][hand]<=0)continue;const queue=state.fixedCurseRetreats[owner][hand];if(!queue.length)continue;let restored=0;while(queue.length&&state.traps[owner][hand].length<2){const slot=queue.shift();if(trapCardId(slot)==="trauma")slot.count=0;if(installAttachmentInstance(owner,hand,slot,{notify:false}))restored++;}if(restored)addLog(`${handNames[owner]}の${handNames[hand]}へ固定呪縛が復帰した。`);}}
     function notifyAttachmentInstalled(owner,hand,newSlot){const existing=state.traps[owner][hand].filter(slot=>slot!==newSlot&&trapCardId(slot)==="complexCurse"&&isAttachmentEffectActive(owner,hand,slot));for(const slot of existing){if(state[owner][hand]>0){const before=state[owner][hand];state[owner][hand]=normalize(before+1,owner,hand);addLog(`「コンプレックス」により${handNames[owner]}の${handNames[hand]}が${before}→${state[owner][hand]}。`);}}if(state[owner][hand]===0)clearBrokenTraps(owner);}
@@ -11413,7 +11414,7 @@ function wrapFinger(value) {
     }
     async function useRepetitionCompulsion(player){if(isRomanOpponentTarget(player,otherPlayer(player))){addLog(`「反復強迫」は準備時間中のため不発。`);return false;}const id=await chooseCurseType(player,"反復強迫：連続して付与する呪縛を選んでください。");if(!id)return false;state.repetitionFreeCurse[player]=id;try{return await runAttachmentPlacementSession(player,{kind:"repetitionCompulsion",cardId:id,copiedEffect:!!state.copiedEffectContext});}finally{state.repetitionFreeCurse[player]=null;}}
     function replaceableBlessings(player){const target=otherPlayer(player),out=[];for(const hand of ["L","R"])state.traps[target][hand].forEach((slot,index)=>{if(CARD_LIBRARY[trapCardId(slot)]?.blessing&&canReplaceAttachment(slot))out.push({owner:target,hand,index,slot});});return out;}
-    function canPlaceAttachmentAfterReplacement(user,owner,hand,cardId,replacedSlot){if(!replacedSlot||!canReplaceAttachment(replacedSlot)||state[owner][hand]<=0)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;if(card&&(card.trap||card.blessing)&&!card.themeBlessing&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return state.traps[owner][hand].length-1<2;}
+    function canPlaceAttachmentAfterReplacement(user,owner,hand,cardId,replacedSlot){if(!replacedSlot||!canReplaceAttachment(replacedSlot)||state[owner][hand]<=0)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;if(card&&(card.trap||card.blessing)&&!isDefinitionBlessingCard(cardId)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return state.traps[owner][hand].length-1<2;}
     async function chooseDevaluationBlessing(player,items){if(player!=="human")return items[0]||null;return chooseOneMagicalCard("デバリュエーション","置換する加護を選んでください。",items.map(item=>({id:item.cardId,key:trapInstanceId(item.slot),location:`${handNames[item.owner]}の${handNames[item.hand]}・設置枠${item.index+1}`,...item})));}
     function canUseDevaluation(player){return replaceableBlessings(player).length>0&&state.hands[player].some(id=>CARD_LIBRARY[id]?.curse);}
     async function useDevaluation(player){if(isRomanOpponentTarget(player,otherPlayer(player))){addLog(`「デバリュエーション」は準備時間中のため不発。`);return false;}let changed=0;while(true){const blessings=replaceableBlessings(player);if(!blessings.length)break;const blessing=await chooseDevaluationBlessing(player,blessings);if(!blessing)break;const currentIndex=state.traps[blessing.owner][blessing.hand].findIndex(slot=>trapInstanceId(slot)===trapInstanceId(blessing.slot));if(currentIndex<0)continue;const eligible=state.hands[player].map((id,index)=>({id,index})).filter(x=>CARD_LIBRARY[x.id]?.curse&&canPlaceAttachmentAfterReplacement(player,blessing.owner,blessing.hand,x.id,blessing.slot));if(!eligible.length)break;let picked=eligible[0];if(player==="human"){const indexes=await beginHandCardSelection({min:1,max:1,filter:(id,index)=>eligible.some(x=>x.index===index),message:"同じ位置へ設置する呪縛を選んでください。"});picked=eligible.find(x=>x.index===indexes[0]);if(!picked)break;}discardAttachment(blessing.owner,blessing.hand,currentIndex,{reason:"デバリュエーション"});const beforeIds=new Set(state.traps[blessing.owner][blessing.hand].map(trapInstanceId));if(!await setTrap(player,blessing.hand,picked.index,blessing.owner,{freeCardAction:true,countsAsActualCardUse:false}))break;const slots=state.traps[blessing.owner][blessing.hand];if(state[blessing.owner][blessing.hand]>0){const installedIndex=slots.findIndex(slot=>!beforeIds.has(trapInstanceId(slot)));if(installedIndex>=0&&installedIndex!==currentIndex){const [installed]=slots.splice(installedIndex,1);slots.splice(Math.min(currentIndex,slots.length),0,installed);}}changed++;if(player==="human"){const again=await showGameConfirmation({title:"デバリュエーション",message:"続けて置換しますか？",confirmLabel:"続ける",cancelLabel:"終了"});if(!again)break;}if(changed>=4)break;}state.mode="attack";render();return changed>0;}
@@ -11571,7 +11572,7 @@ function wrapFinger(value) {
       slots.forEach(slot=>slot.classList.remove("harpoon-recovering"));
       value.remove();
     }
-    async function recoverHarpoon(owner,{sourceLabel="銛回収",zeroAtSeven=false}={}){
+    async function recoverHarpoon(owner,{sourceLabel="銛回収",zeroAtSeven=false,zeroThreshold=null}={}){
       const info=findOwnedHarpoon(owner); if(!info){addLog(`「${sourceLabel}」は銛がなく不発。`);return {recovered:false,zeroed:false};}
       const vibration=Math.max(0,Number(info.slot.vibration)||0), before=state[info.player][info.hand];
       if(state.battleMode==="friend"&&!state.friendApplyingRemoteState){
@@ -11581,7 +11582,7 @@ function wrapFinger(value) {
       state.traps[info.player][info.hand].splice(info.index,1);
       let zeroed=false;
       if(vibration>0&&before>0){
-        await addFingersWithCalculation(info.player,info.hand,vibration,sourceLabel,false,{sourcePlayer:owner,zeroAtSeven});
+        await addFingersWithCalculation(info.player,info.hand,vibration,sourceLabel,false,{sourcePlayer:owner,zeroAtSeven,zeroThreshold});
         zeroed=before>0&&state[info.player][info.hand]===0;
       }
       addLog(`${handNames[owner]}は${handNames[info.player]}の${handNames[info.hand]}から「銛-振動:${vibration}」を回収した。`);
@@ -11655,13 +11656,17 @@ function wrapFinger(value) {
       return cardId;
     }
 
+    function isDefinitionCard(cardId) { return !!CARD_LIBRARY[cardId]?.definitionCard; }
+    function isDefinitionBlessingCard(cardId) { const card=CARD_LIBRARY[cardId]; return !!(card?.definitionBlessing || card?.themeBlessing); }
+    function isResourceCard(cardId) { const card=CARD_LIBRARY[cardId]; return !!(card?.resourceCard || card?.chargeResource); }
+    function resourceKeyForCard(cardId) { const card=CARD_LIBRARY[cardId]; return card?.resourceKey || (card?.chargeResource ? "charge" : null); }
     function isProtectedHandCard(cardId) {
-      return isProtectedChargeCard(cardId) || !!CARD_LIBRARY[cardId]?.protectedSpecial;
+      return isResourceCard(cardId) || isDefinitionCard(cardId) || !!CARD_LIBRARY[cardId]?.protectedSpecial;
     }
     function isExternallyDiscardableHandCard(cardId) {
       return !!cardId && CARD_LIBRARY[cardId]?.discardable !== false && !isProtectedHandCard(cardId) && !isRomanTemporarilyProtectedHandCard(cardId);
     }
-    function isCountedHandCard(cardId){return !!cardId&&CARD_LIBRARY[cardId]?.countsAsHandCard!==false;}
+    function isCountedHandCard(cardId){return !!cardId&&!isDefinitionCard(cardId)&&!isResourceCard(cardId)&&CARD_LIBRARY[cardId]?.countsAsHandCard!==false;}
     function getCountedHandCards(player){return state.hands[player].map((cardId,index)=>({cardId,index})).filter(x=>isCountedHandCard(x.cardId));}
     function countHandCards(player){return getCountedHandCards(player).length;}
     function ensureHandCardInstances(player){
@@ -11814,7 +11819,7 @@ function wrapFinger(value) {
       v166ApplyFingerValue(o,picked.hand,state[o][picked.hand]-1,player,"整わない");const own=["L","R"].filter(h=>state[player][h]>0);if(own.length){const h=own[Math.floor(Math.random()*own.length)];v166ApplyFingerValue(player,h,state[player][h]+1,player,"整わない");}
     }
     function isProtectedAttachment(cardId) {
-      return !!CARD_LIBRARY[cardId]?.themeBlessing;
+      return isDefinitionBlessingCard(cardId);
     }
     function isExternallyRemovableAttachment(cardId) {
       return canExternallyRemoveAttachment(cardId);
@@ -11824,19 +11829,26 @@ function wrapFinger(value) {
       return state.selectedTheme?.[player] === "serenade" ? "serenadeTheme" : state.selectedTheme?.[player] === "rondo" ? "rondoTheme" : null;
     }
 
-    function ensureThemeAttachments(player) {
-      const id = themeCardId(player);
+    function ensureDefinitionAttachments(player) {
+      const selectedId = themeCardId(player);
       ensureV169State();
-      state.discard[player]=state.discard[player].filter(cardId=>!CARD_LIBRARY[cardId]?.themeBlessing);
+      // 定義加護は捨て札に存在しない。旧データに残っていてもここで除去する。
+      state.discard[player]=state.discard[player].filter(cardId=>!isDefinitionBlessingCard(cardId));
       for (const hand of ["L", "R"]) {
-        state.traps[player][hand] = state.traps[player][hand].filter(slot => !CARD_LIBRARY[trapCardId(slot)]?.themeBlessing || trapCardId(slot) === id);
-        if (!id) { state.themeRetreats[player][hand]=null; continue; }
         if (state[player][hand] <= 0) continue;
-        if (state.traps[player][hand].some(slot => trapCardId(slot) === id)) { state.themeRetreats[player][hand]=null; continue; }
-        const restoring = state.themeRetreats[player][hand] === id;
-        if (installAttachmentInstance(player,hand,makeTrapInstance(id,player),{notify:!restoring}) && restoring) state.themeRetreats[player][hand]=null;
+        const retreatId = state.themeRetreats[player][hand];
+        const desiredIds = [...new Set([retreatId, selectedId].filter(id=>id&&isDefinitionBlessingCard(id)))];
+        for (const id of desiredIds) {
+          if (state.traps[player][hand].some(slot => trapCardId(slot) === id)) {
+            if (retreatId === id) state.themeRetreats[player][hand]=null;
+            continue;
+          }
+          const restoring = retreatId === id;
+          if (installAttachmentInstance(player,hand,makeTrapInstance(id,player),{notify:!restoring}) && restoring) state.themeRetreats[player][hand]=null;
+        }
       }
     }
+    function ensureThemeAttachments(player) { return ensureDefinitionAttachments(player); }
 
     function getPerformanceLevel(player) { return Math.max(0, Math.min(PERFORMANCE_MAX_LEVEL, Number(state.performanceLevel?.[player] || 0))); }
     function performanceLevelLabel(level) { return PERFORMANCE_ROMAN_LEVELS[Math.max(0, Math.min(PERFORMANCE_MAX_LEVEL, Number(level) || 0))] || ""; }
@@ -11852,6 +11864,20 @@ function wrapFinger(value) {
     function changePerformanceLevel(player, delta, reason) {
       const before = getPerformanceLevel(player);
       return setPerformanceLevel(player, before + delta, reason);
+    }
+    function getResourceLevel(player, resourceKey) {
+      if (resourceKey === "charge") return getChargeLevel(player);
+      if (resourceKey === "performance") return getPerformanceLevel(player);
+      return 0;
+    }
+    function setResourceLevel(player, resourceKey, level, reason = "") {
+      if (resourceKey === "charge") return setChargeLevel(player, level);
+      if (resourceKey === "performance") return setPerformanceLevel(player, level, reason);
+      return 0;
+    }
+    function changeResourceLevel(player, resourceKey, delta, reason = "") {
+      const before = getResourceLevel(player, resourceKey);
+      return setResourceLevel(player, resourceKey, before + (Number(delta) || 0), reason);
     }
 
     function transformMagicalChantCards(player) {
@@ -13024,7 +13050,7 @@ function wrapFinger(value) {
     }
     function canPlaceAttachmentOnHand(user,owner,hand,cardId=null){
       if(state[owner][hand]<=0||state.traps[owner][hand].length>=2)return false;const card=CARD_LIBRARY[cardId];if(user===owner&&hasSealCurse(owner,hand))return false;
-      if(card&&(card.trap||card.blessing)&&!card.themeBlessing&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;
+      if(card&&(card.trap||card.blessing)&&!isDefinitionBlessingCard(cardId)&&state[owner][otherHand(hand)]===0&&hasAttachmentRaw(owner,hand,"isolation"))return false;return true;
     }
 
     function findAttachmentSlot(owner, hand, cardId) {
@@ -13881,6 +13907,34 @@ function wrapFinger(value) {
       return true;
     }
 
+    function revealAllOpponentTraps(user) {
+      const owner=otherPlayer(user);
+      const found=[];
+      for(const hand of ["L","R"]){
+        for(const slot of state.traps[owner][hand]||[]){
+          const cardId=trapCardId(slot);
+          if(!cardId||!isTrapCard(cardId))continue;
+          const instanceId=trapInstanceId(slot);
+          if(instanceId)state.revealedTrapIds.add(instanceId);
+          found.push({hand,cardId});
+        }
+      }
+      state.mode="attack";
+      state.pendingTrapTargetEffect=null;
+      if(!found.length){
+        addLog(`${handNames[user]}の「看破」は対象が存在しないため不発。`);
+        setMessage("「看破」：確認できる伏せカードがありませんでした。");
+        render();
+        return false;
+      }
+      const summary=found.map(x=>`${handNames[owner]}の${handNames[x.hand]}「${CARD_LIBRARY[x.cardId]?.name||x.cardId}」`).join("、");
+      setLastAction(user,"看破",`相手の伏せカード${found.length}枚をすべて確認しました。`,"card");
+      addLog(`${handNames[user]}は「看破」で相手の伏せカード${found.length}枚をすべて確認した：${summary}`);
+      setMessage(`「看破」：相手の伏せカード${found.length}枚をすべて確認しました。`);
+      render();
+      return true;
+    }
+
     function moveOpponentTrap(user, owner, hand, index) {
       const other = otherHand(hand);
       if (state[owner][other] <= 0 || state.traps[owner][other].length >= 2) {
@@ -13967,7 +14021,7 @@ function wrapFinger(value) {
       const info = attachmentKindInfo(card, options);
       elements.attachmentDetailKind.textContent = `${info.symbol} ${info.label}`;
       elements.attachmentDetailKind.className = `attachment-detail-kind ${info.className}`;
-      elements.attachmentDetailName.textContent = displayAttachmentName(slot);
+      elements.attachmentDetailName.textContent = displayAttachmentName(options.slot || cardId);
       elements.attachmentDetailMeta.textContent = `コスト${card.cost} / ${card.type}`;
       if (cardId === "duelSurge" && options.slot) {
         const level = Number(options.slot.level) || 0;
@@ -14270,6 +14324,7 @@ function renderLastAction() {
           !cityWillMode &&
           !advanceNoticeMode &&
           !romanRuleLocked &&
+          !(card.definitionCard && state.temp.human.definitionCardUsed) &&
           !restrictedByCost &&
           (!state.forcedCard?.human?.active || handCardInstanceId("human",index)===state.forcedCard.human.instanceId) &&
           canUseCardAction &&
@@ -14338,6 +14393,8 @@ function renderLastAction() {
             ? '<div class="used charge-match-used">光速回路はこの試合で発動済み</div>'
             : hasUsedChargeCardThisTurn("human", cardId)
               ? '<div class="used charge-once-used">この充電カードは今ターン使用済み</div>'
+            : card.definitionCard && state.temp.human.definitionCardUsed
+              ? '<div class="used">定義カードは今ターン使用済み</div>'
             : state.temp.human.cardActionUsed
               ? (lightSpeedChargePlayable
                   ? '<div class="used charge-ready">光速回路：充電カード使用可能</div>'
@@ -15102,6 +15159,7 @@ function renderLastAction() {
       const lightSpeedChargePlayable = canUseChargeCardDuringLightSpeed(player, cardId);
       const magicalExtraCardPlayable = Number(state.temp[player].cardExtraUses || 0) > 0;
       if (card?.consumesCardAction !== false && state.temp[player].cardActionUsed && !lightSpeedChargePlayable && !magicalExtraCardPlayable) return false;
+      if (card?.definitionCard && state.temp[player].definitionCardUsed) { if(player==="human") setMessage("定義カードは1ターンに1枚まで使用できます。"); return false; }
       if (!card || isAttachmentCard(cardId)) return false;
       if (!card.canPlay(player)) {
         if (player === "human" && cardId === "lightSpeedCircuit") {
@@ -15128,7 +15186,8 @@ function renderLastAction() {
 
       const cardAllowanceBeforeUse = {
         cardActionUsed: !!state.temp[player].cardActionUsed,
-        cardExtraUses: Number(state.temp[player].cardExtraUses || 0)
+        cardExtraUses: Number(state.temp[player].cardExtraUses || 0),
+        definitionCardUsed: !!state.temp[player].definitionCardUsed
       };
       if(cardId==="brawl")state.temp[player].brawlAllowanceBeforeUse={...cardAllowanceBeforeUse};
       const onlineCardAction=(state.battleMode==="friend"&&player==="human")?await OnlineActionManager.begin("playCard",{cardId,rawCardId,handIndex}):null;
@@ -15139,7 +15198,8 @@ function renderLastAction() {
       try {
       state.hands[player].splice(handIndex, 1);
       const removedHandInstance=state.handCardInstances[player].splice(handIndex,1)[0];forgetHandCardMetadata(player,removedHandInstance);
-      if(!card.vanishOnUse)state.discard[player].push(rawCardId);
+      if(!card.vanishOnUse&&!card.definitionCard)state.discard[player].push(rawCardId);
+      if(card.definitionCard)state.temp[player].definitionCardUsed=true;
       markChargeCardUsedThisTurn(player, cardId);
       if(card.consumesCardAction!==false)consumeCardActionAllowance(player, { lightSpeedChargePlayable, card });
       if (state.temp[player].directiveActions) state.temp[player].directiveActions.cardUsed = true;
@@ -15159,6 +15219,7 @@ function renderLastAction() {
         // 控訴・上告で使用そのものが差し戻されたため、消費したカード使用権を使用前の状態へ戻す。
         state.temp[player].cardActionUsed = cardAllowanceBeforeUse.cardActionUsed;
         state.temp[player].cardExtraUses = cardAllowanceBeforeUse.cardExtraUses;
+        state.temp[player].definitionCardUsed = cardAllowanceBeforeUse.definitionCardUsed;
         if (state.battleMode === "friend") {
           state.friendCardResolving = false;
           await FriendCommitManager.commit("terminal card appeal rollback").catch(() => FriendCommitManager.schedule("terminal card appeal rollback retry"));
@@ -15486,7 +15547,9 @@ async function maybeChooseManualTrap(defender, candidates, context) {
       const total = before + actual;
       const directiveActor=options.sourcePlayer || state.turn;
       const annihilationActive=!!state.activeDirectiveAnnihilation?.[directiveActor]&&player===otherPlayer(directiveActor);
-      const finalValue=(options.zeroAtSeven&&total>=7)||annihilationActive&&total>=7?0:normalize(total,player,hand);
+      const explicitZeroThreshold=Number(options.zeroThreshold);
+      const thresholdZero=Number.isFinite(explicitZeroThreshold)&&explicitZeroThreshold>0&&total>=explicitZeroThreshold;
+      const finalValue=thresholdZero||(options.zeroAtSeven&&total>=7)||annihilationActive&&total>=7?0:normalize(total,player,hand);
       await animateCalculation(player, hand, total, finalValue);
       state[player][hand] = finalValue;
       if(before>0&&finalValue===0&&effectActor&&effectActor!==player)recordRevengeZeroEvent(player,effectActor,{kind:"card",cardId:state.resolvingEffectCardId||options.sourceCardId||null});
@@ -15688,6 +15751,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       }
       if (!isAlive(attacker, attackHand) || (!options.allowZeroTarget && !isAlive(defender, targetHand))) return false;
       const onlineAttackAction=(state.battleMode==="friend"&&attacker==="human"&&!options.cardInternalAttack)?await OnlineActionManager.begin("normalAttack",{attackHand,defenderSide:friendSideForLocalPlayer(defender),targetHand}):null;
+      let previousRevengeAttackContext=null;
       state.revengeAttackDepth=Number(state.revengeAttackDepth||0)+1;
       try {
 
@@ -15708,6 +15772,9 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         const candidates=[{owner:attacker,hand:otherHand(attackHand)},{owner:otherPlayer(attacker),hand:"L"},{owner:otherPlayer(attacker),hand:"R"}].filter(x=>!(x.owner===attacker&&x.hand===attackHand)&&isAlive(x.owner,x.hand));
         if(candidates.length){const chosen=candidates[Math.floor(Math.random()*candidates.length)];defender=chosen.owner;targetHand=chosen.hand;addLog(`「イド」により攻撃対象が${handNames[defender]}の${handNames[targetHand]}へ変更された。`);}
       }
+
+      previousRevengeAttackContext=state.temp?.[attacker]?.revengeAttackContext?cloneJson(state.temp[attacker].revengeAttackContext):null;
+      state.temp[attacker].revengeAttackContext={attackHand,targetSide:defender===otherPlayer(attacker)?"opponent":"self"};
 
       const danceActive = !!state.temp[attacker]?.dance;
       // 乱舞も通常攻撃として扱う。攻撃イベントは共通処理へ流し、加える本数だけ0にして後で結果を置換する。
@@ -16030,7 +16097,7 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
           power = isBalanced(defender) ? Math.max(0,power-2) : power+1;
           addLog(`${handNames[defender]}の「天秤の加護」により、受ける本数が${beforeScale}→${power}。`);
         }
-        if (hasAttachment(defender,targetHand,"magicalDespair")) {
+        if (hasAttachment(defender,targetHand,"magicalDespair") && isAlive(defender,otherHand(targetHand))) {
           const beforeDespair = power;
           power=Math.max(0,power-1);
           addLog(`${handNames[defender]}の「絶望」により、受ける本数が${beforeDespair}→${power}になった。`);
@@ -16284,6 +16351,8 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
         await OnlineActionManager.fail(onlineAttackAction,error);
         return false;
       } finally {
+        if(previousRevengeAttackContext)state.temp[attacker].revengeAttackContext=previousRevengeAttackContext;
+        else if(state.temp?.[attacker])delete state.temp[attacker].revengeAttackContext;
         state.revengeAttackDepth=Math.max(0,Number(state.revengeAttackDepth||0)-1);
         // v170e: 成功した通常攻撃Actionは resolveActionDone()/handoff まで保持する。
         // ここで消すと「攻撃確定済み・Actionなし・handoff前」という復旧不能な空白が生まれる。
@@ -16298,13 +16367,27 @@ async function attack(attacker, attackHand, defender, targetHand, options = {}) 
       for (const hand of ["L", "R"]) {
         if (state[player][hand] > 0) { state.revengeHandWasZero[player][hand]=false; continue; }
         const freshZero=!state.revengeHandWasZero[player][hand];
-        if(freshZero&&!Number(state.revengeAttackDepth||0)&&state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==player){recordRevengeZeroEvent(player,state.resolvingEffectPlayer,{kind:"card",cardId:state.resolvingEffectCardId||null});}
+        if(freshZero){
+          const attackContext=revengeAttackContextForVictim(player);
+          if(attackContext){
+            recordRevengeZeroEvent(player,attackContext.attacker,{kind:"normal",attackHand:attackContext.attackHand,cardId:state.resolvingEffectCardId||null});
+          }else if(!Number(state.revengeAttackDepth||0)&&state.resolvingEffectPlayer&&state.resolvingEffectPlayer!==player){
+            recordRevengeZeroEvent(player,state.resolvingEffectPlayer,{kind:"card",cardId:state.resolvingEffectCardId||null});
+          }
+        }
         processRevengeTargetZero(player,hand);
         if (state[player][hand] === 0) { ensureV169State(); processGriefZero(player,hand); }
         if (state[player][hand] === 0 && state.traps[player][hand].length > 0) {
-          const count=state.traps[player][hand].length;
-          for(let i=state.traps[player][hand].length-1;i>=0;i--){const slot=state.traps[player][hand][i],slotId=trapCardId(slot);if(CARD_LIBRARY[slotId]?.themeBlessing)state.themeRetreats[player][hand]=slotId;if(isFixedAttachment(slot)&&CARD_LIBRARY[slotId]?.curse){state.traps[player][hand].splice(i,1);slot.originalHand=hand;state.fixedCurseRetreats[player][hand].unshift(slot);}else discardAttachment(player,hand,i,{reason:"手が0",allowFixed:true});}
-          addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下のカード${count}枚が捨て札になった。`);
+          let discarded=0,definitionRetreated=0,fixedRetreated=0;
+          for(let i=state.traps[player][hand].length-1;i>=0;i--){
+            const slot=state.traps[player][hand][i],slotId=trapCardId(slot);
+            if(isDefinitionBlessingCard(slotId)){state.themeRetreats[player][hand]=slotId;if(discardAttachment(player,hand,i,{reason:"手が0",allowFixed:true,noDiscard:true})){definitionRetreated++;}continue;}
+            if(isFixedAttachment(slot)&&CARD_LIBRARY[slotId]?.curse){state.traps[player][hand].splice(i,1);slot.originalHand=hand;state.fixedCurseRetreats[player][hand].unshift(slot);fixedRetreated++;continue;}
+            if(discardAttachment(player,hand,i,{reason:"手が0",allowFixed:true}))discarded++;
+          }
+          if(discarded)addLog(`${handNames[player]}の${handNames[hand]}が0になったため、その下のカード${discarded}枚が捨て札になった。`);
+          if(definitionRetreated)addLog(`${handNames[player]}の${handNames[hand]}の定義加護${definitionRetreated}枚は、手が復活するまで退避した。`);
+          if(fixedRetreated)addLog(`${handNames[player]}の${handNames[hand]}の固定呪縛${fixedRetreated}枚は退避した。`);
         }
       }
       restoreFixedCurses(player);refreshGriefState(player);refreshRevengeTargets();updateRevengeZeroSeen(player);
@@ -16508,7 +16591,7 @@ async function endTurn(reason="unspecified", options={}) {
   state.activeExtraAction[endingPlayer]=false;
   state.extraActions[endingPlayer]=0;
   if(state.selectedTheme?.[endingPlayer]==="serenade"&&!state.resonanceTriggeredThisTurn?.[endingPlayer]&&getPerformanceLevel(endingPlayer)>0)changePerformanceLevel(endingPlayer,-1,"共鳴なしのターン終了");
-  if((state.personalTurnCount?.[endingPlayer]||0)===1){for(let i=state.hands[endingPlayer].length-1;i>=0;i--)if(state.hands[endingPlayer][i]==="themeSetting"){state.hands[endingPlayer].splice(i,1);state.discard[endingPlayer].push("themeSetting");addLog(`${handNames[endingPlayer]}の未使用の「題目設定」が最初のターン終了時に消滅した。`);}}
+  if((state.personalTurnCount?.[endingPlayer]||0)===1){for(let i=state.hands[endingPlayer].length-1;i>=0;i--)if(isDefinitionCard(state.hands[endingPlayer][i]))removeCardWithoutDiscard(endingPlayer,i,"最初のターン終了時に自壊して消滅");}
   if(state.temp[endingPlayer]?.lightSpeedCircuit){ setChargeLevel(endingPlayer,0); state.temp[endingPlayer].lightSpeedCircuit=false; addLog(`${handNames[endingPlayer]}の「光速回路」が終了し、充電が0になった。`); }
       if (!hasCanonHitsDueForEndingPlayer(endingPlayer) && checkWin()) {
         render();
@@ -16931,6 +17014,7 @@ async function endTurn(reason="unspecified", options={}) {
       const effectiveId=effectiveCardIdForPlayer("cpu",id);
       const card = CARD_LIBRARY[effectiveId];
       if (!card || isAttachmentCard(effectiveId) || !card.canPlay("cpu")) return -1;
+      if (card.definitionCard && state.temp.cpu.definitionCardUsed) return -1;
       if (state.activeCostLimit.cpu !== null && card.cost > state.activeCostLimit.cpu) return -1;
       return index;
     }
@@ -18157,8 +18241,8 @@ async function endTurn(reason="unspecified", options={}) {
     function resetGame() {
       const humanDeck = buildDeckFromCounts("human");
       const cpuDeck = buildDeckFromCounts("cpu");
-      const humanHasThemeSetting = extractThemeSettingFromOpeningDeck(humanDeck);
-      const cpuHasThemeSetting = extractThemeSettingFromOpeningDeck(cpuDeck);
+      const humanDefinitionCards = extractDefinitionCardsFromOpeningDeck(humanDeck);
+      const cpuDefinitionCards = extractDefinitionCardsFromOpeningDeck(cpuDeck);
 
       state.human = { L: 1, R: 1 };
       state.cpu = { L: 1, R: 1 };
@@ -18170,8 +18254,8 @@ async function endTurn(reason="unspecified", options={}) {
       state.hands.cpu = [];
       state.discard.human = [];
       state.discard.cpu = [];
-      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
-      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.human = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
+      state.temp.cpu = { attackBonus: 0, guard: false, cardActionUsed: false, definitionCardUsed: false, breakthrough: false, setupMode: false, attachmentPlacementSession: null, allegro: false, allegroTriggered: false, crescendo: false, dance: false, lastMelody: false, ominousPower: false, lightningBonus: 0, lightningZeroAtFive: false, lightningNoChargeGain: false, synapseBonus: 0, electromagneticAttack: false, lightSpeedCircuit: false, dimensionalSlashUsed: false, dimensionalSlashBonus: 0, attackLimit: 1, attacksUsed: 0, attacksOccurredThisTurn:0,naturalFaithActive:false,opponentZeroedThisTurn:false,chargeCardsUsed: [], directiveActions: { attacks: [], splitUsed: false, cardUsed: false } };
       state.selectedTrapCardIndex = null;
       state.pendingTrapTargetEffect = null;
       state.pendingRepairDiscard = null;
@@ -18272,8 +18356,8 @@ async function endTurn(reason="unspecified", options={}) {
         drawCard("human");
         drawCard("cpu");
       }
-      if (humanHasThemeSetting) state.hands.human.push("themeSetting");
-      if (cpuHasThemeSetting) state.hands.cpu.push("themeSetting");
+      state.hands.human.push(...humanDefinitionCards);
+      state.hands.cpu.push(...cpuDefinitionCards);
       renderDeckBuilder();
       if(state.battleMode==="cpu"&&state.currentScreen==="battle")return beginCpuStartingFlow();
       render();
